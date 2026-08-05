@@ -1,0 +1,107 @@
+import { describe, expect, it } from 'vitest';
+import { WindField } from './wind';
+import { sailPlan } from './sailplan';
+import { CRUISER } from './config';
+import { Ghost } from './replay';
+import { knotsToMs } from './units';
+
+describe('wind field', () => {
+  /**
+   * The renderer draws the puffs the player steers by, using the same function
+   * the physics samples. If it were not a pure function of position and time,
+   * the visible puff and the felt puff would drift apart and the tactical layer
+   * of the game would be a lie.
+   */
+  it('is a deterministic function of position and time', () => {
+    const a = new WindField(knotsToMs(14), 0, 0.5, 0.2, 99);
+    const b = new WindField(knotsToMs(14), 0, 0.5, 0.2, 99);
+    a.update(7.5);
+    b.update(7.5);
+    for (const p of [
+      { x: 0, y: 0 },
+      { x: 123, y: -456 },
+      { x: -900, y: 12 },
+    ]) {
+      expect(a.sample(p)).toEqual(b.sample(p));
+    }
+  });
+
+  it('keeps gusts and shifts within a sane band', () => {
+    const w = new WindField(knotsToMs(14), 0, 1, 0.25, 7);
+    let min = Infinity;
+    let max = -Infinity;
+    for (let t = 0; t < 400; t += 3) {
+      w.update(3);
+      for (let x = -800; x <= 800; x += 137) {
+        const s = w.sample({ x, y: x * 0.7 });
+        min = Math.min(min, s.gust);
+        max = Math.max(max, s.gust);
+        expect(Math.abs(s.shift)).toBeLessThanOrEqual(0.25 + 1e-9);
+        expect(s.tws).toBeGreaterThan(0);
+      }
+    }
+    // Real wind gusts harder than it lulls, but never reverses or doubles.
+    expect(min).toBeGreaterThan(0.5);
+    expect(max).toBeLessThan(1.6);
+  });
+
+  it('carries the puff pattern downwind over time', () => {
+    const w = new WindField(knotsToMs(20), 0, 0.6, 0.2, 3);
+    const here = { x: 0, y: 0 };
+    const before = w.sample(here).gust;
+    w.update(30);
+    expect(w.sample(here).gust).not.toBeCloseTo(before, 3);
+  });
+});
+
+describe('sail plan', () => {
+  /**
+   * Reefing is not just an area change. It moves the centre of effort, which
+   * is what forces the player to reduce main and jib together instead of
+   * dumping the mainsail alone.
+   */
+  it('moves the centre of effort forward when the main is reefed', () => {
+    const full = sailPlan(CRUISER, 0, 0);
+    const reefed = sailPlan(CRUISER, 3, 0);
+    expect(reefed.area).toBeLessThan(full.area);
+    expect(reefed.ceX).toBeGreaterThan(full.ceX); // forward = more lee helm
+    expect(reefed.ceHeight).toBeLessThan(full.ceHeight); // and lower = less heel
+  });
+
+  it('moves the centre of effort aft when the jib is furled', () => {
+    const full = sailPlan(CRUISER, 0, 0);
+    const furled = sailPlan(CRUISER, 0, 1);
+    expect(furled.ceX).toBeLessThan(full.ceX); // aft = more weather helm
+  });
+
+  it('survives a bare-poles plan without dividing by zero', () => {
+    const bare = sailPlan(CRUISER, 3, 1);
+    const none = sailPlan({ ...CRUISER, mainArea: 0, jibArea: 0 }, 0, 1);
+    expect(Number.isFinite(bare.ceX)).toBe(true);
+    expect(none.area).toBe(0);
+    expect(Number.isFinite(none.ceHeight)).toBe(true);
+  });
+});
+
+describe('ghost replay', () => {
+  it('interpolates heading the short way around the compass', () => {
+    // Two samples straddling north: 359 degrees then 1 degree.
+    const data = new Float32Array([
+      0, 0, 0, (359 * Math.PI) / 180, 0, 1, 0, 0, (1 * Math.PI) / 180, 0,
+    ]);
+    const g = new Ghost(data);
+    const out = { x: 0, y: 0, heading: 0, heel: 0 };
+    expect(g.sampleAt(0.5, out)).toBe(true);
+    // Naive interpolation would spin the boat 358 degrees the wrong way.
+    const deg = ((out.heading * 180) / Math.PI + 720) % 360;
+    expect(Math.min(deg, 360 - deg)).toBeLessThan(1);
+  });
+
+  it('reports out-of-range times instead of extrapolating', () => {
+    const g = new Ghost(new Float32Array([0, 0, 0, 0, 0, 1, 5, 5, 0, 0]));
+    const out = { x: 0, y: 0, heading: 0, heel: 0 };
+    expect(g.sampleAt(-1, out)).toBe(false);
+    expect(g.sampleAt(99, out)).toBe(false);
+    expect(g.sampleAt(0.5, out)).toBe(true);
+  });
+});

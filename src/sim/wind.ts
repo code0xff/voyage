@@ -1,0 +1,131 @@
+import { compassVec, wrap2Pi, type Vec2 } from './math';
+import { fbm2 } from './noise';
+import type { Environment } from './config';
+
+/**
+ * A wind field that varies with position and drifts downwind over time.
+ *
+ * Why this exists: with a constant wind there is no tactical layer at all.
+ * Find the optimum angle once and you are done forever. What makes real
+ * sailing interesting is
+ *   - seeing a puff running across the water and setting up for it
+ *   - reading a shift and tacking onto the favoured side
+ * and neither is possible unless the wind is a function of *where you are*.
+ *
+ * The puff pattern is a fixed noise field, and the whole field is advected
+ * downwind. That is what makes "there is a puff coming from over there" a true
+ * statement rather than a decoration.
+ */
+
+/** Size of a single puff, in metres. Smaller is more frantic. */
+const GUST_SCALE = 130;
+/** Spatial scale of shifts. Must dwarf the puff scale for "a favoured side" to exist. */
+const SHIFT_SCALE = 620;
+/** How fast the puff pattern drifts downwind, relative to true wind speed. */
+const ADVECTION = 0.8;
+
+export interface WindSample {
+  tws: number;
+  twd: number;
+  /** Strength relative to the mean. 1 = average, >1 = puff, <1 = lull. */
+  gust: number;
+  /** Direction offset from the mean, rad. Positive = right shift. */
+  shift: number;
+}
+
+export class WindField {
+  /** Mean true wind speed, m/s. */
+  baseTws: number;
+  /** Mean true wind direction (the direction it blows from), rad. */
+  baseTwd: number;
+  /** 0 = dead steady, 1 = very gusty. */
+  gustiness: number;
+  /** Shift amplitude, rad. */
+  shiftAmplitude: number;
+
+  private t = 0;
+  private seed: number;
+
+  constructor(baseTws: number, baseTwd = 0, gustiness = 0.45, shiftAmplitude = 0.19, seed = 1337) {
+    this.baseTws = baseTws;
+    this.baseTwd = baseTwd;
+    this.gustiness = gustiness;
+    this.shiftAmplitude = shiftAmplitude;
+    this.seed = seed;
+  }
+
+  update(dt: number): void {
+    this.t += dt;
+  }
+
+  get time(): number {
+    return this.t;
+  }
+
+  /** The mean environment, for steady-state work such as the polar solver. */
+  meanEnv(base: Environment): Environment {
+    return { ...base, tws: this.baseTws, twd: this.baseTwd };
+  }
+
+  /**
+   * The wind at a point. The renderer calls the very same function.
+   * If the puff drawn on the water and the puff the boat actually hits were to
+   * diverge, the player could not trust what they see, and the whole tactical
+   * layer would collapse.
+   */
+  sample(pos: Vec2): WindSample {
+    // The noise field is fixed; rewinding the sample coordinate upwind is what
+    // makes the whole pattern drift downwind.
+    const windDir = compassVec(this.baseTwd); // points towards where the wind comes from
+    const driftX = -windDir.x * this.baseTws * ADVECTION * this.t;
+    const driftY = -windDir.y * this.baseTws * ADVECTION * this.t;
+
+    const gx = (pos.x - driftX) / GUST_SCALE;
+    const gy = (pos.y - driftY) / GUST_SCALE;
+    // 0..1 -> -1..1
+    const g = fbm2(gx, gy, this.seed, 3) * 2 - 1;
+
+    const sx = (pos.x - driftX * 0.55) / SHIFT_SCALE;
+    const sy = (pos.y - driftY * 0.55) / SHIFT_SCALE;
+    const s = fbm2(sx, sy, this.seed + 4111, 2) * 2 - 1;
+
+    // Real wind gusts harder than it lulls, so the response is asymmetric.
+    const gust = 1 + this.gustiness * (g > 0 ? g * 0.5 : g * 0.35);
+    const shift = s * this.shiftAmplitude;
+
+    return {
+      tws: Math.max(0.2, this.baseTws * gust),
+      twd: wrap2Pi(this.baseTwd + shift),
+      gust,
+      shift,
+    };
+  }
+
+  /**
+   * Batch sample for the renderer. Called hundreds of times per frame, so it
+   * writes [gust, shift] into a caller-owned array instead of allocating.
+   *
+   * The renderer needs the shift as well as the gust: if it only drew gusts,
+   * shifts would be completely invisible on screen, and something the player
+   * cannot see might as well not exist.
+   */
+  sampleInto(x: number, y: number, out: [number, number]): void {
+    const windDir = compassVec(this.baseTwd);
+    const driftX = -windDir.x * this.baseTws * ADVECTION * this.t;
+    const driftY = -windDir.y * this.baseTws * ADVECTION * this.t;
+
+    const g = fbm2((x - driftX) / GUST_SCALE, (y - driftY) / GUST_SCALE, this.seed, 3) * 2 - 1;
+    const s =
+      fbm2(
+        (x - driftX * 0.55) / SHIFT_SCALE,
+        (y - driftY * 0.55) / SHIFT_SCALE,
+        this.seed + 4111,
+        2,
+      ) *
+        2 -
+      1;
+
+    out[0] = 1 + this.gustiness * (g > 0 ? g * 0.5 : g * 0.35);
+    out[1] = s * this.shiftAmplitude;
+  }
+}
