@@ -191,8 +191,16 @@ export function createMinimap(): Minimap {
     ctx.clearRect(0, 0, WIND_CELLS, WIND_CELLS);
 
     const mPerCell = (2 * range) / WIND_CELLS;
+    // Strength is carried by hue, not by lightness.
+    //
+    // Lulls were drawn with --foreground, which is dark on a light theme and
+    // very nearly white on a dark one -- so in the dark theme an island's wind
+    // shadow came out as a bright plume streaming away downwind, drawing the
+    // place with no breeze in it as the brightest thing on the chart. Any
+    // encoding that leans on light-versus-dark inverts with the theme. Two
+    // hues do not: more breeze reads blue, less reads red, in either.
     const puff = token('--info');
-    const lull = token('--foreground');
+    const lull = token('--destructive');
 
     for (let gx = 0; gx < WIND_CELLS; gx++) {
       for (let gy = 0; gy < WIND_CELLS; gy++) {
