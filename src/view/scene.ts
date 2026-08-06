@@ -142,10 +142,17 @@ function hullGeometry(cfg: BoatConfig): THREE.BufferGeometry {
     idx.push(centre[i], pR, pR2, centre[i], pR2, centre[i + 1]);
   }
 
-  // Transom (closes off the stern)
+  // Transom (closes off the stern).
+  //
+  // Winding matters here and is easy to get backwards, because this fan lies in
+  // a single plane at the stern while every other face in the hull is lofted.
+  // The stern ring runs port deck -> keel -> starboard deck, so taking its
+  // points in that order with the centre last gives an outward (+Z, aft) normal.
+  // Reversed, the transom is back-face culled and the hull is an open shell you
+  // can see straight into from astern.
   const sternCentre = push(0, freeboardAt(0), L * 0.5);
   for (let j = 0; j < M * 2 - 2; j++) {
-    idx.push(ring[0][j + 1], ring[0][j], sternCentre);
+    idx.push(ring[0][j], ring[0][j + 1], sternCentre);
   }
 
   const geo = new THREE.BufferGeometry();
