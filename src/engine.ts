@@ -16,6 +16,7 @@ import { msToKnots } from './sim/units';
 import { buildCourse, initialRaceState, updateRace, type Course, type RaceState } from './sim/race';
 import { EMPTY_TERRAIN, Terrain, generateArchipelago } from './sim/terrain';
 import { skyState, type SkyState } from './sim/sky';
+import { Weather } from './sim/weather';
 import {
   Ghost,
   Recorder,
@@ -51,6 +52,7 @@ export interface Snapshot {
   course: Course;
   race: RaceState;
   sky: SkyState;
+  weather: Weather;
   polar: Polar | null;
   telemetry: Telemetry;
   best: number | null;
@@ -96,6 +98,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   const env: Environment = { ...DEFAULT_ENV };
   const wind = new WindField(windMs(settings), 0, settings.gustiness);
   const waves = new WaveField(windMs(settings), 0);
+  const weather = new Weather(settings.seed, 'fair');
 
   // Reused every physics step; allocating per step would keep the GC busy at 120 Hz.
   const hullWave: HullWaveSample = { heave: 0, pitchSlope: 0, rollSlope: 0, bowRise: 0 };
@@ -143,7 +146,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     terrain: EMPTY_TERRAIN,
     course,
     race,
-    sky: skyState(settings.startHour),
+    sky: skyState(hour),
+    weather,
     polar: null,
     telemetry,
     best,
@@ -198,6 +202,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     }, delay);
   }
 
+  // --- Course and terrain ---------------------------------------------------
   function rebuildWorld(): void {
     course = buildCourse(raceCfg(current), wind.baseTwd);
     race = initialRaceState(raceCfg(current));
@@ -239,10 +244,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       s.laps !== current.laps;
     current = s;
 
-    wind.baseTws = windMs(s);
-    wind.gustiness = s.gustiness;
+    wind.baseTws = windMs(s) * weather.state.windScale;
+    wind.gustiness = s.gustiness * weather.state.gustScale;
     wind.shiftAmplitude = 0.19 * s.gustiness * 2.2;
     waves.setFromWind(wind.baseTws * s.seaScale, wind.baseTwd);
+    weather.evolve = s.weatherMode === 'auto';
+    if (s.weatherMode !== 'auto') weather.set(s.weatherMode);
     sound.setEnabled(s.sound);
     snapshot.soundOn = s.sound;
     if (worldChanged) rebuildWorld();
@@ -288,6 +295,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   function physicsStep(): void {
     // Time of day. timeScale is "simulated minutes per real minute".
     hour += (PHYS_DT / 3600) * current.timeScale;
+    weather.update(PHYS_DT);
+
+    // Weather drives the mean wind, so re-derive it every step rather than
+    // only when a setting changes.
+    wind.baseTws = windMs(current) * weather.state.windScale;
+    wind.gustiness = current.gustiness * weather.state.gustScale;
 
     wind.update(PHYS_DT);
     // Wind is a function of position: sample it where the boat actually is.
@@ -430,13 +443,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       wind.baseTwd = wrap2Pi(wind.baseTwd + input.windShift * 25 * DEG * wall);
       waves.setFromWind(wind.baseTws * current.seaScale, wind.baseTwd);
     }
-    if (input.windGust !== 0) {
-      current = {
-        ...current,
-        windKnots: clamp(current.windKnots + input.windGust * 12 * wall, 3, 40),
-      };
-      applySettings(current);
-    }
   }
 
   function render(dt: number): void {
@@ -451,6 +457,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       course,
       race,
       sky: snapshot.sky,
+      weather: weather.state,
+      visibility: weather.visibility,
       ghost: showGhost ? ghostSample : null,
       dt,
     });

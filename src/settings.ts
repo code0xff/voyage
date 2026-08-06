@@ -1,3 +1,5 @@
+import type { WeatherKind } from './sim/weather';
+import { WEATHER_KINDS } from './sim/weather';
 import { knotsToMs, msToKnots } from './sim/units';
 
 /**
@@ -25,9 +27,11 @@ export interface Settings {
   startHour: number;
   /** How many simulated minutes pass per real minute. 1 = real time. */
   timeScale: number;
+  /** 'auto' lets the weather evolve on its own; anything else pins it. */
+  weatherMode: 'auto' | WeatherKind;
   /** Number of islands scattered around the course. Zero is open water. */
   islandCount: number;
-  /** Seed for the archipelago, so a session can be reproduced. */
+  /** Seed for islands and weather, so a session can be reproduced. */
   seed: number;
 }
 
@@ -41,6 +45,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sound: true,
   startHour: 9,
   timeScale: 60,
+  weatherMode: 'auto',
   islandCount: 4,
   seed: 20260806,
 };
@@ -56,6 +61,10 @@ export function loadSettings(): Settings {
     // never be able to break the game.
     const num = (v: unknown, d: number, lo: number, hi: number): number =>
       typeof v === 'number' && Number.isFinite(v) ? Math.min(Math.max(v, lo), hi) : d;
+    const mode =
+      o.weatherMode === 'auto' || (o.weatherMode && WEATHER_KINDS.includes(o.weatherMode))
+        ? o.weatherMode
+        : DEFAULT_SETTINGS.weatherMode;
     return {
       windKnots: num(o.windKnots, DEFAULT_SETTINGS.windKnots, 3, 40),
       gustiness: num(o.gustiness, DEFAULT_SETTINGS.gustiness, 0, 1),
@@ -66,6 +75,7 @@ export function loadSettings(): Settings {
       sound: typeof o.sound === 'boolean' ? o.sound : DEFAULT_SETTINGS.sound,
       startHour: num(o.startHour, DEFAULT_SETTINGS.startHour, 0, 24),
       timeScale: num(o.timeScale, DEFAULT_SETTINGS.timeScale, 0, 600),
+      weatherMode: mode,
       islandCount: Math.round(num(o.islandCount, DEFAULT_SETTINGS.islandCount, 0, 10)),
       seed: Math.round(num(o.seed, DEFAULT_SETTINGS.seed, 1, 2 ** 31)),
     };

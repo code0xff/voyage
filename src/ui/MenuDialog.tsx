@@ -1,14 +1,22 @@
-import { useState } from 'react';
-import { Anchor, Compass, Play, Settings2, Waves, Wind } from 'lucide-react';
-import { Dialog } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Separator } from '@/components/ui/separator';
-import { Badge } from '@/components/ui/badge';
-import { formatTime, type Course, type RaceState } from '@/sim/race';
-import { formatClock } from '@/sim/sky';
-import type { Settings } from '@/settings';
-import { cn } from '@/lib/utils';
+import { useState } from "react";
+import { Anchor, Compass, Play, Settings2, Waves, Wind } from "lucide-react";
+import { Dialog } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { formatTime, type Course, type RaceState } from "@/sim/race";
+import { formatClock } from "@/sim/sky";
+import { WEATHER_KINDS, WEATHER_LABEL, type WeatherKind } from "@/sim/weather";
+import type { Settings } from "@/settings";
+import { cn } from "@/lib/utils";
 
 export interface RaceResult {
   time: number;
@@ -50,7 +58,9 @@ function Slider({
                    [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none
                    [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-foreground"
       />
-      <span className="text-right font-mono text-[11px] tabular-nums">{format(value)}</span>
+      <span className="text-right font-mono text-[11px] tabular-nums">
+        {format(value)}
+      </span>
     </div>
   );
 }
@@ -64,10 +74,13 @@ function Results({ result }: { result: RaceResult }) {
       </div>
       <div className="mt-1 text-center text-[11px]">
         {result.isBest ? (
-          <span className="text-warning">New personal best — ghost updated</span>
+          <span className="text-warning">
+            New personal best — ghost updated
+          </span>
         ) : result.best !== null ? (
           <span className="text-muted-foreground">
-            Personal best {formatTime(result.best)} · {result.time - result.best >= 0 ? '+' : ''}
+            Personal best {formatTime(result.best)} ·{" "}
+            {result.time - result.best >= 0 ? "+" : ""}
             {(result.time - result.best).toFixed(1)}s
           </span>
         ) : null}
@@ -79,7 +92,7 @@ function Results({ result }: { result: RaceResult }) {
             key={i}
             className="grid grid-cols-[1fr_auto_58px] gap-3 font-mono text-[10.5px] tabular-nums text-muted-foreground"
           >
-            <span className="truncate font-sans">{labels[i] ?? ''}</span>
+            <span className="truncate font-sans">{labels[i] ?? ""}</span>
             <span>{formatTime(t)}</span>
             <span className="text-right opacity-70">
               +{(t - (i === 0 ? 0 : result.race.splits[i - 1])).toFixed(1)}s
@@ -110,7 +123,7 @@ export function MenuDialog({
   result: RaceResult | null;
   canResume: boolean;
 }) {
-  const [tab, setTab] = useState('race');
+  const [tab, setTab] = useState("race");
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) =>
     onSettings({ ...settings, [k]: v });
 
@@ -127,9 +140,9 @@ export function MenuDialog({
       }
       description={
         <span className="block text-[11px] leading-relaxed">
-          A sailing simulator that computes apparent wind, sail lift, keel side force and
-          wave-making resistance. The wind differs from place to place, and the waves move the
-          boat.
+          A sailing simulator that computes apparent wind, sail lift, keel side
+          force and wave-making resistance. Wind differs from place to place,
+          weather turns, and land steals your breeze.
         </span>
       }
       footer={
@@ -137,7 +150,9 @@ export function MenuDialog({
           <Badge variant="outline" className="text-[10px] font-normal">
             physics core runs headless · npm run polar
           </Badge>
-          <span className="font-mono text-[10px] text-muted-foreground">seed {settings.seed}</span>
+          <span className="font-mono text-[10px] text-muted-foreground">
+            seed {settings.seed}
+          </span>
         </div>
       }
     >
@@ -183,7 +198,7 @@ export function MenuDialog({
               step={10}
               value={settings.legLength}
               format={(v) => `${v} m`}
-              onChange={(v) => set('legLength', v)}
+              onChange={(v) => set("legLength", v)}
             />
             <Slider
               label="Laps"
@@ -192,7 +207,7 @@ export function MenuDialog({
               step={1}
               value={settings.laps}
               format={(v) => String(v)}
-              onChange={(v) => set('laps', v)}
+              onChange={(v) => set("laps", v)}
             />
             <Slider
               label="Countdown"
@@ -201,7 +216,7 @@ export function MenuDialog({
               step={5}
               value={settings.countdown}
               format={(v) => `${v}s`}
-              onChange={(v) => set('countdown', v)}
+              onChange={(v) => set("countdown", v)}
             />
             <Slider
               label="Islands"
@@ -209,29 +224,34 @@ export function MenuDialog({
               max={10}
               step={1}
               value={settings.islandCount}
-              format={(v) => (v === 0 ? 'open sea' : String(v))}
-              onChange={(v) => set('islandCount', v)}
+              format={(v) => (v === 0 ? "open sea" : String(v))}
+              onChange={(v) => set("islandCount", v)}
             />
             <div className="grid grid-cols-[104px_1fr] items-center gap-3">
-              <span className="text-[11px] text-muted-foreground">World seed</span>
+              <span className="text-[11px] text-muted-foreground">
+                World seed
+              </span>
               <div className="flex gap-2">
                 <input
                   className="h-8 w-full rounded-md border border-input bg-transparent px-2 font-mono text-xs tabular-nums outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   value={settings.seed}
-                  onChange={(e) => set('seed', Number(e.target.value) || 1)}
+                  onChange={(e) => set("seed", Number(e.target.value) || 1)}
                 />
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => set('seed', Math.floor(Math.random() * 1e8) + 1)}
+                  onClick={() =>
+                    set("seed", Math.floor(Math.random() * 1e8) + 1)
+                  }
                 >
                   Roll
                 </Button>
               </div>
             </div>
             <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
-              Islands sit close to the course on purpose. Their lee is flat water but almost no
-              wind, and the shoals around them will stop you dead.
+              Islands sit close to the course on purpose. Their lee is flat
+              water but almost no wind, and the shoals around them will stop you
+              dead.
             </p>
           </TabsContent>
 
@@ -243,7 +263,7 @@ export function MenuDialog({
               step={1}
               value={settings.windKnots}
               format={(v) => `${v} kn`}
-              onChange={(v) => set('windKnots', v)}
+              onChange={(v) => set("windKnots", v)}
             />
             <Slider
               label="Gusts / shifts"
@@ -251,8 +271,8 @@ export function MenuDialog({
               max={1}
               step={0.05}
               value={settings.gustiness}
-              format={(v) => (v === 0 ? 'steady' : `${Math.round(v * 100)}%`)}
-              onChange={(v) => set('gustiness', v)}
+              format={(v) => (v === 0 ? "steady" : `${Math.round(v * 100)}%`)}
+              onChange={(v) => set("gustiness", v)}
             />
             <Slider
               label="Sea state"
@@ -260,8 +280,8 @@ export function MenuDialog({
               max={2}
               step={0.1}
               value={settings.seaScale}
-              format={(v) => (v === 0 ? 'flat' : `${v.toFixed(1)}x`)}
-              onChange={(v) => set('seaScale', v)}
+              format={(v) => (v === 0 ? "flat" : `${v.toFixed(1)}x`)}
+              onChange={(v) => set("seaScale", v)}
             />
             <Slider
               label="Start time"
@@ -270,7 +290,7 @@ export function MenuDialog({
               step={0.5}
               value={settings.startHour}
               format={(v) => formatClock(v)}
-              onChange={(v) => set('startHour', v)}
+              onChange={(v) => set("startHour", v)}
             />
             <Slider
               label="Time speed"
@@ -278,29 +298,57 @@ export function MenuDialog({
               max={360}
               step={10}
               value={settings.timeScale}
-              format={(v) => (v === 0 ? 'frozen' : `${v}x`)}
-              onChange={(v) => set('timeScale', v)}
+              format={(v) => (v === 0 ? "frozen" : `${v}x`)}
+              onChange={(v) => set("timeScale", v)}
             />
+            <div className="grid grid-cols-[104px_1fr] items-center gap-3">
+              <span className="text-[11px] text-muted-foreground">Weather</span>
+              <Select
+                value={settings.weatherMode}
+                onValueChange={(v) =>
+                  set("weatherMode", v as "auto" | WeatherKind)
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Evolving (random)</SelectItem>
+                  {WEATHER_KINDS.map((k) => (
+                    <SelectItem key={k} value={k}>
+                      {WEATHER_LABEL[k]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
+              Evolving weather is what makes two runs of the same course
+              different. A squall on the second beat forces a reef and changes
+              which side pays.
+            </p>
           </TabsContent>
 
           <TabsContent value="keys" className="mt-4">
             <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-[11px]">
               {[
-                ['← →  /  A D', 'helm'],
-                ['↑ ↓  /  W S', 'trim in / ease'],
-                ['T', 'auto-trim'],
-                ['1 2 3 4', 'reef 0–3'],
-                ['F / G', 'furl / unfurl jib'],
-                ['Y', 'auto-reef'],
-                ['Q E', 'mean wind direction'],
-                ['[ ]', 'mean wind speed'],
-                ['C', 'camera'],
-                ['P', 're-solve polar'],
-                ['R', 'restart'],
-                ['M', 'sound'],
-                ['Esc', 'this menu'],
+                ["← →  /  A D", "helm"],
+                ["↑ ↓  /  W S", "trim in / ease"],
+                ["T", "auto-trim"],
+                ["1 2 3 4", "reef 0–3"],
+                ["F / G", "furl / unfurl jib"],
+                ["Y", "auto-reef"],
+                ["Q E", "mean wind direction"],
+                ["C", "camera"],
+                ["P", "re-solve polar"],
+                ["R", "restart"],
+                ["M", "sound"],
+                ["Esc", "this menu"],
               ].map(([k, v]) => (
-                <div key={k} className="flex items-baseline justify-between gap-3">
+                <div
+                  key={k}
+                  className="flex items-baseline justify-between gap-3"
+                >
                   <kbd className="rounded border border-border bg-secondary px-1.5 py-px font-mono text-[10px]">
                     {k}
                   </kbd>
@@ -308,12 +356,17 @@ export function MenuDialog({
                 </div>
               ))}
             </div>
-            <div className={cn('mt-4 rounded-md border border-warning/40 bg-warning/10 p-3')}>
+            <div
+              className={cn(
+                "mt-4 rounded-md border border-warning/40 bg-warning/10 p-3",
+              )}
+            >
               <p className="text-[11px] leading-relaxed">
                 <span className="font-medium text-warning">
                   You cannot sail at the windward mark.
-                </span>{' '}
-                Zig-zag up to it at roughly 45° to the wind. The polar panel shows the best angle.
+                </span>{" "}
+                Zig-zag up to it at roughly 45° to the wind. The polar panel
+                shows the best angle.
               </p>
             </div>
           </TabsContent>

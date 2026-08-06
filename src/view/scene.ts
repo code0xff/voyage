@@ -9,9 +9,11 @@ import type { Course, RaceState } from '../sim/race';
 import type { GhostSample } from '../sim/replay';
 import type { Terrain } from '../sim/terrain';
 import type { SkyState } from '../sim/sky';
+import type { WeatherState } from '../sim/weather';
 import { createWater } from './water';
 import { createCourseView } from './course';
 import { createIslandView } from './islands';
+import { createRain } from './rain';
 import { createSkyDome } from './skydome';
 
 /**
@@ -42,6 +44,8 @@ export interface FrameInput {
   course: Course;
   race: RaceState;
   sky: SkyState;
+  weather: WeatherState;
+  visibility: number;
   ghost: GhostSample | null;
   dt: number;
 }
@@ -195,6 +199,9 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
 
   const islandView = createIslandView();
   scene.add(islandView.group);
+
+  const rain = createRain();
+  scene.add(rain.object);
 
   const courseView = createCourseView();
   scene.add(courseView.group);
@@ -366,27 +373,26 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   }
   resize();
 
-  /** How far you can see. Weather narrows this later; for now it is the sky. */
-  const VISIBILITY = 900;
-
   function render(f: FrameInput): void {
     const { state, diag, wind, waves, sky, dt } = f;
 
-    // --- Sky and light ---
+    // --- Sky, light and visibility ---
+    // Weather thins the sun and thickens the air; time of day sets the colour.
+    const overcast = 1 - f.weather.cloud * 0.72;
     sun.color.setRGB(sky.sunColor[0], sky.sunColor[1], sky.sunColor[2]);
-    sun.intensity = sky.sunIntensity;
+    sun.intensity = sky.sunIntensity * overcast;
     sun.position.set(sky.sunDir[0] * 400, sky.sunDir[1] * 400 + 30, sky.sunDir[2] * 400);
     hemi.color.setRGB(sky.skyHorizon[0], sky.skyHorizon[1], sky.skyHorizon[2]);
     hemi.groundColor.setRGB(sky.waterDeep[0], sky.waterDeep[1], sky.waterDeep[2]);
-    hemi.intensity = sky.ambientIntensity;
+    hemi.intensity = sky.ambientIntensity * (0.65 + f.weather.cloud * 0.35);
     fill.intensity = 0.25 + sky.daylight * 0.55;
 
     const fogColor = new THREE.Color(sky.fogColor[0], sky.fogColor[1], sky.fogColor[2]);
     scene.background = fogColor;
     (scene.fog as THREE.Fog).color.copy(fogColor);
-    (scene.fog as THREE.Fog).near = VISIBILITY * 0.35;
-    (scene.fog as THREE.Fog).far = VISIBILITY;
-    skyDome.update(sky, 0);
+    (scene.fog as THREE.Fog).near = f.visibility * 0.35;
+    (scene.fog as THREE.Fog).far = f.visibility;
+    skyDome.update(sky, f.weather.cloud);
     islandView.update(sky);
 
     courseView.update(f.course, f.race, waves);
@@ -402,7 +408,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       wind.baseTws,
       wind.baseTwd,
       sky,
-      VISIBILITY,
+      f.visibility,
     );
 
     // The boat floats on the waves; heave, pitch and heel all come from the
@@ -535,6 +541,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     camera.position.copy(camPos);
     camera.lookAt(camTarget);
     skyDome.mesh.position.copy(camPos);
+    rain.update(f.weather.rain, wind.baseTws, wind.baseTwd, camera, dt);
 
     renderer.render(scene, camera);
   }
@@ -552,6 +559,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     dispose() {
       water.dispose();
       islandView.dispose();
+      rain.dispose();
       skyDome.dispose();
       renderer.dispose();
     },

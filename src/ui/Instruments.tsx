@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { RAD, wrap2Pi } from '@/sim/math';
 import { msToKnots } from '@/sim/units';
 import { phaseName, formatClock } from '@/sim/sky';
+import { WEATHER_LABEL } from '@/sim/weather';
 import type { Snapshot } from '@/engine';
 import { useEngineFrame, useReadout } from './engine-context';
 import { TelemetryCard } from './TelemetryCard';
@@ -52,8 +53,7 @@ function Alerts() {
     const w = s.wind.sample(s.state.pos);
 
     if (s.clearance < 0) msgs.push({ text: 'AGROUND', tone: 'bad' });
-    else if (s.clearance < 3)
-      msgs.push({ text: `SHOAL — ${s.clearance.toFixed(1)} m under keel`, tone: 'bad' });
+    else if (s.clearance < 3) msgs.push({ text: `SHOAL — ${s.clearance.toFixed(1)} m under keel`, tone: 'bad' });
 
     if (w.exposure < 0.75) msgs.push({ text: 'WIND SHADOW — sailing into a lee', tone: 'warn' });
     if (w.gust > 1.12) msgs.push({ text: `PUFF +${Math.round((w.gust - 1) * 100)}%`, tone: 'info' });
@@ -140,7 +140,8 @@ function Modes() {
 
 export function Instruments() {
   const conditions = useReadout<HTMLSpanElement>(
-    (s) => `${formatClock(s.sky.hour)} · ${phaseName(s.sky)}`,
+    (s) =>
+      `${formatClock(s.sky.hour)} · ${phaseName(s.sky)} · ${WEATHER_LABEL[s.weather.state.kind]}`,
   );
 
   return (
