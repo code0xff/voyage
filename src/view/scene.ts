@@ -15,6 +15,7 @@ import { createCourseView } from './course';
 import { createIslandView } from './islands';
 import { createRain } from './rain';
 import { createSkyDome } from './skydome';
+import { createOrbit } from './orbit';
 
 /**
  * Scene assembly.
@@ -363,6 +364,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   let camMode = 0; // 0 = chase, 1 = top-down
   const camPos = new THREE.Vector3(0, 14, 30);
   const camTarget = new THREE.Vector3();
+  const orbit = createOrbit(canvas);
 
   function resize(): void {
     const w = canvas.clientWidth || window.innerWidth;
@@ -522,20 +524,39 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     const jumped = camTarget.distanceTo(new THREE.Vector3(bx, 3, bz)) > 150;
 
     if (camMode === 0) {
-      const back = 26 + diag.speed * 2.2;
+      // Spherical about the boat, so the mouse can swing the eye anywhere
+      // around her. Azimuth is measured from dead astern and added to the
+      // heading, which is what keeps a chosen view fixed relative to the boat
+      // rather than to the compass.
+      const dist = (26 + diag.speed * 2.2) * orbit.zoom;
+      const az = state.heading + orbit.yaw;
+      const horiz = Math.cos(orbit.pitch) * dist;
       // The camera only partly follows the heave; tracking it fully is nauseating.
       const want = new THREE.Vector3(
-        bx + Math.sin(state.heading) * -back,
-        11 + diag.speed * 0.6 + state.heave * 0.4,
-        bz + Math.cos(state.heading) * back,
+        bx - Math.sin(az) * horiz,
+        3 + state.heave * 0.4 + Math.sin(orbit.pitch) * dist,
+        bz + Math.cos(az) * horiz,
       );
-      camPos.lerp(want, jumped ? 1 : 1 - Math.exp(-dt / 0.5));
+      // Half a second of smoothing is right for following the boat and far too
+      // slow for following a hand: dragged with it, the view visibly trails the
+      // mouse. Tighten it while the mouse has hold of the camera.
+      const follow = orbit.dragging ? 0.06 : 0.5;
+      camPos.lerp(want, jumped ? 1 : 1 - Math.exp(-dt / follow));
       camTarget.lerp(
         new THREE.Vector3(bx, 3 + state.heave * 0.6, bz),
         jumped ? 1 : 1 - Math.exp(-dt / 0.25),
       );
+
+      // At a low orbit angle in a seaway the eye ends up inside a crest, which
+      // renders as a full-screen flash of blue. Ride over the local surface
+      // instead. Sim y is north, three z is south, hence the negation.
+      const minY = waves.heightAt(camPos.x, -camPos.z) + 2;
+      if (camPos.y < minY) camPos.y = minY;
     } else {
-      camPos.lerp(new THREE.Vector3(bx, 120, bz + 0.01), jumped ? 1 : 1 - Math.exp(-dt / 0.3));
+      camPos.lerp(
+        new THREE.Vector3(bx, 120 * orbit.zoom, bz + 0.01),
+        jumped ? 1 : 1 - Math.exp(-dt / 0.3),
+      );
       camTarget.lerp(new THREE.Vector3(bx, 0, bz), jumped ? 1 : 1 - Math.exp(-dt / 0.3));
     }
     camera.position.copy(camPos);
@@ -557,6 +578,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       water.setTerrain(terrain);
     },
     dispose() {
+      orbit.dispose();
       water.dispose();
       islandView.dispose();
       rain.dispose();

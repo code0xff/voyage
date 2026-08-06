@@ -329,6 +329,9 @@ with a personal best updates the ghost you race against next time.
 | `Q E` | mean wind direction |
 | `[ ]` | mean wind speed |
 | `C` | camera (chase / top-down) |
+| drag | orbit the camera around the boat |
+| wheel | zoom |
+| double-click | recentre the view astern |
 | `P` | recompute polar |
 | `R` | restart |
 | `M` | sound |
