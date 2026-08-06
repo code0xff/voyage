@@ -3,6 +3,7 @@ import {
   ACTIVE_RANGE,
   IslandField,
   MAX_ACTIVE_ISLANDS,
+  MAX_DENSITY,
   Terrain,
   WAKE_MAX,
   sameIslands,
@@ -91,15 +92,15 @@ describe('endless island field', () => {
     new IslandField({ seed: 42, density: 0.4, keepClear: [], clearance: 130, ...over });
 
   it('is reproducible from a seed', () => {
-    const a = field().active(3000, -1200);
-    const b = field().active(3000, -1200);
+    const a = field().active(3000, -1200, 0);
+    const b = field().active(3000, -1200, 0);
     expect(a).toEqual(b);
     expect(a.length).toBeGreaterThan(0);
   });
 
   it('gives different worlds for different seeds', () => {
-    const a = field().active(0, 0);
-    const b = field({ seed: 43 }).active(0, 0);
+    const a = field().active(0, 0, 0);
+    const b = field({ seed: 43 }).active(0, 0, 0);
     expect(a).not.toEqual(b);
   });
 
@@ -109,11 +110,11 @@ describe('endless island field', () => {
    */
   it('puts the same island in the same place however you come upon it', () => {
     const f = field();
-    const first = f.active(0, 0);
+    const first = f.active(0, 0, 0);
     const target = first[0];
     // Sail well away, then back. The window is re-collected from scratch.
-    f.active(9000, 9000);
-    const again = f.active(0, 0);
+    f.active(9000, 9000, 0);
+    const again = f.active(0, 0, 0);
     expect(again).toContainEqual(target);
   });
 
@@ -124,14 +125,14 @@ describe('endless island field', () => {
       { x: -120, y: -90 },
     ];
     const f = field({ density: 0.9, keepClear: marks });
-    const t = new Terrain(f.active(0, 200));
+    const t = new Terrain(f.active(0, 200, 0));
     for (const m of marks) {
       expect(t.depthAt(m.x, m.y)).toBeGreaterThan(CRUISER.draft * 2);
     }
   });
 
   it('is open ocean at zero density', () => {
-    expect(field({ density: 0 }).active(0, 0)).toEqual([]);
+    expect(field({ density: 0 }).active(0, 0, 0)).toEqual([]);
   });
 
   /**
@@ -142,7 +143,7 @@ describe('endless island field', () => {
   it('never hands out more islands than the shader can hold', () => {
     const f = field({ density: 1 }); // clamped to the maximum internally
     for (let x = 0; x < 20000; x += 1300) {
-      expect(f.active(x, x * 0.4).length).toBeLessThanOrEqual(MAX_ACTIVE_ISLANDS);
+      expect(f.active(x, x * 0.4, 0).length).toBeLessThanOrEqual(MAX_ACTIVE_ISLANDS);
     }
   });
 
@@ -167,7 +168,7 @@ describe('endless island field', () => {
    */
   it('keeps the cache bounded over a long passage without changing the world', () => {
     const f = field({ density: 0.22 });
-    const home = f.active(0, 0);
+    const home = f.active(0, 0, 0);
     let peak = 0;
     for (let d = 0; d < 200000; d += 400) {
       f.visible(d, d * 0.3);
@@ -175,15 +176,58 @@ describe('endless island field', () => {
     }
     expect(peak).toBeGreaterThan(2048); // the prune really was exercised
     expect(f.cellCount).toBeLessThan(2048);
-    expect(f.active(0, 0)).toEqual(home);
+    expect(f.active(0, 0, 0)).toEqual(home);
+  });
+
+  /**
+   * The window's whole justification: what it leaves out cannot be felt.
+   *
+   * Both halves of that get checked here, because both were wrong once. Land
+   * beyond ACTIVE_RANGE must not matter -- the first bound measured a wake
+   * along its axis and forgot that it spreads, cutting off the last ninety
+   * metres of it. And when the window is fuller than the shader can hold, what
+   * gets dropped must not matter either -- dropping the furthest island cost
+   * up to 0.30 of wind exposure at points the water grid actually samples,
+   * because a wake points downwind and distance knows nothing about that.
+   *
+   * Sampling is at QUERY_REACH, not at the boat: at the boat the old rule
+   * looked perfect, which is exactly why it survived review.
+   */
+  it('leaves out only what cannot be felt, in a crowded window', () => {
+    const REACH = 650;
+    let worst = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      // Wound right up, so the cap bites and there is land outside the window.
+      const f = field({ seed, density: MAX_DENSITY });
+      for (let i = 0; i < 4; i++) {
+        const x = i * 613 + seed * 7;
+        const y = i * 389 - seed * 11;
+        for (let twd = 0; twd < 6.28; twd += 0.9) {
+          const capped = new Terrain(f.active(x, y, twd));
+          // Everything anywhere near, with no window and no cap at all.
+          const everything = new Terrain(f.debugCollectAll(x, y, ACTIVE_RANGE * 3));
+          for (let a = 0; a < 6.28; a += 0.8) {
+            const qx = x + Math.cos(a) * REACH;
+            const qy = y + Math.sin(a) * REACH;
+            worst = Math.max(
+              worst,
+              Math.abs(capped.windExposure(qx, qy, twd) - everything.windExposure(qx, qy, twd)),
+              Math.abs(capped.waveShelter(qx, qy, twd) - everything.waveShelter(qx, qy, twd)),
+              Math.abs(capped.depthAt(qx, qy) - everything.depthAt(qx, qy)),
+            );
+          }
+        }
+      }
+    }
+    expect(worst).toBeLessThan(1e-9);
   });
 
   it('recognises an unchanged window so the world is not rebuilt for nothing', () => {
     const f = field();
     // Ten metres is nothing next to a 1.9 km window: the same islands, and the
     // very same objects, must come back.
-    expect(sameIslands(f.active(0, 0), f.active(10, 0))).toBe(true);
-    expect(sameIslands(f.active(0, 0), f.active(6000, 6000))).toBe(false);
+    expect(sameIslands(f.active(0, 0, 0), f.active(10, 0, 0))).toBe(true);
+    expect(sameIslands(f.active(0, 0, 0), f.active(6000, 6000, 0))).toBe(false);
   });
 });
 

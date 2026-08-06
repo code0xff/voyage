@@ -15,7 +15,14 @@ import { cyclePilot, initialPilot, pilotRudder, type PilotState } from './sim/au
 import { DEG, RAD, approach, clamp, compassVec, wrap2Pi, wrapPi } from './sim/math';
 import { msToKnots } from './sim/units';
 import { buildCourse, initialRaceState, updateRace, type Course, type RaceState } from './sim/race';
-import { EMPTY_TERRAIN, IslandField, Terrain, sameIslands, type Island } from './sim/terrain';
+import {
+  EMPTY_TERRAIN,
+  IslandField,
+  MAX_DENSITY,
+  Terrain,
+  sameIslands,
+  type Island,
+} from './sim/terrain';
 import { skyState, type SkyState } from './sim/sky';
 import { Weather } from './sim/weather';
 import {
@@ -107,6 +114,8 @@ const PHYS_DT = 1 / 120;
  * island is invisible, and it keeps the cell scan off the per-step path.
  */
 const STREAM_STEP = 100;
+/** How far the mean wind must turn before the island window is re-ranked, rad. */
+const STREAM_TURN = 8 * DEG;
 /**
  * How fast the keys move the helm, in fractions of full deflection per second:
  * slowly near amidships, faster the further over it already is.
@@ -256,6 +265,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let activeIslands: readonly Island[] = [];
   let visibleIslands: readonly Island[] = [];
   let streamedFrom = { x: Infinity, y: Infinity };
+  let streamedTwd = Infinity;
   /**
    * Whether the current field has ever been published.
    *
@@ -284,12 +294,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
         ? new IslandField({
             seed: current.seed,
             // The slider is 0..10 islands' worth of thickness, not a count: in
-            // an endless ocean there is no total to set. The scale is chosen so
-            // that the default keeps about five islands inside the physics
-            // window, comfortably under the dozen it can hold -- saturating the
-            // window means islands being dropped from it, and land the boat
-            // sails past without feeling.
-            density: current.islandCount * 0.055,
+            // an endless ocean there is no total to set. Ten is MAX_DENSITY,
+            // which is not a round number but the thickest sea the island
+            // window is measured to handle without leaving anything out.
+            density: (current.islandCount / 10) * MAX_DENSITY,
             keepClear: [
               course.start.a,
               course.start.b,
@@ -328,14 +336,22 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       }
       return;
     }
-    if (Math.hypot(x - streamedFrom.x, y - streamedFrom.y) < STREAM_STEP) return;
+    // Distance is the usual trigger, but the window also depends on the wind:
+    // which land is worth keeping when the window is full is a question about
+    // where the wakes point. Turn the wind far enough and it has to be asked
+    // again even if the boat has not moved a metre.
+    const turned = Math.abs(wrapPi(wind.baseTwd - streamedTwd));
+    if (Math.hypot(x - streamedFrom.x, y - streamedFrom.y) < STREAM_STEP && turned < STREAM_TURN) {
+      return;
+    }
     streamedFrom = { x, y };
+    streamedTwd = wind.baseTwd;
 
     // The two windows are checked separately. The drawn one is the larger, so
     // land can enter it -- and has to be built -- long before it is close
     // enough to be felt, and equally land can drop out of the physics window
     // while still very much in sight.
-    const active = field.active(x, y);
+    const active = field.active(x, y, wind.baseTwd);
     const visible = field.visible(x, y);
     if (published && sameIslands(active, activeIslands) && sameIslands(visible, visibleIslands)) {
       return;

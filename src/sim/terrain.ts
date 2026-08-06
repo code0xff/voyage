@@ -218,25 +218,58 @@ const CELL = 820;
  * would show as a seam.
  */
 const QUERY_REACH = 650;
+/** The largest island the field will generate. The bounds below depend on it. */
+const MAX_ISLAND_RADIUS = 250;
+/**
+ * How far from an island's centre its influence can possibly reach, m.
+ *
+ * WAKE_MAX alone is not it, and the first version of this bound said it was.
+ * A wake is not a line: it spreads, so the furthest influenced point is out at
+ * the corner of the wake, not straight down the axis. Taking the wider of the
+ * two spreading rates and the widest island the field makes, the corner sits
+ * about ninety metres beyond WAKE_MAX -- which is how much of the wake the old
+ * bound quietly cut off.
+ *
+ * The shelf is not the binding constraint: land shoals to full depth within
+ * radius * 2.6 + MAX_DEPTH / SHELF_SLOPE, about 1.1 km, well inside this.
+ */
+const INFLUENCE_RADIUS = Math.hypot(
+  WAKE_MAX,
+  MAX_ISLAND_RADIUS * 1.15 + WAKE_MAX * 0.16,
+);
 /**
  * How far the physics window reaches from the boat, m.
  *
- * This is a bound, not a taste: a wake is over by WAKE_MAX from the island that
- * casts it, and the furthest anything is asked about is QUERY_REACH from the
- * boat, so an island beyond the sum of the two provably cannot change any
- * answer. That is what makes it safe to hand the physics a finite list.
+ * This is a bound, not a taste. Nothing is asked about the terrain further than
+ * QUERY_REACH from the boat, and no island reaches further than
+ * INFLUENCE_RADIUS from its own centre, so an island beyond the sum of the two
+ * provably cannot change any answer. That is what makes it safe to hand the
+ * physics a finite list -- and `terrain.test.ts` holds the claim to account
+ * rather than leaving it as a comment.
  */
-export const ACTIVE_RANGE = WAKE_MAX + QUERY_REACH;
+export const ACTIVE_RANGE = INFLUENCE_RADIUS + QUERY_REACH;
 /**
  * How many islands the physics window holds. The water shader loops over this
  * many uniforms, so it is a shader cost as much as a physics one, and both must
  * use the same number or the flat water and the felt lee stop matching.
  *
- * The default density keeps about five in the window. Wound up to maximum the
- * cap does bite, and what gets dropped is the furthest -- which, by the taper
- * above, is the land whose wake has already faded to nothing.
+ * Sixteen and MAX_DENSITY are a matched pair, chosen by measurement rather than
+ * taste: at the thickest sea the field will make, sixteen is where the window
+ * stops leaving anything out that could be felt anywhere the water is sampled.
+ * Twelve was not -- it was 0.12 of wind exposure short at the top of the range
+ * even after relevance() started deciding what to drop, and 0.30 short before
+ * that. Raising either number without re-running that measurement breaks the
+ * guarantee terrain.test.ts asserts.
  */
-export const MAX_ACTIVE_ISLANDS = 12;
+export const MAX_ACTIVE_ISLANDS = 16;
+/**
+ * The thickest the sea gets, as a fraction of cells holding an island.
+ *
+ * A ceiling on how much land the cap has to account for, so the window's
+ * promise -- that what it leaves out cannot be felt -- holds for every world
+ * the field can be asked for and not merely the ones the menu offers today.
+ */
+export const MAX_DENSITY = 0.55;
 /** How far islands are drawn, m. Past the fog at any visibility, so they are born unseen. */
 export const VISUAL_RANGE = 2800;
 /** Cap on drawn islands, purely to bound the mesh budget in a crowded archipelago. */
@@ -256,6 +289,51 @@ interface Cell {
   cx: number;
   cy: number;
   island: Island | null;
+}
+
+/**
+ * An upper bound, 0..1, on how much this island could matter to anything asked
+ * within QUERY_REACH of (x, y). Used only to decide what to drop when the
+ * window is fuller than the shader can hold.
+ *
+ * Dropping the furthest island is the obvious rule and it is wrong. A wake
+ * points downwind, so an island two kilometres away and dead upwind can be
+ * taking most of the breeze out of the water the boat is about to sail into,
+ * while three nearer ones sit harmlessly abeam. Ordered by distance the useful
+ * one is the first to go: measured over four thousand crowded windows, the
+ * wind at a point 650 m from the boat came out as much as 0.30 wrong, and the
+ * wave shelter 0.47, against the same window uncapped.
+ *
+ * Every offset here is taken in the island's favour -- the strongest point the
+ * neighbourhood can reach, not the boat's own position -- so this can only
+ * overstate an island's importance, never drop one that mattered.
+ */
+function relevance(
+  isl: Island,
+  x: number,
+  y: number,
+  dwx: number,
+  dwy: number,
+  d: number,
+): number {
+  // Land near enough to shoal under the boat is kept whatever the wind is
+  // doing: grounding does not care which way the wake points.
+  if (d <= isl.radius * 2.6 + MAX_DEPTH / SHELF_SLOPE + QUERY_REACH) return 1;
+
+  const dx = x - isl.pos.x;
+  const dy = y - isl.pos.y;
+  const along = dx * dwx + dy * dwy;
+  // Entirely upwind of everything in reach: it cannot touch any of it.
+  if (along + QUERY_REACH <= 0) return 0;
+
+  const near = Math.max(0, along - QUERY_REACH);
+  if (near > WAKE_MAX) return 0;
+  const across = Math.max(0, Math.abs(dx * dwy - dy * dwx) - QUERY_REACH);
+  // The wider of the two wake models, so this bounds both.
+  if (across > isl.radius * 1.15 + near * 0.16) return 0;
+
+  const reach = Math.max(isl.height, 8) * 13;
+  return Math.exp(-near / reach) * wakeTaper(near);
 }
 
 /** Hash a cell to its own random stream. Neighbouring cells must be unrelated. */
@@ -291,8 +369,7 @@ export class IslandField {
   private density: number;
 
   constructor(private opts: IslandFieldOptions) {
-    // Above about 0.9 the cells start reading as a grid rather than a sea.
-    this.density = Math.min(Math.max(opts.density, 0), 0.9);
+    this.density = Math.min(Math.max(opts.density, 0), MAX_DENSITY);
   }
 
   private cell(cx: number, cy: number): Cell {
@@ -309,7 +386,7 @@ export class IslandField {
         x: (cx + 0.18 + rand() * 0.64) * CELL,
         y: (cy + 0.18 + rand() * 0.64) * CELL,
       };
-      const radius = 60 + rand() * 190;
+      const radius = 60 + rand() * (MAX_ISLAND_RADIUS - 60);
       const height = 18 + rand() * 90 * (radius / 200);
       const clear = this.opts.keepClear.every(
         (p) => Math.hypot(p.x - pos.x, p.y - pos.y) > radius * 1.3 + this.opts.clearance,
@@ -330,22 +407,32 @@ export class IslandField {
    * shelf. Measuring to the shoreline instead would quietly pull islands into
    * the window that are a shoreline-width beyond where anything can be felt.
    */
-  private collect(x: number, y: number, range: number, max: number): Island[] {
+  private collect(
+    x: number,
+    y: number,
+    range: number,
+    max: number,
+    twd?: number,
+  ): Island[] {
     const c0 = Math.floor((x - range) / CELL);
     const c1 = Math.floor((x + range) / CELL);
     const r0 = Math.floor((y - range) / CELL);
     const r1 = Math.floor((y + range) / CELL);
+    const from = twd === undefined ? null : compassVec(twd);
 
-    const found: { isl: Island; d: number }[] = [];
+    const found: { isl: Island; d: number; rank: number }[] = [];
     for (let cx = c0; cx <= c1; cx++) {
       for (let cy = r0; cy <= r1; cy++) {
         const isl = this.cell(cx, cy).island;
         if (!isl) continue;
         const d = Math.hypot(isl.pos.x - x, isl.pos.y - y);
-        if (d <= range) found.push({ isl, d });
+        if (d > range) continue;
+        found.push({ isl, d, rank: from ? relevance(isl, x, y, -from.x, -from.y, d) : 1 });
       }
     }
-    found.sort((a, b) => a.d - b.d);
+    // Most relevant first, nearest first among equals. Distance alone is the
+    // wrong order to truncate in: see relevance().
+    found.sort((a, b) => b.rank - a.rank || a.d - b.d);
     if (found.length > max) found.length = max;
     return found.map((f) => f.isl);
   }
@@ -355,9 +442,23 @@ export class IslandField {
     return this.cells.size;
   }
 
-  /** The window the physics and the water shader share. */
-  active(x: number, y: number): Island[] {
-    return this.collect(x, y, ACTIVE_RANGE, MAX_ACTIVE_ISLANDS);
+  /**
+   * Every island within `range`, no cap and no ranking. Only the test that
+   * holds ACTIVE_RANGE to account uses this: it needs something to compare the
+   * window against, and that something has to be the unwindowed truth.
+   */
+  debugCollectAll(x: number, y: number, range: number): Island[] {
+    return this.collect(x, y, range, Number.MAX_SAFE_INTEGER);
+  }
+
+  /**
+   * The window the physics and the water shader share.
+   *
+   * @param twd the mean wind direction, which decides what is worth keeping
+   *            when there is more land in range than the shader can hold
+   */
+  active(x: number, y: number, twd: number): Island[] {
+    return this.collect(x, y, ACTIVE_RANGE, MAX_ACTIVE_ISLANDS, twd);
   }
 
   /** The larger window the island meshes are built from. */
