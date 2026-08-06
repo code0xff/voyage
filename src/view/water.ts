@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { MAX_WAVES, type WaveField } from '../sim/waves';
 import type { Terrain } from '../sim/terrain';
+import type { SkyState } from '../sim/sky';
 import { compassVec } from '../sim/math';
 
 /**
@@ -117,6 +118,7 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uShallow;
   uniform vec3 uSky;
   uniform vec3 uSun;
+  uniform vec3 uSunColor;
   uniform vec3 uFogColor;
   uniform float uFogNear;
   uniform float uFogFar;
@@ -156,7 +158,7 @@ const fragmentShader = /* glsl */ `
     col = mix(col, uSky, clamp(fres * 0.85, 0.0, 0.75));
 
     vec3 h = normalize(sunDir + viewDir);
-    col += vec3(1.0, 0.98, 0.92) * pow(max(dot(n, h), 0.0), 90.0) * uSpecular;
+    col += uSunColor * pow(max(dot(n, h), 0.0), 90.0) * uSpecular;
 
     // Whitecaps. Keying on height alone produces broad white bands that read
     // as fog. Waves only actually break on crests that are both high *and*
@@ -177,12 +179,20 @@ const fragmentShader = /* glsl */ `
 export interface Water {
   mesh: THREE.Mesh;
   /** Per frame: move the grid to the boat and refresh the wave uniforms. */
-  update(waves: WaveField, simX: number, simY: number, tws: number, twd: number): void;
+  update(
+    waves: WaveField,
+    simX: number,
+    simY: number,
+    tws: number,
+    twd: number,
+    sky: SkyState,
+    visibility: number,
+  ): void;
   setTerrain(terrain: Terrain): void;
   dispose(): void;
 }
 
-export function createWater(fogColor: number, fogNear: number, fogFar: number): Water {
+export function createWater(): Water {
   const geo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
   // The plane stays in XY: the shader converts to three's coordinates itself,
   // so there is no rotation here.
@@ -208,9 +218,10 @@ export function createWater(fogColor: number, fogNear: number, fogFar: number): 
     uShallow: { value: new THREE.Color(0x3a6b8a) },
     uSky: { value: new THREE.Color(0x62869f) },
     uSun: { value: new THREE.Vector3(-0.5, 0.7, 0.3) },
-    uFogColor: { value: new THREE.Color(fogColor) },
-    uFogNear: { value: fogNear },
-    uFogFar: { value: fogFar },
+    uSunColor: { value: new THREE.Color(1, 0.98, 0.94) },
+    uFogColor: { value: new THREE.Color(0x1b2a3a) },
+    uFogNear: { value: 260 },
+    uFogFar: { value: 560 },
     uWhitecap: { value: 0 },
     uSpecular: { value: 0.5 },
   };
@@ -231,7 +242,7 @@ export function createWater(fogColor: number, fogNear: number, fogFar: number): 
         else islands[i].set(0, 0, 1, 0);
       }
     },
-    update(waves, simX, simY, tws, twd) {
+    update(waves, simX, simY, tws, twd, sky, visibility) {
       // Snap to whole cells, otherwise the vertices slide and the water swims.
       const ox = Math.round(simX / quad) * quad;
       const oy = Math.round(simY / quad) * quad;
@@ -256,6 +267,20 @@ export function createWater(fogColor: number, fogNear: number, fogFar: number): 
       // Whitecaps start to appear around 12 knots.
       uniforms.uWhitecap.value = Math.min(Math.max((tws - 6) / 12, 0), 0.85);
 
+      uniforms.uDeep.value.setRGB(sky.waterDeep[0], sky.waterDeep[1], sky.waterDeep[2]);
+      uniforms.uShallow.value.setRGB(
+        sky.waterShallow[0],
+        sky.waterShallow[1],
+        sky.waterShallow[2],
+      );
+      uniforms.uSky.value.setRGB(sky.skyHorizon[0], sky.skyHorizon[1], sky.skyHorizon[2]);
+      uniforms.uSunColor.value.setRGB(sky.sunColor[0], sky.sunColor[1], sky.sunColor[2]);
+      uniforms.uFogColor.value.setRGB(sky.fogColor[0], sky.fogColor[1], sky.fogColor[2]);
+      uniforms.uSun.value.set(sky.sunDir[0], sky.sunDir[1], sky.sunDir[2]);
+      // A low sun lays a long glare path down the water; overhead it sparkles.
+      uniforms.uSpecular.value = 0.25 + sky.daylight * 0.55 + sky.goldenness * 0.5;
+      uniforms.uFogNear.value = visibility * 0.35;
+      uniforms.uFogFar.value = visibility;
     },
     dispose() {
       geo.dispose();

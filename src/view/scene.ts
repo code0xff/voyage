@@ -8,9 +8,11 @@ import type { WaveField } from '../sim/waves';
 import type { Course, RaceState } from '../sim/race';
 import type { GhostSample } from '../sim/replay';
 import type { Terrain } from '../sim/terrain';
+import type { SkyState } from '../sim/sky';
 import { createWater } from './water';
 import { createCourseView } from './course';
 import { createIslandView } from './islands';
+import { createSkyDome } from './skydome';
 
 /**
  * Scene assembly.
@@ -39,6 +41,7 @@ export interface FrameInput {
   waves: WaveField;
   course: Course;
   race: RaceState;
+  sky: SkyState;
   ghost: GhostSample | null;
   dt: number;
 }
@@ -168,24 +171,26 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 
   const scene = new THREE.Scene();
-  // Fog and background must match for the horizon to dissolve naturally.
-  const HORIZON = 0x1b2a3a;
-  scene.background = new THREE.Color(HORIZON);
-  scene.fog = new THREE.Fog(HORIZON, 260, 560);
+  // Fog colour tracks the sky, so the horizon always dissolves into it.
+  scene.fog = new THREE.Fog(0x1b2a3a, 260, 560);
 
-  const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 2000);
+  const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 4000);
 
-  scene.add(new THREE.HemisphereLight(0xcfe2f5, 0x223141, 2.2));
+  // All three lights are driven by the time of day every frame.
+  const hemi = new THREE.HemisphereLight(0xcfe2f5, 0x223141, 2.2);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffffff, 2.0);
-  sun.position.set(-60, 90, 40);
   scene.add(sun);
   const fill = new THREE.DirectionalLight(0x9fc4e8, 0.9);
   fill.position.set(70, 40, -60);
   scene.add(fill);
 
+  const skyDome = createSkyDome();
+  scene.add(skyDome.mesh);
+
   // --- Water --------------------------------------------------------------
   // Wave shape on the GPU, floating height on the CPU, from the same formula.
-  const water = createWater(HORIZON, 260, 560);
+  const water = createWater();
   scene.add(water.mesh);
 
   const islandView = createIslandView();
@@ -361,15 +366,44 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   }
   resize();
 
+  /** How far you can see. Weather narrows this later; for now it is the sky. */
+  const VISIBILITY = 900;
+
   function render(f: FrameInput): void {
-    const { state, diag, wind, waves, dt } = f;
+    const { state, diag, wind, waves, sky, dt } = f;
+
+    // --- Sky and light ---
+    sun.color.setRGB(sky.sunColor[0], sky.sunColor[1], sky.sunColor[2]);
+    sun.intensity = sky.sunIntensity;
+    sun.position.set(sky.sunDir[0] * 400, sky.sunDir[1] * 400 + 30, sky.sunDir[2] * 400);
+    hemi.color.setRGB(sky.skyHorizon[0], sky.skyHorizon[1], sky.skyHorizon[2]);
+    hemi.groundColor.setRGB(sky.waterDeep[0], sky.waterDeep[1], sky.waterDeep[2]);
+    hemi.intensity = sky.ambientIntensity;
+    fill.intensity = 0.25 + sky.daylight * 0.55;
+
+    const fogColor = new THREE.Color(sky.fogColor[0], sky.fogColor[1], sky.fogColor[2]);
+    scene.background = fogColor;
+    (scene.fog as THREE.Fog).color.copy(fogColor);
+    (scene.fog as THREE.Fog).near = VISIBILITY * 0.35;
+    (scene.fog as THREE.Fog).far = VISIBILITY;
+    skyDome.update(sky, 0);
+    islandView.update(sky);
+
     courseView.update(f.course, f.race, waves);
     courseView.setGhost(f.ghost);
 
     const bx = state.pos.x;
     const bz = -state.pos.y;
 
-    water.update(waves, state.pos.x, state.pos.y, wind.baseTws, wind.baseTwd);
+    water.update(
+      waves,
+      state.pos.x,
+      state.pos.y,
+      wind.baseTws,
+      wind.baseTwd,
+      sky,
+      VISIBILITY,
+    );
 
     // The boat floats on the waves; heave, pitch and heel all come from the
     // integrated physics state.
@@ -500,6 +534,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     }
     camera.position.copy(camPos);
     camera.lookAt(camTarget);
+    skyDome.mesh.position.copy(camPos);
 
     renderer.render(scene, camera);
   }
@@ -517,6 +552,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     dispose() {
       water.dispose();
       islandView.dispose();
+      skyDome.dispose();
       renderer.dispose();
     },
   };

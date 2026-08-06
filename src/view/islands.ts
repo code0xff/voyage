@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Terrain } from '../sim/terrain';
+import type { SkyState } from '../sim/sky';
 
 /**
  * Island meshes.
@@ -75,6 +76,7 @@ function islandMesh(
 export interface IslandView {
   group: THREE.Object3D;
   setTerrain(terrain: Terrain): void;
+  update(sky: SkyState): void;
   dispose(): void;
 }
 
@@ -103,6 +105,11 @@ export function createIslandView(): IslandView {
         const reach = isl.radius * 1.55 + 40;
         group.add(islandMesh(terrain, isl.pos.x, isl.pos.y, reach, material));
       }
+    },
+    update(sky) {
+      // Land reads far too bright at night without this; the moon is not a sun.
+      const k = 0.16 + sky.daylight * 0.84;
+      material.color.setRGB(k, k, k);
     },
     dispose() {
       clear();

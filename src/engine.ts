@@ -15,6 +15,7 @@ import { DEG, RAD, clamp, compassVec, wrap2Pi } from './sim/math';
 import { msToKnots } from './sim/units';
 import { buildCourse, initialRaceState, updateRace, type Course, type RaceState } from './sim/race';
 import { EMPTY_TERRAIN, Terrain, generateArchipelago } from './sim/terrain';
+import { skyState, type SkyState } from './sim/sky';
 import {
   Ghost,
   Recorder,
@@ -49,6 +50,7 @@ export interface Snapshot {
   terrain: Terrain;
   course: Course;
   race: RaceState;
+  sky: SkyState;
   polar: Polar | null;
   telemetry: Telemetry;
   best: number | null;
@@ -111,6 +113,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let race = initialRaceState(raceCfg(settings));
   let racing = false;
   let paused = false;
+  let hour = settings.startHour;
   let current = settings;
 
   const view: SceneView = createScene(canvas, cfg);
@@ -140,6 +143,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     terrain: EMPTY_TERRAIN,
     course,
     race,
+    sky: skyState(settings.startHour),
     polar: null,
     telemetry,
     best,
@@ -282,6 +286,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * diverged, what the console produces and what you actually play would differ.
    */
   function physicsStep(): void {
+    // Time of day. timeScale is "simulated minutes per real minute".
+    hour += (PHYS_DT / 3600) * current.timeScale;
+
     wind.update(PHYS_DT);
     // Wind is a function of position: sample it where the boat actually is.
     const w = wind.sample(state.pos);
@@ -379,6 +386,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       }
     }
 
+    snapshot.sky = skyState(hour);
     render(wall);
     input.endFrame();
     frameSubs.forEach((f) => f(snapshot));
@@ -442,6 +450,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       waves,
       course,
       race,
+      sky: snapshot.sky,
       ghost: showGhost ? ghostSample : null,
       dt,
     });

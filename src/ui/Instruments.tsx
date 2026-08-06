@@ -1,9 +1,11 @@
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { RAD, wrap2Pi } from '@/sim/math';
 import { msToKnots } from '@/sim/units';
+import { phaseName, formatClock } from '@/sim/sky';
 import type { Snapshot } from '@/engine';
 import { useEngineFrame, useReadout } from './engine-context';
 import { TelemetryCard } from './TelemetryCard';
@@ -137,12 +139,19 @@ function Modes() {
 }
 
 export function Instruments() {
+  const conditions = useReadout<HTMLSpanElement>(
+    (s) => `${formatClock(s.sky.hour)} · ${phaseName(s.sky)}`,
+  );
+
   return (
     <Card className="pointer-events-auto w-[268px] gap-0 p-3 backdrop-blur-md bg-card/85">
       <div className="flex items-center justify-between pb-2">
         <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
           Instruments
         </span>
+        <Badge variant="outline" className="px-1.5 py-0 text-[9px] font-normal">
+          <span ref={conditions} />
+        </Badge>
       </div>
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">

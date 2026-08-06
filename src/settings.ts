@@ -21,6 +21,10 @@ export interface Settings {
   countdown: number;
   sound: boolean;
 
+  /** Hour of day the session starts at, 0..24. */
+  startHour: number;
+  /** How many simulated minutes pass per real minute. 1 = real time. */
+  timeScale: number;
   /** Number of islands scattered around the course. Zero is open water. */
   islandCount: number;
   /** Seed for the archipelago, so a session can be reproduced. */
@@ -35,6 +39,8 @@ export const DEFAULT_SETTINGS: Settings = {
   laps: 2,
   countdown: 45,
   sound: true,
+  startHour: 9,
+  timeScale: 60,
   islandCount: 4,
   seed: 20260806,
 };
@@ -58,6 +64,8 @@ export function loadSettings(): Settings {
       laps: Math.round(num(o.laps, DEFAULT_SETTINGS.laps, 1, 5)),
       countdown: Math.round(num(o.countdown, DEFAULT_SETTINGS.countdown, 5, 300)),
       sound: typeof o.sound === 'boolean' ? o.sound : DEFAULT_SETTINGS.sound,
+      startHour: num(o.startHour, DEFAULT_SETTINGS.startHour, 0, 24),
+      timeScale: num(o.timeScale, DEFAULT_SETTINGS.timeScale, 0, 600),
       islandCount: Math.round(num(o.islandCount, DEFAULT_SETTINGS.islandCount, 0, 10)),
       seed: Math.round(num(o.seed, DEFAULT_SETTINGS.seed, 1, 2 ** 31)),
     };

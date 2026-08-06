@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { formatTime, type Course, type RaceState } from '@/sim/race';
+import { formatClock } from '@/sim/sky';
 import type { Settings } from '@/settings';
 import { cn } from '@/lib/utils';
 
@@ -261,6 +262,24 @@ export function MenuDialog({
               value={settings.seaScale}
               format={(v) => (v === 0 ? 'flat' : `${v.toFixed(1)}x`)}
               onChange={(v) => set('seaScale', v)}
+            />
+            <Slider
+              label="Start time"
+              min={0}
+              max={23.5}
+              step={0.5}
+              value={settings.startHour}
+              format={(v) => formatClock(v)}
+              onChange={(v) => set('startHour', v)}
+            />
+            <Slider
+              label="Time speed"
+              min={0}
+              max={360}
+              step={10}
+              value={settings.timeScale}
+              format={(v) => (v === 0 ? 'frozen' : `${v}x`)}
+              onChange={(v) => set('timeScale', v)}
             />
           </TabsContent>
 
