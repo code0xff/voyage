@@ -153,9 +153,16 @@ test to make the suite pass; fix the cause.
 
 ## 6. Branching and commits
 
-- `main` is the stable branch. Do not commit to it directly.
-- Work on `dev` or a feature branch off it.
+**`dev` is the default branch, and until the project actually launches it is the
+only one.** There is deliberately no `main`: a stable branch that nothing is ever
+released from is ceremony, and keeping two branches in step costs attention a
+pre-launch project should be spending elsewhere.
+
+- Work on `dev`, or on a short-lived branch merged straight back into it.
+- Cut a release branch when there is something to release, not before.
 - Never commit `node_modules/`, `dist/`, or anything derived.
+- History on `dev` may be rewritten while this is pre-launch and single-author.
+  The moment anyone else is pulling it, that stops.
 
 ### One commit per implemented feature
 
