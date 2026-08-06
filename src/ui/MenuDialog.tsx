@@ -224,22 +224,38 @@ export function MenuDialog({
                 anyone here wants, so it leads and it is the wide one. The two
                 below it both throw that session away, which is why they are
                 not sitting in the same row as it. */}
+            {/* Stacked, not side by side. A row of two reads as one choice
+                against another, the way Cancel sits next to OK -- but these are
+                not opposites, they are two different games, and a list is how
+                you offer those. It also absorbs a third mode without becoming a
+                cramped row of three. Weight comes from the variant, not the
+                width, so Resume still leads. */}
             {canResume && (
-              <Button className="mb-2 w-full" onClick={() => onOpenChange(false)}>
-                Resume
-                <span className="opacity-60">· Esc</span>
+              <Button className="mb-2 w-full justify-between" onClick={() => onOpenChange(false)}>
+                <span>Resume</span>
+                <span className="opacity-60">Esc</span>
               </Button>
             )}
-            <div className="flex gap-2">
+            <div className="space-y-2">
               <Button
                 variant={canResume ? "secondary" : "default"}
-                className="flex-1"
+                className="w-full justify-between"
                 onClick={onStartRace}
               >
-                <Play /> {result ? "Race again" : "Start race"}
+                <span className="flex items-center gap-2">
+                  <Play /> {result ? "Race again" : "Start race"}
+                </span>
+                <span className="font-normal opacity-60">round the marks, timed</span>
               </Button>
-              <Button variant="secondary" className="flex-1" onClick={onFreeSail}>
-                <Compass /> Free sail
+              <Button
+                variant="secondary"
+                className="w-full justify-between"
+                onClick={onFreeSail}
+              >
+                <span className="flex items-center gap-2">
+                  <Compass /> Free sail
+                </span>
+                <span className="font-normal opacity-60">no course, no clock</span>
               </Button>
             </div>
 
