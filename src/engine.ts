@@ -78,6 +78,8 @@ export interface Snapshot {
   ghost: GhostSample | null;
   /** Distance sailed over the ground since this session began, m. */
   run: number;
+  /** Increments whenever a new session starts. A view can reset its own state on it. */
+  session: number;
   pilot: PilotState;
 }
 
@@ -167,6 +169,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let paused = false;
   let hour = settings.startHour;
   let run = 0;
+  /** Bumped on every new session, so view-side caches know to start over. */
+  let session = 0;
   /** The wind the wave field is currently built from; it lags the real one. */
   let seaTws = windMs(settings);
   const pilot = initialPilot();
@@ -214,6 +218,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     clearance: Infinity,
     ghost: null,
     run: 0,
+    session: 0,
     pilot,
   };
 
@@ -389,7 +394,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (s.weatherMode !== 'auto') weather.set(s.weatherMode);
     sound.setEnabled(s.sound);
     snapshot.soundOn = s.sound;
-    if (worldChanged) rebuildWorld();
+    if (worldChanged) {
+      // rebuildWorld() puts the course and the race back to the prestart, but
+      // the boat stays where she was. Carrying on from there is not the race
+      // that was interrupted and not a fresh one either, so the edit ends it
+      // and what is left is a free sail in the new world.
+      racing = false;
+      snapshot.racing = false;
+      rebuildWorld();
+    }
     schedulePolar();
   }
 
@@ -438,6 +451,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       current = { ...current, seed };
       emit({ type: 'world', seed });
     }
+    // The clock belongs to the session too. `hour` was read once when the
+    // engine was built, so the Start hour setting did nothing after the first
+    // load and every race began wherever the last one's clock had wandered to.
+    hour = current.startHour;
+    session++;
+    snapshot.session = session;
     weather.reseed(current.seed);
     // A new session starts with the sea its weather implies, not the one the
     // last race left behind.

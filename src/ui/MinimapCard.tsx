@@ -57,6 +57,7 @@ export function MinimapCard() {
       ghost: s.ghost,
       draft: CRUISER.draft,
       range,
+      session: s.session,
     });
   });
 

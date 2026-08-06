@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Island, Terrain } from '../sim/terrain';
+import { sameIslands, type Island, type Terrain } from '../sim/terrain';
 import type { SkyState } from '../sim/sky';
 
 /**
@@ -105,15 +105,21 @@ export function createIslandView(): IslandView {
   // Islands are identified by object, not by position: the field hands back the
   // same object for the same piece of sea every time, so identity is exactly
   // "the island I already built".
-  const built = new Map<Island, THREE.Mesh>();
+  //
+  // The neighbours are part of that key too. elevationAt() merges land that
+  // shares a shelf, so a mesh built before its neighbour arrived is missing the
+  // ground between them -- as much as a 374 m error in where the shore is --
+  // and with nothing to invalidate it, the beach you see would stop being the
+  // beach you run onto for as long as that island stayed loaded.
+  const built = new Map<Island, { mesh: THREE.Mesh; deps: readonly Island[] }>();
   let pending: Island[] = [];
   let source: Terrain | null = null;
 
   const drop = (isl: Island) => {
-    const mesh = built.get(isl);
-    if (!mesh) return;
-    group.remove(mesh);
-    mesh.geometry.dispose();
+    const hit = built.get(isl);
+    if (!hit) return;
+    group.remove(hit.mesh);
+    hit.mesh.geometry.dispose();
     built.delete(isl);
   };
 
@@ -128,7 +134,10 @@ export function createIslandView(): IslandView {
     setTerrain(terrain) {
       source = terrain;
       const wanted = new Set(terrain.islands);
-      for (const isl of [...built.keys()]) if (!wanted.has(isl)) drop(isl);
+      for (const isl of [...built.keys()]) {
+        const hit = built.get(isl);
+        if (!wanted.has(isl) || !sameIslands(hit!.deps, terrain.islandsAffecting(isl))) drop(isl);
+      }
       // Nearest first: the field sorts by distance, so the land the player is
       // most likely to be looking at is built first.
       pending = terrain.islands.filter((isl) => !built.has(isl));
@@ -143,7 +152,7 @@ export function createIslandView(): IslandView {
         // Reach past the shoreline so the underwater skirt is included.
         const reach = isl.radius * 1.55 + 40;
         const mesh = islandMesh(source, isl.pos.x, isl.pos.y, reach, material);
-        built.set(isl, mesh);
+        built.set(isl, { mesh, deps: source.islandsAffecting(isl) });
         group.add(mesh);
       }
 

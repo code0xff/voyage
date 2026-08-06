@@ -1,7 +1,7 @@
 import type { BoatState } from '../sim/boat';
 import type { Course, RaceState } from '../sim/race';
 import type { GhostSample } from '../sim/replay';
-import type { Island, Terrain } from '../sim/terrain';
+import { sameIslands, type Island, type Terrain } from '../sim/terrain';
 import type { WindField } from '../sim/wind';
 import { clamp, compassVec } from '../sim/math';
 import { token } from '../ui/tokens';
@@ -77,12 +77,20 @@ export interface MinimapInput {
   draft: number;
   /** Index into RANGES. */
   range: number;
+  /** Bumped by the engine on every new session; the track starts over on it. */
+  session: number;
 }
 
 /** Shore and safe-water radius at each bearing, both measured from the centre. */
 interface Outline {
   shore: Float32Array;
   safe: Float32Array;
+  /**
+   * The neighbours this shape was traced with. elevationAt() merges islands
+   * that share a shelf, so an outline is a function of them too, and one keyed
+   * on its island alone goes stale the moment a neighbour loads or drops.
+   */
+  deps: readonly Island[];
 }
 
 export interface Minimap {
@@ -100,6 +108,7 @@ export interface Minimap {
 function traceOutline(terrain: Terrain, isl: Island, draft: number): Outline {
   const shore = new Float32Array(BEARINGS);
   const safe = new Float32Array(BEARINGS);
+  const deps = terrain.islandsAffecting(isl);
   // Far enough out to clear the shelf: the seabed falls away slowly, so safe
   // water is a good way beyond the beach.
   const outer = isl.radius * 1.45 + draft * 14 + 30;
@@ -128,7 +137,7 @@ function traceOutline(terrain: Terrain, isl: Island, draft: number): Outline {
       }
     }
   }
-  return { shore, safe };
+  return { shore, safe, deps };
 }
 
 export function createMinimap(): Minimap {
@@ -149,6 +158,8 @@ export function createMinimap(): Minimap {
   let windCy = NaN;
   const windOut: [number, number] = [1, 0];
 
+  let session = -1;
+
   // Where the chart is looking. World coordinates, and deliberately not the
   // boat's: see PAN_AT.
   let centreX = NaN;
@@ -159,9 +170,6 @@ export function createMinimap(): Minimap {
       const lx = track[(trackCount - 1) * 2];
       const ly = track[(trackCount - 1) * 2 + 1];
       if (Math.hypot(x - lx, y - ly) < TRACK_STEP) return;
-      // A restart teleports the boat. A straight line across the chart from
-      // where the last race ended is not a track anyone sailed.
-      if (Math.hypot(x - lx, y - ly) > 400) trackCount = 0;
     }
     if (trackCount === TRACK_MAX) {
       track.copyWithin(0, 2);
@@ -264,6 +272,13 @@ export function createMinimap(): Minimap {
       const sx = (x: number) => cx + (x - centreX) * k;
       const sy = (y: number) => cy - (y - centreY) * k;
 
+      // A new session is a new track. Guessing from a teleport did not work:
+      // the finish gate is the start gate, so a restart moves the boat about
+      // ninety metres and the next race drew on joined to the last one.
+      if (input.session !== session) {
+        session = input.session;
+        trackCount = 0;
+      }
       pushTrack(bx, by);
 
       ctx.clearRect(0, 0, size, size);
@@ -321,7 +336,7 @@ export function createMinimap(): Minimap {
       // --- Land -------------------------------------------------------------
       for (const isl of input.terrain.islands) {
         let outline = outlines.get(isl);
-        if (!outline) {
+        if (!outline || !sameIslands(outline.deps, input.terrain.islandsAffecting(isl))) {
           outline = traceOutline(input.terrain, isl, input.draft);
           outlines.set(isl, outline);
         }

@@ -182,6 +182,29 @@ export class Terrain {
     return Math.max(0.05, shelter);
   }
 
+  /**
+   * The other islands whose ground reaches into this one's, so a shape traced
+   * through elevationAt() around `isl` depends on them as well as on `isl`.
+   *
+   * Anything that caches a traced coastline has to know this. elevationAt()
+   * takes the highest of every island, so two close enough to share a shelf
+   * trace as one landmass -- and a cache keyed on the island alone keeps the
+   * shape it had when it was traced. Measured across the shapes this field
+   * generates, a neighbour arriving moves the shoreline by up to 374 m: a whole
+   * isthmus appears, and since nothing invalidates the cache it stays missing
+   * for as long as that island is loaded, right up to sailing into it.
+   */
+  islandsAffecting(isl: Island): Island[] {
+    // isl's own tracing reach, plus how far the neighbour's ground carries.
+    const own = isl.radius * 2.6 + MAX_DEPTH / SHELF_SLOPE;
+    return this.islands.filter(
+      (o) =>
+        o !== isl &&
+        Math.hypot(o.pos.x - isl.pos.x, o.pos.y - isl.pos.y) <
+          own + o.radius * 2.6 + MAX_DEPTH / SHELF_SLOPE,
+    );
+  }
+
   /** Distance to the nearest shoreline, positive offshore. Infinity with no islands. */
   distanceToShore(x: number, y: number): number {
     let best = Infinity;

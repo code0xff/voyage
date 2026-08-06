@@ -12,6 +12,28 @@ describe('wind field', () => {
    * the visible puff and the felt puff would drift apart and the tactical layer
    * of the game would be a lie.
    */
+  /**
+   * The advection used to be `baseTws * ADVECTION * elapsed`, which applies the
+   * wind speed of this instant to the entire history. While the mean wind never
+   * moved that was the same answer; once the weather started turning inside a
+   * session it meant that half an hour in, a squall swept the whole puff field
+   * past the boat at about 590 knots.
+   */
+  it('carries the puffs at the wind that blew, not the wind that is blowing', () => {
+    const w = new WindField(knotsToMs(12), 0, 0.5, 0.2, 99);
+    for (let i = 0; i < 1800 * 4; i++) w.update(0.25); // half an hour out
+    const before = w.sample({ x: 0, y: 0 }).gust;
+
+    w.baseTws = knotsToMs(21); // a squall arrives
+    w.update(0.25);
+    const after = w.sample({ x: 0, y: 0 }).gust;
+
+    // A quarter of a second moves the pattern a couple of metres, so the wind
+    // at a fixed point can barely have changed. Re-advecting the history put
+    // six kilometres of different water there instead.
+    expect(Math.abs(after - before)).toBeLessThan(0.01);
+  });
+
   it('is a deterministic function of position and time', () => {
     const a = new WindField(knotsToMs(14), 0, 0.5, 0.2, 99);
     const b = new WindField(knotsToMs(14), 0, 0.5, 0.2, 99);

@@ -53,6 +53,19 @@ export class WindField {
   terrain: Terrain = EMPTY_TERRAIN;
 
   private t = 0;
+  /**
+   * How far the puff pattern has been carried downwind so far, m.
+   *
+   * Integrated, not computed from the elapsed time. It used to be
+   * `baseTws * ADVECTION * t`, which reads the *current* wind speed back over
+   * the *whole* history: change the wind and every second already sailed is
+   * re-advected at the new speed, so the pattern teleports. Harmless while the
+   * mean wind never moved; once the weather started turning inside a session,
+   * a squall thirty minutes in swept the entire puff field past the boat at
+   * about 590 knots. What has blown is what has blown, so it is accumulated.
+   */
+  private driftX = 0;
+  private driftY = 0;
   private seed: number;
 
   constructor(baseTws: number, baseTwd = 0, gustiness = 0.45, shiftAmplitude = 0.19, seed = 1337) {
@@ -65,6 +78,11 @@ export class WindField {
 
   update(dt: number): void {
     this.t += dt;
+    // Direction as well as speed: turn the mean wind and the pattern starts
+    // travelling the new way from here, rather than from the beginning.
+    const windDir = compassVec(this.baseTwd);
+    this.driftX -= windDir.x * this.baseTws * ADVECTION * dt;
+    this.driftY -= windDir.y * this.baseTws * ADVECTION * dt;
   }
 
   get time(): number {
@@ -85,9 +103,8 @@ export class WindField {
   sample(pos: Vec2): WindSample {
     // The noise field is fixed; rewinding the sample coordinate upwind is what
     // makes the whole pattern drift downwind.
-    const windDir = compassVec(this.baseTwd); // points towards where the wind comes from
-    const driftX = -windDir.x * this.baseTws * ADVECTION * this.t;
-    const driftY = -windDir.y * this.baseTws * ADVECTION * this.t;
+    const driftX = this.driftX;
+    const driftY = this.driftY;
 
     const gx = (pos.x - driftX) / GUST_SCALE;
     const gy = (pos.y - driftY) / GUST_SCALE;
@@ -121,9 +138,8 @@ export class WindField {
    * cannot see might as well not exist.
    */
   sampleInto(x: number, y: number, out: [number, number]): void {
-    const windDir = compassVec(this.baseTwd);
-    const driftX = -windDir.x * this.baseTws * ADVECTION * this.t;
-    const driftY = -windDir.y * this.baseTws * ADVECTION * this.t;
+    const driftX = this.driftX;
+    const driftY = this.driftY;
 
     const g = fbm2((x - driftX) / GUST_SCALE, (y - driftY) / GUST_SCALE, this.seed, 3) * 2 - 1;
     const s =

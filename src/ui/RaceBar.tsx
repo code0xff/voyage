@@ -68,7 +68,16 @@ export function RaceBar() {
     let text = '';
     let tone = 'text-muted-foreground';
 
-    if (g && currentLeg?.mark?.id === 'W' && s.polar?.bestUpwind) {
+    // The layline is the polar's best upwind angle, and that angle moves with
+    // wind speed -- 45 degrees in twelve knots, 55 in thirty-five. The polar is
+    // only re-solved on demand, and re-solving costs 230 ms on the main thread,
+    // which is not a price worth paying every time a front comes through. So
+    // when the wind has left the polar behind, say nothing rather than give a
+    // number that is quietly ten degrees out. `P` re-solves it.
+    const polarStale =
+      !!s.polar && Math.abs(s.wind.baseTws - s.polar.tws) > 0.15 * s.polar.tws;
+
+    if (g && currentLeg?.mark?.id === 'W' && s.polar?.bestUpwind && !polarStale) {
       // If the bearing to the mark is further off the wind than the best upwind
       // angle, the layline is already behind us.
       const twaToMark = wrapPi(s.course.twd - g.bearing);
