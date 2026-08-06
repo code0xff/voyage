@@ -4,6 +4,10 @@ A sailing simulator that runs in the browser and actually computes the physics:
 apparent wind, sail lift and induced drag, keel side force, wave-making
 resistance, added resistance in waves, and a six-degree-of-freedom hull response.
 
+The wind varies from place to place and drifts downwind, the weather turns on
+its own, the sun rises and sets, and islands steal your breeze and ground you if
+you cut the corner.
+
 ```bash
 npm install
 npm run dev        # simulator
@@ -21,7 +25,7 @@ Contributing? Read [AGENTS.md](AGENTS.md) first.
 ## Layout
 
 ```
-src/sim/     pure physics core, with no dependency on Three.js at all
+src/sim/     pure physics core -- no Three.js, no React, no browser APIs
   math       coordinate and angle conventions, vector helpers
   units      SI <-> knots, hull speed
   tables     foil coefficient tables (tables + interpolation, not formulae)
@@ -30,20 +34,34 @@ src/sim/     pure physics core, with no dependency on Three.js at all
   boat       state and step(). This one file is the boat
   wind       a wind field that varies with position and drifts downwind
   waves      wind sea, and four-point hull sampling
+  terrain    islands: depth field, wind shadow, wave shelter, grounding
+  sky        time of day -- sun position, light and colour palettes
+  weather    conditions that evolve on their own
   noise      deterministic value noise
   polar      steady-state polar solver -- the physics validation tool
   race       course generation, start/mark/finish judging
   replay     ghost recording and playback, personal bests
 
-src/view/    rendering and UI
+src/engine.ts  the 120 Hz loop, the render loop and everything imperative
+
+src/view/    3D rendering
   scene      scene assembly, lofted hull, camera, wind streaks, wake
-  water      wave surface (GPU vertex shader)
+  water      wave surface (GPU vertex shader, land shelter included)
+  skydome    sky gradient and sun glow
+  islands    island meshes, sampled from the same elevation field
+  rain       wind-slanted rain around the camera
   course     marks, start line, ghost boat
-  hud        instruments and polar plot
   telemetry  rolling time-series graph
-  racehud    race clock, layline, start timing
-  menu       menu, settings and results
+  polarplot  polar diagram, drawn with the UI design tokens
   audio      procedural sound, no external assets
+
+src/ui/      React overlay, built on the shadcn/ui design system
+  App             layout shell
+  engine-context  the bridge that keeps 60 Hz readouts out of React
+  Instruments     gauges, sail plan, alerts
+  RaceBar         clock, leg, layline and start timing
+  PolarCard       the polar diagram
+  MenuDialog      menu, settings, results
 
 scripts/polar.ts   runs the same core headless, without a browser
 ```
@@ -53,6 +71,11 @@ not for tidiness.** Instead of restarting the browser and sailing around after
 every parameter change, `npm run polar` reports the steady state at 37 wind
 angles in a few hundred milliseconds. Most of the real bugs found in this
 project were caught that way.
+
+The UI is React, but the loop is not. `engine.ts` publishes one mutable snapshot
+per frame and the instruments write straight into the DOM; React only renders
+structure and things that change rarely. A dozen readings through the reconciler
+at 60 Hz would cost frame budget for nothing.
 
 ---
 
@@ -159,7 +182,46 @@ term swamps the rudder at low speed, making the boat impossible to steer.
 | `+weathervane * beta * v²` | directional stability |
 | `-yawDamp * r * (0.6 + v)` | yaw damping |
 
-### 7. The wind field
+### 7. Land
+
+Islands are only worth having if they change how you sail. Three effects make
+them tactical rather than decorative:
+
+- **Wind shadow.** An island steals the wind downwind of it, in a wake that
+  spreads and weakens with distance. Sailing into a lee is a real and painful
+  mistake. This was nearly free to add, because the wind is already a pure
+  function of position — the shadow is one more term composed into
+  `WindField.sample()`.
+- **Flat water in the lee.** Waves need fetch, so shelter reaches much further
+  downwind than the wind shadow does. Sometimes the smooth water is worth the
+  lost breeze, which is exactly the kind of trade worth offering.
+- **Grounding.** The seabed shoals towards the shore, and the shallows stop you
+  dead. That is what makes cutting a corner a gamble.
+
+Island shapes are analytic — a noise-modulated radius — so every query is a few
+arithmetic operations and the physics can call them at 120 Hz. The meshes are
+built by sampling the very same `elevationAt()` the boat grounds on, and the
+water shader recomputes `waveShelter()` in GLSL, so what you see and what you
+sail through cannot drift apart.
+
+### 8. Time of day and weather
+
+The sun is not astronomical: elevation is a sine between fixed sunrise and sunset
+hours. What matters to a helmsman is how much light there is and where the glare
+sits, and a real ephemeris would add nothing on top of that. Everything visual —
+sky gradient, sun glow, light colour, water colour, fog — is a pure function of
+the hour, so the renderer, the shader and the HUD can ask independently and never
+disagree. Night is never pitch black, because a moonlit night at sea is genuinely
+sailable and an unplayable one would just be a black screen.
+
+Weather is a slow random walk between named conditions (clear, fair, overcast,
+rain, squall, fog), with every continuous quantity easing towards its target
+rather than snapping. It drives mean wind, gustiness, visibility, cloud cover and
+rain. This is what makes two runs of the same course different: a squall arriving
+on the second beat forces a reef and changes which side pays. It is seeded, so a
+given seed replays exactly.
+
+### 9. The wind field
 
 A constant wind leaves the game with no tactics: find the optimum angle once and
 you are done. So the wind is a function of position and time.
@@ -170,13 +232,13 @@ you are done. So the wind is a function of position and time.
   samples**. If the visible puff and the felt puff disagreed, the player could
   not trust the display and the tactical layer would collapse.
 
-### 8. Wave rendering
+### 10. Wave rendering
 
 Vertex displacement runs in a GPU vertex shader; the height the boat floats at
 is computed on the CPU. The two use *literally the same formula*, which is why
 the wave model is restricted to a sum of sines whose parameters fit in uniforms.
 
-### 9. Integration
+### 11. Integration
 
 Three degrees of freedom in hull axes plus roll, pitch and heave, semi-implicit
 Euler, **fixed 1/120 s timestep**.
@@ -264,14 +326,17 @@ with a personal best updates the ghost you race against next time.
 | `1 2 3 4` | reef 0-3 |
 | `F` / `G` | furl / unfurl jib |
 | `Y` | auto-reef |
-| `Q E` / `[ ]` | mean wind direction / speed |
+| `Q E` | mean wind direction |
+| `[ ]` | mean wind speed |
 | `C` | camera (chase / top-down) |
 | `P` | recompute polar |
 | `R` | restart |
 | `M` | sound |
 | `Esc` | menu / settings |
 
-From the console: `voyage.setWind(25)`, `voyage.advance(60, 0.5)`.
+From the console the whole engine is exposed as `voyage`: `voyage.advance(60, 0.5)`
+runs the physics without rendering (useful because a backgrounded tab freezes
+`requestAnimationFrame`), and `voyage.snapshot` is the live world state.
 
 ---
 
@@ -297,7 +362,9 @@ meaning anything.
 - Sails are modelled as a single area. The two sails in the renderer are
   visual; there is no main/jib slot interaction.
 - No spinnaker, so downwind is slower than reality.
-- Wind sea only: no swell and no current.
+- Wind sea only: no swell, no current and no tide.
 - No wave orbital velocity acting on the hull, and no surfing.
 - No AI opponents; the only thing to race is your own ghost.
-- No collision, grounding or mooring.
+- No boat-to-boat collision.
+- The sun is not astronomical, and islands shadow the wind without bending it
+  around headlands. Both are deliberate: see AGENTS.md.
