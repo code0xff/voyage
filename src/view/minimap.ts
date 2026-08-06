@@ -1,0 +1,377 @@
+import type { BoatState } from '../sim/boat';
+import type { Course, RaceState } from '../sim/race';
+import type { GhostSample } from '../sim/replay';
+import type { Island, Terrain } from '../sim/terrain';
+import type { WindField } from '../sim/wind';
+import { clamp, compassVec } from '../sim/math';
+import { token } from '../ui/tokens';
+
+/**
+ * The chart.
+ *
+ * A minimap in a sailing game is not there to stop you getting lost -- the
+ * course is four marks and you can see them. It is there to show the two
+ * things that decide a leg and that a helmsman cannot see from the deck:
+ *
+ *   1. **Where the breeze is.** The wind is a pure function of position, so it
+ *      can simply be drawn: puffs bright, lulls dark. The hole behind an island
+ *      falls out of the same sample, which turns "do not sail into the lee"
+ *      from advice into something you can look at. This is the whole reason
+ *      the chart earns its screen space.
+ *   2. **Where the water runs out.** The shoreline drawn here is traced through
+ *      the same elevationAt() the boat grounds on, and the second contour is
+ *      the depth this hull actually needs, so the line on the chart is the line
+ *      you go aground on rather than an artist's impression of it.
+ *
+ * Everything is drawn north-up. Course-up would spin the whole world on every
+ * tack, and the one thing a chart has to be is still.
+ */
+
+/** Ranges the chart cycles through, m from the boat to the edge. */
+export const RANGES = [300, 700, 1200] as const;
+
+/**
+ * The furthest range is bounded by the physics: the island window reaches
+ * ACTIVE_RANGE from the boat, so beyond that the chart would show open water
+ * where there is land, which is worse than showing nothing. 1200 m to the edge
+ * puts the far corner at 1700 m, inside the window with room to spare.
+ */
+
+/** How many wind samples across the chart. Coarse: this is pressure, not detail. */
+const WIND_CELLS = 28;
+/** Bearings used to trace a coastline. */
+const BEARINGS = 36;
+/** Redraw interval for the wind layer, ms. It advects far too slowly to need 60 Hz. */
+const WIND_INTERVAL = 120;
+
+const TRACK_MAX = 240;
+/** Metres between recorded track points. */
+const TRACK_STEP = 12;
+
+export interface MinimapInput {
+  state: BoatState;
+  wind: WindField;
+  terrain: Terrain;
+  course: Course;
+  race: RaceState;
+  racing: boolean;
+  ghost: GhostSample | null;
+  /** Depth the hull needs, m. The shoal contour is drawn at exactly this. */
+  draft: number;
+  /** Index into RANGES. */
+  range: number;
+}
+
+/** Shore and safe-water radius at each bearing, both measured from the centre. */
+interface Outline {
+  shore: Float32Array;
+  safe: Float32Array;
+}
+
+export interface Minimap {
+  draw(ctx: CanvasRenderingContext2D, size: number, input: MinimapInput): void;
+}
+
+/**
+ * Trace an island by marching out along each bearing until the ground drops
+ * below sea level, and again until it drops below the boat's draft.
+ *
+ * elevationAt() takes the highest of every island, so two islands close enough
+ * to share a shelf trace as the single piece of land the boat will actually
+ * meet.
+ */
+function traceOutline(terrain: Terrain, isl: Island, draft: number): Outline {
+  const shore = new Float32Array(BEARINGS);
+  const safe = new Float32Array(BEARINGS);
+  // Far enough out to clear the shelf: the seabed falls away slowly, so safe
+  // water is a good way beyond the beach.
+  const outer = isl.radius * 1.45 + draft * 14 + 30;
+  const step = outer / 60;
+
+  for (let i = 0; i < BEARINGS; i++) {
+    const a = (i / BEARINGS) * Math.PI * 2;
+    const dx = Math.cos(a);
+    const dy = Math.sin(a);
+    let foundShore = false;
+    // If the march never reaches water -- which happens on the bearing towards
+    // a neighbour close enough to share a shelf -- the honest answer is "land
+    // all the way out". Leaving it at zero would spike the outline back to the
+    // island's centre and draw a bite out of the coast that is not there.
+    shore[i] = outer;
+    safe[i] = outer;
+    for (let r = isl.radius * 0.35; r <= outer; r += step) {
+      const e = terrain.elevationAt(isl.pos.x + dx * r, isl.pos.y + dy * r);
+      if (!foundShore && e < 0) {
+        shore[i] = r;
+        foundShore = true;
+      }
+      if (foundShore && -e >= draft) {
+        safe[i] = r;
+        break;
+      }
+    }
+  }
+  return { shore, safe };
+}
+
+export function createMinimap(): Minimap {
+  // Outlines are keyed on the island object, which the island field hands back
+  // unchanged for as long as a piece of sea stays loaded. Tracing costs a few
+  // hundred elevation samples and must not happen per frame.
+  const outlines = new Map<Island, Outline>();
+
+  // The track is the chart's own record: the recorder only runs during a race,
+  // and a track is worth having while free sailing too.
+  const track = new Float32Array(TRACK_MAX * 2);
+  let trackCount = 0;
+
+  const windLayer = document.createElement('canvas');
+  let windDrawnAt = -Infinity;
+  let windRange = -1;
+  const windOut: [number, number] = [1, 0];
+
+  function pushTrack(x: number, y: number): void {
+    if (trackCount > 0) {
+      const lx = track[(trackCount - 1) * 2];
+      const ly = track[(trackCount - 1) * 2 + 1];
+      if (Math.hypot(x - lx, y - ly) < TRACK_STEP) return;
+      // A restart teleports the boat. A straight line across the chart from
+      // where the last race ended is not a track anyone sailed.
+      if (Math.hypot(x - lx, y - ly) > 400) trackCount = 0;
+    }
+    if (trackCount === TRACK_MAX) {
+      track.copyWithin(0, 2);
+      trackCount--;
+    }
+    track[trackCount * 2] = x;
+    track[trackCount * 2 + 1] = y;
+    trackCount++;
+  }
+
+  /**
+   * The breeze, painted one pixel per sample and blown up to fill the chart.
+   *
+   * Drawing the cells at full size instead looked like a chessboard, and the
+   * half-pixel overlap needed to close the gaps between them made it worse:
+   * translucent fills laid over each other double up, so the seams the overlap
+   * was there to hide came back darker. At one pixel a cell there is nothing to
+   * overlap, and letting the canvas scale it up gives the smooth gradient a
+   * pressure map should have anyway.
+   */
+  function drawWind(input: MinimapInput, range: number): void {
+    if (windLayer.width !== WIND_CELLS) {
+      windLayer.width = WIND_CELLS;
+      windLayer.height = WIND_CELLS;
+    }
+    const ctx = windLayer.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, WIND_CELLS, WIND_CELLS);
+
+    const mPerCell = (2 * range) / WIND_CELLS;
+    const puff = token('--info');
+    const lull = token('--foreground');
+
+    for (let gx = 0; gx < WIND_CELLS; gx++) {
+      for (let gy = 0; gy < WIND_CELLS; gy++) {
+        // Canvas y runs down, north runs up.
+        const wx = input.state.pos.x + (gx + 0.5 - WIND_CELLS / 2) * mPerCell;
+        const wy = input.state.pos.y - (gy + 0.5 - WIND_CELLS / 2) * mPerCell;
+        input.wind.sampleInto(wx, wy, windOut);
+
+        // sampleInto returns gust * exposure, so an island's wind shadow is
+        // already in it -- the hole behind the land draws itself.
+        const t = windOut[0] - 1;
+        // Puffs and lulls need different scales. A puff is a few per cent; a
+        // lee takes the breeze down by nine tenths, and on one scale every
+        // shadow saturates into the same flat grey with no gradient to read.
+        const strength = t > 0 ? clamp(t * 2.6, 0, 1) : clamp(-t * 1.15, 0, 1);
+        if (strength < 0.04) continue;
+        ctx.globalAlpha = strength * (t > 0 ? 0.45 : 0.5);
+        ctx.fillStyle = t > 0 ? puff : lull;
+        ctx.fillRect(gx, gy, 1, 1);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  return {
+    draw(ctx, size, input) {
+      const range = RANGES[clamp(input.range, 0, RANGES.length - 1)];
+      const k = size / (2 * range); // px per metre
+      const cx = size / 2;
+      const cy = size / 2;
+      const bx = input.state.pos.x;
+      const by = input.state.pos.y;
+      const sx = (x: number) => cx + (x - bx) * k;
+      const sy = (y: number) => cy - (y - by) * k;
+
+      pushTrack(bx, by);
+
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      // Everything is clipped to the chart circle, so land and breeze run off
+      // the edge instead of stopping at a square nobody drew.
+      ctx.beginPath();
+      ctx.arc(cx, cy, size / 2 - 1, 0, Math.PI * 2);
+      ctx.clip();
+
+      ctx.fillStyle = token('--muted', 0.55);
+      ctx.fillRect(0, 0, size, size);
+
+      // --- Wind -----------------------------------------------------------
+      const now = performance.now();
+      if (now - windDrawnAt > WIND_INTERVAL || windRange !== range) {
+        drawWind(input, range);
+        windDrawnAt = now;
+        windRange = range;
+      }
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(windLayer, 0, 0, size, size);
+
+      // --- Land -------------------------------------------------------------
+      for (const isl of input.terrain.islands) {
+        let outline = outlines.get(isl);
+        if (!outline) {
+          outline = traceOutline(input.terrain, isl, input.draft);
+          outlines.set(isl, outline);
+        }
+        const ring = (radii: Float32Array) => {
+          ctx.beginPath();
+          for (let i = 0; i < BEARINGS; i++) {
+            const a = (i / BEARINGS) * Math.PI * 2;
+            const x = sx(isl.pos.x + Math.cos(a) * radii[i]);
+            const y = sy(isl.pos.y + Math.sin(a) * radii[i]);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.closePath();
+        };
+        // Shoal first, so the land sits on top of its own shallows.
+        ring(outline.safe);
+        ctx.fillStyle = token('--warning', 0.22);
+        ctx.fill();
+        ring(outline.shore);
+        ctx.fillStyle = token('--muted-foreground', 0.85);
+        ctx.fill();
+      }
+
+      // Drop stale outlines. Islands fall astern for ever in an endless ocean,
+      // and a map that never forgot them would grow all session.
+      if (outlines.size > input.terrain.islands.length + 24) {
+        const live = new Set(input.terrain.islands);
+        for (const isl of [...outlines.keys()]) if (!live.has(isl)) outlines.delete(isl);
+      }
+
+      // --- Track ------------------------------------------------------------
+      if (trackCount > 1) {
+        ctx.beginPath();
+        for (let i = 0; i < trackCount; i++) {
+          const x = sx(track[i * 2]);
+          const y = sy(track[i * 2 + 1]);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = token('--foreground', 0.3);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      // --- Course -----------------------------------------------------------
+      if (input.racing) {
+        const c = input.course;
+        const target = c.legs[input.race.legIndex]?.target;
+
+        ctx.strokeStyle = token('--success', 0.9);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(sx(c.start.a.x), sy(c.start.a.y));
+        ctx.lineTo(sx(c.start.b.x), sy(c.start.b.y));
+        ctx.stroke();
+
+        ctx.strokeStyle = token('--warning');
+        ctx.fillStyle = token('--warning');
+        for (const mark of [c.windward, c.leeward]) {
+          ctx.beginPath();
+          ctx.arc(sx(mark.pos.x), sy(mark.pos.y), 3, 0, Math.PI * 2);
+          ctx.fill();
+          // The rounding zone, at its true radius: whether you are inside it
+          // is a rule, not a feeling.
+          ctx.globalAlpha = 0.4;
+          ctx.beginPath();
+          ctx.arc(sx(mark.pos.x), sy(mark.pos.y), mark.radius * k, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+
+        // The leg being sailed. Without it the chart shows where everything is
+        // and not which way you are supposed to be going.
+        if (target) {
+          ctx.strokeStyle = token('--warning', 0.55);
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.moveTo(sx(bx), sy(by));
+          ctx.lineTo(sx(target.x), sy(target.y));
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+
+      if (input.ghost) {
+        ctx.fillStyle = token('--muted-foreground', 0.8);
+        ctx.beginPath();
+        ctx.arc(sx(input.ghost.x), sy(input.ghost.y), 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // --- Boat ---------------------------------------------------------------
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(input.state.heading); // compass bearing, and north is up
+      ctx.beginPath();
+      ctx.moveTo(0, -7);
+      ctx.lineTo(4.5, 5);
+      ctx.lineTo(0, 2.5);
+      ctx.lineTo(-4.5, 5);
+      ctx.closePath();
+      ctx.fillStyle = token('--foreground');
+      ctx.fill();
+      ctx.restore();
+
+      ctx.restore(); // end clip
+
+      // --- Frame, north and wind ----------------------------------------------
+      ctx.strokeStyle = token('--border');
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, size / 2 - 1, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // The true wind, drawn flying with the breeze from the edge of the rose,
+      // which is the way a wind barb is read on any chart.
+      // Kept short and clear of the rim, so it cannot sit on top of the north
+      // mark on the one bearing that matters most -- a northerly.
+      const from = compassVec(input.wind.baseTwd);
+      const r = size / 2 - 18;
+      const tipX = cx + from.x * r * 0.45;
+      const tipY = cy - from.y * r * 0.45;
+      const tailX = cx + from.x * r;
+      const tailY = cy - from.y * r;
+      ctx.strokeStyle = token('--info');
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(tailX, tailY);
+      ctx.lineTo(tipX, tipY);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(tailX, tailY, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = token('--info');
+      ctx.fill();
+
+      ctx.font = '9px ui-monospace, "JetBrains Mono", monospace';
+      ctx.fillStyle = token('--muted-foreground');
+      ctx.textAlign = 'center';
+      ctx.fillText('N', cx, 10);
+    },
+  };
+}

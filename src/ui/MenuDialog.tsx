@@ -341,6 +341,7 @@ export function MenuDialog({
                 ["Y", "auto-reef"],
                 ["Q E", "mean wind direction"],
                 ["C", "camera"],
+                ["N", "chart range"],
                 ["drag", "orbit around the boat"],
                 ["wheel", "zoom"],
                 ["double-click", "recentre astern"],

@@ -7,6 +7,7 @@ import { PolarCard } from './PolarCard';
 import { RaceBar } from './RaceBar';
 import { MenuDialog, type RaceResult } from './MenuDialog';
 import { HintBar } from './HintBar';
+import { MinimapCard } from './MinimapCard';
 
 /**
  * The app shell.
@@ -128,6 +129,7 @@ export function App() {
               </div>
               <div className="mt-auto flex items-end justify-between gap-3">
                 <HintBar />
+                <MinimapCard />
               </div>
             </div>
           </div>

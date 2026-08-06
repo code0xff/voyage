@@ -66,6 +66,8 @@ export interface Snapshot {
   depth: number;
   /** Depth under the keel, m. Negative means aground. */
   clearance: number;
+  /** Where the ghost is right now, or null when there is nothing to chase. */
+  ghost: GhostSample | null;
 }
 
 export type EngineEvent =
@@ -74,6 +76,8 @@ export type EngineEvent =
   | { type: 'sound'; on: boolean }
   /** A fresh world was rolled. The settings hold the seed so it can be sailed again. */
   | { type: 'world'; seed: number }
+  /** `N` was pressed: the chart should step to its next range. */
+  | { type: 'chartRange' }
   | { type: 'finished'; time: number; isBest: boolean };
 
 export interface Engine {
@@ -167,6 +171,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     polarBusy: false,
     depth: Infinity,
     clearance: Infinity,
+    ghost: null,
   };
 
   const frameSubs = new Set<(s: Snapshot) => void>();
@@ -518,6 +523,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   function handleKeys(wall: number): void {
     if (input.wasPressed('t')) input.autoTrim = !input.autoTrim;
     if (input.wasPressed('c')) view.toggleCamera();
+    if (input.wasPressed('n')) emit({ type: 'chartRange' });
     if (input.wasPressed('p')) schedulePolar(0);
     if (input.wasPressed('r')) (racing ? startRace : freeSail)();
     if (input.wasPressed('y')) {
@@ -559,6 +565,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (!diag) return;
     const showGhost =
       racing && ghost !== null && race.phase === 'racing' && ghost.sampleAt(race.clock, ghostSample);
+    // Published as well as drawn: the chart wants the same ghost the scene has,
+    // and sampling it twice would be two answers to one question.
+    snapshot.ghost = showGhost ? ghostSample : null;
     view.render({
       state,
       diag,
