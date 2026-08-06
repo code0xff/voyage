@@ -342,6 +342,7 @@ export function MenuDialog({
                 ["Space", "centre the helm"],
                 ["↑ ↓  /  W S", "trim in / ease"],
                 ["T", "auto-trim"],
+                ["H", "autopilot: off / compass / wind"],
                 ["1 2 3 4", "reef 0–3"],
                 ["F / G", "furl / unfurl jib"],
                 ["Y", "auto-reef"],

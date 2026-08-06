@@ -357,6 +357,7 @@ with a personal best updates the ghost you race against next time.
 | `Space` | centre the helm (or hold both directions) |
 | `↑ ↓` / `W S` | trim in / ease out |
 | `T` | auto-trim |
+| `H` | autopilot: off → compass → wind (any helm input drops it) |
 | `1 2 3 4` | reef 0-3 |
 | `F` / `G` | furl / unfurl jib |
 | `Y` | auto-reef |

@@ -122,7 +122,16 @@ function Modes() {
   useEngineFrame((s) => {
     const el = ref.current;
     if (!el) return;
+    // The pilot's chip carries its target, because "on" is not the useful fact
+    // -- what it is steering to is, and it is the only place that number shows.
+    const pilot =
+      s.pilot.mode === 'compass'
+        ? `PILOT ${Math.round(s.pilot.heading * RAD)}°`
+        : s.pilot.mode === 'wind'
+          ? `PILOT WIND ${Math.round(Math.abs(s.pilot.twa * RAD))}°${s.pilot.twa < 0 ? 'P' : 'S'}`
+          : null;
     const chips = [
+      pilot,
       s.autoTrim ? 'AUTO TRIM' : null,
       s.autoReef ? 'AUTO REEF' : null,
       s.soundOn ? null : 'MUTED',

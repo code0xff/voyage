@@ -11,7 +11,8 @@ import { solvePolar, type Polar } from './sim/polar';
 import { WindField } from './sim/wind';
 import { WaveField, sampleHull, type HullWaveSample } from './sim/waves';
 import { MAX_REEF, autoReef, type ReefState } from './sim/sailplan';
-import { DEG, RAD, clamp, compassVec, wrap2Pi } from './sim/math';
+import { cyclePilot, initialPilot, pilotRudder, type PilotState } from './sim/autopilot';
+import { DEG, RAD, clamp, compassVec, wrap2Pi, wrapPi } from './sim/math';
 import { msToKnots } from './sim/units';
 import { buildCourse, initialRaceState, updateRace, type Course, type RaceState } from './sim/race';
 import { EMPTY_TERRAIN, IslandField, Terrain, sameIslands, type Island } from './sim/terrain';
@@ -70,6 +71,7 @@ export interface Snapshot {
   ghost: GhostSample | null;
   /** Distance sailed over the ground since this session began, m. */
   run: number;
+  pilot: PilotState;
 }
 
 export type EngineEvent =
@@ -149,6 +151,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let paused = false;
   let hour = settings.startHour;
   let run = 0;
+  const pilot = initialPilot();
   let current = settings;
 
   const view: SceneView = createScene(canvas, cfg);
@@ -193,6 +196,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     clearance: Infinity,
     ghost: null,
     run: 0,
+    pilot,
   };
 
   const frameSubs = new Set<(s: Snapshot) => void>();
@@ -366,8 +370,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     reefState.jibFurl = 0;
     reefState.timer = 0;
     // The helm persists now, so a race must not start with the last one's
-    // correction still wound on.
+    // correction still wound on -- nor with the pilot steering to a course
+    // from a world that no longer exists.
     ctl.rudder = 0;
+    pilot.mode = 'off';
     accumulator = 0;
     telemetry.clear();
     run = 0;
@@ -448,6 +454,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     const w = wind.sample(state.pos);
     env.tws = w.tws;
     env.twd = w.twd;
+
+    // The pilot steers at the physics rate, from the wind where the boat is,
+    // so in wind mode it follows the shift she is actually in.
+    if (pilot.mode !== 'off') {
+      ctl.rudder = pilotRudder(pilot, state.heading, env.twd, state.r);
+    }
 
     if (autoReefOn) autoReef(reefState, state.heel, PHYS_DT);
     state.reef = reefState.reef;
@@ -539,11 +551,18 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       // Now the keys move the helm and it stays put, which is what a tiller
       // does. The physics is untouched; the rudder still slews at its own rate
       // and the boat still carries her way round after the helm is centred.
-      if (input.centreHelm) {
-        ctl.rudder = 0;
-      } else if (input.rudder !== 0) {
-        const rate = HELM_CREEP + HELM_GAIN * Math.abs(ctl.rudder);
-        ctl.rudder = clamp(ctl.rudder + input.rudder * rate * wall, -1, 1);
+      // A hand on the tiller takes the boat back off the pilot, which is both
+      // what a pilot does and the only safe answer to "why is it not steering
+      // where I am pointing it".
+      if (pilot.mode !== 'off' && (input.rudder !== 0 || input.centreHelm)) pilot.mode = 'off';
+
+      if (pilot.mode === 'off') {
+        if (input.centreHelm) {
+          ctl.rudder = 0;
+        } else if (input.rudder !== 0) {
+          const rate = HELM_CREEP + HELM_GAIN * Math.abs(ctl.rudder);
+          ctl.rudder = clamp(ctl.rudder + input.rudder * rate * wall, -1, 1);
+        }
       }
       ctl.sheet = input.sheet;
       ctl.autoTrim = input.autoTrim && ctl.sheet === 0;
@@ -574,6 +593,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
   function handleKeys(wall: number): void {
     if (input.wasPressed('t')) input.autoTrim = !input.autoTrim;
+    // Engage on the course being sailed: you steady up first, then press it.
+    if (input.wasPressed('h')) cyclePilot(pilot, state.heading, wrapPi(env.twd - state.heading));
     if (input.wasPressed('c')) view.toggleCamera();
     if (input.wasPressed('n')) emit({ type: 'chartRange' });
     if (input.wasPressed('p')) schedulePolar(0);
