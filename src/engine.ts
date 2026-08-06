@@ -650,7 +650,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
         }
       }
       ctl.sheet = input.sheet;
-      ctl.autoTrim = input.autoTrim && ctl.sheet === 0;
+      ctl.twist = input.twist;
+      // Touching either trim control takes the sail off auto-trim, the same way
+      // a hand on the tiller takes the boat off the pilot. Twist has to count:
+      // otherwise the auto-trim would quietly wind the vang straight back to
+      // where it wanted it, and the key would look broken.
+      ctl.autoTrim = input.autoTrim && ctl.sheet === 0 && ctl.twist === 0;
       snapshot.autoTrim = ctl.autoTrim;
 
       accumulator += wall;

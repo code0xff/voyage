@@ -143,6 +143,17 @@ export class Input {
     return this.axis(['arrowup', 'w'], ['arrowdown', 's']);
   }
 
+  /**
+   * -1 = harden the leech, +1 = let the head twist open. This is the vang.
+   *
+   * Z and X sit under the A/D helm keys so that one hand can steer and twist,
+   * which is how the control actually gets used: you twist off as the boat
+   * stands up in a gust, without letting go of the tiller.
+   */
+  get twist(): number {
+    return this.axis(['z'], ['x']);
+  }
+
   get windShift(): number {
     return this.axis(['q'], ['e']);
   }

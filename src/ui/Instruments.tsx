@@ -67,7 +67,9 @@ function Alerts() {
     }
     if (s.diag.luffing < 0.6) msgs.push({ text: 'LUFFING — sheet in or bear away', tone: 'warn' });
     if (Math.abs(s.diag.twa) * RAD < 35) msgs.push({ text: 'NO-GO ZONE', tone: 'warn' });
-    if (Math.abs(s.state.heel) * RAD > 32) msgs.push({ text: 'OVERPOWERED — reef or ease', tone: 'warn' });
+    // Twist first: it is the cheapest way to give power back, and it is the one
+    // the player is least likely to reach for on their own.
+    if (Math.abs(s.state.heel) * RAD > 32) msgs.push({ text: 'OVERPOWERED — twist off, ease or reef', tone: 'warn' });
     if (s.diag.froude > 0.95) msgs.push({ text: 'HULL SPEED', tone: 'info' });
 
     const html = msgs
@@ -112,6 +114,57 @@ function SailPlan() {
       </div>
       <div ref={bar}>
         <Progress value={100} className="h-1" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Sail twist, against what the wind gradient is asking for.
+ *
+ * The number alone would be useless. Twist is only meaningful relative to the
+ * spread of apparent wind angle over the rig, and that changes with every
+ * course alteration -- a few degrees hard on the wind, twenty on a broad reach.
+ * So the bar carries a mark at the gradient's ask, and the player trims to it.
+ *
+ * Sitting past the mark is not an error, and the bar deliberately does not
+ * scold: twisting off beyond the gradient is how you depower without reefing,
+ * and in a breeze it is the fastest thing to do. The mark says what the sail
+ * wants for power; the decision to give power away is the player's.
+ */
+function Twist() {
+  const angle = useReadout<HTMLSpanElement>((s) =>
+    s.diag ? `${(s.state.twist * RAD).toFixed(0)}° / ${(s.diag.twistWanted * RAD).toFixed(0)}°` : '--',
+  );
+  const fill = useRef<HTMLDivElement>(null);
+  const mark = useRef<HTMLDivElement>(null);
+
+  useEngineFrame((s) => {
+    if (!s.diag) return;
+    if (fill.current) {
+      fill.current.style.width = `${clamp(s.state.twist / CRUISER.maxTwist, 0, 1) * 100}%`;
+      // Twisted well past what the gradient wants means the sail is being used
+      // to spill wind rather than to make power, which is worth seeing at a
+      // glance -- it is the difference between trimmed and depowered.
+      const tone =
+        s.state.twist > s.diag.twistWanted + 4 * (Math.PI / 180) ? 'bg-info' : 'bg-foreground';
+      const cls = `absolute inset-y-0 left-0 rounded-sm ${tone}`;
+      if (fill.current.className !== cls) fill.current.className = cls;
+    }
+    if (mark.current) {
+      mark.current.style.left = `${clamp(s.diag.twistWanted / CRUISER.maxTwist, 0, 1) * 100}%`;
+    }
+  });
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[10.5px] text-muted-foreground">Twist · gradient</span>
+        <span ref={angle} className="font-mono text-[10.5px] tabular-nums" />
+      </div>
+      <div className="relative h-1.5 overflow-hidden rounded-sm bg-secondary">
+        <div ref={fill} className="absolute inset-y-0 left-0 rounded-sm bg-foreground" />
+        <div ref={mark} className="absolute inset-y-0 w-px -translate-x-1/2 bg-background/80" />
       </div>
     </div>
   );
@@ -248,6 +301,9 @@ export function Instruments() {
 
       <Separator className="my-2.5" />
       <Helm />
+      <div className="mt-2">
+        <Twist />
+      </div>
       <div className="mt-2">
         <SailPlan />
       </div>

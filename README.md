@@ -399,6 +399,7 @@ with a personal best updates the ghost you race against next time.
 | `← →` / `A D` | helm — the keys move it, it holds where you leave it |
 | `Space` | centre the helm (or hold both directions) |
 | `↑ ↓` / `W S` | trim in / ease out |
+| `Z X` | vang: close the leech / let the head twist open |
 | `T` | auto-trim |
 | `H` | autopilot: off → compass → wind (any helm input drops it) |
 | `1 2 3 4` | reef 0-3 |

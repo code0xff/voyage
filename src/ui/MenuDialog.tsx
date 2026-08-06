@@ -470,6 +470,7 @@ export function MenuDialog({
                 ["← →  /  A D", "helm (holds its angle)"],
                 ["Space", "centre the helm"],
                 ["↑ ↓  /  W S", "trim in / ease"],
+                ["Z X", "vang: close the leech / twist off"],
                 ["T", "auto-trim"],
                 ["H", "autopilot: off / compass / wind"],
                 ["1 2 3 4", "reef 0–3"],
