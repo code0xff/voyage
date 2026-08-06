@@ -47,7 +47,8 @@ src/engine.ts  the 120 Hz loop, the render loop and everything imperative
 
 src/view/    3D rendering
   scene      scene assembly, lofted hull, camera, wind streaks, wake
-  water      wave surface (GPU vertex shader, land shelter included)
+  water      wave surface (GPU vertex shader, land shelter included), and the
+             flat sea that carries it on to the horizon
   skydome    sky gradient and sun glow
   islands    island meshes, sampled from the same elevation field
   rain       wind-slanted rain around the camera

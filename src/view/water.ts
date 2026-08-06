@@ -33,6 +33,46 @@ const SEG = 300; // subdivisions -> 3 m per cell
  */
 const MAX_ISLANDS = MAX_ACTIVE_ISLANDS;
 
+/**
+ * Fine surface texture, shared by the wave grid and the flat sea beyond it.
+ *
+ * The wave model is a handful of long sines -- the swell the boat actually
+ * rides -- and the grid fades even those out towards its edge. That leaves
+ * everything past a couple of hundred metres looking like glass, which is most
+ * obvious now that the sea carries on to the horizon instead of stopping.
+ *
+ * This is a *shading* term and nothing else: it perturbs the normal and never
+ * the height. Where the surface is remains waves.ts's answer alone, so the boat
+ * still floats on exactly the water it is drawn on -- the same licence the
+ * whitecaps already take. Both shaders call this one function so the join
+ * between them cannot show.
+ *
+ * Directions are deliberately non-parallel and the wavelengths are not
+ * harmonics, or the sum reads as a repeating grid rather than as water.
+ */
+const rippleGlsl = /* glsl */ `
+  // Returns the ripple's surface slope (d/dx, d/dy) in sim coordinates.
+  vec2 rippleSlope(vec2 p, float t, float amp) {
+    vec2 s = vec2(0.0);
+    // wavelength ~11 m, ~7 m, ~3.7 m; deep-water speed omega = sqrt(g*k)
+    vec3 k = vec3(0.55, 0.9, 1.7);
+    vec3 a = vec3(0.055, 0.032, 0.014) * amp;
+    vec2 d0 = vec2(0.94, 0.34);
+    vec2 d1 = vec2(-0.42, 0.91);
+    vec2 d2 = vec2(0.71, -0.71);
+    s += d0 * (a.x * k.x * cos(k.x * dot(d0, p) - sqrt(9.81 * k.x) * t));
+    s += d1 * (a.y * k.y * cos(k.y * dot(d1, p) - sqrt(9.81 * k.y) * t + 1.7));
+    s += d2 * (a.z * k.z * cos(k.z * dot(d2, p) - sqrt(9.81 * k.z) * t + 4.1));
+    return s;
+  }
+
+  // Fade it out before it is finer than a pixel, or the horizon crawls with
+  // moire. By then the fog has taken over anyway.
+  float rippleAmp(float dist, float scale) {
+    return scale * (1.0 - smoothstep(800.0, 2500.0, dist));
+  }
+`;
+
 const vertexShader = /* glsl */ `
   uniform float uTime;
   uniform vec2 uOrigin;                  // world position of the grid centre (sim coords)
@@ -125,6 +165,7 @@ const vertexShader = /* glsl */ `
 `;
 
 const fragmentShader = /* glsl */ `
+  uniform float uTime;
   uniform vec3 uDeep;
   uniform vec3 uShallow;
   uniform vec3 uSky;
@@ -135,6 +176,7 @@ const fragmentShader = /* glsl */ `
   uniform float uFogFar;
   uniform float uWhitecap;
   uniform float uSpecular;
+  uniform float uRipple;
   uniform vec4 uIslands[${MAX_ISLANDS}];
 
   varying vec3 vNormal;
@@ -144,8 +186,20 @@ const fragmentShader = /* glsl */ `
   varying float vSteepness;
   varying float vShelter;
 
+  ${rippleGlsl}
+
   void main() {
-    vec3 n = normalize(vNormal);
+    float dist = length(cameraPosition - vWorld);
+    // Sheltered water is smooth: the lee of an island loses the ripple for the
+    // same reason it loses the waves.
+    vec2 rs = rippleSlope(
+      vec2(vWorld.x, -vWorld.z),
+      uTime,
+      rippleAmp(dist, uRipple) * vShelter
+    );
+    // three.z = -sim.y, so the z slope flips sign, exactly as in the vertex
+    // shader's normal above.
+    vec3 n = normalize(normalize(vNormal) + vec3(-rs.x, 0.0, rs.y));
     vec3 viewDir = normalize(cameraPosition - vWorld);
     vec3 sunDir = normalize(uSun);
 
@@ -180,8 +234,7 @@ const fragmentShader = /* glsl */ `
       col = mix(col, vec3(0.86, 0.91, 0.95), crest * steep * uWhitecap * vShelter);
     }
 
-    float d = length(cameraPosition - vWorld);
-    col = mix(col, uFogColor, smoothstep(uFogNear, uFogFar, d));
+    col = mix(col, uFogColor, smoothstep(uFogNear, uFogFar, dist));
 
     gl_FragColor = vec4(col, 1.0);
   }
@@ -216,6 +269,7 @@ const farVertexShader = /* glsl */ `
 `;
 
 const farFragmentShader = /* glsl */ `
+  uniform float uTime;
   uniform vec3 uDeep;
   uniform vec3 uShallow;
   uniform vec3 uSky;
@@ -225,14 +279,19 @@ const farFragmentShader = /* glsl */ `
   uniform float uFogNear;
   uniform float uFogFar;
   uniform float uSpecular;
+  uniform float uRipple;
 
   varying vec3 vWorld;
 
-  // The colour half of the grid's fragment shader, with n fixed to straight up.
-  // Whitecaps and the shoal tint are left out: both need wave amplitude or
-  // nearby land, and neither survives out here.
+  ${rippleGlsl}
+
+  // The colour half of the grid's fragment shader, with the swell gone and only
+  // the ripple left on the surface. Whitecaps and the shoal tint are left out:
+  // both need wave amplitude or nearby land, and neither survives out here.
   void main() {
-    vec3 n = vec3(0.0, 1.0, 0.0);
+    float dist = length(cameraPosition - vWorld);
+    vec2 rs = rippleSlope(vec2(vWorld.x, -vWorld.z), uTime, rippleAmp(dist, uRipple));
+    vec3 n = normalize(vec3(-rs.x, 1.0, rs.y));
     vec3 viewDir = normalize(cameraPosition - vWorld);
     vec3 sunDir = normalize(uSun);
 
@@ -245,8 +304,7 @@ const farFragmentShader = /* glsl */ `
     vec3 h = normalize(sunDir + viewDir);
     col += uSunColor * pow(max(dot(n, h), 0.0), 90.0) * uSpecular;
 
-    float d = length(cameraPosition - vWorld);
-    col = mix(col, uFogColor, smoothstep(uFogNear, uFogFar, d));
+    col = mix(col, uFogColor, smoothstep(uFogNear, uFogFar, dist));
 
     gl_FragColor = vec4(col, 1.0);
   }
@@ -302,6 +360,7 @@ export function createWater(): Water {
     uFogFar: { value: 560 },
     uWhitecap: { value: 0 },
     uSpecular: { value: 0.5 },
+    uRipple: { value: 1 },
   };
 
   const mat = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader });
@@ -359,6 +418,9 @@ export function createWater(): Water {
 
       // Whitecaps start to appear around 12 knots.
       uniforms.uWhitecap.value = Math.min(Math.max((tws - 6) / 12, 0), 0.85);
+      // Ripple with the wind. A glassy calm is a real thing and should look
+      // like one, but the sea should never be a mirror once it is blowing.
+      uniforms.uRipple.value = Math.min(0.3 + tws / 9, 1.5);
 
       uniforms.uDeep.value.setRGB(sky.waterDeep[0], sky.waterDeep[1], sky.waterDeep[2]);
       uniforms.uShallow.value.setRGB(
