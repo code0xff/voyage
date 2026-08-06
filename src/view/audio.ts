@@ -186,6 +186,53 @@ export class SoundEngine {
     }
   }
 
+  /**
+   * How loud something is from here.
+   *
+   * Sound outdoors over water falls off close to inverse-distance. The
+   * reference is how far the thing carries -- a couple of hundred metres for a
+   * gull. Anything inaudible is dropped rather than played at zero gain,
+   * because each call builds a small node graph and paying for one nobody can
+   * hear is pure waste.
+   */
+  private carry(distance: number, reference: number): number {
+    return reference / (reference + Math.max(distance, 1));
+  }
+
+  /**
+   * A gull. Tonal rather than noisy, so this is an oscillator: two or three
+   * descending cries, which is the shape of the call people know.
+   */
+  gullCall(distance: number, strength: number): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.master || ctx.state !== 'running') return;
+    const gain = this.carry(distance, 200) * strength * 0.16;
+    if (gain < 0.01) return;
+
+    const t0 = ctx.currentTime;
+    const cries = 2 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < cries; i++) {
+      const t = t0 + i * (0.22 + Math.random() * 0.1);
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      const base = 900 + Math.random() * 350;
+      osc.frequency.setValueAtTime(base, t);
+      osc.frequency.exponentialRampToValueAtTime(base * 0.55, t + 0.18);
+      // A narrow band keeps the sawtooth from sounding like a buzzer.
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.Q.value = 4;
+      f.frequency.setValueAtTime(base * 1.2, t);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(gain, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      osc.connect(f).connect(g).connect(this.master);
+      osc.start(t);
+      osc.stop(t + 0.22);
+    }
+  }
+
   dispose(): void {
     this.ctx?.close();
     this.ctx = null;

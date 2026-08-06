@@ -24,6 +24,7 @@ import {
   type Island,
 } from './sim/terrain';
 import { skyState, type SkyState } from './sim/sky';
+import { Wildlife } from './sim/wildlife';
 import { Weather } from './sim/weather';
 import {
   Ghost,
@@ -150,6 +151,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   const wind = new WindField(windMs(settings), 0, settings.gustiness);
   const waves = new WaveField(windMs(settings), 0);
   const weather = new Weather(settings.seed, 'fair');
+  const wildlife = new Wildlife(settings.seed);
 
   // Reused every physics step; allocating per step would keep the GC busy at 120 Hz.
   const hullWave: HullWaveSample = { heave: 0, pitchSlope: 0, rollSlope: 0, bowRise: 0 };
@@ -563,6 +565,14 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
     const wasX = state.pos.x;
     const wasY = state.pos.y;
+    // Gulls run on the physics clock, so a boat that is standing in towards a
+    // shore hears them come up at the rate she is closing it.
+    wildlife.update(PHYS_DT, state.pos, snapshot.terrain);
+    for (const ev of wildlife.events) {
+      const d = Math.hypot(ev.pos.x - state.pos.x, ev.pos.y - state.pos.y);
+      sound.gullCall(d, ev.strength);
+    }
+
     diag = step(state, cfg, env, ctl, PHYS_DT, { sea });
     snapshot.diag = diag;
 

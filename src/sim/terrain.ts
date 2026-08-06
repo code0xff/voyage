@@ -205,6 +205,20 @@ export class Terrain {
     );
   }
 
+  /** The island whose shoreline is nearest, or null in open water. */
+  nearestIsland(x: number, y: number): Island | null {
+    let best: Island | null = null;
+    let bestD = Infinity;
+    for (const isl of this.islands) {
+      const d = Math.hypot(x - isl.pos.x, y - isl.pos.y) - isl.radius;
+      if (d < bestD) {
+        bestD = d;
+        best = isl;
+      }
+    }
+    return best;
+  }
+
   /** Distance to the nearest shoreline, positive offshore. Infinity with no islands. */
   distanceToShore(x: number, y: number): number {
     let best = Infinity;
