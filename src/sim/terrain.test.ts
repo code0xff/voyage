@@ -159,6 +159,25 @@ describe('endless island field', () => {
     expect(beyond.waveShelter(0, 0, 0)).toBe(1);
   });
 
+  /**
+   * The cell cache is what gives islands a stable identity, and on a long
+   * enough passage it would grow without limit, so it prunes what is far
+   * astern. Nothing shorter than a very long passage reaches that threshold --
+   * and whatever it drops has to come back exactly as it was.
+   */
+  it('keeps the cache bounded over a long passage without changing the world', () => {
+    const f = field({ density: 0.22 });
+    const home = f.active(0, 0);
+    let peak = 0;
+    for (let d = 0; d < 200000; d += 400) {
+      f.visible(d, d * 0.3);
+      peak = Math.max(peak, f.cellCount);
+    }
+    expect(peak).toBeGreaterThan(2048); // the prune really was exercised
+    expect(f.cellCount).toBeLessThan(2048);
+    expect(f.active(0, 0)).toEqual(home);
+  });
+
   it('recognises an unchanged window so the world is not rebuilt for nothing', () => {
     const f = field();
     // Ten metres is nothing next to a 1.9 km window: the same islands, and the

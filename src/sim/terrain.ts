@@ -350,6 +350,11 @@ export class IslandField {
     return found.map((f) => f.isl);
   }
 
+  /** Cells currently held. Exposed so a test can prove the cache stays bounded. */
+  get cellCount(): number {
+    return this.cells.size;
+  }
+
   /** The window the physics and the water shader share. */
   active(x: number, y: number): Island[] {
     return this.collect(x, y, ACTIVE_RANGE, MAX_ACTIVE_ISLANDS);

@@ -252,7 +252,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
           })
         : null;
 
+    // Both windows, not just the loaded one. The comparison below is by object
+    // identity, and a rebuilt field mints new islands, so a stale list happens
+    // never to match -- but that is luck, not a rule, and the cost of not
+    // relying on it is one line.
     activeIslands = [];
+    visibleIslands = [];
     streamedFrom = { x: Infinity, y: Infinity };
     streamWorld(state.pos.x, state.pos.y);
   }
@@ -268,6 +273,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   function streamWorld(x: number, y: number): void {
     if (!field) {
       if (snapshot.terrain !== EMPTY_TERRAIN) {
+        activeIslands = [];
+        visibleIslands = [];
         wind.terrain = EMPTY_TERRAIN;
         snapshot.terrain = EMPTY_TERRAIN;
         view.setTerrain(EMPTY_TERRAIN, EMPTY_TERRAIN);
@@ -346,17 +353,26 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * an endless ocean feel small: whatever the boat did, the same island was
    * always off the same layline. The rolled seed is written back to the
    * settings, so a world worth keeping can be pinned and sailed again.
+   *
+   * The weather restarts from the seed whether it was rolled or pinned. It is
+   * as much a part of the world as the land -- more, on a day when a front
+   * comes through -- and a seed that reproduced the islands but not the fronts
+   * would be reproducible to look at rather than to sail.
    */
-  function rollWorld(): void {
-    if (!current.randomWorld) return;
-    const seed = Math.floor(Math.random() * 1e8) + 1;
-    current = { ...current, seed };
-    emit({ type: 'world', seed });
+  function newSession(): void {
+    if (current.randomWorld) {
+      const seed = Math.floor(Math.random() * 1e8) + 1;
+      current = { ...current, seed };
+      emit({ type: 'world', seed });
+    }
+    weather.reseed(current.seed);
+    weather.evolve = current.weatherMode === 'auto';
+    if (current.weatherMode !== 'auto') weather.set(current.weatherMode);
+    rebuildWorld();
   }
 
   function startRace(): void {
-    rollWorld();
-    rebuildWorld();
+    newSession();
     racing = true;
     snapshot.racing = true;
     recorder.reset();
@@ -364,8 +380,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   function freeSail(): void {
-    rollWorld();
-    rebuildWorld();
+    newSession();
     racing = false;
     snapshot.racing = false;
     recorder.reset();

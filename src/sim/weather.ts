@@ -140,6 +140,24 @@ export class Weather {
     this.timer = this.target.dwell;
   }
 
+  /**
+   * Start the weather again from a seed.
+   *
+   * A seed is supposed to name a world, and weather is half of what makes two
+   * races in the same world differ. Left out, a pinned seed brings back the
+   * islands and then whatever front happened to be passing at the end of the
+   * last race -- reproducible to look at and not to sail.
+   *
+   * The opening condition comes from the seed too. Always starting in 'fair'
+   * would throw away variety the seed is there to provide, and starting in
+   * anything at all would sometimes put the gun inside a squall.
+   */
+  reseed(seed: number): void {
+    this.rand = rng(seed);
+    const openers: WeatherKind[] = ['clear', 'fair', 'fair', 'overcast'];
+    this.set(openers[Math.floor(this.rand() * openers.length)]);
+  }
+
   /** Jump straight to a condition, with no transition. */
   set(kind: WeatherKind): void {
     this.target = PROFILES[kind];

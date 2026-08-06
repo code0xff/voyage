@@ -63,6 +63,33 @@ describe('weather', () => {
     expect(w.state.kind).toBe(kind);
   });
 
+  /**
+   * The seed names the whole world. Rolling a new one for each race rolled the
+   * islands and left the weather running on from the last race, so pinning a
+   * seed reproduced the land and not the day's sailing.
+   */
+  it('replays the same weather from a reseed, whatever came before', () => {
+    const a = new Weather(1);
+    const b = new Weather(2);
+    for (let i = 0; i < 900; i++) b.update(1, SCALE); // a different past
+    a.reseed(4242);
+    b.reseed(4242);
+    expect(a.state).toEqual(b.state);
+    for (let i = 0; i < 900; i++) {
+      a.update(1, SCALE);
+      b.update(1, SCALE);
+    }
+    expect(a.state).toEqual(b.state);
+  });
+
+  it('opens in a condition you would set out in', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const w = new Weather(7);
+      w.reseed(seed);
+      expect(['clear', 'fair', 'overcast']).toContain(w.state.kind);
+    }
+  });
+
   it('can be pinned to one condition', () => {
     const w = new Weather(3);
     w.evolve = false;
