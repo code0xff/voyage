@@ -168,23 +168,98 @@ function hullGeometry(cfg: BoatConfig): THREE.BufferGeometry {
 }
 
 /**
- * A triangular sail. Drawn in the local XY plane, then given a base rotation so
- * that -X (towards the clew) points aft (+Z). Rotating the containing group
- * about Y is then exactly the sheet angle.
+ * How many horizontal panels a sail is built from.
  *
- * The physics core only ever sees one sail area, so this shape is purely visual.
+ * Nothing to do with the five strips the physics integrates; this number only
+ * has to be enough for the twist to read as a curve rather than a fold.
  */
-function sailGeometry(tack: [number, number], head: [number, number], clew: [number, number]) {
-  // Do not close the path with a lineTo back to the start. The duplicate vertex
-  // makes ShapeUtils.triangulateShape emit no triangles at all, and the sail
-  // silently disappears.
-  const shape = new THREE.Shape();
-  shape.moveTo(tack[0], tack[1]);
-  shape.lineTo(head[0], head[1]);
-  shape.lineTo(clew[0], clew[1]);
-  const geo = new THREE.ShapeGeometry(shape);
-  geo.rotateY(Math.PI / 2);
-  return geo;
+const SAIL_PANELS = 6;
+
+interface Sail {
+  geo: THREE.BufferGeometry;
+  /** Height of the leech at each panel edge, and its offset aft of the luff. */
+  leechY: number[];
+  leechZ: number[];
+  luffZ: number[];
+}
+
+/**
+ * A triangular sail, built as a ladder of horizontal panels so that it can be
+ * twisted.
+ *
+ * A single triangle cannot show twist at all: any three points are coplanar, so
+ * swinging the head just tilts a flat sheet. The panels are what let the sail
+ * be a surface with a shape in it.
+ *
+ * Arguments are (x, y) corners; -X (towards the clew) becomes aft (+Z), so
+ * rotating the containing group about Y is exactly the sheet angle. The luff
+ * runs tack to head and the leech clew to head, so the chord between them
+ * closes to nothing at the masthead, which is where a triangular sail runs out
+ * of cloth.
+ *
+ * The physics core only ever sees one equivalent sail, so this shape is purely
+ * visual -- but the *twist* on it is not, and must be the angle the sail is
+ * actually working at.
+ */
+function buildSail(
+  tack: [number, number],
+  head: [number, number],
+  clew: [number, number],
+): Sail {
+  const zy = (p: [number, number]): [number, number] => [-p[0], p[1]];
+  const [tz, ty] = zy(tack);
+  const [hz, hy] = zy(head);
+  const [cz, cy] = zy(clew);
+
+  const pos: number[] = [];
+  const index: number[] = [];
+  const leechY: number[] = [];
+  const leechZ: number[] = [];
+  const luffZ: number[] = [];
+
+  for (let i = 0; i <= SAIL_PANELS; i++) {
+    const u = i / SAIL_PANELS;
+    const lz = tz + (hz - tz) * u;
+    const ly = ty + (hy - ty) * u;
+    const rz = cz + (hz - cz) * u;
+    const ry = cy + (hy - cy) * u;
+    luffZ.push(lz);
+    leechY.push(ry);
+    leechZ.push(rz);
+    pos.push(0, ly, lz, 0, ry, rz); // luff vertex, then leech vertex
+
+    if (i > 0) {
+      const a = (i - 1) * 2;
+      index.push(a, a + 1, a + 3, a, a + 3, a + 2);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(index);
+  geo.computeVertexNormals();
+  return { geo, leechY, leechZ, luffZ };
+}
+
+/**
+ * Swing each panel's leech open by `twist` at the head, in proportion to its
+ * height.
+ *
+ * Every panel rotates about the luff point at its *own* height, not about a
+ * single vertical axis. For the mainsail the two are the same thing, since the
+ * luff is the mast. For the jib they are not: its luff is the forestay, raked
+ * aft, and rotating that about a vertical line through the stemhead would carry
+ * the head of the sail away from the masthead it is hoisted to.
+ */
+function twistSail(sail: Sail, twist: number): void {
+  const pos = sail.geo.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i <= SAIL_PANELS; i++) {
+    const phi = twist * (i / SAIL_PANELS);
+    const chord = sail.leechZ[i] - sail.luffZ[i];
+    pos.setXYZ(i * 2 + 1, chord * Math.sin(phi), sail.leechY[i], sail.luffZ[i] + chord * Math.cos(phi));
+  }
+  pos.needsUpdate = true;
+  sail.geo.computeVertexNormals();
 }
 
 export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneView {
@@ -350,10 +425,8 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   const sailPivot = new THREE.Group();
   sailPivot.position.set(0, DECK_Y, -cfg.mastX);
   heelGroup.add(sailPivot);
-  const mainSail = new THREE.Mesh(
-    sailGeometry([0, 0.9], [0, mastHeight * 0.94], [-boomLen, 1.25]),
-    sailMat,
-  );
+  const main = buildSail([0, 0.9], [0, mastHeight * 0.94], [-boomLen, 1.25]);
+  const mainSail = new THREE.Mesh(main.geo, sailMat);
   sailPivot.add(mainSail);
 
   const boom = new THREE.Mesh(
@@ -368,10 +441,8 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   const jibPivot = new THREE.Group();
   jibPivot.position.set(0, DECK_Y, -bowX);
   heelGroup.add(jibPivot);
-  const jibSail = new THREE.Mesh(
-    sailGeometry([0, 0.35], [-forestay, mastHeight * 0.92], [-forestay * 1.75, 1.0]),
-    sailMat,
-  );
+  const jib = buildSail([0, 0.35], [-forestay, mastHeight * 0.92], [-forestay * 1.75, 1.0]);
+  const jibSail = new THREE.Mesh(jib.geo, sailMat);
   jibPivot.add(jibSail);
 
   // Masthead wind vane: shows where the apparent wind is coming from.
@@ -471,6 +542,14 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     const tack = side(diag.awa);
     sailPivot.rotation.y = -tack * state.sheet;
     jibPivot.rotation.y = -tack * state.sheet * 0.6;
+
+    // Twist opens the head further to leeward, so it carries on in the same
+    // direction the sheet already swung the sail. Both sails get the same
+    // angle: the physics integrates one equivalent sail and has one twist for
+    // it, and drawing the jib standing flat beside a twisted main would be
+    // saying something about the model that is not true.
+    twistSail(main, -tack * state.twist);
+    twistSail(jib, -tack * state.twist);
     rudderPivot.rotation.y = state.rudder;
     vanePivot.rotation.y = -diag.awa;
 
@@ -481,12 +560,14 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     // Show reefing and furling. If the sails do not visibly shrink, the whole
     // mechanic is invisible.
     const rf = REEF_AREA_FACTOR[clamp(Math.round(state.reef), 0, REEF_AREA_FACTOR.length - 1)];
-    // A reef folds down onto the boom, so the height goes first
-    mainSail.scale.set(1, rf, Math.sqrt(rf));
+    // A reef folds down onto the boom, so the height goes first. X and Z scale
+    // together because a twisted sail lies partly across both, and shrinking
+    // only one of them would swing the sail as it was reefed.
+    mainSail.scale.set(Math.sqrt(rf), rf, Math.sqrt(rf));
     const jf = Math.max(1 - state.jibFurl, 0.001);
-    // The geometry is rotateY(90)-ed, so local Z is the chord and Y the height.
-    // Furling rolls the sail onto the forestay, so the chord goes first.
-    jibSail.scale.set(1, 0.5 + 0.5 * jf, jf);
+    // Local Z is the chord and Y the height. Furling rolls the sail onto the
+    // forestay, so the chord goes first.
+    jibSail.scale.set(jf, 0.5 + 0.5 * jf, jf);
     jibSail.visible = state.jibFurl < 0.98;
 
     // Wind streaks drift downwind with the puff pattern and wrap around the
