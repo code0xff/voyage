@@ -1,6 +1,6 @@
 import type { BoatState, Diagnostics } from '../sim/boat';
-import { clamp } from '../sim/math';
-import { dominantEncounter, slamImpact, type WaveField } from '../sim/waves';
+import { TAU, clamp } from '../sim/math';
+import { dominantEncounter, waveHitStrength, type WaveField } from '../sim/waves';
 
 /**
  * Procedural sound: everything is synthesised with WebAudio, no audio files.
@@ -48,8 +48,6 @@ export class SoundEngine {
 
   enabled = true;
   private started = false;
-  private lastSlam = 0;
-  private clock = 0;
   /** Where we are between one wave and the next, rad. */
   private wavePhase = 0;
 
@@ -122,24 +120,72 @@ export class SoundEngine {
     }
   }
 
-  /** Short impact when a wave slams the bow. */
-  private slam(strength: number): void {
+  /**
+   * One wave arriving at the hull.
+   *
+   * Two attempts got this wrong in instructive ways, so both are written down.
+   *
+   * The first could not be heard at all: it was the *same brown noise* as the
+   * hull rush, filtered darker than it and barely louder, and the ear simply
+   * merged the two. A wave arriving has to be a different sound, not a louder
+   * one.
+   *
+   * The second was heard, and was a drum. A bandpass starting bright and
+   * sweeping down behind a ten-millisecond attack is the signature of something
+   * being struck -- a hard front edge, then a darkening body. Water does none
+   * of that. It has no attack worth the name; it swells and drains. And its
+   * bright part arrives *after* the low part, not before, because the mass of
+   * water lands first and the foam that hisses is what the impact leaves
+   * behind.
+   *
+   * So: two layers from the one noise source. A low body with a soft front,
+   * and a brighter wash that starts late, peaks later still, and outlives it by
+   * a second. Nothing here is struck.
+   */
+  private waveHit(strength: number): void {
     const ctx = this.ctx;
-    if (!ctx || !this.master || !this.noise) return;
-    const src = ctx.createBufferSource();
-    src.buffer = this.noise;
-    src.loop = true;
-    const f = ctx.createBiquadFilter();
-    f.type = 'lowpass';
-    f.frequency.value = 240 + strength * 500;
-    const g = ctx.createGain();
+    const master = this.master;
+    const noise = this.noise;
+    if (!ctx || !master || !noise) return;
+    const s = clamp(strength, 0, 1);
     const t = ctx.currentTime;
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(clamp(strength, 0, 1) * 0.55, t + 0.015);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
-    src.connect(f).connect(g).connect(this.master);
-    src.start(t, Math.random() * 2);
-    src.stop(t + 0.55);
+
+    const layer = (
+      type: BiquadFilterType,
+      freq: number,
+      q: number,
+      delay: number,
+      attack: number,
+      decay: number,
+      peak: number,
+    ) => {
+      const src = ctx.createBufferSource();
+      src.buffer = noise;
+      src.loop = true;
+      const f = ctx.createBiquadFilter();
+      f.type = type;
+      f.frequency.value = freq;
+      f.Q.value = q;
+      const g = ctx.createGain();
+      const t0 = t + delay;
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(peak, t0 + attack);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + decay);
+      src.connect(f).connect(g).connect(master);
+      src.start(t0, Math.random() * 2);
+      src.stop(t0 + attack + decay + 0.05);
+    };
+
+    // The mass of water. Low, and the front edge is deliberately blunt: at
+    // twenty milliseconds this read as a knock, so it is four times slower than
+    // anything that could be called a hit.
+    layer('lowpass', 240 + s * 260, 0.7, 0, 0.085, 0.5 + s * 0.35, 0.15 + s * 0.28);
+
+    // Foam running aft. Starts after the water has landed, takes its time
+    // building, and is still hissing when the body has gone. This is the half
+    // that separates the sound from the hull rush, which is why it is the
+    // bright one.
+    layer('bandpass', 1500 + s * 1300, 0.5, 0.055, 0.19, 0.85 + s * 0.5, 0.07 + s * 0.2);
   }
 
   /**
@@ -150,15 +196,12 @@ export class SoundEngine {
     state: BoatState,
     diag: Diagnostics,
     waves: WaveField,
-    tws: number,
-    bowRise: number,
     dt: number,
   ): void {
     const ctx = this.ctx;
     if (!ctx || !this.hull || !this.rig || !this.luff || !this.luffAm) return;
     if (ctx.state !== 'running') return;
 
-    this.clock += dt;
     const t = ctx.currentTime;
     const smooth = 0.09;
 
@@ -175,7 +218,30 @@ export class SoundEngine {
     // this is well under a hertz, so a 60 Hz update is far finer than the shape
     // it is drawing, and setTargetAtTime smooths what is left.
     const enc = dominantEncounter(waves, state.heading, state.u, state.v);
-    this.wavePhase = (this.wavePhase + enc.omega * dt) % (Math.PI * 2);
+    this.wavePhase += enc.omega * dt;
+    if (this.wavePhase >= TAU) {
+      this.wavePhase -= TAU;
+      // One wave, one sound.
+      //
+      // This used to be a threshold on slamImpact(), and measuring it showed
+      // the sound had never once played: the trigger wanted 1.6 and eighty
+      // minutes of sailing from 12 to 32 knots never produced more than 0.99.
+      // It was written for a boat that pounds into short steep water, and this
+      // model's boat heaves over long swell.
+      //
+      // Firing on the encounter instead needs no threshold and no rate limit,
+      // because the encounter frequency *is* the rate: busy beating, slow
+      // running, and silent when she keeps station with the crest and stops
+      // meeting waves at all.
+      //
+      // Varied per wave, because the trigger runs off the dominant train alone
+      // and that is one clean sine: every wave would arrive at exactly the same
+      // strength and the sea would tick like a metronome. Real wave heights in
+      // a seaway scatter widely about the significant height, so this is the
+      // honest correction as well as the one that sounds like water.
+      const hit = waveHitStrength(enc, diag.speed) * (0.7 + Math.random() * 0.6);
+      if (hit > 0.03) this.waveHit(hit);
+    }
     // Deep in a big sea, almost flat in a slop. Never all the way to silence in
     // the trough: the water does not stop touching the hull.
     const depth = clamp(enc.amp * 0.42, 0, 0.62);
@@ -202,12 +268,6 @@ export class SoundEngine {
     }
     this.luffAm.gain.setTargetAtTime(luffAmount > 0.02 ? 0.9 : 0, t, 0.05);
 
-    // Slamming as the bow drops into a trough. Rate-limited or it becomes noise.
-    const impact = slamImpact(state.pitchRate, bowRise);
-    if (impact > 1.6 && this.clock - this.lastSlam > 0.55 && tws > 3) {
-      this.lastSlam = this.clock;
-      this.slam(clamp((impact - 1.6) * 0.5, 0.15, 1));
-    }
   }
 
   /**

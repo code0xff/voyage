@@ -193,25 +193,34 @@ export function dominantEncounter(
 }
 
 /**
- * How hard the bow is meeting the sea, in arbitrary units.
+ * How hard a single wave meets the boat, 0..1.
  *
- * Positive means the stem is being driven down into water that is coming up at
- * it.
+ * amp * omega_e is the scale of the surface's vertical velocity relative to the
+ * hull, in m/s, which is the honest measure of a wave arriving: a big slow
+ * swell and a small quick chop can be equally gentle, and it is the product
+ * that says so. Boat speed multiplies it, because driving into water is not the
+ * same as lying in it.
  *
- * Worth knowing before tuning against it: in this wave model the boat mostly
- * *heaves* rather than slams. Measured beating into a 4 m sea, the pitch-rate
- * term contributes under 0.1 and everything above that comes from bowRise, so
- * anything keyed to a high threshold here will fire rarely, not continuously.
+ * Both halves matter and both are already physical, so there is nothing here
+ * chosen to make a number come out -- only the final scaling into 0..1, which
+ * is a volume and has to be.
+ *
+ * Worth knowing before reaching for a different signal: in this wave model the
+ * boat *heaves* over long swell rather than pounding into short steep water.
+ * Measured over eighty minutes from 12 to 32 knots, the bow's slam impact --
+ * pitch rate and vertical surface velocity together -- never once exceeded 1.0,
+ * which is why the sound that used to key off a threshold there had literally
+ * never played. Encounter, not impact, is the quantity with the range.
  */
-export function slamImpact(pitchRate: number, bowRise: number): number {
-  return -pitchRate * 2 - bowRise * 0.5;
+export function waveHitStrength(enc: Encounter, speed: number): number {
+  const vRel = enc.amp * enc.omega;
+  return Math.min(vRel * (0.35 + speed * 0.16), 1);
 }
 
 export interface HullWaveSample {
   heave: number; // m, mean surface elevation
   pitchSlope: number; // rad, fore-and-aft slope (positive = bow up)
   rollSlope: number; // rad, athwartships slope (positive = starboard up)
-  bowRise: number; // m/s, vertical surface velocity at the bow (slam detection)
 }
 
 export function sampleHull(
@@ -241,5 +250,4 @@ export function sampleHull(
   out.heave = (hBow + hStern + hStb + hPort) * 0.25 * shelter;
   out.pitchSlope = Math.atan2((hBow - hStern) * shelter, half * 2);
   out.rollSlope = Math.atan2((hStb - hPort) * shelter, hb * 2);
-  out.bowRise = waves.verticalVelocityAt(px + fx * half, py + fy * half) * shelter;
 }

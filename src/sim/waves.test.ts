@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { WaveField, dominantEncounter, slamImpact } from './waves';
+import { WaveField, dominantEncounter, waveHitStrength } from './waves';
 
 /**
  * Wind from the north, so the waves travel south. Everything below is stated in
@@ -81,19 +81,44 @@ describe('encounter frequency', () => {
   });
 });
 
-describe('slam impact', () => {
-  /** Bow driven down into water that is coming up at it: the hard case. */
-  it('is positive when the stem falls into a rising surface', () => {
-    expect(slamImpact(-0.5, -2)).toBeGreaterThan(0);
+describe('wave hit strength', () => {
+  /**
+   * The point of the whole thing: at the same wave height and the same boat
+   * speed, punching into a sea has to sound harder than being carried by one.
+   * It comes out of the encounter frequency without being asked for.
+   */
+  it('is harder beating than running, in the same sea at the same speed', () => {
+    const w = sea();
+    const beating = waveHitStrength(dominantEncounter(w, 0, 3, 0), 3);
+    const running = waveHitStrength(dominantEncounter(w, Math.PI, 3, 0), 3);
+    expect(beating).toBeGreaterThan(running);
   });
 
-  it('is negative lifting off the back of a wave', () => {
-    expect(slamImpact(0.5, 2)).toBeLessThan(0);
+  it('is harder in a bigger sea', () => {
+    const small = new WaveField(10, 0);
+    const big = new WaveField(28, 0);
+    expect(waveHitStrength(dominantEncounter(big, 0, 3, 0), 3)).toBeGreaterThan(
+      waveHitStrength(dominantEncounter(small, 0, 3, 0), 3),
+    );
   });
 
-  it('is zero in flat water with no pitching', () => {
-    // toBeCloseTo, not toBe: the expression negates, so it lands on -0 and
-    // Object.is says that is not 0.
-    expect(slamImpact(0, 0)).toBeCloseTo(0, 10);
+  it('is harder the faster she is driven', () => {
+    const w = sea();
+    const slow = waveHitStrength(dominantEncounter(w, 0, 1, 0), 1);
+    const fast = waveHitStrength(dominantEncounter(w, 0, 5, 0), 5);
+    expect(fast).toBeGreaterThan(slow);
+  });
+
+  /** Nothing to meet, nothing to hear. */
+  it('is nothing in flat calm', () => {
+    const w = sea();
+    w.comps.length = 0;
+    expect(waveHitStrength(dominantEncounter(w, 0, 4, 0), 4)).toBe(0);
+  });
+
+  /** It is a volume, so it cannot run away in a gale. */
+  it('never exceeds one, however hard she is pressed', () => {
+    const gale = new WaveField(45, 0);
+    expect(waveHitStrength(dominantEncounter(gale, 0, 9, 0), 9)).toBeLessThanOrEqual(1);
   });
 });

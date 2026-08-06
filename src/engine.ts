@@ -156,7 +156,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   const wildlife = new Wildlife(settings.seed);
 
   // Reused every physics step; allocating per step would keep the GC busy at 120 Hz.
-  const hullWave: HullWaveSample = { heave: 0, pitchSlope: 0, rollSlope: 0, bowRise: 0 };
+  const hullWave: HullWaveSample = { heave: 0, pitchSlope: 0, rollSlope: 0 };
   const sea: SeaState = {
     h13: 0,
     heave: 0,
@@ -666,7 +666,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
           Math.abs(state.heel) * RAD,
           msToKnots(env.tws),
         ]);
-        sound.update(state, diag, waves, env.tws, hullWave.bowRise, wall);
+        sound.update(state, diag, waves, wall);
       }
     }
 
