@@ -14,6 +14,7 @@ import { MAX_REEF, autoReef, type ReefState } from './sim/sailplan';
 import { DEG, RAD, clamp, compassVec, wrap2Pi } from './sim/math';
 import { msToKnots } from './sim/units';
 import { buildCourse, initialRaceState, updateRace, type Course, type RaceState } from './sim/race';
+import { EMPTY_TERRAIN, Terrain, generateArchipelago } from './sim/terrain';
 import {
   Ghost,
   Recorder,
@@ -45,6 +46,7 @@ export interface Snapshot {
   env: Environment;
   wind: WindField;
   waves: WaveField;
+  terrain: Terrain;
   course: Course;
   race: RaceState;
   polar: Polar | null;
@@ -56,6 +58,10 @@ export interface Snapshot {
   autoReef: boolean;
   soundOn: boolean;
   polarBusy: boolean;
+  /** Water depth here, m. Infinity in deep water. */
+  depth: number;
+  /** Depth under the keel, m. Negative means aground. */
+  clearance: number;
 }
 
 export type EngineEvent =
@@ -91,7 +97,14 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
   // Reused every physics step; allocating per step would keep the GC busy at 120 Hz.
   const hullWave: HullWaveSample = { heave: 0, pitchSlope: 0, rollSlope: 0, bowRise: 0 };
-  const sea: SeaState = { h13: 0, heave: 0, pitchSlope: 0, rollSlope: 0, dir: 0 };
+  const sea: SeaState = {
+    h13: 0,
+    heave: 0,
+    pitchSlope: 0,
+    rollSlope: 0,
+    dir: 0,
+    depth: Infinity,
+  };
 
   let state = initialState();
   let course = buildCourse(raceCfg(settings), wind.baseTwd);
@@ -124,6 +137,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     env,
     wind,
     waves,
+    terrain: EMPTY_TERRAIN,
     course,
     race,
     polar: null,
@@ -135,6 +149,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     autoReef: true,
     soundOn: settings.sound,
     polarBusy: false,
+    depth: Infinity,
+    clearance: Infinity,
   };
 
   const frameSubs = new Set<(s: Snapshot) => void>();
@@ -183,6 +199,25 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     race = initialRaceState(raceCfg(current));
     snapshot.course = course;
     snapshot.race = race;
+
+    // Islands are deliberately placed near the course, not safely far from it.
+    // An island two kilometres away is scenery; one a few hundred metres off
+    // the layline is a decision.
+    const terrain =
+      current.islandCount > 0
+        ? generateArchipelago({
+            seed: current.seed,
+            count: current.islandCount,
+            keepClear: [course.start.a, course.start.b, course.windward.pos, course.leeward.pos],
+            clearance: 130,
+            minRange: current.legLength * 0.55,
+            maxRange: current.legLength * 2.1,
+            origin: { x: 0, y: current.legLength * 0.4 },
+          })
+        : EMPTY_TERRAIN;
+    wind.terrain = terrain;
+    snapshot.terrain = terrain;
+    view.setTerrain(terrain);
   }
 
   const ctl: Controls = { rudder: 0, sheet: 0, autoTrim: true };
@@ -193,7 +228,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let diag: Diagnostics | null = null;
 
   function applySettings(s: Settings): void {
-    const worldChanged = s.legLength !== current.legLength || s.laps !== current.laps;
+    const worldChanged =
+      s.islandCount !== current.islandCount ||
+      s.seed !== current.seed ||
+      s.legLength !== current.legLength ||
+      s.laps !== current.laps;
     current = s;
 
     wind.baseTws = windMs(s);
@@ -254,13 +293,28 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     state.jibFurl = reefState.jibFurl;
 
     // Sample four points on the hull to get the local water surface slope.
+    // Land shelters the sea in its lee, so waves are scaled by the same shelter
+    // term the water shader uses.
     waves.update(PHYS_DT);
-    sampleHull(waves, state.pos.x, state.pos.y, state.heading, cfg.loa, cfg.beam, hullWave);
-    sea.h13 = waves.sigWaveHeight;
+    const shelter = snapshot.terrain.waveShelter(state.pos.x, state.pos.y, wind.baseTwd);
+    sampleHull(
+      waves,
+      state.pos.x,
+      state.pos.y,
+      state.heading,
+      cfg.loa,
+      cfg.beam,
+      hullWave,
+      shelter,
+    );
+    sea.h13 = waves.sigWaveHeight * shelter;
     sea.heave = hullWave.heave;
     sea.pitchSlope = hullWave.pitchSlope;
     sea.rollSlope = hullWave.rollSlope;
     sea.dir = wind.baseTwd + Math.PI;
+    sea.depth = snapshot.terrain.depthAt(state.pos.x, state.pos.y);
+    snapshot.depth = sea.depth;
+    snapshot.clearance = sea.depth - cfg.draft;
 
     diag = step(state, cfg, env, ctl, PHYS_DT, { sea });
     snapshot.diag = diag;

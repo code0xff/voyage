@@ -20,6 +20,11 @@ export interface Settings {
   laps: number;
   countdown: number;
   sound: boolean;
+
+  /** Number of islands scattered around the course. Zero is open water. */
+  islandCount: number;
+  /** Seed for the archipelago, so a session can be reproduced. */
+  seed: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -30,9 +35,11 @@ export const DEFAULT_SETTINGS: Settings = {
   laps: 2,
   countdown: 45,
   sound: true,
+  islandCount: 4,
+  seed: 20260806,
 };
 
-const KEY = 'voyage.settings.v1';
+const KEY = 'voyage.settings.v2';
 
 export function loadSettings(): Settings {
   try {
@@ -51,6 +58,8 @@ export function loadSettings(): Settings {
       laps: Math.round(num(o.laps, DEFAULT_SETTINGS.laps, 1, 5)),
       countdown: Math.round(num(o.countdown, DEFAULT_SETTINGS.countdown, 5, 300)),
       sound: typeof o.sound === 'boolean' ? o.sound : DEFAULT_SETTINGS.sound,
+      islandCount: Math.round(num(o.islandCount, DEFAULT_SETTINGS.islandCount, 0, 10)),
+      seed: Math.round(num(o.seed, DEFAULT_SETTINGS.seed, 1, 2 ** 31)),
     };
   } catch {
     return { ...DEFAULT_SETTINGS };

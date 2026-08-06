@@ -17,7 +17,9 @@ export function HintBar() {
     const w = s.wind.sample(s.state.pos);
     const parts: string[] = [];
 
-    if (w.gust > 1.15) parts.push('Puff coming — be ready to ease or head up');
+    if (s.clearance < 0) parts.push('Aground — sail off before you lose the race');
+    else if (w.exposure < 0.6) parts.push('In the lee of the land — get back into clear air');
+    else if (w.gust > 1.15) parts.push('Puff coming — be ready to ease or head up');
     else if (s.race.phase === 'prestart' && s.racing) parts.push('Time the line: cross on zero, not before');
     else if (Math.abs(s.diag.twa) * (180 / Math.PI) < 35) parts.push('Too close to the wind — bear away');
     else parts.push('Esc for menu and settings');

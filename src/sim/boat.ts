@@ -50,9 +50,18 @@ export interface SeaState {
   rollSlope: number; // rad, athwartships slope
   /** Wave travel direction (compass rad), for the encounter-angle term. */
   dir: number;
+  /** Water depth here, m. Infinity in deep water. */
+  depth: number;
 }
 
-export const CALM: SeaState = { h13: 0, heave: 0, pitchSlope: 0, rollSlope: 0, dir: 0 };
+export const CALM: SeaState = {
+  h13: 0,
+  heave: 0,
+  pitchSlope: 0,
+  rollSlope: 0,
+  dir: 0,
+  depth: Infinity,
+};
 
 /** Helm input. The physics step sees nothing else. */
 export interface Controls {
@@ -85,6 +94,8 @@ export interface Diagnostics {
   sailFraction: number; // effective area as a fraction of full sail
   ceX: number; // m, longitudinal centre of effort of the current plan
   addedResistance: number; // N, added resistance in waves
+  /** 0 = afloat, 1 = hard aground. */
+  aground: number;
 }
 
 export function initialState(overrides: Partial<BoatState> = {}): BoatState {
@@ -327,6 +338,18 @@ export function step(
   s.u += dt * (fx / mx + s.v * s.r);
   s.v += dt * (fy / my - s.u * s.r);
 
+  // Grounding. Modelled as velocity damping rather than a contact force: a
+  // stiff contact spring at this timestep would explode, and what matters for
+  // gameplay is simply that the boat stops. It is deliberately not a total
+  // freeze -- the sails can still work you off again, which is what happens.
+  const aground = clamp((cfg.draft - sea.depth) / 0.8, 0, 1);
+  if (aground > 0) {
+    const bite = Math.exp(-dt * 6 * aground);
+    s.u *= bite;
+    s.v *= bite;
+    s.r *= bite;
+  }
+
   if (opts.lockHeading) {
     s.r = 0;
   } else {
@@ -360,5 +383,6 @@ export function step(
     sailFraction: plan.fraction,
     ceX: plan.ceX,
     addedResistance,
+    aground,
   };
 }

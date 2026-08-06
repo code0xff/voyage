@@ -161,6 +161,8 @@ export function sampleHull(
   loa: number,
   beam: number,
   out: HullWaveSample,
+  /** Wave height multiplier from land shelter, 0..1. */
+  shelter = 1,
 ): void {
   const fx = Math.sin(heading);
   const fy = Math.cos(heading);
@@ -175,8 +177,8 @@ export function sampleHull(
   const hStb = waves.heightAt(px + sx * hb, py + sy * hb);
   const hPort = waves.heightAt(px - sx * hb, py - sy * hb);
 
-  out.heave = (hBow + hStern + hStb + hPort) * 0.25;
-  out.pitchSlope = Math.atan2(hBow - hStern, half * 2);
-  out.rollSlope = Math.atan2(hStb - hPort, hb * 2);
-  out.bowRise = waves.verticalVelocityAt(px + fx * half, py + fy * half);
+  out.heave = (hBow + hStern + hStb + hPort) * 0.25 * shelter;
+  out.pitchSlope = Math.atan2((hBow - hStern) * shelter, half * 2);
+  out.rollSlope = Math.atan2((hStb - hPort) * shelter, hb * 2);
+  out.bowRise = waves.verticalVelocityAt(px + fx * half, py + fy * half) * shelter;
 }

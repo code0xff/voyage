@@ -62,6 +62,7 @@ export function solveOne(
     heave: 0,
     pitchSlope: 0,
     rollSlope: 0,
+    depth: Infinity,
   };
   const opts = { lockHeading: true, sea };
 

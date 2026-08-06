@@ -49,6 +49,11 @@ function Alerts() {
     const msgs: { text: string; tone: 'warn' | 'bad' | 'info' }[] = [];
     const w = s.wind.sample(s.state.pos);
 
+    if (s.clearance < 0) msgs.push({ text: 'AGROUND', tone: 'bad' });
+    else if (s.clearance < 3)
+      msgs.push({ text: `SHOAL — ${s.clearance.toFixed(1)} m under keel`, tone: 'bad' });
+
+    if (w.exposure < 0.75) msgs.push({ text: 'WIND SHADOW — sailing into a lee', tone: 'warn' });
     if (w.gust > 1.12) msgs.push({ text: `PUFF +${Math.round((w.gust - 1) * 100)}%`, tone: 'info' });
     else if (w.gust < 0.9) msgs.push({ text: `LULL ${Math.round((w.gust - 1) * 100)}%`, tone: 'info' });
     if (Math.abs(w.shift) * RAD > 5) {
@@ -154,7 +159,11 @@ export function Instruments() {
         <Gauge label="Sheet" read={(s) => deg(s.state.sheet * RAD)} />
         <Gauge label="Rudder" read={(s) => deg(s.state.rudder * RAD)} />
         <Gauge label="Sea" unit="m" read={(s) => s.waves.sigWaveHeight.toFixed(1)} />
-        <Gauge label="Fr" read={(s) => (s.diag ? s.diag.froude.toFixed(2) : '--')} />
+        <Gauge
+          label="Depth"
+          unit="m"
+          read={(s) => (s.depth === Infinity ? '∞' : s.depth.toFixed(0))}
+        />
       </div>
 
       <Separator className="my-2.5" />

@@ -1,6 +1,7 @@
 import { compassVec, wrap2Pi, type Vec2 } from './math';
 import { fbm2 } from './noise';
 import type { Environment } from './config';
+import { EMPTY_TERRAIN, type Terrain } from './terrain';
 
 /**
  * A wind field that varies with position and drifts downwind over time.
@@ -31,6 +32,8 @@ export interface WindSample {
   gust: number;
   /** Direction offset from the mean, rad. Positive = right shift. */
   shift: number;
+  /** How much wind survives the land shadow here, 0..1. */
+  exposure: number;
 }
 
 export class WindField {
@@ -42,6 +45,12 @@ export class WindField {
   gustiness: number;
   /** Shift amplitude, rad. */
   shiftAmplitude: number;
+  /**
+   * Land that steals the wind. Kept inside the wind field rather than composed
+   * outside it so that "the wind at a point" has exactly one definition, shared
+   * by the physics and by the streaks drawn on the water.
+   */
+  terrain: Terrain = EMPTY_TERRAIN;
 
   private t = 0;
   private seed: number;
@@ -92,12 +101,14 @@ export class WindField {
     // Real wind gusts harder than it lulls, so the response is asymmetric.
     const gust = 1 + this.gustiness * (g > 0 ? g * 0.5 : g * 0.35);
     const shift = s * this.shiftAmplitude;
+    const exposure = this.terrain.windExposure(pos.x, pos.y, this.baseTwd);
 
     return {
-      tws: Math.max(0.2, this.baseTws * gust),
+      tws: Math.max(0.2, this.baseTws * gust * exposure),
       twd: wrap2Pi(this.baseTwd + shift),
       gust,
       shift,
+      exposure,
     };
   }
 
@@ -125,7 +136,9 @@ export class WindField {
         2 -
       1;
 
-    out[0] = 1 + this.gustiness * (g > 0 ? g * 0.5 : g * 0.35);
+    out[0] =
+      (1 + this.gustiness * (g > 0 ? g * 0.5 : g * 0.35)) *
+      this.terrain.windExposure(x, y, this.baseTwd);
     out[1] = s * this.shiftAmplitude;
   }
 }

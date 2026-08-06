@@ -7,8 +7,10 @@ import type { WindField } from '../sim/wind';
 import type { WaveField } from '../sim/waves';
 import type { Course, RaceState } from '../sim/race';
 import type { GhostSample } from '../sim/replay';
+import type { Terrain } from '../sim/terrain';
 import { createWater } from './water';
 import { createCourseView } from './course';
+import { createIslandView } from './islands';
 
 /**
  * Scene assembly.
@@ -43,6 +45,7 @@ export interface FrameInput {
 
 export interface SceneView {
   render(f: FrameInput): void;
+  setTerrain(terrain: Terrain): void;
   toggleCamera(): void;
   resize(): void;
   dispose(): void;
@@ -184,6 +187,9 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   // Wave shape on the GPU, floating height on the CPU, from the same formula.
   const water = createWater(HORIZON, 260, 560);
   scene.add(water.mesh);
+
+  const islandView = createIslandView();
+  scene.add(islandView.group);
 
   const courseView = createCourseView();
   scene.add(courseView.group);
@@ -363,7 +369,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     const bx = state.pos.x;
     const bz = -state.pos.y;
 
-    water.update(waves, state.pos.x, state.pos.y, wind.baseTws);
+    water.update(waves, state.pos.x, state.pos.y, wind.baseTws, wind.baseTwd);
 
     // The boat floats on the waves; heave, pitch and heel all come from the
     // integrated physics state.
@@ -504,8 +510,13 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     toggleCamera() {
       camMode = (camMode + 1) % 2;
     },
+    setTerrain(terrain) {
+      islandView.setTerrain(terrain);
+      water.setTerrain(terrain);
+    },
     dispose() {
       water.dispose();
+      islandView.dispose();
       renderer.dispose();
     },
   };

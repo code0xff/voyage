@@ -132,9 +132,12 @@ export function MenuDialog({
         </span>
       }
       footer={
-        <Badge variant="outline" className="text-[10px] font-normal">
-          physics core runs headless · npm run polar
-        </Badge>
+        <div className="flex w-full items-center justify-between">
+          <Badge variant="outline" className="text-[10px] font-normal">
+            physics core runs headless · npm run polar
+          </Badge>
+          <span className="font-mono text-[10px] text-muted-foreground">seed {settings.seed}</span>
+        </div>
       }
     >
       <div>
@@ -199,6 +202,36 @@ export function MenuDialog({
               format={(v) => `${v}s`}
               onChange={(v) => set('countdown', v)}
             />
+            <Slider
+              label="Islands"
+              min={0}
+              max={10}
+              step={1}
+              value={settings.islandCount}
+              format={(v) => (v === 0 ? 'open sea' : String(v))}
+              onChange={(v) => set('islandCount', v)}
+            />
+            <div className="grid grid-cols-[104px_1fr] items-center gap-3">
+              <span className="text-[11px] text-muted-foreground">World seed</span>
+              <div className="flex gap-2">
+                <input
+                  className="h-8 w-full rounded-md border border-input bg-transparent px-2 font-mono text-xs tabular-nums outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  value={settings.seed}
+                  onChange={(e) => set('seed', Number(e.target.value) || 1)}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => set('seed', Math.floor(Math.random() * 1e8) + 1)}
+                >
+                  Roll
+                </Button>
+              </div>
+            </div>
+            <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
+              Islands sit close to the course on purpose. Their lee is flat water but almost no
+              wind, and the shoals around them will stop you dead.
+            </p>
           </TabsContent>
 
           <TabsContent value="conditions" className="mt-4 space-y-2.5">
