@@ -55,10 +55,23 @@ export class Input {
     document.addEventListener('visibilitychange', this.onBlur);
   }
 
-  /** Every token one press should answer to: what it typed, and where it is. */
+  /**
+   * The tokens one press should answer to.
+   *
+   * The physical key is a *fallback*, not a second binding. Taking both
+   * unconditionally binds one press to two controls on any layout where the
+   * caps do not match a US board: on AZERTY the A key reports key 'a' with
+   * code 'KeyQ', which put the helm to port and shifted the wind at the same
+   * time. When the layout produced a plain letter or digit, that is what the
+   * player pressed and it is the whole answer. Only when it produced something
+   * that cannot be a binding -- a jamo, a kana, an input method's placeholder
+   * -- is there nothing to match and the physical key has to stand in.
+   */
   private tokens(e: KeyboardEvent): string[] {
-    const out: string[] = [];
     const typed = e.key.toLowerCase();
+    if (/^[a-z0-9]$/.test(typed)) return [typed];
+
+    const out: string[] = [];
     // An input method in the middle of composing reports these instead of a
     // character. They are not keys, and holding onto one would leave a token
     // in `held` that no keyup ever clears.

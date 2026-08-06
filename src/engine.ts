@@ -12,7 +12,7 @@ import { WindField } from './sim/wind';
 import { WaveField, sampleHull, type HullWaveSample } from './sim/waves';
 import { MAX_REEF, autoReef, type ReefState } from './sim/sailplan';
 import { cyclePilot, initialPilot, pilotRudder, type PilotState } from './sim/autopilot';
-import { DEG, RAD, clamp, compassVec, wrap2Pi, wrapPi } from './sim/math';
+import { DEG, RAD, approach, clamp, compassVec, wrap2Pi, wrapPi } from './sim/math';
 import { msToKnots } from './sim/units';
 import { buildCourse, initialRaceState, updateRace, type Course, type RaceState } from './sim/race';
 import { EMPTY_TERRAIN, IslandField, Terrain, sameIslands, type Island } from './sim/terrain';
@@ -124,6 +124,13 @@ const STREAM_STEP = 100;
  */
 const HELM_CREEP = 0.12;
 const HELM_GAIN = 1.5;
+/**
+ * How long the sea takes to catch up with a change in the wind, in world
+ * seconds. Twenty minutes of world time -- twenty seconds of play at the
+ * default scale -- which is quick for a real sea and slow enough that a squall
+ * arrives as wind first and waves after, in that order, as it should.
+ */
+const SEA_BUILD_TAU = 1200;
 const MAX_CATCHUP = 0.25;
 
 export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Engine {
@@ -151,6 +158,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let paused = false;
   let hour = settings.startHour;
   let run = 0;
+  /** The wind the wave field is currently built from; it lags the real one. */
+  let seaTws = windMs(settings);
   const pilot = initialPilot();
   let current = settings;
 
@@ -247,6 +256,16 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let activeIslands: readonly Island[] = [];
   let visibleIslands: readonly Island[] = [];
   let streamedFrom = { x: Infinity, y: Infinity };
+  /**
+   * Whether the current field has ever been published.
+   *
+   * Without it, a rebuilt world whose first window happens to be empty compares
+   * equal to the cleared lists -- two empty arrays always match -- and the
+   * early-out below leaves the *previous* world's terrain installed in the
+   * snapshot, the wind and the scene. Sailing a new low-density seed then meant
+   * feeling and seeing islands from the race before.
+   */
+  let published = false;
 
   function rebuildWorld(): void {
     course = buildCourse(raceCfg(current), wind.baseTwd);
@@ -282,12 +301,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
           })
         : null;
 
-    // Both windows, not just the loaded one. The comparison below is by object
-    // identity, and a rebuilt field mints new islands, so a stale list happens
-    // never to match -- but that is luck, not a rule, and the cost of not
-    // relying on it is one line.
     activeIslands = [];
     visibleIslands = [];
+    published = false;
     streamedFrom = { x: Infinity, y: Infinity };
     streamWorld(state.pos.x, state.pos.y);
   }
@@ -302,9 +318,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    */
   function streamWorld(x: number, y: number): void {
     if (!field) {
-      if (snapshot.terrain !== EMPTY_TERRAIN) {
+      if (!published || snapshot.terrain !== EMPTY_TERRAIN) {
         activeIslands = [];
         visibleIslands = [];
+        published = true;
         wind.terrain = EMPTY_TERRAIN;
         snapshot.terrain = EMPTY_TERRAIN;
         view.setTerrain(EMPTY_TERRAIN, EMPTY_TERRAIN);
@@ -320,9 +337,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // while still very much in sight.
     const active = field.active(x, y);
     const visible = field.visible(x, y);
-    if (sameIslands(active, activeIslands) && sameIslands(visible, visibleIslands)) return;
+    if (published && sameIslands(active, activeIslands) && sameIslands(visible, visibleIslands)) {
+      return;
+    }
     activeIslands = active;
     visibleIslands = visible;
+    published = true;
 
     const terrain = new Terrain(active);
     wind.terrain = terrain;
@@ -403,6 +423,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       emit({ type: 'world', seed });
     }
     weather.reseed(current.seed);
+    // A new session starts with the sea its weather implies, not the one the
+    // last race left behind.
+    seaTws = windMs(current) * weather.state.windScale;
     weather.evolve = current.weatherMode === 'auto';
     if (current.weatherMode !== 'auto') weather.set(current.weatherMode);
     rebuildWorld();
@@ -448,6 +471,20 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // only when a setting changes.
     wind.baseTws = windMs(current) * weather.state.windScale;
     wind.gustiness = current.gustiness * weather.state.gustScale;
+
+    // ...and the sea has to follow the wind that is now blowing over it. The
+    // wave field was only rebuilt when a setting moved, so once the weather
+    // started turning inside a session a squall raised the wind, the whitecaps
+    // and the ripple while the swell, the added resistance and the depth of
+    // water the hull sampled all stayed at the last condition's height.
+    //
+    // Not instantly, though. A sea is fetch- and duration-limited: it takes a
+    // long while to get up and longer to lie down, and swell that tracked every
+    // gust would be a worse lie than swell that ignored the front. So the wind
+    // the waves are built from lags the real one, on world time, because
+    // building a sea is a thing the world does and not the screen.
+    seaTws = approach(seaTws, wind.baseTws, SEA_BUILD_TAU, PHYS_DT * current.timeScale);
+    waves.setFromWind(seaTws * current.seaScale, wind.baseTwd);
 
     wind.update(PHYS_DT);
     // Wind is a function of position: sample it where the boat actually is.
