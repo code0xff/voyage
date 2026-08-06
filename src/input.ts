@@ -2,6 +2,46 @@
  * Keyboard input. Continuous axes (fed to the physics step) are kept separate
  * from one-shot key presses (which drive UI actions).
  */
+
+/**
+ * What the physical key would be on a US layout: 'KeyA' -> 'a', 'Digit3' ->
+ * '3', 'Space' -> ' '. Returns null for keys with no binding in this game.
+ *
+ * Every binding is read from both `key` and `code`, because neither alone is
+ * enough. `key` is what the layout produces, which is the right thing for a
+ * player on AZERTY pressing the letter printed on the cap -- but with a Korean
+ * or Japanese input method switched on it is the jamo or kana, so 'a' arrives
+ * as 'ㅁ' and every letter binding in the game silently stops working while
+ * the arrow keys carry on. `code` is the physical key and is immune to that,
+ * but it hard-codes a US layout. Accepting either costs one Set entry and
+ * means the helm answers whichever way you are typing.
+ */
+function usKey(code: string): string | null {
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3).toLowerCase();
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+  switch (code) {
+    case 'Space':
+      return ' ';
+    case 'Escape':
+      return 'escape';
+    case 'BracketLeft':
+      return '[';
+    case 'BracketRight':
+      return ']';
+    case 'Minus':
+      return '-';
+    case 'Equal':
+      return '=';
+    case 'ArrowLeft':
+    case 'ArrowRight':
+    case 'ArrowUp':
+    case 'ArrowDown':
+      return code.toLowerCase();
+    default:
+      return null;
+  }
+}
+
 export class Input {
   private held = new Set<string>();
   private pressed = new Set<string>();
@@ -15,15 +55,35 @@ export class Input {
     document.addEventListener('visibilitychange', this.onBlur);
   }
 
+  /** Every token one press should answer to: what it typed, and where it is. */
+  private tokens(e: KeyboardEvent): string[] {
+    const out: string[] = [];
+    const typed = e.key.toLowerCase();
+    // An input method in the middle of composing reports these instead of a
+    // character. They are not keys, and holding onto one would leave a token
+    // in `held` that no keyup ever clears.
+    if (typed !== 'process' && typed !== 'dead' && typed !== 'unidentified') out.push(typed);
+    const physical = usKey(e.code);
+    if (physical && physical !== out[0]) out.push(physical);
+    return out;
+  }
+
   private onDown = (e: KeyboardEvent) => {
-    const k = e.key.toLowerCase();
-    if (!this.held.has(k)) this.pressed.add(k);
-    this.held.add(k);
-    if (k.startsWith('arrow') || k === ' ') e.preventDefault();
+    // Typing into a field is typing, not steering. The seed box is the only one
+    // in the game, but a stray keystroke there should not put the helm over.
+    const target = e.target as HTMLElement | null;
+    if (target?.isContentEditable || /^(input|textarea|select)$/i.test(target?.tagName ?? '')) {
+      return;
+    }
+    for (const k of this.tokens(e)) {
+      if (!this.held.has(k)) this.pressed.add(k);
+      this.held.add(k);
+      if (k.startsWith('arrow') || k === ' ') e.preventDefault();
+    }
   };
 
   private onUp = (e: KeyboardEvent) => {
-    this.held.delete(e.key.toLowerCase());
+    for (const k of this.tokens(e)) this.held.delete(k);
   };
 
   /**
