@@ -163,6 +163,10 @@ export function MenuDialog({
           </div>
         )}
 
+        {/* Two buttons that throw the current session away, and -- on its own
+            row, because it is not one of them -- the one that keeps it. Wedged
+            in beside them it was both cramped and easy to mistake for a third
+            way to start something. */}
         <div className="flex gap-2">
           <Button className="flex-1" onClick={onStartRace}>
             <Play /> Start race
@@ -170,12 +174,13 @@ export function MenuDialog({
           <Button variant="secondary" className="flex-1" onClick={onFreeSail}>
             <Compass /> Free sail
           </Button>
-          {canResume && (
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Resume
-            </Button>
-          )}
         </div>
+        {canResume && (
+          <Button variant="outline" className="mt-2 w-full" onClick={() => onOpenChange(false)}>
+            Resume
+            <span className="text-muted-foreground">· Esc</span>
+          </Button>
+        )}
 
         <Tabs value={tab} onValueChange={setTab} className="mt-4">
           <TabsList className="w-full">
