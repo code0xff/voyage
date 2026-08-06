@@ -105,6 +105,23 @@ const PHYS_DT = 1 / 120;
  * island is invisible, and it keeps the cell scan off the per-step path.
  */
 const STREAM_STEP = 100;
+/**
+ * How fast the keys move the helm, in fractions of full deflection per second:
+ * slowly near amidships, faster the further over it already is.
+ *
+ * The two jobs the helm has are four decibels apart. Holding a course against
+ * this boat's round-up needs about half a degree of rudder -- steady weather
+ * helm, carried all day. Tacking needs thirty-five. At any one rate the short
+ * tap a hand can actually produce is either eight times too much for the first
+ * or the throw takes far too long for the second.
+ *
+ * So the rate grows with the angle already on. From amidships a tap is a
+ * fraction of a degree, which is the trim the old momentary helm could not
+ * express at all; once it is over, it keeps moving, and hard over takes under
+ * two seconds.
+ */
+const HELM_CREEP = 0.12;
+const HELM_GAIN = 1.5;
 const MAX_CATCHUP = 0.25;
 
 export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Engine {
@@ -348,6 +365,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     reefState.reef = 0;
     reefState.jibFurl = 0;
     reefState.timer = 0;
+    // The helm persists now, so a race must not start with the last one's
+    // correction still wound on.
+    ctl.rudder = 0;
     accumulator = 0;
     telemetry.clear();
     run = 0;
@@ -506,7 +526,25 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (!paused) {
       handleKeys(wall);
 
-      ctl.rudder = input.rudder;
+      // The helm holds the angle it is left at.
+      //
+      // It used to be the key state itself, so it sprang back to centre the
+      // moment you let go: in practice the rudder was only ever hard over or
+      // amidships, because the two are 0.3 s apart and nothing holds it in
+      // between. There is no way to carry three degrees of weather helm that
+      // way, and this boat needs some -- left alone at fifteen degrees of heel
+      // she rounds up about five degrees a minute -- so holding a straight
+      // line meant pulsing the key and overshooting on every correction.
+      //
+      // Now the keys move the helm and it stays put, which is what a tiller
+      // does. The physics is untouched; the rudder still slews at its own rate
+      // and the boat still carries her way round after the helm is centred.
+      if (input.centreHelm) {
+        ctl.rudder = 0;
+      } else if (input.rudder !== 0) {
+        const rate = HELM_CREEP + HELM_GAIN * Math.abs(ctl.rudder);
+        ctl.rudder = clamp(ctl.rudder + input.rudder * rate * wall, -1, 1);
+      }
       ctl.sheet = input.sheet;
       ctl.autoTrim = input.autoTrim && ctl.sheet === 0;
       snapshot.autoTrim = ctl.autoTrim;

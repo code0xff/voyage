@@ -45,9 +45,24 @@ export class Input {
     );
   }
 
-  /** -1 = helm to port, +1 = helm to starboard. */
+  /**
+   * Which way the helm is being moved: -1 to port, +1 to starboard, 0 for not
+   * moving. This is a rate, not a position -- the engine integrates it, so the
+   * helm stays where it is left.
+   */
   get rudder(): number {
     return this.axis(['arrowleft', 'a'], ['arrowright', 'd']);
+  }
+
+  /**
+   * Centre the helm. Space, or both directions at once -- which is what a hand
+   * does on a tiller when it wants the boat to go straight, and is worth
+   * supporting because it is the first thing anyone tries.
+   */
+  get centreHelm(): boolean {
+    const port = this.held.has('arrowleft') || this.held.has('a');
+    const stbd = this.held.has('arrowright') || this.held.has('d');
+    return this.held.has(' ') || (port && stbd);
   }
 
   /** -1 = trim in, +1 = ease out. */

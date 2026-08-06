@@ -333,7 +333,8 @@ export function MenuDialog({
           <TabsContent value="keys" className="mt-4">
             <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-[11px]">
               {[
-                ["← →  /  A D", "helm"],
+                ["← →  /  A D", "helm (holds its angle)"],
+                ["Space", "centre the helm"],
                 ["↑ ↓  /  W S", "trim in / ease"],
                 ["T", "auto-trim"],
                 ["1 2 3 4", "reef 0–3"],

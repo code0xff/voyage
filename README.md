@@ -353,7 +353,8 @@ with a personal best updates the ghost you race against next time.
 
 | Key | |
 |---|---|
-| `← →` / `A D` | helm |
+| `← →` / `A D` | helm — the keys move it, it holds where you leave it |
+| `Space` | centre the helm (or hold both directions) |
 | `↑ ↓` / `W S` | trim in / ease out |
 | `T` | auto-trim |
 | `1 2 3 4` | reef 0-3 |
