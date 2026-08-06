@@ -18,6 +18,13 @@ export default defineConfig({
   },
   // strictPort so a busy port fails loudly instead of silently moving, which
   // would leave a stale tab pointed at nothing.
-  server: { port: PORT, strictPort: true },
-  preview: { port: PORT, strictPort: true },
+  //
+  // allowedHosts covers Cloudflare quick tunnels, which is how this gets shown
+  // to someone on another machine. Vite rejects any Host header it does not
+  // recognise -- a real defence against DNS rebinding, and the reason a tunnel
+  // returns a blank 403 rather than the game. The entry is a leading-dot
+  // suffix match rather than `true`, so only that one throwaway domain is
+  // trusted and every other host is still refused.
+  server: { port: PORT, strictPort: true, allowedHosts: ['.trycloudflare.com'] },
+  preview: { port: PORT, strictPort: true, allowedHosts: ['.trycloudflare.com'] },
 });
