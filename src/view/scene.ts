@@ -3,7 +3,7 @@ import type { BoatConfig } from '../sim/config';
 import type { BoatState, Diagnostics } from '../sim/boat';
 import { clamp, compassVec, side } from '../sim/math';
 import { REEF_AREA_FACTOR } from '../sim/sailplan';
-import type { WindField } from '../sim/wind';
+import { ADVECTION, type WindField } from '../sim/wind';
 import type { WaveField } from '../sim/waves';
 import type { Course, RaceState } from '../sim/race';
 import type { GhostSample } from '../sim/replay';
@@ -238,7 +238,17 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   streaks.frustumCulled = false;
   scene.add(streaks);
 
-  // Streak seeds, relative to the boat. They drift with the wind and wrap around.
+  // Seeds are world positions, not offsets from the boat.
+  //
+  // As offsets they travelled with the hull, so the most visible thing on the
+  // water -- nine hundred bright lines -- sat perfectly still however fast you
+  // were going, and the boat felt becalmed at six knots. In world coordinates
+  // they stream past, which is the only close-range motion cue an empty ocean
+  // has to offer.
+  //
+  // It is also the truthful arrangement: a puff is somewhere, and it stays
+  // there while it drifts downwind, rather than being carried along by whoever
+  // is looking at it.
   const seeds = new Float32Array(STREAKS * 2);
   // Scratch buffer reused STREAKS times per frame, to avoid 900 allocations.
   const windOut: [number, number] = [1, 0];
@@ -460,32 +470,45 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     jibSail.scale.set(1, 0.5 + 0.5 * jf, jf);
     jibSail.visible = state.jibFurl < 0.98;
 
-    // Wind streaks drift with the true wind and wrap at the patch edge.
-    // Length and brightness track the local puff strength, direction tracks the
-    // local shift, so both "a puff is coming" and "that side has shifted" are
-    // visible at a glance.
+    // Wind streaks drift downwind with the puff pattern and wrap around the
+    // boat. Length and brightness track the local puff strength, direction
+    // tracks the local shift, so both "a puff is coming" and "that side has
+    // shifted" are visible at a glance.
     const meanDir = compassVec(wind.baseTwd); // towards where it blows from
-    const wx = -meanDir.x * wind.baseTws * dt;
-    const wy = -meanDir.y * wind.baseTws * dt;
+    // The same advection rate the puff field itself uses, or the streaks would
+    // slide across the puffs they are drawn to show.
+    const drift = wind.baseTws * ADVECTION * dt;
+    const wx = -meanDir.x * drift;
+    const wy = -meanDir.y * drift;
     const baseLen = 1.2 + wind.baseTws * 0.55;
     const half = FIELD / 2;
     for (let i = 0; i < STREAKS; i++) {
       let sx = seeds[i * 2] + wx;
       let sy = seeds[i * 2 + 1] + wy;
-      if (sx > half) sx -= FIELD;
-      else if (sx < -half) sx += FIELD;
-      if (sy > half) sy -= FIELD;
-      else if (sy < -half) sy += FIELD;
+      // Wrap into the patch centred on the boat. Rounded rather than stepped
+      // once, so a restart -- which teleports the boat -- brings the whole
+      // field along instead of leaving it to crawl back over half a minute.
+      sx -= Math.round((sx - state.pos.x) / FIELD) * FIELD;
+      sy -= Math.round((sy - state.pos.y) / FIELD) * FIELD;
       seeds[i * 2] = sx;
       seeds[i * 2 + 1] = sy;
 
-      const px = bx + sx;
-      const py = state.pos.y + sy;
-      const pz = bz - sy;
+      const px = sx;
+      const py = sy;
+      const pz = -sy;
+
+      // Shrink to nothing towards the edge of the patch. Streaks now cross it
+      // at sailing speed rather than drifting across it, so without this they
+      // wink in and out at the boundary several times a second. Length rather
+      // than brightness because these lines blend normally: fading the colour
+      // would leave a dark streak on a pale sea, which is more visible than
+      // the pop it was meant to hide.
+      const edge = Math.max(Math.abs(px - bx), Math.abs(py - state.pos.y)) / half;
+      const fade = clamp((1 - edge) * 4, 0, 1);
 
       wind.sampleInto(px, py, windOut);
       const gust = windOut[0];
-      const len = baseLen * gust * gust; // exaggerated for visual contrast
+      const len = baseLen * gust * gust * fade; // exaggerated for visual contrast
       // Lulls dark and short, puffs bright and long
       const b = clamp((gust - 0.72) * 1.9, 0.06, 1);
 

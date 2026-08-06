@@ -23,7 +23,7 @@ const GUST_SCALE = 130;
 /** Spatial scale of shifts. Must dwarf the puff scale for "a favoured side" to exist. */
 const SHIFT_SCALE = 620;
 /** How fast the puff pattern drifts downwind, relative to true wind speed. */
-const ADVECTION = 0.8;
+export const ADVECTION = 0.8;
 
 export interface WindSample {
   tws: number;
