@@ -68,6 +68,7 @@ export function drawTelemetry(
   tel: Telemetry,
   w: number,
   h: number,
+  gridColor: string,
 ): void {
   ctx.clearRect(0, 0, w, h);
 
@@ -75,7 +76,7 @@ export function drawTelemetry(
   const gh = h - pad * 2;
 
   // Background gridlines
-  ctx.strokeStyle = '#1c2733';
+  ctx.strokeStyle = gridColor;
   ctx.lineWidth = 1;
   for (let i = 1; i < 4; i++) {
     const y = pad + (gh * i) / 4;
@@ -106,7 +107,7 @@ export function drawTelemetry(
   }
 
   // Legend
-  ctx.font = '9px ui-monospace, monospace';
+  ctx.font = '9px ui-monospace, "JetBrains Mono", monospace';
   ctx.textAlign = 'left';
   let lx = 4;
   for (const ch of tel.channels) {
