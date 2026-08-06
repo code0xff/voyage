@@ -1,0 +1,83 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* shadcn "neutral" palette stored as oklch *components* (no oklch() wrapper) so Tailwind
+   can inject alpha via `oklch(var(--x) / <alpha-value>)` — this is what makes utilities
+   like `bg-primary/90`, `bg-success/15`, `border-info/40` work. Dark is the default theme
+   (ship <html class="dark"> in index.html); light is the `:root` fallback. */
+@layer base {
+  :root {
+    --background: 0.985 0 0;
+    --foreground: 0.145 0 0;
+    --card: 1 0 0;
+    --card-foreground: 0.145 0 0;
+    --popover: 1 0 0;
+    --popover-foreground: 0.145 0 0;
+    --primary: 0.205 0 0;
+    --primary-foreground: 0.985 0 0;
+    --secondary: 0.97 0 0;
+    --secondary-foreground: 0.205 0 0;
+    --muted: 0.97 0 0;
+    --muted-foreground: 0.556 0 0;
+    --accent: 0.97 0 0;
+    --accent-foreground: 0.205 0 0;
+    --destructive: 0.577 0.245 27.325;
+    --destructive-foreground: 0.985 0 0;
+    --success: 0.648 0.15 160;
+    --success-foreground: 0.985 0 0;
+    --warning: 0.769 0.165 70;
+    --warning-foreground: 0.205 0 0;
+    --info: 0.623 0.188 259;
+    --info-foreground: 0.985 0 0;
+    --border: 0.922 0 0;
+    --input: 0.922 0 0;
+    --ring: 0.708 0 0;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 0.145 0 0;
+    --foreground: 0.985 0 0;
+    --card: 0.205 0 0;
+    --card-foreground: 0.985 0 0;
+    --popover: 0.205 0 0;
+    --popover-foreground: 0.985 0 0;
+    --primary: 0.922 0 0;
+    --primary-foreground: 0.205 0 0;
+    --secondary: 0.269 0 0;
+    --secondary-foreground: 0.985 0 0;
+    --muted: 0.269 0 0;
+    --muted-foreground: 0.708 0 0;
+    --accent: 0.269 0 0;
+    --accent-foreground: 0.985 0 0;
+    --destructive: 0.704 0.191 22.216;
+    --destructive-foreground: 0.985 0 0;
+    --success: 0.696 0.17 162.48;
+    --success-foreground: 0.205 0 0;
+    --warning: 0.828 0.189 84.43;
+    --warning-foreground: 0.205 0 0;
+    --info: 0.707 0.165 254.62;
+    --info-foreground: 0.205 0 0;
+    --border: 0.269 0 0;
+    --input: 0.269 0 0;
+    --ring: 0.556 0 0;
+  }
+}
+
+@layer base {
+  html {
+    font-size: 15px;
+  }
+
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "tnum";
+  }
+}

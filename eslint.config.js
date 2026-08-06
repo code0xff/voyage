@@ -3,11 +3,24 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'coverage'] },
+  {
+    // The design-system primitives and Tailwind config come from a shared
+    // generator; linting them here would mean maintaining a fork of someone
+    // else's house style.
+    ignores: [
+      'dist',
+      'node_modules',
+      'coverage',
+      'src/components/ui/**',
+      'src/lib/**',
+      'tailwind.config.js',
+      'postcss.config.js',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['**/*.ts'],
+    files: ['**/*.{ts,tsx}'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
