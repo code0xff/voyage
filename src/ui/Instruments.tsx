@@ -3,7 +3,8 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { RAD, wrap2Pi } from '@/sim/math';
+import { RAD, clamp, wrap2Pi } from '@/sim/math';
+import { CRUISER } from '@/sim/config';
 import { msToKnots } from '@/sim/units';
 import { phaseName, formatClock } from '@/sim/sky';
 import { WEATHER_LABEL } from '@/sim/weather';
@@ -116,6 +117,66 @@ function SailPlan() {
   );
 }
 
+/**
+ * Helm angle.
+ *
+ * The keys move the rudder and it stays where it is left, so how much helm is
+ * wound on is persistent state the player has to know. On a real boat you know
+ * it because your hand is on the tiller; on a screen there is no such feedback,
+ * and the only symptom of a forgotten quarter-turn is the boat quietly circling.
+ * Every simulator that keeps the helm where you put it carries an indicator for
+ * exactly this reason.
+ *
+ * It reads the *actual* rudder angle rather than the commanded one, which is
+ * what a rudder-angle indicator shows: the blade slews at its own rate, and
+ * during a tack the lag is real and worth seeing.
+ */
+function Helm() {
+  const angle = useReadout<HTMLSpanElement>((s) => {
+    const d = s.state.rudder * RAD;
+    if (Math.abs(d) < 0.5) return 'amidships';
+    return `${Math.abs(d).toFixed(0)}° ${d > 0 ? 'stbd' : 'port'}`;
+  });
+  const who = useReadout<HTMLSpanElement>((s) => (s.pilot.mode === 'off' ? 'Helm' : 'Pilot'));
+  const fill = useRef<HTMLDivElement>(null);
+
+  useEngineFrame((s) => {
+    const el = fill.current;
+    if (!el) return;
+    const v = clamp(s.state.rudder / CRUISER.maxRudder, -1, 1);
+    const half = Math.abs(v) * 50;
+    // Grow out from the centre, so which way it is wound is the shape, not a
+    // number to be read.
+    el.style.left = v >= 0 ? '50%' : `${50 - half}%`;
+    el.style.width = `${half}%`;
+
+    // A blade near hard over is mostly making drag rather than turning the
+    // boat, which is worth saying out loud.
+    const tone =
+      Math.abs(v) > 0.85
+        ? 'bg-warning'
+        : s.pilot.mode !== 'off'
+          ? 'bg-info'
+          : 'bg-foreground';
+    const cls = `absolute inset-y-0 rounded-sm ${tone}`;
+    if (el.className !== cls) el.className = cls;
+  });
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between gap-2">
+        <span ref={who} className="text-[10.5px] text-muted-foreground" />
+        <span ref={angle} className="font-mono text-[10.5px] tabular-nums" />
+      </div>
+      <div className="relative h-1.5 overflow-hidden rounded-sm bg-secondary">
+        <div ref={fill} className="absolute inset-y-0 rounded-sm bg-foreground" />
+        {/* Amidships. Without a centre mark the bar says how much but not from where. */}
+        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-background/80" />
+      </div>
+    </div>
+  );
+}
+
 /** Auto-mode chips. These change rarely, so plain React state via a re-render is fine. */
 function Modes() {
   const ref = useRef<HTMLDivElement>(null);
@@ -176,7 +237,7 @@ export function Instruments() {
         <Gauge label="Heel" read={(s) => `${(s.state.heel * RAD).toFixed(1)}°`} />
         <Gauge label="Leeway" read={(s) => (s.diag ? `${(s.diag.leeway * RAD).toFixed(1)}°` : '--')} />
         <Gauge label="Sheet" read={(s) => deg(s.state.sheet * RAD)} />
-        <Gauge label="Rudder" read={(s) => deg(s.state.rudder * RAD)} />
+        <Gauge label="AoA" read={(s) => (s.diag ? deg(s.diag.sailAoA * RAD) : '--')} />
         <Gauge label="Sea" unit="m" read={(s) => s.waves.sigWaveHeight.toFixed(1)} />
         <Gauge
           label="Depth"
@@ -186,7 +247,10 @@ export function Instruments() {
       </div>
 
       <Separator className="my-2.5" />
-      <SailPlan />
+      <Helm />
+      <div className="mt-2">
+        <SailPlan />
+      </div>
       <div className="mt-1.5">
         <Modes />
       </div>
