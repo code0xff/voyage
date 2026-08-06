@@ -51,6 +51,8 @@ export interface FrameInput {
   ghost: GhostSample | null;
   /** Whether the boat is showing her lights. */
   lightsOn: boolean;
+  /** Bumped on every new session, so the view can drop what it was trailing. */
+  session: number;
   dt: number;
 }
 
@@ -274,6 +276,8 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   scene.add(wake);
   let wakeCount = 0;
   let wakeTimer = 0;
+  /** The session the trail belongs to. -1 so the first frame always clears. */
+  let trailSession = -1;
 
   // --- Boat ---------------------------------------------------------------
   const boat = new THREE.Group(); // position and heading
@@ -550,6 +554,18 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     }
     streakGeo.attributes.position.needsUpdate = true;
     streakGeo.attributes.color.needsUpdate = true;
+
+    // Starting a session teleports the boat back to the line, and the track is
+    // in world coordinates, so without this the next point is joined to the
+    // last one of the previous session and a straight line is drawn clean
+    // across the chart. Snapshot.session exists for exactly this and had simply
+    // never been plumbed through to the view.
+    if (f.session !== trailSession) {
+      trailSession = f.session;
+      wakeCount = 0;
+      wakeTimer = 0;
+      wakeGeo.setDrawRange(0, 0);
+    }
 
     // The wake follows the actual track, not the heading, which is what makes
     // leeway visible.

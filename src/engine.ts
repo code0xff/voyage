@@ -739,6 +739,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       visibility: weather.visibility,
       ghost: showGhost ? ghostSample : null,
       lightsOn: snapshot.lightsOn,
+      session,
       dt,
     });
   }
