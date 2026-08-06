@@ -1,5 +1,15 @@
 import { useState } from "react";
-import { Anchor, Compass, Play, Settings2, Waves, Wind } from "lucide-react";
+import {
+  Anchor,
+  ArrowLeft,
+  Compass,
+  Play,
+  Settings2,
+  SlidersHorizontal,
+  Waves,
+  Wind,
+  X,
+} from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -124,6 +134,16 @@ export function MenuDialog({
   canResume: boolean;
 }) {
   const [tab, setTab] = useState("race");
+  /**
+   * The dialog is two screens, not one.
+   *
+   * Everything used to be on the opening screen at once: the way in, and every
+   * knob. Sliders are the biggest thing on a page whether or not anyone wants
+   * them, so what a first-time player met was a control panel rather than a
+   * game, and the buttons that actually start it were just two more rows in it.
+   * Settings are a place you go, and going there is one click.
+   */
+  const [view, setView] = useState<"play" | "settings">("play");
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) =>
     onSettings({ ...settings, [k]: v });
 
@@ -131,31 +151,66 @@ export function MenuDialog({
     <Dialog
       open={open}
       onClose={() => onOpenChange(false)}
-      className="max-w-[560px]"
+      className="relative max-w-[560px]"
       title={
-        <span className="flex items-center gap-2">
-          <Anchor className="size-4 text-info" />
-          <span className="text-lg font-medium tracking-[0.2em]">VOYAGE</span>
-        </span>
+        view === "play" ? (
+          <span className="flex items-center gap-2">
+            <Anchor className="size-4 text-info" />
+            <span className="text-lg font-medium tracking-[0.2em]">VOYAGE</span>
+          </span>
+        ) : (
+          <span className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-ml-2 h-7 px-2"
+              onClick={() => setView("play")}
+            >
+              <ArrowLeft />
+            </Button>
+            <span className="text-base font-medium">Settings</span>
+          </span>
+        )
       }
       description={
-        <span className="block text-[11px] leading-relaxed">
-          A sailing simulator that computes apparent wind, sail lift, keel side
-          force and wave-making resistance. Wind differs from place to place,
-          weather turns, and land steals your breeze.
-        </span>
+        view === "play" ? (
+          <span className="block text-[11px] leading-relaxed">
+            A sailing simulator that computes apparent wind, sail lift, keel side
+            force and wave-making resistance. Wind differs from place to place,
+            weather turns, and land steals your breeze.
+          </span>
+        ) : undefined
       }
       footer={
-        <div className="flex w-full items-center justify-between">
-          <Badge variant="outline" className="text-[10px] font-normal">
-            physics core runs headless · npm run polar
-          </Badge>
-          <span className="font-mono text-[10px] text-muted-foreground">
-            seed {settings.seed}
-          </span>
-        </div>
+        view === "play" ? undefined : (
+          // Developer trivia, and the seed, belong where someone is already
+          // looking at settings -- not in front of a player trying to start.
+          <div className="flex w-full items-center justify-between">
+            <Badge variant="outline" className="text-[10px] font-normal">
+              physics core runs headless · npm run polar
+            </Badge>
+            <Button size="sm" onClick={() => setView("play")}>
+              Done
+            </Button>
+          </div>
+        )
       }
     >
+      {/* Every dialog needs one, and this one had none: it closed on Escape or
+          a click outside, both of which have to be guessed. It is not a
+          substitute for Resume. This says "put this window away"; Resume says
+          "your race is still out there, go back to it", and when there is a
+          race running that is the likeliest thing anyone wants and belongs on
+          a full-width button rather than in a corner. */}
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={() => onOpenChange(false)}
+        className="absolute right-3 top-3 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <X className="size-4" />
+      </button>
+
       <div>
         {result && (
           <div className="mb-4">
@@ -163,26 +218,81 @@ export function MenuDialog({
           </div>
         )}
 
-        {/* Two buttons that throw the current session away, and -- on its own
-            row, because it is not one of them -- the one that keeps it. Wedged
-            in beside them it was both cramped and easy to mistake for a third
-            way to start something. */}
-        <div className="flex gap-2">
-          <Button className="flex-1" onClick={onStartRace}>
-            <Play /> Start race
-          </Button>
-          <Button variant="secondary" className="flex-1" onClick={onFreeSail}>
-            <Compass /> Free sail
-          </Button>
-        </div>
-        {canResume && (
-          <Button variant="outline" className="mt-2 w-full" onClick={() => onOpenChange(false)}>
-            Resume
-            <span className="text-muted-foreground">· Esc</span>
-          </Button>
+        {view === "play" && (
+          <>
+            {/* Going back to a session in progress is the likeliest thing
+                anyone here wants, so it leads and it is the wide one. The two
+                below it both throw that session away, which is why they are
+                not sitting in the same row as it. */}
+            {canResume && (
+              <Button className="mb-2 w-full" onClick={() => onOpenChange(false)}>
+                Resume
+                <span className="opacity-60">· Esc</span>
+              </Button>
+            )}
+            <div className="flex gap-2">
+              <Button
+                variant={canResume ? "secondary" : "default"}
+                className="flex-1"
+                onClick={onStartRace}
+              >
+                <Play /> {result ? "Race again" : "Start race"}
+              </Button>
+              <Button variant="secondary" className="flex-1" onClick={onFreeSail}>
+                <Compass /> Free sail
+              </Button>
+            </div>
+
+            {/* What you are about to sail in, in one glance. The knobs behind
+                it are worth having, but not worth reading past every time. */}
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-md border border-border bg-secondary/30 px-3 py-2">
+              <div className="text-[11px] leading-relaxed text-muted-foreground">
+                <div>
+                  {settings.windKnots} kn ·{" "}
+                  {settings.weatherMode === "auto"
+                    ? "changing weather"
+                    : WEATHER_LABEL[settings.weatherMode]}{" "}
+                  · {formatClock(settings.startHour)}
+                </div>
+                <div>
+                  {settings.legLength} m × {settings.laps}{" "}
+                  {settings.laps === 1 ? "lap" : "laps"} ·{" "}
+                  {settings.islandCount === 0
+                    ? "open sea"
+                    : `${settings.islandCount} islands`}
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setView("settings")}>
+                <SlidersHorizontal /> Adjust
+              </Button>
+            </div>
+
+            <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground">
+              <kbd className="rounded border border-border bg-secondary px-1 py-px font-mono">
+                ← →
+              </kbd>{" "}
+              helm ·{" "}
+              <kbd className="rounded border border-border bg-secondary px-1 py-px font-mono">
+                H
+              </kbd>{" "}
+              autopilot ·{" "}
+              <kbd className="rounded border border-border bg-secondary px-1 py-px font-mono">
+                T
+              </kbd>{" "}
+              auto-trim ·{" "}
+              <kbd className="rounded border border-border bg-secondary px-1 py-px font-mono">
+                Esc
+              </kbd>{" "}
+              this menu
+            </p>
+          </>
         )}
 
-        <Tabs value={tab} onValueChange={setTab} className="mt-4">
+        <Tabs
+          value={tab}
+          onValueChange={setTab}
+          className={view === "settings" ? "" : "hidden"}
+        >
           <TabsList className="w-full">
             <TabsTrigger value="race" className="flex-1">
               <Settings2 /> Course
