@@ -27,8 +27,24 @@ import { token } from '../ui/tokens';
  * tack, and the one thing a chart has to be is still.
  */
 
-/** Ranges the chart cycles through, m from the boat to the edge. */
+/** Ranges the chart cycles through, m from the centre to the edge. */
 export const RANGES = [300, 700, 1200] as const;
+
+/** Grid spacing at each range, m. Something to count, so distance is readable. */
+const GRID = [100, 200, 500] as const;
+
+/**
+ * How far from the centre the boat may get before the chart starts to pan,
+ * as a fraction of the range.
+ *
+ * This is the whole difference between a chart you can judge progress on and
+ * one you cannot. Locked to the boat, the land creeps by at under a pixel a
+ * second and nothing appears to happen; held still, the boat visibly crosses
+ * the water and past an island. Once it reaches the limit the chart pans at
+ * exactly the boat's speed, which keeps the water ahead in view without ever
+ * jumping.
+ */
+const PAN_AT = 0.55;
 
 /**
  * The furthest range is bounded by the physics: the island window reaches
@@ -128,7 +144,14 @@ export function createMinimap(): Minimap {
   const windLayer = document.createElement('canvas');
   let windDrawnAt = -Infinity;
   let windRange = -1;
+  let windCx = NaN;
+  let windCy = NaN;
   const windOut: [number, number] = [1, 0];
+
+  // Where the chart is looking. World coordinates, and deliberately not the
+  // boat's: see PAN_AT.
+  let centreX = NaN;
+  let centreY = NaN;
 
   function pushTrack(x: number, y: number): void {
     if (trackCount > 0) {
@@ -158,7 +181,7 @@ export function createMinimap(): Minimap {
    * overlap, and letting the canvas scale it up gives the smooth gradient a
    * pressure map should have anyway.
    */
-  function drawWind(input: MinimapInput, range: number): void {
+  function drawWind(input: MinimapInput, range: number, cx: number, cy: number): void {
     if (windLayer.width !== WIND_CELLS) {
       windLayer.width = WIND_CELLS;
       windLayer.height = WIND_CELLS;
@@ -174,8 +197,8 @@ export function createMinimap(): Minimap {
     for (let gx = 0; gx < WIND_CELLS; gx++) {
       for (let gy = 0; gy < WIND_CELLS; gy++) {
         // Canvas y runs down, north runs up.
-        const wx = input.state.pos.x + (gx + 0.5 - WIND_CELLS / 2) * mPerCell;
-        const wy = input.state.pos.y - (gy + 0.5 - WIND_CELLS / 2) * mPerCell;
+        const wx = cx + (gx + 0.5 - WIND_CELLS / 2) * mPerCell;
+        const wy = cy - (gy + 0.5 - WIND_CELLS / 2) * mPerCell;
         input.wind.sampleInto(wx, wy, windOut);
 
         // sampleInto returns gust * exposure, so an island's wind shadow is
@@ -196,14 +219,33 @@ export function createMinimap(): Minimap {
 
   return {
     draw(ctx, size, input) {
-      const range = RANGES[clamp(input.range, 0, RANGES.length - 1)];
+      const rangeIndex = clamp(input.range, 0, RANGES.length - 1);
+      const range = RANGES[rangeIndex];
       const k = size / (2 * range); // px per metre
       const cx = size / 2;
       const cy = size / 2;
       const bx = input.state.pos.x;
       const by = input.state.pos.y;
-      const sx = (x: number) => cx + (x - bx) * k;
-      const sy = (y: number) => cy - (y - by) * k;
+
+      // Hold the view still and let the boat move across it, panning only once
+      // she reaches the limit -- and then by exactly the distance she is over
+      // it, so the pan matches her speed rather than chasing or overshooting.
+      if (!Number.isFinite(centreX) || Math.hypot(bx - centreX, by - centreY) > range * 2) {
+        // First frame, or the boat has been teleported by a restart.
+        centreX = bx;
+        centreY = by;
+      }
+      const offX = bx - centreX;
+      const offY = by - centreY;
+      const off = Math.hypot(offX, offY);
+      const limit = range * PAN_AT;
+      if (off > limit) {
+        centreX += (offX / off) * (off - limit);
+        centreY += (offY / off) * (off - limit);
+      }
+
+      const sx = (x: number) => cx + (x - centreX) * k;
+      const sy = (y: number) => cy - (y - centreY) * k;
 
       pushTrack(bx, by);
 
@@ -219,15 +261,45 @@ export function createMinimap(): Minimap {
       ctx.fillRect(0, 0, size, size);
 
       // --- Wind -----------------------------------------------------------
+      // Time is the usual trigger; the distance test only catches a jump. The
+      // chart pans at sailing speed, so between two redraws the layer is stale
+      // by well under a pixel, but a restart moves it a kilometre at once.
       const now = performance.now();
-      if (now - windDrawnAt > WIND_INTERVAL || windRange !== range) {
-        drawWind(input, range);
+      if (
+        now - windDrawnAt > WIND_INTERVAL ||
+        windRange !== range ||
+        Math.hypot(centreX - windCx, centreY - windCy) > range * 0.05
+      ) {
+        drawWind(input, range, centreX, centreY);
         windDrawnAt = now;
         windRange = range;
+        windCx = centreX;
+        windCy = centreY;
       }
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(windLayer, 0, 0, size, size);
+
+      // --- Grid ---------------------------------------------------------------
+      // Anchored to round world coordinates, not to the chart, so it slides
+      // under the boat as she sails. Watching it go past is the difference
+      // between knowing you are moving and being told you are, and the squares
+      // give a distance you can count rather than estimate.
+      const grid = GRID[rangeIndex];
+      ctx.strokeStyle = token('--foreground', 0.1);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      const first = Math.ceil((centreX - range) / grid) * grid;
+      for (let gx = first; gx <= centreX + range; gx += grid) {
+        ctx.moveTo(sx(gx), 0);
+        ctx.lineTo(sx(gx), size);
+      }
+      const firstY = Math.ceil((centreY - range) / grid) * grid;
+      for (let gy = firstY; gy <= centreY + range; gy += grid) {
+        ctx.moveTo(0, sy(gy));
+        ctx.lineTo(size, sy(gy));
+      }
+      ctx.stroke();
 
       // --- Land -------------------------------------------------------------
       for (const isl of input.terrain.islands) {
@@ -326,7 +398,7 @@ export function createMinimap(): Minimap {
 
       // --- Boat ---------------------------------------------------------------
       ctx.save();
-      ctx.translate(cx, cy);
+      ctx.translate(sx(bx), sy(by));
       ctx.rotate(input.state.heading); // compass bearing, and north is up
       ctx.beginPath();
       ctx.moveTo(0, -7);

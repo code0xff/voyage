@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RANGES, createMinimap } from '@/view/minimap';
 import { CRUISER } from '@/sim/config';
-import { useEngine, useEngineFrame } from './engine-context';
+import { useEngine, useEngineFrame, useReadout } from './engine-context';
 
 const SIZE = 176;
 
@@ -37,6 +37,13 @@ export function MinimapCard() {
   // keyboard, so it reports the press rather than the card listening itself.
   useEffect(() => engine.onEvent((e) => e.type === 'chartRange' && cycle()), [engine, cycle]);
 
+  // Distance run answers "how far have I actually got" as a number, which the
+  // picture only answers by eye. It changes every frame, so it goes straight
+  // to the DOM rather than through React.
+  const runLabel = useReadout<HTMLSpanElement>((s) =>
+    s.run < 1000 ? `${s.run.toFixed(0)} m` : `${(s.run / 1000).toFixed(2)} km`,
+  );
+
   useEngineFrame((s) => {
     const ctx = ref.current?.getContext('2d');
     if (!ctx) return;
@@ -59,8 +66,11 @@ export function MinimapCard() {
         <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
           Chart
         </span>
-        <Badge variant="outline" className="px-1.5 py-0 text-[9px] font-normal">
-          {RANGES[range]} m
+        <Badge variant="outline" className="px-1.5 py-0 text-[9px] font-normal tabular-nums">
+          {/* The gap is a class, not a space: prettier wraps this line and JSX
+              eats whitespace that ends up next to a newline. */}
+          {RANGES[range]} m · run
+          <span ref={runLabel} className="ml-1" />
         </Badge>
       </div>
       <canvas

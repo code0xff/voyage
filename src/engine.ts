@@ -68,6 +68,8 @@ export interface Snapshot {
   clearance: number;
   /** Where the ghost is right now, or null when there is nothing to chase. */
   ghost: GhostSample | null;
+  /** Distance sailed over the ground since this session began, m. */
+  run: number;
 }
 
 export type EngineEvent =
@@ -129,6 +131,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let racing = false;
   let paused = false;
   let hour = settings.startHour;
+  let run = 0;
   let current = settings;
 
   const view: SceneView = createScene(canvas, cfg);
@@ -172,6 +175,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     depth: Infinity,
     clearance: Infinity,
     ghost: null,
+    run: 0,
   };
 
   const frameSubs = new Set<(s: Snapshot) => void>();
@@ -346,6 +350,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     reefState.timer = 0;
     accumulator = 0;
     telemetry.clear();
+    run = 0;
+    snapshot.run = 0;
     // The boat has just teleported. Load the sea it landed in before the next
     // frame draws the one it came from.
     streamWorld(state.pos.x, state.pos.y);
@@ -451,8 +457,16 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     snapshot.depth = sea.depth;
     snapshot.clearance = sea.depth - cfg.draft;
 
+    const wasX = state.pos.x;
+    const wasY = state.pos.y;
     diag = step(state, cfg, env, ctl, PHYS_DT, { sea });
     snapshot.diag = diag;
+
+    // Distance over the ground, which is not distance through the water: it
+    // includes leeway, and it is the number that answers "how far have I
+    // actually got".
+    run += Math.hypot(state.pos.x - wasX, state.pos.y - wasY);
+    snapshot.run = run;
 
     if (!racing) return;
 
