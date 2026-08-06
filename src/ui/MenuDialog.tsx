@@ -224,7 +224,7 @@ export function MenuDialog({
               max={10}
               step={1}
               value={settings.islandCount}
-              format={(v) => (v === 0 ? "open sea" : String(v))}
+              format={(v) => (v === 0 ? "open sea" : `${v}/10`)}
               onChange={(v) => set("islandCount", v)}
             />
             <div className="grid grid-cols-[104px_1fr] items-center gap-3">
@@ -233,25 +233,26 @@ export function MenuDialog({
               </span>
               <div className="flex gap-2">
                 <input
-                  className="h-8 w-full rounded-md border border-input bg-transparent px-2 font-mono text-xs tabular-nums outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  className="h-8 w-full rounded-md border border-input bg-transparent px-2 font-mono text-xs tabular-nums outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
                   value={settings.seed}
+                  disabled={settings.randomWorld}
                   onChange={(e) => set("seed", Number(e.target.value) || 1)}
                 />
                 <Button
-                  variant="outline"
+                  variant={settings.randomWorld ? "default" : "outline"}
                   size="sm"
-                  onClick={() =>
-                    set("seed", Math.floor(Math.random() * 1e8) + 1)
-                  }
+                  className="shrink-0"
+                  onClick={() => set("randomWorld", !settings.randomWorld)}
                 >
-                  Roll
+                  {settings.randomWorld ? "New each race" : "Pinned"}
                 </Button>
               </div>
             </div>
             <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
-              Islands sit close to the course on purpose. Their lee is flat
-              water but almost no wind, and the shoals around them will stop you
-              dead.
+              The ocean has no edge: islands keep coming over the horizon for as
+              long as you sail. Their lee is flat water but almost no wind, and
+              the shoals around them will stop you dead. Pin the seed to race the
+              same water twice.
             </p>
           </TabsContent>
 

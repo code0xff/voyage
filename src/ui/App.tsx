@@ -36,6 +36,15 @@ export function App() {
 
     const offEvent = e.onEvent((ev) => {
       if (ev.type === 'toggleMenu') setMenuOpen((v) => !v);
+      // The engine rolls the world, so the seed shown in the menu has to follow
+      // it -- otherwise the field would name a sea the player is not sailing in.
+      if (ev.type === 'world') {
+        setSettings((s) => {
+          const next = { ...s, seed: ev.seed };
+          saveSettings(next);
+          return next;
+        });
+      }
       if (ev.type === 'sound') {
         setSettings((s) => {
           const next = { ...s, sound: ev.on };

@@ -29,10 +29,12 @@ export interface Settings {
   timeScale: number;
   /** 'auto' lets the weather evolve on its own; anything else pins it. */
   weatherMode: 'auto' | WeatherKind;
-  /** Number of islands scattered around the course. Zero is open water. */
+  /** How thickly islands are scattered through the ocean, 0..10. Zero is open water. */
   islandCount: number;
   /** Seed for islands and weather, so a session can be reproduced. */
   seed: number;
+  /** Roll a new seed at the start of every race. Off pins the world to `seed`. */
+  randomWorld: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -48,6 +50,7 @@ export const DEFAULT_SETTINGS: Settings = {
   weatherMode: 'auto',
   islandCount: 4,
   seed: 20260806,
+  randomWorld: true,
 };
 
 const KEY = 'voyage.settings.v2';
@@ -78,6 +81,8 @@ export function loadSettings(): Settings {
       weatherMode: mode,
       islandCount: Math.round(num(o.islandCount, DEFAULT_SETTINGS.islandCount, 0, 10)),
       seed: Math.round(num(o.seed, DEFAULT_SETTINGS.seed, 1, 2 ** 31)),
+      randomWorld:
+        typeof o.randomWorld === 'boolean' ? o.randomWorld : DEFAULT_SETTINGS.randomWorld,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };

@@ -72,6 +72,8 @@ export type EngineEvent =
   | { type: 'toggleMenu' }
   | { type: 'polar' }
   | { type: 'sound'; on: boolean }
+  /** A fresh world was rolled. The settings hold the seed so it can be sailed again. */
+  | { type: 'world'; seed: number }
   | { type: 'finished'; time: number; isBest: boolean };
 
 export interface Engine {
@@ -337,7 +339,23 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     streamWorld(state.pos.x, state.pos.y);
   }
 
+  /**
+   * A new sea for a new race, unless the player has pinned one.
+   *
+   * Sailing the identical archipelago every time was the single thing that made
+   * an endless ocean feel small: whatever the boat did, the same island was
+   * always off the same layline. The rolled seed is written back to the
+   * settings, so a world worth keeping can be pinned and sailed again.
+   */
+  function rollWorld(): void {
+    if (!current.randomWorld) return;
+    const seed = Math.floor(Math.random() * 1e8) + 1;
+    current = { ...current, seed };
+    emit({ type: 'world', seed });
+  }
+
   function startRace(): void {
+    rollWorld();
     rebuildWorld();
     racing = true;
     snapshot.racing = true;
@@ -346,6 +364,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   function freeSail(): void {
+    rollWorld();
     rebuildWorld();
     racing = false;
     snapshot.racing = false;
