@@ -109,10 +109,12 @@ A = W_true - V_boat
 
 ### 2. Sails
 
-The boom always swings to leeward, so the angle of attack is a subtraction.
+The boom always swings to leeward, so the angle of attack is a subtraction. The
+sail is integrated in five horizontal strips, each with its own height, its own
+wind and therefore its own angle of attack:
 
 ```
-AoA = |AWA| - sheet
+AoA(u) = |AWA(u)| - (sheet + twist * u)      u = 0 at the foot, 1 at the head
 ```
 
 - `AoA < 0` means luffing; the force fades out over five degrees.
@@ -125,6 +127,39 @@ AoA = |AWA| - sheet
 - Lift is perpendicular to **the apparent wind, not the sail chord**. Model it
   as a flat-plate normal force and sailing upwind becomes physically impossible.
 - Hull and rig windage is added separately.
+
+### 2b. The wind gradient and twist
+
+Friction against the water slows the wind near the surface, so the head of the
+sail stands in a stronger true wind than the foot. The profile is the power law
+`V(z) = V_ref · (z/z_ref)^0.14`, which puts the head of this rig in about 28%
+more wind than its foot.
+
+`V_ref` is quoted at the height of the **full-sail centre of effort**, not the
+10 m meteorological standard. That choice is the whole design: referenced
+anywhere else, adding a gradient would simply mean every sail on the boat saw
+less wind, the boat would be slower everywhere, and `CRUISER` would be retuned
+until the polar came back to where it started.
+
+The boat's own velocity is the same at every height, so a stronger true wind up
+top means the apparent wind up there comes **from further aft**. The gap between
+the apparent wind angle at the head and at the foot is exactly the twist the
+sail wants. It is small on a beat, where boat speed dominates the apparent wind
+and compresses the spread, and large on a broad reach — which is why sails are
+trimmed nearly flat upwind and let right open downwind.
+
+Twist has a second job, and measurement says it is the more valuable one:
+**twisting the head open depowers the boat**. The head has the longest lever on
+heel, so spilling it sheds heeling moment while the foot keeps driving. Hard on
+the wind in 20 knots, full twist is 13% faster than gradient-matched trim. The
+auto-trim therefore matches the gradient until the boat is overpowered and then
+twists off, and because that band sits below the auto-reef's trigger, the cheap
+depowering is spent before the expensive one.
+
+Under-twisting, by contrast, costs almost nothing — under 1% at every angle
+measured. The sail's lift curve is flat near its peak, so a head a few degrees
+off ideal barely notices. Twist is a depowering control that happens to also
+match the gradient, not a "match it or lose power" control.
 
 ### 3. Reefing and balance
 
@@ -296,16 +331,24 @@ The only objective yardstick for whether the physics is right. The output of
 
 Voyager 33 (10 m cruiser, LWL 9 m, hull speed 7.29 kn):
 
-| TWS | Best upwind VMG | Tacking angle | Top speed | Upwind sail |
-|---|---|---|---|---|
-| 6 kn | TWA 50° | 100° | 4.57 kn | 100% |
-| 12 kn | TWA 45° | 90° | 6.11 kn | 100% |
-| 25 kn | TWA 55° | 110° | 7.31 kn | 43% |
-| 35 kn | TWA 55° | 110° | 7.89 kn | 33% |
+| TWS | Best upwind VMG | Tacking angle | Top speed | Upwind sail | Twist |
+|---|---|---|---|---|---|
+| 6 kn | TWA 50° | 100° | 4.56 kn | 100% | 3° |
+| 12 kn | TWA 45° | 90° | 6.10 kn | 100% | 4° |
+| 25 kn | TWA 45° | 90° | 7.30 kn | 54% | 17° |
+| 35 kn | TWA 55° | 110° | 7.88 kn | 33% | 17° |
 
 The boat **points highest in medium air and worse at both extremes** — light air
 lacks the power to drive through drag, heavy air means reefed sails and a head
 sea. That is the real pattern.
+
+In a breeze the boat now twists the head of the sail open instead of reefing so
+early: at 25 knots it carries 54% of full sail where it used to carry 43%, and
+points 20 degrees closer to the wind for it. At 35 knots the trade runs the
+other way — it holds a steady 28 degrees of heel where it used to lie over at
+36, and gives up about 7% of upwind VMG to do it. That is the intended answer.
+A polar is the speed you could hold *if you sailed the boat well*, and nobody
+sails a cruiser to windward in a gale at 36 degrees of heel.
 
 ### Bugs the headless validation caught
 
@@ -398,8 +441,11 @@ meaning anything.
 
 ## Deliberate simplifications
 
-- Sails are modelled as a single area. The two sails in the renderer are
-  visual; there is no main/jib slot interaction.
+- Main and jib are integrated as one equivalent sail — separate areas and
+  centres of effort, but a single set of strips. The two sails in the renderer
+  are visual; there is no main/jib slot interaction.
+- The wind gradient changes wind *speed* with height but not direction. Real
+  shear veers a degree or so over a rig this size, which no helmsman notices.
 - No spinnaker, so downwind is slower than reality.
 - Wind sea only: no swell, no current and no tide.
 - No wave orbital velocity acting on the hull, and no surfing.

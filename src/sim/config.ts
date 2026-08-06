@@ -34,11 +34,27 @@ export interface BoatConfig {
   jibCeHeight: number;
   jibCeX: number;
 
+  /**
+   * m, vertical extent of the full sail plan, foot to head.
+   *
+   * Only used for the wind gradient: it is what turns the centre of effort into
+   * a sail with a top and a bottom that see different winds.
+   */
+  sailSpan: number;
+
   sailAR: number; // aspect ratio; governs induced drag CDi = CL^2 / (pi * AR)
   mastX: number; // m, mast position (rendering)
   minSheet: number; // rad, boom angle when sheeted hard in
   maxSheet: number; // rad, fully eased
   targetAoA: number; // rad, angle of attack the auto-trim aims for
+  /**
+   * rad, how far the head may be twisted open beyond the foot.
+   *
+   * Twist is a magnitude, like the sheet, not a signed angle: the head of a
+   * sail falls away to leeward and never hooks to windward, because the leech
+   * has nothing to hold it up there.
+   */
+  maxTwist: number;
 
   // --- Windage ---
   // Hull, mast and rigging simply being pushed by the wind. Not negligible
@@ -95,11 +111,15 @@ export const CRUISER: BoatConfig = {
   jibCeHeight: 5.2,
   jibCeX: 2.4,
 
+  // Foot 2.5 m above the water, head 14 m up: a 13 m stick on a 10 m boat.
+  sailSpan: 11.5,
+
   sailAR: 2.8,
   mastX: 1.2,
   minSheet: 11 * DEG,
   maxSheet: 85 * DEG,
   targetAoA: 19 * DEG,
+  maxTwist: 30 * DEG,
 
   windageArea: 9,
   windageCd: 0.85,
@@ -135,10 +155,21 @@ export const CRUISER: BoatConfig = {
 
 export const boatHullSpeed = (c: BoatConfig): number => hullSpeed(c.lwl);
 
+/**
+ * m, height of the centre of gravity above the water.
+ *
+ * Not a separate number: the keel reaches `keelDepth` below the CG and `draft`
+ * below the surface, so the difference is the freeboard of the CG. Heights in
+ * the physics are measured from the CG because that is where the moments act;
+ * the wind gradient needs them from the water, because that is what slows the
+ * wind down.
+ */
+export const cgHeight = (c: BoatConfig): number => c.draft - c.keelDepth;
+
 export interface Environment {
   /** The direction the wind blows *from* (compass rad), as sailors quote it. */
   twd: number;
-  /** True wind speed, m/s. */
+  /** True wind speed, m/s, at `windRefHeight` above the water. */
   tws: number;
   rhoAir: number;
   rhoWater: number;

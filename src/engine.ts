@@ -376,7 +376,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     view.setTerrain(terrain, new Terrain(visible));
   }
 
-  const ctl: Controls = { rudder: 0, sheet: 0, autoTrim: true };
+  const ctl: Controls = { rudder: 0, sheet: 0, twist: 0, autoTrim: true };
   const reefState: ReefState = { reef: 0, jibFurl: 0, timer: 0 };
   let autoReefOn = true;
   let accumulator = 0;

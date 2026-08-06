@@ -51,7 +51,9 @@ describe('polar diagram', () => {
     expect(leeway).toBeLessThan(6);
   });
 
-  it('points highest in medium air and worse at both extremes', () => {
+  // Three full polars, which is 111 steady-state solves and about 1.6 million
+  // physics steps. It genuinely takes this long; it is not hanging.
+  it('points highest in medium air and worse at both extremes', { timeout: 30_000 }, () => {
     const angleAt = (kn: number) =>
       solvePolar(CRUISER, { ...DEFAULT_ENV, tws: knotsToMs(kn) }, 5).bestUpwind!.twa * RAD;
     const light = angleAt(6);

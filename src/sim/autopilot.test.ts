@@ -24,7 +24,7 @@ function sail(
     twd: opts.twd ?? 0,
   };
   const s: BoatState = initialState({ heading: opts.heading ?? 0, u: knotsToMs(5) });
-  const ctl: Controls = { rudder: 0, sheet: 0, autoTrim: true };
+  const ctl: Controls = { rudder: 0, sheet: 0, twist: 0, autoTrim: true };
   const track: { heading: number; twa: number }[] = [];
   for (let i = 0; i < seconds / DT; i++) {
     ctl.rudder = pilotRudder(p, s.heading, env.twd, s.r);

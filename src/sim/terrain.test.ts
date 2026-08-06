@@ -242,7 +242,7 @@ describe('grounding physics', () => {
       dir: 0,
       depth: 0.5, // well under the 1.8 m draft
     };
-    const ctl = { rudder: 0, sheet: 0, autoTrim: true };
+    const ctl = { rudder: 0, sheet: 0, twist: 0, autoTrim: true };
     for (let i = 0; i < 120 * 4; i++) step(s, CRUISER, DEFAULT_ENV, ctl, 1 / 120, { sea });
     expect(msToKnots(Math.hypot(s.u, s.v))).toBeLessThan(0.6);
 

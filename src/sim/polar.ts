@@ -22,6 +22,8 @@ export interface PolarPoint {
   heel: number; // rad
   leeway: number; // rad
   sheet: number; // rad
+  /** rad, twist the auto-trim settled on. This is what the gradient is asking for. */
+  twist: number;
   awa: number; // rad
   sailFraction: number; // effective area vs full sail, after auto-reefing
 }
@@ -34,7 +36,7 @@ export interface Polar {
   maxSpeed: number;
 }
 
-const AUTO: Controls = { rudder: 0, sheet: 0, autoTrim: true };
+const AUTO: Controls = { rudder: 0, sheet: 0, twist: 0, autoTrim: true };
 
 /** Run with the heading frozen until the boat settles. */
 export function solveOne(
@@ -86,6 +88,7 @@ export function solveOne(
     heel: s.heel,
     leeway: d.leeway,
     sheet: s.sheet,
+    twist: s.twist,
     awa: d.awa,
     sailFraction: d.sailFraction,
   };
@@ -114,9 +117,9 @@ export function formatPolar(polar: Polar, cfg: BoatConfig): string {
   const lines: string[] = [];
   lines.push(`${cfg.name}  |  TWS ${msToKnots(polar.tws).toFixed(1)} kn`);
   lines.push('');
-  lines.push(' TWA    BSP    VMG    AWA   heel  leeway  sheet   sail');
-  lines.push(' deg     kn     kn    deg    deg     deg    deg      %');
-  lines.push('------------------------------------------------------');
+  lines.push(' TWA    BSP    VMG    AWA   heel  leeway  sheet  twist   sail');
+  lines.push(' deg     kn     kn    deg    deg     deg    deg    deg      %');
+  lines.push('--------------------------------------------------------------');
   for (const p of polar.points) {
     lines.push(
       [
@@ -127,11 +130,12 @@ export function formatPolar(polar: Polar, cfg: BoatConfig): string {
         (Math.abs(p.heel) * RAD).toFixed(1).padStart(7),
         (Math.abs(p.leeway) * RAD).toFixed(1).padStart(8),
         (p.sheet * RAD).toFixed(0).padStart(7),
+        (p.twist * RAD).toFixed(0).padStart(7),
         (p.sailFraction * 100).toFixed(0).padStart(7),
       ].join(''),
     );
   }
-  lines.push('------------------------------------------------------');
+  lines.push('--------------------------------------------------------------');
   if (polar.bestUpwind) {
     const b = polar.bestUpwind;
     lines.push(

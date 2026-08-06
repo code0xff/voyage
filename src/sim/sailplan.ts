@@ -1,5 +1,5 @@
 import { DEG, clamp } from './math';
-import type { BoatConfig } from './config';
+import { cgHeight, type BoatConfig } from './config';
 
 /**
  * Sail plan: turns a reef count and a jib furl fraction into effective sail
@@ -30,7 +30,38 @@ export interface SailPlan {
   ceX: number; // m, effective longitudinal centre of effort
   /** Area as a fraction of full sail, for the HUD. */
   fraction: number;
+  /** m above the centre of gravity: the bottom of the sail's area. */
+  footHeight: number;
+  /** m above the centre of gravity: the top of it. */
+  headHeight: number;
 }
+
+/**
+ * Height of the full-sail centre of effort above the centre of gravity.
+ *
+ * Kept out of `sailPlan()` because it must *not* move when the boat reefs: it
+ * is a property of the rig, not of today's sail area.
+ */
+function fullCeHeight(cfg: BoatConfig): number {
+  const a = cfg.mainArea + cfg.jibArea;
+  return a < 1e-3
+    ? cfg.mainCeHeight
+    : (cfg.mainArea * cfg.mainCeHeight + cfg.jibArea * cfg.jibCeHeight) / a;
+}
+
+/**
+ * m above the water, the height the true wind speed is quoted at.
+ *
+ * Deliberately *not* the 10 m meteorological standard. The gradient has to be
+ * referenced somewhere, and referencing it above the sail would mean every sail
+ * on the boat suddenly saw less wind than before: the boat would be slower
+ * everywhere, `CRUISER` would simply be retuned until the polar came back to
+ * where it started, and the whole exercise would have been motion without
+ * progress. Quoting the wind at the height its force acts leaves the gradient
+ * doing the one thing it is here to do -- redistributing wind over the sail, so
+ * that twist starts to matter.
+ */
+export const windRefHeight = (cfg: BoatConfig): number => fullCeHeight(cfg) + cgHeight(cfg);
 
 export function sailPlan(cfg: BoatConfig, reef: number, jibFurl: number): SailPlan {
   const r = clamp(Math.round(reef), 0, MAX_REEF);
@@ -40,21 +71,80 @@ export function sailPlan(cfg: BoatConfig, reef: number, jibFurl: number): SailPl
   const aj = cfg.jibArea * (1 - furl);
   const area = am + aj;
 
+  // The main sets the top of the rig, so only reefing shortens the plan --
+  // rolling the jib away takes area out of the middle and leaves the mainsail
+  // standing to the masthead. Geometrically similar triangles, hence the root.
+  const span = cfg.sailSpan * Math.sqrt(REEF_AREA[r]);
+
   if (area < 1e-3) {
     // Bare poles. Guard the division below.
-    return { area: 0, ceHeight: cfg.mainCeHeight, ceX: cfg.mainCeX, fraction: 0 };
+    return {
+      area: 0,
+      ceHeight: cfg.mainCeHeight,
+      ceX: cfg.mainCeX,
+      fraction: 0,
+      footHeight: cfg.mainCeHeight,
+      headHeight: cfg.mainCeHeight,
+    };
   }
 
   // A partly furled jib loses its forward area first, so its CE creeps aft.
   const jibX = cfg.jibCeX * (1 - furl * 0.25);
+  const ceHeight = (am * cfg.mainCeHeight * REEF_CE[r] + aj * cfg.jibCeHeight) / area;
 
   return {
     area,
-    ceHeight: (am * cfg.mainCeHeight * REEF_CE[r] + aj * cfg.jibCeHeight) / area,
+    ceHeight,
     ceX: (am * cfg.mainCeX * REEF_X[r] + aj * jibX) / area,
     fraction: area / (cfg.mainArea + cfg.jibArea),
+    // The centroid of a triangle sits a third of the way up it, so the foot and
+    // the head follow from the centre of effort and the span.
+    footHeight: ceHeight - span / 3,
+    headHeight: ceHeight + (2 * span) / 3,
   };
 }
+
+/**
+ * How many horizontal strips the sail is integrated in.
+ *
+ * Not a free number: the loop runs at 120 Hz and doubles the cost of a step.
+ * Measured over nine settled operating points, five against nine strips differs
+ * by under 0.01 kn everywhere except hard on the wind in 25 knots, where the
+ * heel-driven depowering makes the fixed point sensitive and the gap is 0.02 kn
+ * (0.3%). Three strips costs 1% at that same point, which is too much to give
+ * away for a saving that nothing needs.
+ */
+export const SAIL_STRIPS = 5;
+
+/**
+ * Where each strip sits between foot (0) and head (1), and what fraction of the
+ * area it carries.
+ *
+ * A Bermudan sail is a triangle, so its chord -- and hence its area per metre of
+ * height -- falls off linearly towards the head: density `2(1-u)`. That matters
+ * more than it looks. Under a uniform distribution the head would carry as much
+ * area as the foot, the twist that keeps it attached would be worth far more
+ * than it really is, and heel would come out badly overstated.
+ *
+ * Integrated once, here, rather than in the physics loop.
+ */
+function stripGeometry(): { u: number[]; area: number[] } {
+  const u: number[] = [];
+  const area: number[] = [];
+  for (let i = 0; i < SAIL_STRIPS; i++) {
+    const a = i / SAIL_STRIPS;
+    const b = (i + 1) / SAIL_STRIPS;
+    const w = 2 * (b - a) - (b * b - a * a); // integral of 2(1-u)
+    const m = b * b - a * a - (2 / 3) * (b * b * b - a * a * a); // integral of 2u(1-u)
+    u.push(m / w); // the strip's own centroid, not its midpoint
+    area.push(w);
+  }
+  return { u, area };
+}
+
+const STRIPS = stripGeometry();
+export const STRIP_U: readonly number[] = STRIPS.u;
+export const STRIP_AREA: readonly number[] = STRIPS.area;
 
 /** Heel angle the auto-reef aims to hold. */
 export const TARGET_HEEL = 24 * DEG;
@@ -70,8 +160,12 @@ export interface ReefState {
   avgHeel?: number;
 }
 
-/** Heel-average time constant. Must exceed the 3.6 s roll period to ride out gusts. */
-const HEEL_TAU = 6;
+/**
+ * Heel-average time constant. Must exceed the 3.6 s roll period to ride out
+ * gusts. Shared with the auto-trim's depowering, which needs it for a second
+ * reason: see `heelAvg` in `boat.ts`.
+ */
+export const HEEL_TAU = 6;
 
 /**
  * Automatic reefing. This is crew judgement, not physics, so it lives outside

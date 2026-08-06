@@ -5,7 +5,7 @@ import { DEG, RAD, wrapPi } from './math';
 import { knotsToMs, msToKnots } from './units';
 
 const DT = 1 / 120;
-const AUTO: Controls = { rudder: 0, sheet: 0, autoTrim: true };
+const AUTO: Controls = { rudder: 0, sheet: 0, twist: 0, autoTrim: true };
 
 function run(s: BoatState, seconds: number, ctl: Controls = AUTO, tws = knotsToMs(12)) {
   const env = { ...DEFAULT_ENV, tws };
@@ -47,7 +47,7 @@ describe('steering', () => {
   it('turns to starboard on positive rudder', () => {
     const s = initialState({ heading: 90 * DEG, u: 3 });
     const before = s.heading;
-    run(s, 6, { rudder: 0.8, sheet: 0, autoTrim: true });
+    run(s, 6, { rudder: 0.8, sheet: 0, twist: 0, autoTrim: true });
     expect(wrapPi(s.heading - before)).toBeGreaterThan(0);
   });
 
@@ -76,7 +76,7 @@ describe('steering', () => {
     expect(speedBefore).toBeGreaterThan(3);
 
     // Push the helm over and hold it until the bow crosses the wind.
-    run(s, 14, { rudder: 0.9, sheet: 0, autoTrim: true });
+    run(s, 14, { rudder: 0.9, sheet: 0, twist: 0, autoTrim: true });
     const afterTack = step(s, CRUISER, DEFAULT_ENV, AUTO, DT);
     expect(afterTack.awa).toBeLessThan(0); // now on the other tack
     expect(s.heel).toBeGreaterThan(0); // and heeled the other way
