@@ -187,8 +187,75 @@ const fragmentShader = /* glsl */ `
   }
 `;
 
+/**
+ * The sea beyond the wave grid.
+ *
+ * The detailed grid is 900 m across, which is all the resolution the waves are
+ * worth. Everything outside it used to be nothing at all -- what looked like
+ * the horizon was the edge of the grid, and any land drawn past it hung in the
+ * sky with its underwater skirt showing. That was survivable when islands were
+ * only ever a few hundred metres away; in an endless ocean, where land is drawn
+ * out to the fog, it makes every island look like it is floating.
+ *
+ * So a flat plane fills in the rest. It is shaded by the same formula as the
+ * grid with a flat normal, which is exactly what the grid itself has out there
+ * -- its waves are faded to zero by its own edge -- so the join does not show.
+ * It sits a third of a metre lower to stay out of a depth fight with the grid
+ * that covers it.
+ */
+const FAR_SIZE = 8000;
+const FAR_Y = -0.35;
+
+const farVertexShader = /* glsl */ `
+  varying vec3 vWorld;
+
+  void main() {
+    vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const farFragmentShader = /* glsl */ `
+  uniform vec3 uDeep;
+  uniform vec3 uShallow;
+  uniform vec3 uSky;
+  uniform vec3 uSun;
+  uniform vec3 uSunColor;
+  uniform vec3 uFogColor;
+  uniform float uFogNear;
+  uniform float uFogFar;
+  uniform float uSpecular;
+
+  varying vec3 vWorld;
+
+  // The colour half of the grid's fragment shader, with n fixed to straight up.
+  // Whitecaps and the shoal tint are left out: both need wave amplitude or
+  // nearby land, and neither survives out here.
+  void main() {
+    vec3 n = vec3(0.0, 1.0, 0.0);
+    vec3 viewDir = normalize(cameraPosition - vWorld);
+    vec3 sunDir = normalize(uSun);
+
+    float diff = max(dot(n, sunDir), 0.0);
+    float fres = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
+
+    vec3 col = mix(uDeep, uShallow, diff * 0.65);
+    col = mix(col, uSky, clamp(fres * 0.85, 0.0, 0.75));
+
+    vec3 h = normalize(sunDir + viewDir);
+    col += uSunColor * pow(max(dot(n, h), 0.0), 90.0) * uSpecular;
+
+    float d = length(cameraPosition - vWorld);
+    col = mix(col, uFogColor, smoothstep(uFogNear, uFogFar, d));
+
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
 export interface Water {
   mesh: THREE.Mesh;
+  /** The flat sea filling everything outside the grid, out to the fog. */
+  far: THREE.Mesh;
   /** Per frame: move the grid to the boat and refresh the wave uniforms. */
   update(
     waves: WaveField,
@@ -242,10 +309,24 @@ export function createWater(): Water {
   mesh.frustumCulled = false;
   mesh.renderOrder = -1;
 
+  // The same uniform objects, so the far sea cannot fall out of step with the
+  // grid it joins: one update() sets the colours for both.
+  const farGeo = new THREE.PlaneGeometry(FAR_SIZE, FAR_SIZE);
+  farGeo.rotateX(-Math.PI / 2);
+  const farMat = new THREE.ShaderMaterial({
+    uniforms,
+    vertexShader: farVertexShader,
+    fragmentShader: farFragmentShader,
+  });
+  const far = new THREE.Mesh(farGeo, farMat);
+  far.frustumCulled = false;
+  far.renderOrder = -2;
+
   const quad = SIZE / SEG;
 
   return {
     mesh,
+    far,
     setTerrain(terrain) {
       for (let i = 0; i < MAX_ISLANDS; i++) {
         const isl = terrain.islands[i];
@@ -259,6 +340,7 @@ export function createWater(): Water {
       const oy = Math.round(simY / quad) * quad;
       uniforms.uOrigin.value.set(ox, oy);
       mesh.position.set(ox, 0, -oy);
+      far.position.set(ox, FAR_Y, -oy);
       uniforms.uTime.value = waves.time;
 
       const from = compassVec(twd);
@@ -296,6 +378,8 @@ export function createWater(): Water {
     dispose() {
       geo.dispose();
       mat.dispose();
+      farGeo.dispose();
+      farMat.dispose();
     },
   };
 }

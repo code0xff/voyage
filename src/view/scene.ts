@@ -207,6 +207,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   // --- Water --------------------------------------------------------------
   // Wave shape on the GPU, floating height on the CPU, from the same formula.
   const water = createWater();
+  scene.add(water.far);
   scene.add(water.mesh);
 
   const islandView = createIslandView();
