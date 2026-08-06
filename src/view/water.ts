@@ -177,6 +177,8 @@ const fragmentShader = /* glsl */ `
   uniform float uWhitecap;
   uniform float uSpecular;
   uniform float uRipple;
+  uniform vec4 uLamp;
+  uniform vec3 uLampColor;
   uniform vec4 uIslands[${MAX_ISLANDS}];
 
   varying vec3 vNormal;
@@ -232,6 +234,50 @@ const fragmentShader = /* glsl */ `
       float crest = smoothstep(0.72, 0.99, vHeight / vAmp);
       float steep = smoothstep(0.22, 0.55, vSteepness);
       col = mix(col, vec3(0.86, 0.91, 0.95), crest * steep * uWhitecap * vShelter);
+    }
+
+    // Deck lights pooling on the sea.
+    //
+    // The lamps themselves are three.js PointLights, and PointLights do nothing
+    // here: this is a raw ShaderMaterial and it takes no scene lighting at all.
+    // Left to them the boat was a lit object floating on black water, which is
+    // the one thing that gives away that the sea is a shader and not a sea.
+    //
+    // So the pool is drawn explicitly. It is added *before* the fog so that a
+    // boat seen from the far end of a long chase camera loses her pool the same
+    // way she loses her hull.
+    //
+    // It is a *cone from the spreader*, not a smear centred on the boat. That
+    // distinction is the whole difference between something that looks like a
+    // light and something that looks like a stain: a lamp hung up the mast
+    // throws a round patch with an edge to it, and the edge is what the eye
+    // reads as illumination. uLamp.w carries the height the lamp is actually
+    // hanging at, taken off the scene graph, so when she heels and the lamp
+    // swings out to leeward the pool goes with it.
+    if (uLamp.z > 0.001) {
+      float dl = distance(simP, uLamp.xy);
+      float h = max(uLamp.w, 1.0);
+
+      // The cone's footprint. A wide-ish flood, and the soft inner edge keeps
+      // the rim from looking stamped on.
+      float radius = h * 1.15;
+      float cone = 1.0 - smoothstep(radius * 0.45, radius, dl);
+      // Inverse square from the lamp itself, which is what makes the middle of
+      // the pool brighter than its edge without any extra tuning.
+      float fall = (h * h) / (dl * dl + h * h);
+      float pool = cone * fall;
+
+      // The wash alone is still a flat disc. What makes it read as light *on
+      // water* is the glitter: a specular off the ripple normals, with the lamp
+      // treated as the near source it is rather than as one at infinity like
+      // the sun. Broad exponent, because a soft flood throws a soft highlight
+      // and not a sun-glint pinpoint.
+      vec3 lampPos = vec3(uLamp.x, h, -uLamp.y);
+      vec3 lampDir = normalize(lampPos - vWorld);
+      vec3 lh = normalize(lampDir + viewDir);
+      float glint = pow(max(dot(n, lh), 0.0), 45.0);
+
+      col += uLampColor * uLamp.z * pool * (0.8 + glint * 2.4);
     }
 
     col = mix(col, uFogColor, smoothstep(uFogNear, uFogFar, dist));
@@ -325,6 +371,11 @@ export interface Water {
     visibility: number,
   ): void;
   setTerrain(terrain: Terrain): void;
+  /**
+   * Where the spreader flood hangs and how lit it is, for the pool it throws.
+   * @param height metres above the water; it sets the size of the pool
+   */
+  setLamp(simX: number, simY: number, level: number, height: number): void;
   dispose(): void;
 }
 
@@ -361,6 +412,9 @@ export function createWater(): Water {
     uWhitecap: { value: 0 },
     uSpecular: { value: 0.5 },
     uRipple: { value: 1 },
+    // xy: the lamp in sim coordinates, z: how lit it is, w: its height.
+    uLamp: { value: new THREE.Vector4(0, 0, 0, 1) },
+    uLampColor: { value: new THREE.Color(0.42, 0.29, 0.14) },
   };
 
   const mat = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader });
@@ -386,6 +440,9 @@ export function createWater(): Water {
   return {
     mesh,
     far,
+    setLamp(simX, simY, level, height) {
+      uniforms.uLamp.value.set(simX, simY, level, height);
+    },
     setTerrain(terrain) {
       for (let i = 0; i < MAX_ISLANDS; i++) {
         const isl = terrain.islands[i];

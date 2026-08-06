@@ -15,6 +15,7 @@ import { createCourseView } from './course';
 import { createIslandView } from './islands';
 import { createRain } from './rain';
 import { createSkyDome } from './skydome';
+import { createBoatLights, lampLevel } from './lights';
 import { createOrbit } from './orbit';
 
 /**
@@ -48,6 +49,8 @@ export interface FrameInput {
   weather: WeatherState;
   visibility: number;
   ghost: GhostSample | null;
+  /** Whether the boat is showing her lights. */
+  lightsOn: boolean;
   dt: number;
 }
 
@@ -309,7 +312,14 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   heelGroup.add(cabin);
 
   const DECK_Y = 1.02; // deck height at the mast, matching the hull freeboard
+
   const mastHeight = cfg.loa * 1.3;
+
+  // Navigation lights, the spreader flood and the cabin glow. They ride with
+  // the hull, so they heel and pitch with her -- and so does the pool the
+  // spreader throws, which is the point of hanging it up the mast.
+  const boatLights = createBoatLights(cfg.loa, cfg.beam, DECK_Y, mastHeight);
+  heelGroup.add(boatLights.group);
   const boomLen = cfg.loa * 0.42;
   const bowX = cfg.loa * 0.5;
   const forestay = bowX - cfg.mastX; // mast to stemhead = the jib's base
@@ -386,6 +396,8 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   let camMode = 0; // 0 = chase, 1 = top-down
   const camPos = new THREE.Vector3(0, 14, 30);
   const camTarget = new THREE.Vector3();
+  // Scratch for the spreader lamp's world position, read every frame.
+  const lampWorld = new THREE.Vector3();
   const orbit = createOrbit(canvas);
 
   function resize(): void {
@@ -425,6 +437,9 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     const bx = state.pos.x;
     const bz = -state.pos.y;
 
+    // The lamps and the pool they throw on the water come off one number, so
+    // the sea cannot be lit by a boat that is showing no lights.
+    const lamp = lampLevel(f.lightsOn, sky.daylight);
     water.update(
       waves,
       state.pos.x,
@@ -599,6 +614,20 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     skyDome.mesh.position.copy(camPos);
     rain.update(f.weather.rain, wind.baseTws, wind.baseTwd, camera, dt);
 
+    // Which lamps the camera can see depends on where it is round the boat,
+    // because the sidelights are sectored the way the real ones are.
+    const camBearing = Math.atan2(camPos.x - bx, -(camPos.z - bz)) - state.heading;
+    boatLights.update(lamp, camBearing);
+
+    // Where the spreader flood actually hangs, taken off the scene graph rather
+    // than recomputed: the shader and the renderer then cannot disagree about
+    // where the light is. She heels, the lamp swings out to leeward, and the
+    // pool goes with it -- which is most of what makes it read as a light
+    // rather than as a decal stuck under the boat.
+    boat.updateMatrixWorld(true);
+    boatLights.spreader.getWorldPosition(lampWorld);
+    water.setLamp(lampWorld.x, -lampWorld.z, lamp, Math.max(lampWorld.y, 1));
+
     renderer.render(scene, camera);
   }
 
@@ -613,6 +642,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       water.setTerrain(physics);
     },
     dispose() {
+      boatLights.dispose();
       orbit.dispose();
       water.dispose();
       islandView.dispose();

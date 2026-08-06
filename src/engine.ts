@@ -82,6 +82,8 @@ export interface Snapshot {
   /** Increments whenever a new session starts. A view can reset its own state on it. */
   session: number;
   pilot: PilotState;
+  /** Whether the boat is showing her lights. */
+  lightsOn: boolean;
 }
 
 export type EngineEvent =
@@ -222,6 +224,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     run: 0,
     session: 0,
     pilot,
+    lightsOn: true,
   };
 
   const frameSubs = new Set<(s: Snapshot) => void>();
@@ -678,6 +681,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // Engage on the course being sailed: you steady up first, then press it.
     if (input.wasPressed('h')) cyclePilot(pilot, state.heading, wrapPi(env.twd - state.heading));
     if (input.wasPressed('c')) view.toggleCamera();
+    if (input.wasPressed('l')) snapshot.lightsOn = !snapshot.lightsOn;
     if (input.wasPressed('n')) emit({ type: 'chartRange' });
     if (input.wasPressed('p')) schedulePolar(0);
     if (input.wasPressed('r')) (racing ? startRace : freeSail)();
@@ -734,6 +738,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       weather: weather.state,
       visibility: weather.visibility,
       ghost: showGhost ? ghostSample : null,
+      lightsOn: snapshot.lightsOn,
       dt,
     });
   }
