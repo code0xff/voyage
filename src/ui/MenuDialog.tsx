@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Compass,
   Play,
+  Sailboat,
   Settings2,
   SlidersHorizontal,
   Waves,
@@ -232,7 +233,9 @@ export function MenuDialog({
                 width, so Resume still leads. */}
             {canResume && (
               <Button className="mb-2 w-full justify-between" onClick={() => onOpenChange(false)}>
-                <span>Resume</span>
+                <span className="flex items-center gap-2">
+                  <Sailboat /> Resume
+                </span>
                 <span className="opacity-60">Esc</span>
               </Button>
             )}
@@ -481,6 +484,7 @@ export function MenuDialog({
                 ["P", "re-solve polar"],
                 ["R", "restart"],
                 ["M", "sound"],
+                ["L", "navigation lights"],
                 ["Esc", "this menu"],
               ].map(([k, v]) => (
                 <div
