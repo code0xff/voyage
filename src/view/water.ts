@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { MAX_WAVES, type WaveField } from '../sim/waves';
-import type { Terrain } from '../sim/terrain';
+import { MAX_ACTIVE_ISLANDS, WAKE_FADE, WAKE_MAX, type Terrain } from '../sim/terrain';
 import type { SkyState } from '../sim/sky';
 import { compassVec } from '../sim/math';
 
@@ -21,9 +21,17 @@ import { compassVec } from '../sim/math';
  * vertices slide along the wave form and the water appears to swim.
  */
 
-const SIZE = 900; // m of coverage. Wide enough that race marks stay visible.
+// m of coverage. Wide enough that race marks stay visible, and small enough
+// that the grid corner stays inside QUERY_REACH in terrain.ts -- the shelter
+// under the far corner of this grid has to be one the island window can answer.
+const SIZE = 900;
 const SEG = 300; // subdivisions -> 3 m per cell
-export const MAX_ISLANDS = 10;
+/**
+ * The island window is defined by the physics, not here: the shader has to loop
+ * over exactly the islands the boat feels, or the flat water and the flat ride
+ * would be in different places.
+ */
+const MAX_ISLANDS = MAX_ACTIVE_ISLANDS;
 
 const vertexShader = /* glsl */ `
   uniform float uTime;
@@ -41,7 +49,8 @@ const vertexShader = /* glsl */ `
   varying float vSteepness;
   varying float vShelter;
 
-  // Must stay identical to Terrain.waveShelter() in src/sim/terrain.ts.
+  // Must stay identical to Terrain.waveShelter() in src/sim/terrain.ts,
+  // including the taper that ends the wake at WAKE_MAX.
   float waveShelter(vec2 p) {
     float shelter = 1.0;
     for (int i = 0; i < ${MAX_ISLANDS}; i++) {
@@ -49,10 +58,12 @@ const vertexShader = /* glsl */ `
       vec2 d = p - uIslands[i].xy;
       float along = dot(d, uDownwind);
       if (along <= 0.0) continue;
+      if (along > ${WAKE_MAX.toFixed(1)}) continue;
       float across = abs(d.x * uDownwind.y - d.y * uDownwind.x);
       float halfWidth = uIslands[i].z * 1.15 + along * 0.1;
       if (across > halfWidth) continue;
-      float decay = exp(-along / (uIslands[i].z * 9.0 + 200.0));
+      float taper = 1.0 - smoothstep(${WAKE_FADE.toFixed(1)}, ${WAKE_MAX.toFixed(1)}, along);
+      float decay = exp(-along / (uIslands[i].z * 9.0 + 200.0)) * taper;
       float edge = 1.0 - pow(across / halfWidth, 2.0);
       shelter *= 1.0 - 0.9 * decay * edge;
     }

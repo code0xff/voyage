@@ -14,7 +14,7 @@ import { MAX_REEF, autoReef, type ReefState } from './sim/sailplan';
 import { DEG, RAD, clamp, compassVec, wrap2Pi } from './sim/math';
 import { msToKnots } from './sim/units';
 import { buildCourse, initialRaceState, updateRace, type Course, type RaceState } from './sim/race';
-import { EMPTY_TERRAIN, Terrain, generateArchipelago } from './sim/terrain';
+import { EMPTY_TERRAIN, IslandField, Terrain, sameIslands, type Island } from './sim/terrain';
 import { skyState, type SkyState } from './sim/sky';
 import { Weather } from './sim/weather';
 import {
@@ -91,6 +91,12 @@ export interface Engine {
 }
 
 const PHYS_DT = 1 / 120;
+/**
+ * How far the boat must travel before the island window is re-collected, m.
+ * The window reaches kilometres, so being a hundred metres late to load an
+ * island is invisible, and it keeps the cell scan off the per-step path.
+ */
+const STREAM_STEP = 100;
 const MAX_CATCHUP = 0.25;
 
 export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Engine {
@@ -203,30 +209,86 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   // --- Course and terrain ---------------------------------------------------
+  /** The endless ocean this session is sailing in, or null for open water. */
+  let field: IslandField | null = null;
+  /** The islands currently loaded, so a refresh that changes nothing costs nothing. */
+  let activeIslands: readonly Island[] = [];
+  let visibleIslands: readonly Island[] = [];
+  let streamedFrom = { x: Infinity, y: Infinity };
+
   function rebuildWorld(): void {
     course = buildCourse(raceCfg(current), wind.baseTwd);
     race = initialRaceState(raceCfg(current));
     snapshot.course = course;
     snapshot.race = race;
 
-    // Islands are deliberately placed near the course, not safely far from it.
-    // An island two kilometres away is scenery; one a few hundred metres off
-    // the layline is a decision.
-    const terrain =
+    // The sea is endless and the same everywhere, so islands are as likely to
+    // be on the course as anywhere else -- which is the point. An island two
+    // kilometres away is scenery; one a few hundred metres off the layline is a
+    // decision. Only the marks themselves and the starting position are kept
+    // clear, so that a race is always sailable.
+    const up = compassVec(wind.baseTwd);
+    field =
       current.islandCount > 0
-        ? generateArchipelago({
+        ? new IslandField({
             seed: current.seed,
-            count: current.islandCount,
-            keepClear: [course.start.a, course.start.b, course.windward.pos, course.leeward.pos],
+            // The slider is 0..10 islands' worth of thickness, not a count: in
+            // an endless ocean there is no total to set. The scale is chosen so
+            // that the default keeps about five islands inside the physics
+            // window, comfortably under the dozen it can hold -- saturating the
+            // window means islands being dropped from it, and land the boat
+            // sails past without feeling.
+            density: current.islandCount * 0.055,
+            keepClear: [
+              course.start.a,
+              course.start.b,
+              course.windward.pos,
+              course.leeward.pos,
+              { x: -up.x * 90, y: -up.y * 90 },
+            ],
             clearance: 130,
-            minRange: current.legLength * 0.55,
-            maxRange: current.legLength * 2.1,
-            origin: { x: 0, y: current.legLength * 0.4 },
           })
-        : EMPTY_TERRAIN;
+        : null;
+
+    activeIslands = [];
+    streamedFrom = { x: Infinity, y: Infinity };
+    streamWorld(state.pos.x, state.pos.y);
+  }
+
+  /**
+   * Slide the loaded window of islands along with the boat.
+   *
+   * Re-collecting on every step would be wasted work -- the window only changes
+   * when the boat has actually gone somewhere -- and rebuilding the meshes when
+   * the same islands come back would hitch the frame. So this runs on distance
+   * travelled, and then only does anything if the island set really differs.
+   */
+  function streamWorld(x: number, y: number): void {
+    if (!field) {
+      if (snapshot.terrain !== EMPTY_TERRAIN) {
+        wind.terrain = EMPTY_TERRAIN;
+        snapshot.terrain = EMPTY_TERRAIN;
+        view.setTerrain(EMPTY_TERRAIN, EMPTY_TERRAIN);
+      }
+      return;
+    }
+    if (Math.hypot(x - streamedFrom.x, y - streamedFrom.y) < STREAM_STEP) return;
+    streamedFrom = { x, y };
+
+    // The two windows are checked separately. The drawn one is the larger, so
+    // land can enter it -- and has to be built -- long before it is close
+    // enough to be felt, and equally land can drop out of the physics window
+    // while still very much in sight.
+    const active = field.active(x, y);
+    const visible = field.visible(x, y);
+    if (sameIslands(active, activeIslands) && sameIslands(visible, visibleIslands)) return;
+    activeIslands = active;
+    visibleIslands = visible;
+
+    const terrain = new Terrain(active);
     wind.terrain = terrain;
     snapshot.terrain = terrain;
-    view.setTerrain(terrain);
+    view.setTerrain(terrain, new Terrain(visible));
   }
 
   const ctl: Controls = { rudder: 0, sheet: 0, autoTrim: true };
@@ -270,6 +332,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     reefState.timer = 0;
     accumulator = 0;
     telemetry.clear();
+    // The boat has just teleported. Load the sea it landed in before the next
+    // frame draws the one it came from.
+    streamWorld(state.pos.x, state.pos.y);
   }
 
   function startRace(): void {
@@ -293,6 +358,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * diverged, what the console produces and what you actually play would differ.
    */
   function physicsStep(): void {
+    // Load the land around wherever the boat is now, before anything asks what
+    // is under it. Restarting teleports the boat, and reading the depth from
+    // the window belonging to the last position would ground it on land it has
+    // already left.
+    streamWorld(state.pos.x, state.pos.y);
+
     // Time of day. timeScale is "simulated minutes per real minute".
     hour += (PHYS_DT / 3600) * current.timeScale;
     // Weather keeps world time, not wall-clock time: a front takes hours to

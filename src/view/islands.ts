@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Terrain } from '../sim/terrain';
+import type { Island, Terrain } from '../sim/terrain';
 import type { SkyState } from '../sim/sky';
 
 /**
@@ -12,10 +12,24 @@ import type { SkyState } from '../sim/sky';
  *
  * Each island gets a polar grid centred on it: dense near the shoreline where
  * the interesting shape is, sparse inland where it is just a hill.
+ *
+ * The sea is endless, so this list is never final: islands arrive over the
+ * horizon and fall astern for as long as the boat keeps sailing. Meshes are
+ * therefore kept per island and reused -- an island that is still there after a
+ * refresh keeps the mesh it already has, and only genuinely new land is built.
+ * Rebuilding the lot every time the window slid would hitch the frame for
+ * something the player cannot see.
  */
 
 const RINGS = 26;
 const SEGMENTS = 56;
+/**
+ * Meshes built per frame. Each is a few thousand vertices sampled through
+ * elevationAt(), which is enough work that a crowded horizon appearing at once
+ * would drop a frame. Two a frame clears any realistic backlog in well under a
+ * second, and it is all happening in the fog anyway.
+ */
+const BUILDS_PER_FRAME = 2;
 
 function islandMesh(
   terrain: Terrain,
@@ -88,25 +102,51 @@ export function createIslandView(): IslandView {
     metalness: 0,
   });
 
+  // Islands are identified by object, not by position: the field hands back the
+  // same object for the same piece of sea every time, so identity is exactly
+  // "the island I already built".
+  const built = new Map<Island, THREE.Mesh>();
+  let pending: Island[] = [];
+  let source: Terrain | null = null;
+
+  const drop = (isl: Island) => {
+    const mesh = built.get(isl);
+    if (!mesh) return;
+    group.remove(mesh);
+    mesh.geometry.dispose();
+    built.delete(isl);
+  };
+
   const clear = () => {
-    for (const child of [...group.children]) {
-      group.remove(child);
-      const m = child as THREE.Mesh;
-      m.geometry?.dispose();
-    }
+    for (const isl of [...built.keys()]) drop(isl);
+    pending = [];
+    source = null;
   };
 
   return {
     group,
     setTerrain(terrain) {
-      clear();
-      for (const isl of terrain.islands) {
-        // Reach past the shoreline so the underwater skirt is included.
-        const reach = isl.radius * 1.55 + 40;
-        group.add(islandMesh(terrain, isl.pos.x, isl.pos.y, reach, material));
-      }
+      source = terrain;
+      const wanted = new Set(terrain.islands);
+      for (const isl of [...built.keys()]) if (!wanted.has(isl)) drop(isl);
+      // Nearest first: the field sorts by distance, so the land the player is
+      // most likely to be looking at is built first.
+      pending = terrain.islands.filter((isl) => !built.has(isl));
     },
     update(sky) {
+      // Build a little at a time rather than all at once. `source` is the
+      // terrain the mesh is sampled from, which must be the one the island came
+      // in with -- neighbouring islands overlap, and elevationAt() takes the
+      // highest of them.
+      for (let i = 0; i < BUILDS_PER_FRAME && pending.length > 0 && source; i++) {
+        const isl = pending.shift() as Island;
+        // Reach past the shoreline so the underwater skirt is included.
+        const reach = isl.radius * 1.55 + 40;
+        const mesh = islandMesh(source, isl.pos.x, isl.pos.y, reach, material);
+        built.set(isl, mesh);
+        group.add(mesh);
+      }
+
       // Land reads far too bright at night without this; the moon is not a sun.
       const k = 0.16 + sky.daylight * 0.84;
       material.color.setRGB(k, k, k);

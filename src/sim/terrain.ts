@@ -1,4 +1,4 @@
-import { compassVec, type Vec2 } from './math';
+import { compassVec, smoothstep, type Vec2 } from './math';
 import { fbm2, valueNoise2 } from './noise';
 
 /**
@@ -38,6 +38,27 @@ export interface Island {
 const SHELF_SLOPE = 0.09;
 /** Deep water depth, m. Beyond this the bottom stops mattering. */
 const MAX_DEPTH = 40;
+
+/**
+ * Distance downwind at which a lee is over, m, and where it starts to fade out.
+ *
+ * The wake models below decay exponentially, so on paper an island shelters the
+ * water a very long way downwind -- a large one still holds a third of its wave
+ * shelter at 2 km. That was harmless when the whole world was four islands that
+ * could all be looped over. In an endless ocean the boat has to work from a
+ * finite window of nearby land, and a window is only honest if everything
+ * outside it genuinely has no effect. So the wake is faded out to exactly zero
+ * over the last 600 m instead of trailing off forever.
+ *
+ * What this costs: a large island's flat water now ends by 1.5 km rather than
+ * thinning out to 2.5 km. At the default 380 m leg that is four legs downwind,
+ * well past where anyone is still thinking about the island.
+ */
+export const WAKE_MAX = 1500;
+export const WAKE_FADE = 900;
+
+/** 1 close astern of an island, easing to 0 at the end of the wake. */
+const wakeTaper = (along: number): number => 1 - smoothstep(WAKE_FADE, WAKE_MAX, along);
 
 /**
  * Shoreline radius at a given bearing. Islands are lobed rather than circular;
@@ -113,6 +134,7 @@ export class Terrain {
       // Distance downwind of the island, and lateral offset from its wake axis.
       const along = dx * dwx + dy * dwy;
       if (along <= 0) continue; // upwind of the island: unaffected
+      if (along > WAKE_MAX) continue;
       const across = Math.abs(dx * dwy - dy * dwx);
 
       // The wake spreads as it travels downwind.
@@ -122,7 +144,7 @@ export class Terrain {
       // A rough rule of thumb: shelter persists for roughly ten to fifteen times
       // the obstacle height before the wind fills back in.
       const reach = Math.max(isl.height, 8) * 13;
-      const decay = Math.exp(-along / reach);
+      const decay = Math.exp(-along / reach) * wakeTaper(along);
       // Softer towards the edges of the wake than dead astern of the island.
       const edge = 1 - Math.pow(across / halfWidth, 2);
       exposure *= 1 - 0.85 * decay * edge;
@@ -147,12 +169,13 @@ export class Terrain {
       const dy = y - isl.pos.y;
       const along = dx * dwx + dy * dwy;
       if (along <= 0) continue;
+      if (along > WAKE_MAX) continue;
       const across = Math.abs(dx * dwy - dy * dwx);
       const halfWidth = isl.radius * 1.15 + along * 0.1;
       if (across > halfWidth) continue;
 
       // Fetch-limited: it takes a long way downwind to rebuild a sea.
-      const decay = Math.exp(-along / (isl.radius * 9 + 200));
+      const decay = Math.exp(-along / (isl.radius * 9 + 200)) * wakeTaper(along);
       const edge = 1 - Math.pow(across / halfWidth, 2);
       shelter *= 1 - 0.9 * decay * edge;
     }
@@ -182,57 +205,181 @@ function rng(seed: number): () => number {
   };
 }
 
-export interface ArchipelagoOptions {
+export const EMPTY_TERRAIN = new Terrain([]);
+
+/** Cell size, m. At most one island per cell, so this sets the closest spacing. */
+const CELL = 820;
+/**
+ * How far from the boat anything asks about the terrain, m.
+ *
+ * Not everything is asked about the boat's own position: the renderer samples
+ * the wave surface across its whole grid, several hundred metres out, and a
+ * shelter that was right under the hull and wrong at the edge of the water
+ * would show as a seam.
+ */
+const QUERY_REACH = 650;
+/**
+ * How far the physics window reaches from the boat, m.
+ *
+ * This is a bound, not a taste: a wake is over by WAKE_MAX from the island that
+ * casts it, and the furthest anything is asked about is QUERY_REACH from the
+ * boat, so an island beyond the sum of the two provably cannot change any
+ * answer. That is what makes it safe to hand the physics a finite list.
+ */
+export const ACTIVE_RANGE = WAKE_MAX + QUERY_REACH;
+/**
+ * How many islands the physics window holds. The water shader loops over this
+ * many uniforms, so it is a shader cost as much as a physics one, and both must
+ * use the same number or the flat water and the felt lee stop matching.
+ *
+ * The default density keeps about five in the window. Wound up to maximum the
+ * cap does bite, and what gets dropped is the furthest -- which, by the taper
+ * above, is the land whose wake has already faded to nothing.
+ */
+export const MAX_ACTIVE_ISLANDS = 12;
+/** How far islands are drawn, m. Past the fog at any visibility, so they are born unseen. */
+export const VISUAL_RANGE = 2800;
+/** Cap on drawn islands, purely to bound the mesh budget in a crowded archipelago. */
+const MAX_VISIBLE_ISLANDS = 40;
+
+export interface IslandFieldOptions {
   seed: number;
-  count: number;
-  /** Points the islands must stay clear of, usually the course marks. */
+  /** 0 = open ocean, 1 = an island in nearly every cell. */
+  density: number;
+  /** Points that must stay in navigable water, usually the marks and the start. */
   keepClear: Vec2[];
-  /** Minimum distance from those points to the island shoreline, m. */
+  /** How far the shoreline must stay from those points, m. */
   clearance: number;
-  /** Ring the islands are scattered within. */
-  minRange: number;
-  maxRange: number;
-  origin: Vec2;
+}
+
+interface Cell {
+  cx: number;
+  cy: number;
+  island: Island | null;
+}
+
+/** Hash a cell to its own random stream. Neighbouring cells must be unrelated. */
+function cellSeed(seed: number, cx: number, cy: number): number {
+  let h = Math.imul(cx, 0x27d4eb2d) ^ Math.imul(cy, 0x165667b1) ^ Math.imul(seed, 0x9e3779b1);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h ^= h >>> 13;
+  return h >>> 0;
 }
 
 /**
- * Scatter islands around the course.
+ * An ocean that does not end.
  *
- * They are deliberately placed *near* the course rather than safely far from it.
- * An island 2 km away is scenery; an island a few hundred metres off the layline
- * is a decision. The clearance check only keeps them off the marks themselves.
+ * Islands are not a list that is generated once. The sea is divided into square
+ * cells, and each cell either holds an island or does not, decided by hashing
+ * the cell coordinates together with the world seed. Nothing is stored, so the
+ * world is the same size whether you sail a mile or fifty, and sailing back to
+ * an island you passed an hour ago finds it exactly where you left it.
+ *
+ * The boat still works from a plain `Terrain` -- a finite list -- because the
+ * physics, the water shader and the island meshes all have to agree on the same
+ * islands, and a shader cannot hash an infinite plane. This class is what keeps
+ * that list up to date as the boat moves: `active()` is the window the physics
+ * and the shader share, `visible()` the larger one the meshes are built from.
+ *
+ * Cells cache their island, so a cell that has been visited returns the very
+ * same object. That is what lets the renderer tell "the same island as last
+ * refresh" from "a new one" by identity, and rebuild only what actually
+ * appeared.
  */
-export function generateArchipelago(opts: ArchipelagoOptions): Terrain {
-  const rand = rng(opts.seed);
-  const islands: Island[] = [];
+export class IslandField {
+  private cells = new Map<string, Cell>();
+  private density: number;
 
-  for (let attempt = 0; attempt < opts.count * 40 && islands.length < opts.count; attempt++) {
-    const angle = rand() * Math.PI * 2;
-    const range = opts.minRange + rand() * (opts.maxRange - opts.minRange);
-    const pos = {
-      x: opts.origin.x + Math.cos(angle) * range,
-      y: opts.origin.y + Math.sin(angle) * range,
-    };
-    const radius = 60 + rand() * 190;
-    const height = 18 + rand() * 90 * (radius / 200);
-
-    const candidate: Island = { pos, radius, height, seed: Math.floor(rand() * 1e6) };
-
-    // Keep clear of the marks, and of other islands.
-    const maxShore = radius * 1.3;
-    const tooClose =
-      opts.keepClear.some(
-        (p) => Math.hypot(p.x - pos.x, p.y - pos.y) < maxShore + opts.clearance,
-      ) ||
-      islands.some(
-        (o) => Math.hypot(o.pos.x - pos.x, o.pos.y - pos.y) < maxShore + o.radius * 1.3 + 120,
-      );
-    if (tooClose) continue;
-
-    islands.push(candidate);
+  constructor(private opts: IslandFieldOptions) {
+    // Above about 0.9 the cells start reading as a grid rather than a sea.
+    this.density = Math.min(Math.max(opts.density, 0), 0.9);
   }
 
-  return new Terrain(islands);
+  private cell(cx: number, cy: number): Cell {
+    const key = `${cx},${cy}`;
+    const hit = this.cells.get(key);
+    if (hit) return hit;
+
+    const rand = rng(cellSeed(this.opts.seed, cx, cy));
+    let island: Island | null = null;
+    if (rand() < this.density) {
+      // Jitter inside the cell, but not right up to the edge: two islands
+      // either side of a boundary would otherwise fuse into one landmass.
+      const pos = {
+        x: (cx + 0.18 + rand() * 0.64) * CELL,
+        y: (cy + 0.18 + rand() * 0.64) * CELL,
+      };
+      const radius = 60 + rand() * 190;
+      const height = 18 + rand() * 90 * (radius / 200);
+      const clear = this.opts.keepClear.every(
+        (p) => Math.hypot(p.x - pos.x, p.y - pos.y) > radius * 1.3 + this.opts.clearance,
+      );
+      if (clear) island = { pos, radius, height, seed: Math.floor(rand() * 1e6) };
+    }
+
+    const made: Cell = { cx, cy, island };
+    this.cells.set(key, made);
+    return made;
+  }
+
+  /**
+   * Islands within `range` of a point, nearest first, at most `max` of them.
+   *
+   * Range is to the island's centre, because that is what every reach in this
+   * file is measured from -- the wake starts at the centre, and so does the
+   * shelf. Measuring to the shoreline instead would quietly pull islands into
+   * the window that are a shoreline-width beyond where anything can be felt.
+   */
+  private collect(x: number, y: number, range: number, max: number): Island[] {
+    const c0 = Math.floor((x - range) / CELL);
+    const c1 = Math.floor((x + range) / CELL);
+    const r0 = Math.floor((y - range) / CELL);
+    const r1 = Math.floor((y + range) / CELL);
+
+    const found: { isl: Island; d: number }[] = [];
+    for (let cx = c0; cx <= c1; cx++) {
+      for (let cy = r0; cy <= r1; cy++) {
+        const isl = this.cell(cx, cy).island;
+        if (!isl) continue;
+        const d = Math.hypot(isl.pos.x - x, isl.pos.y - y);
+        if (d <= range) found.push({ isl, d });
+      }
+    }
+    found.sort((a, b) => a.d - b.d);
+    if (found.length > max) found.length = max;
+    return found.map((f) => f.isl);
+  }
+
+  /** The window the physics and the water shader share. */
+  active(x: number, y: number): Island[] {
+    return this.collect(x, y, ACTIVE_RANGE, MAX_ACTIVE_ISLANDS);
+  }
+
+  /** The larger window the island meshes are built from. */
+  visible(x: number, y: number): Island[] {
+    this.prune(x, y);
+    return this.collect(x, y, VISUAL_RANGE, MAX_VISIBLE_ISLANDS);
+  }
+
+  /**
+   * Forget cells far astern. The cache is what gives islands a stable identity,
+   * but a long passage would otherwise grow it without limit. Anything dropped
+   * regenerates identically if the boat ever comes back.
+   */
+  private prune(x: number, y: number): void {
+    if (this.cells.size < 2048) return;
+    const keep = VISUAL_RANGE * 2;
+    for (const [key, c] of this.cells) {
+      const dx = (c.cx + 0.5) * CELL - x;
+      const dy = (c.cy + 0.5) * CELL - y;
+      if (Math.abs(dx) > keep || Math.abs(dy) > keep) this.cells.delete(key);
+    }
+  }
 }
 
-export const EMPTY_TERRAIN = new Terrain([]);
+/** True if two windows hold exactly the same islands, so nothing need be rebuilt. */
+export function sameIslands(a: readonly Island[], b: readonly Island[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}

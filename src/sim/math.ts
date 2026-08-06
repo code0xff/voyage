@@ -62,6 +62,12 @@ export const clamp = (v: number, lo: number, hi: number): number =>
 
 export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
+/** GLSL smoothstep, so a formula shared with a shader can be written the same way. */
+export function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = clamp((x - edge0) / (edge1 - edge0 || 1e-6), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
 /** Sign function that treats zero as positive, for picking a tack or a side. */
 export const side = (v: number): number => (v < 0 ? -1 : 1);
 

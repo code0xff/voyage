@@ -53,7 +53,11 @@ export interface FrameInput {
 
 export interface SceneView {
   render(f: FrameInput): void;
-  setTerrain(terrain: Terrain): void;
+  /**
+   * @param physics the island window the boat feels, shared with the water shader
+   * @param visible the wider window that is merely drawn, out to the fog
+   */
+  setTerrain(physics: Terrain, visible: Terrain): void;
   toggleCamera(): void;
   resize(): void;
   dispose(): void;
@@ -573,9 +577,9 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     toggleCamera() {
       camMode = (camMode + 1) % 2;
     },
-    setTerrain(terrain) {
-      islandView.setTerrain(terrain);
-      water.setTerrain(terrain);
+    setTerrain(physics, visible) {
+      islandView.setTerrain(visible);
+      water.setTerrain(physics);
     },
     dispose() {
       orbit.dispose();

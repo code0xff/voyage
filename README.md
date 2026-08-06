@@ -6,7 +6,8 @@ resistance, added resistance in waves, and a six-degree-of-freedom hull response
 
 The wind varies from place to place and drifts downwind, the weather turns on
 its own, the sun rises and sets, and islands steal your breeze and ground you if
-you cut the corner.
+you cut the corner. The ocean has no edge: keep sailing and new land keeps
+coming over the horizon.
 
 ```bash
 npm install
@@ -203,6 +204,28 @@ arithmetic operations and the physics can call them at 120 Hz. The meshes are
 built by sampling the very same `elevationAt()` the boat grounds on, and the
 water shader recomputes `waveShelter()` in GLSL, so what you see and what you
 sail through cannot drift apart.
+
+**The ocean has no edge.** Islands are not a list generated at the start. The sea
+is divided into cells, and whether a cell holds an island — and what shape it is
+— comes from hashing its coordinates with the world seed. Nothing is stored, so
+the world costs the same whether you sail a mile or fifty, and an island you
+passed an hour ago is still there when you come back to it.
+
+The boat, though, is handed a plain finite list: the physics, the water shader
+and the meshes must all agree on the same islands, and a shader cannot hash an
+infinite plane. `IslandField` keeps that list up to date as the boat moves, and
+the window is provably big enough — a wake is over by `WAKE_MAX` from the island
+that casts it, and nothing is asked about the terrain further than `QUERY_REACH`
+from the boat, so land outside the window cannot change any answer. That bound
+is why the wake is faded to exactly zero at the end of its reach rather than
+being left to decay forever: an unbounded tail and a finite window cannot both
+be honest. The cost is that a large island's flat water now ends by 1.5 km
+instead of thinning out to 2.5 km, which is four legs downwind of a course.
+
+The meshes are drawn from a wider window than the physics uses, out past the fog
+at any visibility, so land is always born unseen rather than appearing out of
+clear air. Nothing in that outer ring affects the boat, so the two windows are
+allowed to differ.
 
 ### 8. Time of day and weather
 
