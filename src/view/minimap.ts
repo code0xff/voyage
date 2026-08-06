@@ -14,7 +14,8 @@ import { token } from '../ui/tokens';
  * things that decide a leg and that a helmsman cannot see from the deck:
  *
  *   1. **Where the breeze is.** The wind is a pure function of position, so it
- *      can simply be drawn: puffs bright, lulls dark. The hole behind an island
+ *      can simply be drawn: blue where there is more of it, grey where there
+ *      is less, and nothing where it is average. The hole behind an island
  *      falls out of the same sample, which turns "do not sail into the lee"
  *      from advice into something you can look at. This is the whole reason
  *      the chart earns its screen space.
@@ -191,16 +192,24 @@ export function createMinimap(): Minimap {
     ctx.clearRect(0, 0, WIND_CELLS, WIND_CELLS);
 
     const mPerCell = (2 * range) / WIND_CELLS;
-    // Strength is carried by hue, not by lightness.
+    // Breeze reads blue, its absence reads as flat grey.
     //
-    // Lulls were drawn with --foreground, which is dark on a light theme and
-    // very nearly white on a dark one -- so in the dark theme an island's wind
-    // shadow came out as a bright plume streaming away downwind, drawing the
-    // place with no breeze in it as the brightest thing on the chart. Any
-    // encoding that leans on light-versus-dark inverts with the theme. Two
-    // hues do not: more breeze reads blue, less reads red, in either.
+    // Two earlier attempts were wrong in instructive ways. --foreground makes
+    // the lull dark on a light theme and very nearly white on a dark one, so
+    // an island's wind shadow arrived as a bright plume: the one patch of
+    // water with no breeze in it, drawn as the brightest thing on the chart.
+    // Anything keyed to light-versus-dark has that problem, because that is
+    // precisely what a theme inverts.
+    //
+    // --destructive fixed the inversion and introduced a worse fault. This
+    // colour is not the lee alone: it is every point below the mean, which in
+    // a gusty field is most of the water. Painting ordinary gustiness in a
+    // warning colour teaches the eye to discount the colour, and then the one
+    // lee that matters does not stand out either. Grey claims nothing, and the
+    // deep lees still separate themselves -- a shadow takes the breeze down by
+    // nine tenths, so the alpha ramp alone makes it far the darkest thing here.
     const puff = token('--info');
-    const lull = token('--destructive');
+    const lull = token('--muted-foreground');
 
     for (let gx = 0; gx < WIND_CELLS; gx++) {
       for (let gy = 0; gy < WIND_CELLS; gy++) {
