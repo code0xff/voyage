@@ -666,7 +666,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
           Math.abs(state.heel) * RAD,
           msToKnots(env.tws),
         ]);
-        sound.update(state, diag, env.tws, hullWave.bowRise, wall);
+        sound.update(state, diag, waves, env.tws, hullWave.bowRise, wall);
       }
     }
 

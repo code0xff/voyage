@@ -146,6 +146,67 @@ export class WaveField {
  * over every one of them. Measuring bow and stern separately gives that
  * attenuation for free.
  */
+/** The dominant wave train, as the boat meets it. */
+export interface Encounter {
+  /** rad/s, how often she meets it. Never negative. */
+  omega: number;
+  /** m, amplitude of that train. */
+  amp: number;
+}
+
+/**
+ * How often the boat meets the waves.
+ *
+ * The encounter frequency, w_e = w - k (V . d), where d is the way the train
+ * travels. Beating into a sea the boat closes with each crest, so the crests
+ * arrive faster than their own period; running with them she chases and they
+ * arrive slower, and fast enough downwind w_e passes through zero and she is
+ * keeping station with the wave. The magnitude is the *rate of meetings*, which
+ * is why the absolute value is what comes back.
+ *
+ * This is why a head sea and a following sea sound completely different at the
+ * same boat speed and the same wave height, and it is the only quantity that
+ * expresses it. The dominant train is taken alone: the sea has several, but the
+ * rhythm you hear is the big one's.
+ */
+export function dominantEncounter(
+  waves: WaveField,
+  heading: number,
+  u: number,
+  v: number,
+): Encounter {
+  // Boat velocity through the water, in world axes. Forward is the heading;
+  // starboard is ninety degrees clockwise of it, per the project's convention.
+  const fx = Math.sin(heading);
+  const fy = Math.cos(heading);
+  const vx = fx * u + fy * v;
+  const vy = fy * u - fx * v;
+
+  let best: WaveComponent | null = null;
+  for (const c of waves.comps) {
+    if (c.amp > 0 && (best === null || c.amp > best.amp)) best = c;
+  }
+  if (!best) return { omega: 0, amp: 0 };
+
+  const closing = best.dirX * vx + best.dirY * vy;
+  return { omega: Math.abs(best.omega - best.k * closing), amp: best.amp };
+}
+
+/**
+ * How hard the bow is meeting the sea, in arbitrary units.
+ *
+ * Positive means the stem is being driven down into water that is coming up at
+ * it.
+ *
+ * Worth knowing before tuning against it: in this wave model the boat mostly
+ * *heaves* rather than slams. Measured beating into a 4 m sea, the pitch-rate
+ * term contributes under 0.1 and everything above that comes from bowRise, so
+ * anything keyed to a high threshold here will fire rarely, not continuously.
+ */
+export function slamImpact(pitchRate: number, bowRise: number): number {
+  return -pitchRate * 2 - bowRise * 0.5;
+}
+
 export interface HullWaveSample {
   heave: number; // m, mean surface elevation
   pitchSlope: number; // rad, fore-and-aft slope (positive = bow up)

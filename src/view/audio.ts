@@ -1,5 +1,6 @@
 import type { BoatState, Diagnostics } from '../sim/boat';
 import { clamp } from '../sim/math';
+import { dominantEncounter, slamImpact, type WaveField } from '../sim/waves';
 
 /**
  * Procedural sound: everything is synthesised with WebAudio, no audio files.
@@ -49,6 +50,8 @@ export class SoundEngine {
   private started = false;
   private lastSlam = 0;
   private clock = 0;
+  /** Where we are between one wave and the next, rad. */
+  private wavePhase = 0;
 
   get isRunning(): boolean {
     return this.started && this.ctx?.state === 'running';
@@ -146,6 +149,7 @@ export class SoundEngine {
   update(
     state: BoatState,
     diag: Diagnostics,
+    waves: WaveField,
     tws: number,
     bowRise: number,
     dt: number,
@@ -158,11 +162,31 @@ export class SoundEngine {
     const t = ctx.currentTime;
     const smooth = 0.09;
 
+    // Meeting the waves.
+    //
+    // The rush along the hull is not steady. It rises as the bow drives into a
+    // crest and falls away in the trough, and the rate of that is the encounter
+    // frequency -- so a head sea is busy and a following sea is slow at the
+    // same boat speed and the same wave height. Nothing else in the mix carries
+    // your angle to the sea, and it is something a helmsman hears long before
+    // reading it off an instrument.
+    //
+    // Driven from JS rather than an audio-rate oscillator, unlike the luff:
+    // this is well under a hertz, so a 60 Hz update is far finer than the shape
+    // it is drawing, and setTargetAtTime smooths what is left.
+    const enc = dominantEncounter(waves, state.heading, state.u, state.v);
+    this.wavePhase = (this.wavePhase + enc.omega * dt) % (Math.PI * 2);
+    // Deep in a big sea, almost flat in a slop. Never all the way to silence in
+    // the trough: the water does not stop touching the hull.
+    const depth = clamp(enc.amp * 0.42, 0, 0.62);
+    const beat = 1 + Math.sin(this.wavePhase) * depth;
+
     // Water rush, roughly cubic in speed. Real flow noise goes as v^5 or v^6,
     // but that leaves low speeds completely silent and lifeless.
     const sp = diag.speed;
-    this.hull.gain.gain.setTargetAtTime(clamp(sp * sp * 0.014, 0, 0.5), t, smooth);
-    this.hull.filter.frequency.setTargetAtTime(320 + sp * 150, t, smooth);
+    this.hull.gain.gain.setTargetAtTime(clamp(sp * sp * 0.014 * beat, 0, 0.6), t, smooth);
+    // Brighter as she meets them harder: the same water going past faster.
+    this.hull.filter.frequency.setTargetAtTime(320 + sp * 150 + enc.omega * beat * 90, t, smooth);
 
     // Rigging noise follows apparent wind: on board that is what you hear.
     const aws = diag.aws;
@@ -179,7 +203,7 @@ export class SoundEngine {
     this.luffAm.gain.setTargetAtTime(luffAmount > 0.02 ? 0.9 : 0, t, 0.05);
 
     // Slamming as the bow drops into a trough. Rate-limited or it becomes noise.
-    const impact = -state.pitchRate * 2 - bowRise * 0.5;
+    const impact = slamImpact(state.pitchRate, bowRise);
     if (impact > 1.6 && this.clock - this.lastSlam > 0.55 && tws > 3) {
       this.lastSlam = this.clock;
       this.slam(clamp((impact - 1.6) * 0.5, 0.15, 1));
