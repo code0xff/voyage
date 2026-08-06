@@ -295,7 +295,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   function physicsStep(): void {
     // Time of day. timeScale is "simulated minutes per real minute".
     hour += (PHYS_DT / 3600) * current.timeScale;
-    weather.update(PHYS_DT);
+    // Weather keeps world time, not wall-clock time: a front takes hours to
+    // come through, and those are the same hours the sun is moving through.
+    // Its transitions are eased in real seconds, though -- how fast a squall
+    // *looks* like it arrives is a matter of what reads as weather rather than
+    // as a glitch, and that does not speed up just because the clock does.
+    weather.update(PHYS_DT, PHYS_DT * current.timeScale);
 
     // Weather drives the mean wind, so re-derive it every step rather than
     // only when a setting changes.

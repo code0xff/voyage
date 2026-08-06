@@ -25,18 +25,37 @@ export interface WeatherProfile {
   fog: number; // 0..1 how much the visibility closes in
   windScale: number; // multiplier on mean wind speed
   gustScale: number; // multiplier on gustiness
-  /** Typical dwell time in this state, seconds. */
+  /**
+   * Typical dwell time in this state, in seconds of *world* time.
+   *
+   * These are hours, because that is how long real weather lasts, and because
+   * the clock they are measured against is the same one that moves the sun. At
+   * the default 60x time scale a settled spell is two or three minutes of play
+   * and a squall about half a minute -- which is what makes weather something
+   * that happens during a race rather than something you read about in the
+   * settings. Measured in wall-clock seconds, as they were, nothing ever
+   * changed inside a race while the sun crossed the whole sky.
+   */
   dwell: number;
 }
 
+const HOUR = 3600;
+
 const PROFILES: Record<WeatherKind, WeatherProfile> = {
-  clear: { cloud: 0.05, rain: 0, fog: 0.0, windScale: 0.9, gustScale: 0.6, dwell: 420 },
-  fair: { cloud: 0.35, rain: 0, fog: 0.02, windScale: 1.0, gustScale: 1.0, dwell: 480 },
-  overcast: { cloud: 0.85, rain: 0.05, fog: 0.12, windScale: 1.1, gustScale: 1.15, dwell: 400 },
-  rain: { cloud: 0.95, rain: 0.65, fog: 0.3, windScale: 1.15, gustScale: 1.3, dwell: 300 },
+  clear: { cloud: 0.05, rain: 0, fog: 0.0, windScale: 0.9, gustScale: 0.6, dwell: 2.2 * HOUR },
+  fair: { cloud: 0.35, rain: 0, fog: 0.02, windScale: 1.0, gustScale: 1.0, dwell: 2 * HOUR },
+  overcast: {
+    cloud: 0.85,
+    rain: 0.05,
+    fog: 0.12,
+    windScale: 1.1,
+    gustScale: 1.15,
+    dwell: 1.8 * HOUR,
+  },
+  rain: { cloud: 0.95, rain: 0.65, fog: 0.3, windScale: 1.15, gustScale: 1.3, dwell: 1.3 * HOUR },
   // A squall is short, violent and the most interesting thing that can happen.
-  squall: { cloud: 1.0, rain: 0.9, fog: 0.35, windScale: 1.75, gustScale: 1.9, dwell: 110 },
-  fog: { cloud: 0.7, rain: 0, fog: 1.0, windScale: 0.55, gustScale: 0.5, dwell: 380 },
+  squall: { cloud: 1.0, rain: 0.9, fog: 0.35, windScale: 1.75, gustScale: 1.9, dwell: 0.5 * HOUR },
+  fog: { cloud: 0.7, rain: 0, fog: 1.0, windScale: 0.55, gustScale: 0.5, dwell: 1.6 * HOUR },
 };
 
 /** Where each condition can go next, and how likely. Squalls never last. */
@@ -83,7 +102,7 @@ export interface WeatherState {
   fog: number;
   windScale: number;
   gustScale: number;
-  /** Seconds until the next roll. Shown in the HUD as a "changing soon" hint. */
+  /** World seconds until the next roll, on the same clock as `dwell`. */
   timeToChange: number;
 }
 
@@ -150,9 +169,19 @@ export class Weather {
     }
   }
 
-  update(dt: number): void {
+  /**
+   * @param dt      real seconds, which the transitions are eased over
+   * @param worldDt seconds of simulated time, which the conditions dwell for
+   *
+   * Two clocks, on purpose. *When* the weather turns belongs to the world: a
+   * front is hours long, and if the day passes in twenty minutes the fronts
+   * have to pass with it. *How fast the change looks* belongs to the screen:
+   * eased over world time, a squall at 60x would arrive in a third of a second
+   * and read as a bug rather than as weather.
+   */
+  update(dt: number, worldDt = dt): void {
     if (this.evolve) {
-      this.timer -= dt;
+      this.timer -= worldDt;
       if (this.timer <= 0) this.roll();
     }
     this.state.timeToChange = Math.max(0, this.timer);
@@ -161,11 +190,11 @@ export class Weather {
     // is how it feels on the water: the gust arrives before the sky changes.
     const s = this.state;
     const t = this.target;
-    s.cloud = ease(s.cloud, t.cloud, 90, dt);
-    s.rain = ease(s.rain, t.rain, 60, dt);
-    s.fog = ease(s.fog, t.fog, 120, dt);
-    s.windScale = ease(s.windScale, t.windScale, 35, dt);
-    s.gustScale = ease(s.gustScale, t.gustScale, 35, dt);
+    s.cloud = ease(s.cloud, t.cloud, 45, dt);
+    s.rain = ease(s.rain, t.rain, 30, dt);
+    s.fog = ease(s.fog, t.fog, 60, dt);
+    s.windScale = ease(s.windScale, t.windScale, 22, dt);
+    s.gustScale = ease(s.gustScale, t.gustScale, 22, dt);
   }
 
   /** Visibility in metres, for fog and rain. */

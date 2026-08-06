@@ -221,6 +221,15 @@ rain. This is what makes two runs of the same course different: a squall arrivin
 on the second beat forces a reef and changes which side pays. It is seeded, so a
 given seed replays exactly.
 
+Weather runs on two clocks, deliberately. *When* it turns is world time — a
+front lasts a couple of hours, on the same clock that moves the sun, so at the
+default 60× time scale the conditions turn every minute or two of play. *How
+fast the change looks* is real time, eased over tens of seconds, because a
+squall that arrived in a third of a second would read as a bug rather than as
+weather. Counting the dwell in wall-clock seconds, as it once did, meant the sun
+crossed the entire sky while the weather sat on `fair` — the one system meant to
+make two races differ never did anything inside one.
+
 ### 9. The wind field
 
 A constant wind leaves the game with no tactics: find the optimum angle once and
