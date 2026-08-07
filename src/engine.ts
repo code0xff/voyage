@@ -18,7 +18,19 @@ import { logbook } from './logbook';
 import { WaveField, sampleHull, type HullWaveSample } from './sim/waves';
 import { MAX_REEF, autoReef, type ReefState } from './sim/sailplan';
 import { cyclePilot, initialPilot, pilotRudder, type PilotState } from './sim/autopilot';
-import { DEG, RAD, approach, clamp, compassVec, wrap2Pi, wrapPi, type Vec2 } from './sim/math';
+import {
+  DEG,
+  RAD,
+  approach,
+  clamp,
+  compassVec,
+  len,
+  scale,
+  sub,
+  wrap2Pi,
+  wrapPi,
+  type Vec2,
+} from './sim/math';
 import { msToKnots } from './sim/units';
 import {
   EMPTY_TERRAIN,
@@ -612,7 +624,14 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // gust would be a worse lie than swell that ignored the front. So the wind
     // the waves are built from lags the real one, on world time, because
     // building a sea is a thing the world does and not the screen.
-    seaTws = approach(seaTws, wind.baseTws, SEA_BUILD_TAU, PHYS_DT * current.timeScale);
+    // The sea is raised by wind blowing *over the water*, so what builds it is
+    // the wind relative to a surface that is itself moving. Wind against tide
+    // therefore makes a bigger sea and wind with tide a smaller one -- which is
+    // exactly what these places are known for, and it costs one subtraction
+    // rather than a model. Two and a half knots of foul stream under a
+    // twenty-knot breeze is a twenty-two-knot sea.
+    const overWater = len(sub(scale(compassVec(wind.baseTwd), -wind.baseTws), currents.peak));
+    seaTws = approach(seaTws, overWater, SEA_BUILD_TAU, PHYS_DT * current.timeScale);
     waves.setFromWind(seaTws * current.seaScale, wind.baseTwd);
 
     wind.update(PHYS_DT);
