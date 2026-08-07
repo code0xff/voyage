@@ -27,11 +27,36 @@ If a change makes the game more fun but the physics wrong, it is a bad change.
 | Tests | Vitest |
 | Lint | ESLint (flat config) + typescript-eslint |
 | Runtime | Browser; the physics core also runs headless under `tsx` |
-| Persistence | `localStorage` only. No backend, no network calls |
+| Persistence | local-first in the browser. No backend *yet* — see below |
 
 **TypeScript stays on 5.x.** TypeScript 7 is out, but `typescript-eslint`
 requires `<6.1.0`, and lint must work. Do not bump it until the lint tooling
 supports it.
+
+**Persistence is local-first, and that is a decision rather than a limit.**
+The original rule here said "localStorage only, no backend, no network calls".
+It arrived in the first commit with no reasoning recorded anywhere, and it was
+never a trade-off anyone weighed — it was the shape a one-session scaffold takes
+when the only things to store are a settings object, one ghost and one best
+time. Treated as a rule afterwards, it very nearly decided the logbook too.
+
+What was decided, deliberately: **the browser holds the source of truth, and a
+server may be added later to sync it.** The reasons are the ones that survive
+scrutiny — the game works with no network at all and should keep doing so, a
+calm sailing game should not open with a login screen, and there is no
+deployment to speak of yet (`vite.config.ts` allows a Cloudflare quick tunnel
+because that is currently how it gets shown to anyone else).
+
+What that obliges. Records are **plain serialisable rows with a stable id and a
+timestamp**, so that adding a sync layer later is a new storage adapter and not
+a migration. Storage goes behind an interface for the same reason. And anything
+that accumulates — the logbook above all — uses IndexedDB rather than
+localStorage, which is a few megabytes and already straining: `src/sim/replay.ts`
+packs the ghost into a flat `Float32Array` and rounds every value to two decimals
+specifically to make one recording fit.
+
+The one thing local-first cannot do is follow you to another device. If that is
+ever wanted it needs accounts, and accounts are the real cost — not the database.
 
 **Tailwind stays on v3.** The theme and `tailwind.config.js` come from a shared
 design system that is written against v3.
