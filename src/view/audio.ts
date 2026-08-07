@@ -1,4 +1,5 @@
 import type { BoatState, Diagnostics } from '../sim/boat';
+import type { WeatherState } from '../sim/weather';
 import { TAU, clamp } from '../sim/math';
 import { dominantEncounter, waveHitStrength, type WaveField } from '../sim/waves';
 
@@ -31,6 +32,29 @@ function makeNoise(ctx: AudioContext): AudioBuffer {
   return buf;
 }
 
+/**
+ * Rain gets its own noise, and it is white where the water's is brown.
+ *
+ * Two reasons, and the first is written into this file already: the wave hit
+ * failed once because it was the same brown noise as the hull rush, filtered a
+ * little differently, and the ear merged the two into one sound. Every layer
+ * here plays the *same buffer* from its own source, started at the same moment,
+ * so they are phase-locked copies of one another. Rain sitting on top of the
+ * rigging noise like that would have thickened the wind rather than arrived.
+ *
+ * The second is spectral. The water buffer is integrated towards brown on
+ * purpose, which is right for flow and swell and wrong for rain: rain is a
+ * broad hiss that carries most of its energy well above the wind, and a
+ * high-passed brown noise is a thin, tilted version of the wrong thing.
+ */
+function makeRainNoise(ctx: AudioContext): AudioBuffer {
+  const n = ctx.sampleRate * NOISE_SECONDS;
+  const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  return buf;
+}
+
 interface Layer {
   gain: GainNode;
   filter: BiquadFilterNode;
@@ -43,6 +67,7 @@ export class SoundEngine {
   private hull: Layer | null = null;
   private rig: Layer | null = null;
   private luff: Layer | null = null;
+  private rain: Layer | null = null;
   private luffAm: GainNode | null = null;
   private lfo: OscillatorNode | null = null;
 
@@ -72,9 +97,16 @@ export class SoundEngine {
     master.connect(ctx.destination);
     this.master = master;
 
-    const layer = (type: BiquadFilterType, freq: number, q: number): Layer => {
+    const rainNoise = makeRainNoise(ctx);
+
+    const layer = (
+      type: BiquadFilterType,
+      freq: number,
+      q: number,
+      buffer: AudioBuffer | null = this.noise,
+    ): Layer => {
       const src = ctx.createBufferSource();
-      src.buffer = this.noise;
+      src.buffer = buffer;
       src.loop = true;
       const filter = ctx.createBiquadFilter();
       filter.type = type;
@@ -111,6 +143,10 @@ export class SoundEngine {
     this.luff.gain.connect(am).connect(master);
     this.luffAm = am;
     this.lfo = lfo;
+
+    // Rain: a broad hiss, high-passed, opening downward as it gets heavier.
+    this.rain = layer('highpass', 1900, 0.7, rainNoise);
+    this.rain.gain.connect(master);
   }
 
   setEnabled(on: boolean): void {
@@ -196,10 +232,11 @@ export class SoundEngine {
     state: BoatState,
     diag: Diagnostics,
     waves: WaveField,
+    weather: WeatherState,
     dt: number,
   ): void {
     const ctx = this.ctx;
-    if (!ctx || !this.hull || !this.rig || !this.luff || !this.luffAm) return;
+    if (!ctx || !this.hull || !this.rig || !this.luff || !this.luffAm || !this.rain) return;
     if (ctx.state !== 'running') return;
 
     const t = ctx.currentTime;
@@ -279,6 +316,30 @@ export class SoundEngine {
     }
     this.luffAm.gain.setTargetAtTime(luffAmount > 0.02 ? 0.9 : 0, t, 0.05);
 
+    /*
+     * Rain, which until now was something you could only see.
+     *
+     * Two things move with it, and the second is what stops it being a tap
+     * running. Heavy rain is not merely louder drizzle: the drops are bigger
+     * and there are far more of them, so the sound fills in downward into a
+     * roar. So the high-pass opens as it sets in -- a thin sizzle at the first
+     * spits, a broad wash by the time it is raining properly -- and closing
+     * that cutoff back up is most of what makes it sound like it is easing.
+     *
+     * Slow smoothing, and deliberately slower than anything else here. The
+     * weather model already eases `rain` over about a minute, and the two
+     * together are what keep a squall from arriving as a switch. Nothing else
+     * in this mix is allowed to be this lazy, because everything else is the
+     * boat answering you; this is the sky, which does not.
+     */
+    const wet = clamp(weather.rain, 0, 1);
+    // Under the wind, not over it. The first attempt at this coefficient was
+    // 0.34, which put a squall's rain at 0.31 against the rigging's own ceiling
+    // of 0.32 -- two things of equal weight, and the rain won because it is
+    // broadband. Rain at sea is loud, but you are hearing it *through* a gale,
+    // and the gale is the thing you steer by.
+    this.rain.gain.gain.setTargetAtTime(wet * 0.22, t, 0.4);
+    this.rain.filter.frequency.setTargetAtTime(1900 - wet * 1050, t, 0.4);
   }
 
   /**
