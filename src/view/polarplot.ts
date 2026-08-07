@@ -17,6 +17,17 @@ export function drawPolar(
   polar: Polar | null,
   diag: Diagnostics | null,
   busy: boolean,
+  /**
+   * True when a tide is running, which suppresses the live marker.
+   *
+   * The curve is a still-water polar -- `solveOne` drops any current on purpose
+   * -- so with a tide under the boat the gap between the marker and the curve
+   * stops meaning "how much you are leaving out there". The apparent wind is not
+   * what still water would give at this speed, so the boat is legitimately off
+   * her polar and no amount of trimming closes it. Showing the dot anyway would
+   * read as a trim error that cannot be fixed.
+   */
+  tidal = false,
 ): void {
   ctx.clearRect(0, 0, w, h);
 
@@ -98,7 +109,7 @@ export function drawPolar(
   }
   ctx.setLineDash([]);
 
-  if (diag) {
+  if (diag && !tidal) {
     const [px, py] = pt(Math.abs(diag.twa), msToKnots(diag.speed), diag.twa >= 0 ? 1 : -1);
     ctx.fillStyle = token('--foreground');
     ctx.beginPath();

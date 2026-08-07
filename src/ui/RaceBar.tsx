@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { RAD, wrapPi } from '@/sim/math';
+import { hasCurrent } from '@/sim/config';
 import { formatTime, guidance } from '@/sim/race';
 import { useEngineFrame, useReadout } from './engine-context';
 
@@ -28,7 +29,11 @@ export function RaceBar() {
       return s.best !== null ? `personal best ${formatTime(s.best)}` : '';
     }
     const brg = (((g.bearing * RAD) % 360) + 360) % 360;
-    const closing = Math.max(s.diag.speed * Math.cos(wrapPi(g.bearing - s.state.heading)), 0.01);
+    // Over the ground, for the same reason as the start timer below: an ETA to
+    // a mark is a question about closing the mark, and a mark does not move with
+    // the tide. Read off BSP and the heading, a boat being set sideways past the
+    // windward mark reports herself closing it nicely.
+    const closing = Math.max(s.diag.sog * Math.cos(wrapPi(g.bearing - s.diag.cog)), 0.01);
     const eta = g.distance / closing;
     return `${g.distance.toFixed(0)} m · ${brg.toFixed(0)}° · ${eta < 900 ? `~${formatTime(eta)}` : '—'}`;
   });
@@ -83,10 +88,7 @@ export function RaceBar() {
     // number is a still-water polar and structurally cannot say where the
     // layline has gone, so with a drift running the honest output is silence
     // rather than an angle that is confidently wrong.
-    const cur = s.env.current;
-    const tideRunning = !!cur && Math.hypot(cur.x, cur.y) > 0.05;
-
-    if (g && currentLeg?.mark?.id === 'W' && s.polar?.bestUpwind && !polarStale && !tideRunning) {
+    if (g && currentLeg?.mark?.id === 'W' && s.polar?.bestUpwind && !polarStale && !hasCurrent(s.env)) {
       // If the bearing to the mark is further off the wind than the best upwind
       // angle, the layline is already behind us.
       const twaToMark = wrapPi(s.course.twd - g.bearing);
