@@ -29,11 +29,19 @@ export const hullSpeed = (lwl: number): number => Math.sqrt((9.81 * lwl) / (2 * 
  *
  * Rounds down rather than to nearest: an ETA that has not got there yet must
  * not read as arrived, and a passage must not claim a minute it did not sail.
+ *
+ * Which is why the last second is `<1s` and not `0s`. Rounding down alone broke
+ * the promise at the one boundary where it is a statement about the world and
+ * not about tidiness: half a second still to run is not an arrival, and `0s`
+ * says it is. Only a span of exactly zero gets to read as zero.
  */
 export function formatDuration(seconds: number): string {
-  const neg = seconds < 0;
-  const s = Math.floor(Math.abs(seconds));
-  const sign = neg ? '-' : '';
+  const sign = seconds < 0 ? '-' : '';
+  const abs = Math.abs(seconds);
+  const s = Math.floor(abs);
+  // `abs > 0` rather than `seconds !== 0`, so that a negative zero -- which is
+  // less than nothing to every reader but `<` -- reads as plain `0s`.
+  if (s === 0) return abs > 0 ? `${sign}<1s` : '0s';
   if (s < 60) return `${sign}${s}s`;
   const m = Math.floor(s / 60);
   if (m < 60) return `${sign}${m}m`;

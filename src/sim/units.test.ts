@@ -53,6 +53,22 @@ describe('formatDuration', () => {
     expect(formatDuration(60)).toBe('1m');
   });
 
+  /*
+   * The boundary the rounding-down rule got wrong on its own, and the one place
+   * it is a claim about the world: half a second still to run is not an
+   * arrival, so it must not print as one. Only exactly zero may read as zero.
+   */
+  it('does not let the last second read as arrived', () => {
+    expect(formatDuration(0.5)).toBe('<1s');
+    expect(formatDuration(0.999)).toBe('<1s');
+    expect(formatDuration(1)).toBe('1s');
+  });
+
+  it('reads a negative zero as zero rather than as "-0s"', () => {
+    expect(formatDuration(-0)).toBe('0s');
+    expect(formatDuration(-0.5)).toBe('-<1s');
+  });
+
   it('drops the seconds above a minute', () => {
     expect(formatDuration(41 * 60 + 12.8)).toBe('41m');
     expect(formatDuration(3599)).toBe('59m');
