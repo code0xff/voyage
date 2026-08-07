@@ -46,4 +46,18 @@ export default tseslint.config(
     files: ['scripts/**/*.ts'],
     rules: { 'no-console': 'off' },
   },
+  {
+    // Agent tooling under .claude/. Node scripts rather than app source, so
+    // they get the Node globals the `.ts` block above only grants to `src`, and
+    // they report by printing. Browser globals too, and not by accident: the
+    // callbacks handed to Playwright are serialised and evaluated in the page,
+    // so one file genuinely spans both environments.
+    files: ['.claude/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: { ...globals.node, ...globals.browser },
+    },
+    rules: { 'no-console': 'off' },
+  },
 );
