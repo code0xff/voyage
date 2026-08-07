@@ -166,21 +166,40 @@ where they cross.
 
 Twist has a second job, and measurement says it is the more valuable one:
 **twisting the head open depowers the boat**. The head has the longest lever on
-heel, so spilling it sheds heeling moment while the foot keeps driving. Hard on
-the wind in 20 knots, full twist is 13% faster than the trim that makes most
-power. The auto-trim therefore trims for power until the boat is overpowered and
-then twists off, and because that band sits below the auto-reef's trigger, the
-cheap depowering is spent before the expensive one.
+heel, so spilling it sheds heeling moment while the foot keeps driving — and
+what that buys is sail area. Hard on the wind in 20 knots, twisting off carries
+65% of full sail where an untwisted rig has to reef to 54% to hold the same 27
+degrees of heel, and goes 8% faster for it. The auto-trim therefore trims for
+power until the boat is overpowered and then twists off, and because that band
+sits below the auto-reef's trigger, the cheap depowering is spent before the
+expensive one.
+
+It is not tuned to the last percent. In the same 20 knots, holding full twist
+by hand carries the whole mainsail at that heel and is a further 5% faster than
+the auto-trim manages, so the depowering ramp is conservative: it reefs a little
+earlier than it needs to. That is a tuning question about how much heel a
+cruiser should accept, not a modelling one, and it is deliberately left open.
 
 All of this is held in place by a test that sweeps fixed twist angles at each
 operating point and requires the auto-trim to land within 1% of the best of
-them. It is the check that would have caught both wrong rules tried on the way
-here, and it is why the deep angles are in its grid.
+them, with the deep angles in its grid because that is where the rules tried on
+the way here went wrong. It catches two of the three; the third costs only 0.2%
+and is pinned by a separate test asserting that close-hauled, with the boom on
+its inhaul, the head still follows the foot.
 
-Under-twisting, by contrast, costs almost nothing — under 1% at every angle
-measured. The sail's lift curve is flat near its peak, so a head a few degrees
-off ideal barely notices. Twist is a depowering control that happens to also
-match the gradient, not a "match it or lose power" control.
+What under-twisting costs depends entirely on where the boom is. On and around
+the wind it is nearly free — 0.2% to 1% — because the spread is small and the
+sail's lift curve is flat near its peak, so a head a few degrees off ideal
+hardly notices. On a broad reach it is not free at all: sailing TWA 150 with
+the sail untwisted costs 3.2% in 6 knots and 2.0% in 10, because the boom is
+against the shrouds and twist is the only trim left that can reach the top of
+the sail.
+
+In a breeze the sign flips. Dropping the twist to zero hard on the wind in 18
+knots is 0.5–0.8% *faster* through the water, because it undoes the depowering
+— and buys that speed with several more degrees of heel. Which is the whole
+point: twist is first a depowering control, and only second a way of matching
+the gradient.
 
 ### 3. Reefing and balance
 

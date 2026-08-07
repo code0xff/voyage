@@ -315,11 +315,12 @@ export function step(
   if (ctl.autoTrim) {
     // Once the boat is overpowered, power is not what is wanted: the head is
     // the part with the longest lever on the heel, so letting it twist open
-    // spills it while the foot keeps driving. Measured on this boat, hard on
-    // the wind in 20 knots, full twist is 13% faster than the trim that makes
-    // most power. That is the real reason a crew reaches for the vang, and it
-    // comes before reefing -- hence a band that starts at the auto-reef's
-    // target heel and is fully on before the reef pennant is touched.
+    // spills it while the foot keeps driving. What that buys is sail area --
+    // measured hard on the wind in 20 knots, twisting off carries 65% of full
+    // sail against 54% at the same 27 degrees of heel, and is 8% faster for it.
+    // That is the real reason a crew reaches for the vang, and it comes before
+    // reefing -- hence a band that starts at the auto-reef's target heel and is
+    // fully on before the reef pennant is touched.
     const depower = clamp((s.heelAvg - TARGET_HEEL) / DEPOWER_BAND, 0, 1);
     s.twist = approach(s.twist, twistWanted + depower * (cfg.maxTwist - twistWanted), 1.5, dt);
   } else {
