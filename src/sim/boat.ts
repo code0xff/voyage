@@ -186,10 +186,15 @@ const SHEET_RATE = 35 * DEG; // rad/s, how fast the sheet can be worked
  */
 const TWIST_RATE = 14 * DEG;
 /**
- * rad of heel beyond the auto-reef's target over which the auto-trim goes from
- * gradient-matched twist to fully twisted off. Full twist lands at 32 degrees,
- * a little under the 30 degrees of *sustained* heel that starts a reef, so the
- * cheap depowering is used up before the expensive one.
+ * rad of heel beyond `DEPOWER_HEEL` over which the auto-trim goes from
+ * gradient-matched twist to fully twisted off.
+ *
+ * 24 plus 8 puts full twist at 32 degrees of *sustained* heel, and a reef
+ * starts at 30, so the twist is about three-quarters on by the time the reef
+ * pennant is touched. That ordering is the point -- the cheap depowering goes
+ * in first and most of the way -- but it is not spent to the last degree, and
+ * an earlier version of this comment claimed 32 was "a little under" 30, which
+ * is not a thing 32 can be.
  */
 const DEPOWER_BAND = 8 * DEG;
 const RUDDER_RATE = 60 * DEG; // rad/s, how fast the helm can be moved

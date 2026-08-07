@@ -171,8 +171,9 @@ what that buys is sail area. Hard on the wind in 20 knots, twisting off carries
 65% of full sail where an untwisted rig has to reef to 54% to hold the same 27
 degrees of heel, and goes 8% faster for it. The auto-trim therefore trims for
 power until the boat is overpowered and then twists off, and because that band
-sits below the auto-reef's trigger, the cheap depowering is spent before the
-expensive one.
+opens well below the auto-reef's trigger — twist starts at 24 degrees of
+sustained heel and is three-quarters on by the 30 that starts a reef — the cheap
+depowering goes in before the expensive one.
 
 It is not tuned to the last percent. In the same 20 knots, holding full twist
 by hand carries the whole mainsail at that heel and is a further 5% faster than
@@ -389,6 +390,13 @@ other way — it holds a steady 28 degrees of heel where it used to lie over at
 36, and gives up about 7% of upwind VMG to do it. That is the intended answer.
 A polar is the speed you could hold *if you sailed the boat well*, and nobody
 sails a cruiser to windward in a gale at 36 degrees of heel.
+
+Those 28 degrees are not a target the boat aims at and falls short of. Nothing
+in the model holds a heel; the reef fires once the six-second average passes 30
+degrees and takes off enough sail to put it back under, so the settled angle in
+any real breeze sits just below the trigger by construction. Moving it means
+moving `REEF_UP`, and the price is sail area and upwind VMG in exactly the
+conditions that have least of both to give away.
 
 ### Bugs the headless validation caught
 
