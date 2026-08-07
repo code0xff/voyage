@@ -66,6 +66,44 @@ describe('logbook export', () => {
     expect(p.venue).toBe('');
   });
 
+  it('refuses a version it has never seen', () => {
+    // Stamped on the way out, so it has to be read on the way in: accepting an
+    // unknown version means guessing at a shape written by a later program.
+    const good = JSON.parse(JSON.stringify(toExport([record()], 0)));
+    expect(fromExport(JSON.stringify(good))).toHaveLength(1);
+    expect(fromExport(JSON.stringify({ ...good, version: 99 }))).toBeNull();
+    expect(fromExport(JSON.stringify({ ...good, version: undefined }))).toBeNull();
+  });
+
+  it('keeps one record per id, so a duplicate cannot overwrite its neighbour', () => {
+    // Imported with sequential puts, a repeated id would silently replace the
+    // record before it and the import would claim more than it stored.
+    const raw = JSON.stringify({
+      format: 'voyage-logbook',
+      version: 1,
+      exportedAt: 0,
+      passages: [record(), record({ distance: 99 }), record({ id: 'p2' })],
+    });
+    const rows = fromExport(raw)!;
+    expect(rows).toHaveLength(2);
+    expect(rows[0].distance).toBe(1840); // the first one won, not the last
+  });
+
+  it('refuses distances and durations no passage could have', () => {
+    const raw = JSON.stringify({
+      format: 'voyage-logbook',
+      version: 1,
+      exportedAt: 0,
+      passages: [record({ duration: -600, distance: -1840, avgSog: -3, to: { x: -50, y: -900 } })],
+    });
+    const [p] = fromExport(raw)!;
+    expect(p.duration).toBe(0);
+    expect(p.distance).toBe(0);
+    expect(p.avgSog).toBe(0);
+    // Coordinates are signed and must survive: half the world is negative.
+    expect(p.to).toEqual({ x: -50, y: -900 });
+  });
+
   it('stamps a format and a version so a later one can tell them apart', () => {
     const e = toExport([], 999);
     expect(e.format).toBe('voyage-logbook');

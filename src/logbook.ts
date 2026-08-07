@@ -173,25 +173,40 @@ export function fromExport(raw: string): PassageRecord[] | null {
   try {
     const o = JSON.parse(raw) as Partial<LogExport>;
     if (o.format !== 'voyage-logbook' || !Array.isArray(o.passages)) return null;
+    // The version is stamped on the way out, so it has to be read on the way
+    // in. Accepting a version this code has never seen would mean guessing at
+    // the shape of a format written by a later one.
+    if (o.version !== EXPORT_VERSION) return null;
+
     const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+    // Durations, distances and speeds cannot be negative -- no passage produces
+    // one, so a negative is a hand-edited file rather than a fact, and letting
+    // one through would put a boat that sailed minus four hundred metres in the
+    // logbook. Coordinates are signed and stay that way.
+    const size = (v: unknown) => Math.max(0, num(v));
     const vec = (v: unknown) => {
       const p = v as { x?: unknown; y?: unknown };
       return { x: num(p?.x), y: num(p?.y) };
     };
+    // One record per id within a file. Sequential `put`s would otherwise let a
+    // duplicate silently overwrite the one before it, so the import would
+    // report more passages than it stored.
+    const seen = new Set<string>();
     return o.passages
       .filter((p): p is PassageRecord => typeof p?.id === 'string' && p.id.length > 0)
+      .filter((p) => !seen.has(p.id) && (seen.add(p.id), true))
       .map((p) => ({
         id: p.id,
-        startedAt: num(p.startedAt),
-        duration: num(p.duration),
-        distance: num(p.distance),
+        startedAt: size(p.startedAt),
+        duration: size(p.duration),
+        distance: size(p.distance),
         from: vec(p.from),
         to: vec(p.to),
-        direct: num(p.direct),
-        avgSog: num(p.avgSog),
-        maxSog: num(p.maxSog),
+        direct: size(p.direct),
+        avgSog: size(p.avgSog),
+        maxSog: size(p.maxSog),
         venue: typeof p.venue === 'string' ? p.venue : '',
-        windKnots: num(p.windKnots),
+        windKnots: size(p.windKnots),
       }));
   } catch {
     return null;
