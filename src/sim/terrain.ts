@@ -32,6 +32,19 @@ export interface Island {
   height: number;
   /** Per-island noise seed, so no two look alike. */
   seed: number;
+  /**
+   * Which landmass this circle belongs to. Omit and it is a landmass of its own.
+   *
+   * `elevationAt` already takes the highest of every island, so overlapping
+   * circles union into one continuous shore for free -- which is how a mainland
+   * or the two sides of a channel get built without a new shape primitive. What
+   * does not come for free is the shelter: the wake models below compose one
+   * island at a time, so a coast drawn as eight circles would shade its lee
+   * eight times over and produce flat water and a hole in the wind that no
+   * headland that size could make. Circles sharing a `land` shelter once,
+   * together, as the single piece of ground they are drawing.
+   */
+  land?: number;
 }
 
 /** How steeply the seabed falls away from the shore (m of depth per m offshore). */
@@ -73,7 +86,32 @@ function shoreRadius(island: Island, bearing: number): number {
 }
 
 export class Terrain {
-  constructor(readonly islands: Island[] = []) {}
+  readonly islands: Island[];
+  /**
+   * Landmass id per island, aligned with `islands` and sorted ascending.
+   *
+   * Both the shelter models here and the copies of them in the water shader
+   * compose by walking the list and closing off a landmass when the id changes,
+   * which is only correct while a landmass's pieces are adjacent. Establishing
+   * that here, once, is what lets the shader read `terrain.islands` in order and
+   * still agree -- the alternative was a lookup keyed on the id, and GLSL ES
+   * 1.00 cannot index an array by a value it did not get from a loop counter.
+   */
+  readonly landGroup: number[];
+
+  constructor(islands: Island[] = []) {
+    // An island with no `land` of its own is its own landmass, so it needs a
+    // real id rather than a shared placeholder: two of them left undefined
+    // would compare equal and shelter as though they were one piece of ground.
+    let next = 0;
+    for (const isl of islands) if (isl.land !== undefined) next = Math.max(next, isl.land + 1);
+    const tagged = islands.map((isl) => ({ isl, g: isl.land ?? next++ }));
+    // Stable, so a field of ungrouped islands keeps the order it arrived in and
+    // composes exactly as it did before landmasses existed.
+    tagged.sort((a, b) => a.g - b.g);
+    this.islands = tagged.map((t) => t.isl);
+    this.landGroup = tagged.map((t) => t.g);
+  }
 
   /**
    * Ground elevation relative to sea level: positive above water, negative
@@ -127,8 +165,19 @@ export class Terrain {
     const dwx = -from.x;
     const dwy = -from.y;
 
+    // Strongest wake within a landmass, multiplied across landmasses. One piece
+    // of ground casts one shadow however many circles were used to draw it;
+    // two separate islands in line do each take their bite.
     let exposure = 1;
-    for (const isl of this.islands) {
+    let groupMax = 0;
+    let group = -1;
+    for (let i = 0; i < this.islands.length; i++) {
+      if (this.landGroup[i] !== group) {
+        exposure *= 1 - groupMax;
+        groupMax = 0;
+        group = this.landGroup[i];
+      }
+      const isl = this.islands[i];
       const dx = x - isl.pos.x;
       const dy = y - isl.pos.y;
       // Distance downwind of the island, and lateral offset from its wake axis.
@@ -147,8 +196,9 @@ export class Terrain {
       const decay = Math.exp(-along / reach) * wakeTaper(along);
       // Softer towards the edges of the wake than dead astern of the island.
       const edge = 1 - Math.pow(across / halfWidth, 2);
-      exposure *= 1 - 0.85 * decay * edge;
+      groupMax = Math.max(groupMax, 0.85 * decay * edge);
     }
+    exposure *= 1 - groupMax; // the last landmass has no successor to close it
     return Math.max(0.08, exposure);
   }
 
@@ -163,8 +213,19 @@ export class Terrain {
     const dwx = -from.x;
     const dwy = -from.y;
 
+    // Grouped by landmass, as in windExposure. It matters more here: shelter is
+    // really a statement about fetch, and the fetch behind a coast is set by
+    // the coast, not by how many circles it happened to be drawn with.
     let shelter = 1;
-    for (const isl of this.islands) {
+    let groupMax = 0;
+    let group = -1;
+    for (let i = 0; i < this.islands.length; i++) {
+      if (this.landGroup[i] !== group) {
+        shelter *= 1 - groupMax;
+        groupMax = 0;
+        group = this.landGroup[i];
+      }
+      const isl = this.islands[i];
       const dx = x - isl.pos.x;
       const dy = y - isl.pos.y;
       const along = dx * dwx + dy * dwy;
@@ -177,8 +238,9 @@ export class Terrain {
       // Fetch-limited: it takes a long way downwind to rebuild a sea.
       const decay = Math.exp(-along / (isl.radius * 9 + 200)) * wakeTaper(along);
       const edge = 1 - Math.pow(across / halfWidth, 2);
-      shelter *= 1 - 0.9 * decay * edge;
+      groupMax = Math.max(groupMax, 0.9 * decay * edge);
     }
+    shelter *= 1 - groupMax;
     return Math.max(0.05, shelter);
   }
 

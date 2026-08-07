@@ -87,6 +87,114 @@ describe('terrain', () => {
   });
 });
 
+/**
+ * A coast is drawn by overlapping circles, because `elevationAt` takes the
+ * highest of them and they therefore union into one continuous shore without a
+ * new shape primitive. The shelter models compose one circle at a time, though,
+ * and that is what has to be told they are all one piece of ground.
+ */
+describe('landmasses', () => {
+  const shoreline = (land: number | undefined) =>
+    new Terrain(
+      // Six circles in a row along x, overlapping into one bank of land.
+      Array.from({ length: 6 }, (_, i) => ({
+        pos: { x: (i - 2.5) * 150, y: 0 },
+        radius: 200,
+        height: 60,
+        seed: 100 + i,
+        land,
+      })),
+    );
+
+  /** What each circle of the coast would shelter if it were alone. */
+  const alone = (t: Terrain, x: number, y: number, twd: number) =>
+    t.islands.map((isl) => new Terrain([{ ...isl, land: undefined }]).waveShelter(x, y, twd));
+
+  /**
+   * The exact statement of the model, rather than an approximate one: a
+   * landmass shelters precisely as hard as the strongest single piece of it,
+   * because that is what taking the maximum within a group means. Asserting a
+   * range here instead would have passed with the composition rule still wrong.
+   */
+  it('shelters behind a coast exactly as hard as its strongest single piece', () => {
+    // Wind from the north, so downwind of the bank is to the south.
+    const coast = shoreline(1);
+    const asCoast = coast.waveShelter(0, -400, 0);
+    expect(asCoast).toBeCloseTo(Math.min(...alone(coast, 0, -400, 0)), 12);
+  });
+
+  /**
+   * The bug this exists to prevent. Six ungrouped circles multiply their wakes
+   * together and produce a lee no headland of that size could make -- the
+   * measurement below is what "eight times over" actually costs.
+   */
+  it('would over-shelter if the circles were not told they are one coast', () => {
+    const asCoast = shoreline(1).waveShelter(0, -400, 0);
+    const asIslands = shoreline(undefined).waveShelter(0, -400, 0);
+    expect(asIslands).toBeLessThan(asCoast * 0.5);
+  });
+
+  it('takes the wind out once for a coast, not once per circle', () => {
+    const coast = shoreline(1);
+    const asCoast = coast.windExposure(0, -400, 0);
+    const asIslands = shoreline(undefined).windExposure(0, -400, 0);
+    expect(asIslands).toBeLessThan(asCoast);
+    const strongest = Math.min(
+      ...coast.islands.map((isl) =>
+        new Terrain([{ ...isl, land: undefined }]).windExposure(0, -400, 0),
+      ),
+    );
+    expect(asCoast).toBeCloseTo(strongest, 12);
+  });
+
+  it('still lets two separate landmasses each take their bite', () => {
+    // In line downwind of each other: the second is sheltering water that the
+    // first has already sheltered, and both should count.
+    const two = new Terrain([
+      { pos: { x: 0, y: 0 }, radius: 200, height: 60, seed: 1, land: 0 },
+      { pos: { x: 0, y: -500 }, radius: 200, height: 60, seed: 2, land: 1 },
+    ]);
+    const near = new Terrain([{ pos: { x: 0, y: -500 }, radius: 200, height: 60, seed: 2 }]);
+    expect(two.waveShelter(0, -900, 0)).toBeLessThan(near.waveShelter(0, -900, 0));
+  });
+
+  /**
+   * The contract the water shader depends on. It walks the island list and
+   * closes a landmass off when the id changes, which only works while a
+   * landmass's pieces are adjacent -- and GLSL ES 1.00 offers no way to index
+   * an array by a group id instead.
+   */
+  it('hands the shader its islands sorted by landmass', () => {
+    const t = new Terrain([
+      { pos: { x: 0, y: 0 }, radius: 100, height: 40, seed: 1, land: 2 },
+      { pos: { x: 300, y: 0 }, radius: 100, height: 40, seed: 2 },
+      { pos: { x: 600, y: 0 }, radius: 100, height: 40, seed: 3, land: 2 },
+      { pos: { x: 900, y: 0 }, radius: 100, height: 40, seed: 4, land: 0 },
+    ]);
+    for (let i = 1; i < t.landGroup.length; i++) {
+      expect(t.landGroup[i]).toBeGreaterThanOrEqual(t.landGroup[i - 1]);
+    }
+    // And an island that named no landmass is its own, never sharing with
+    // another that also named none.
+    expect(new Set(t.landGroup).size).toBe(3);
+  });
+
+  it('leaves a field of ungrouped islands composing exactly as it did', () => {
+    // Each is its own landmass, so every group holds one member and the
+    // grouped form collapses back to the plain product it replaced.
+    const islands = Array.from({ length: 4 }, (_, i) => ({
+      pos: { x: i * 700 - 1000, y: 0 },
+      radius: 150,
+      height: 50,
+      seed: i + 7,
+    }));
+    const t = new Terrain(islands);
+    let product = 1;
+    for (const isl of islands) product *= new Terrain([isl]).waveShelter(0, -600, 0);
+    expect(t.waveShelter(0, -600, 0)).toBeCloseTo(product, 12);
+  });
+});
+
 describe('endless island field', () => {
   const field = (over: Partial<ConstructorParameters<typeof IslandField>[0]> = {}) =>
     new IslandField({ seed: 42, density: 0.4, keepClear: [], clearance: 130, ...over });

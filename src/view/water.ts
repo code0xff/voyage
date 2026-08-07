@@ -91,10 +91,26 @@ const vertexShader = /* glsl */ `
 
   // Must stay identical to Terrain.waveShelter() in src/sim/terrain.ts,
   // including the taper that ends the wake at WAKE_MAX.
+  //
+  // The w component carries the landmass: 0 is an empty slot, anything else is
+  // the group id plus one. Strongest wake within a landmass, multiplied
+  // across landmasses --
+  // a coast drawn as eight circles has to shade its lee once, not eight times.
+  // Walking the list and closing a group off when the id changes needs the
+  // pieces of a landmass to be adjacent, which Terrain's constructor guarantees
+  // and terrain.test.ts holds it to; the obvious alternative, an array indexed
+  // by group id, is not available in GLSL ES 1.00.
   float waveShelter(vec2 p) {
     float shelter = 1.0;
+    float groupMax = 0.0;
+    float group = -1.0;
     for (int i = 0; i < ${MAX_ISLANDS}; i++) {
       if (uIslands[i].w < 0.5) continue;
+      if (uIslands[i].w != group) {
+        shelter *= 1.0 - groupMax;
+        groupMax = 0.0;
+        group = uIslands[i].w;
+      }
       vec2 d = p - uIslands[i].xy;
       float along = dot(d, uDownwind);
       if (along <= 0.0) continue;
@@ -105,8 +121,9 @@ const vertexShader = /* glsl */ `
       float taper = 1.0 - smoothstep(${WAKE_FADE.toFixed(1)}, ${WAKE_MAX.toFixed(1)}, along);
       float decay = exp(-along / (uIslands[i].z * 9.0 + 200.0)) * taper;
       float edge = 1.0 - pow(across / halfWidth, 2.0);
-      shelter *= 1.0 - 0.9 * decay * edge;
+      groupMax = max(groupMax, 0.9 * decay * edge);
     }
+    shelter *= 1.0 - groupMax; // the last landmass has no successor to close it
     return max(0.05, shelter);
   }
 
@@ -446,7 +463,11 @@ export function createWater(): Water {
     setTerrain(terrain) {
       for (let i = 0; i < MAX_ISLANDS; i++) {
         const isl = terrain.islands[i];
-        if (isl) islands[i].set(isl.pos.x, isl.pos.y, isl.radius, 1);
+        // w is the landmass id plus one, so that zero can still mean "no island
+        // here". Uploaded in Terrain's order, which it sorts by landmass --
+        // waveShelter() in the shader walks the list and closes a group off at
+        // each change, and that is only right while a landmass is contiguous.
+        if (isl) islands[i].set(isl.pos.x, isl.pos.y, isl.radius, terrain.landGroup[i] + 1);
         else islands[i].set(0, 0, 1, 0);
       }
     },
