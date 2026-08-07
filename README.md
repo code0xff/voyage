@@ -148,13 +148,34 @@ sail wants. It is small on a beat, where boat speed dominates the apparent wind
 and compresses the spread, and large on a broad reach — which is why sails are
 trimmed nearly flat upwind and let right open downwind.
 
+The auto-trim states this as: trim the foot to the target angle of attack with
+the sheet, then put the head at the same angle with the twist. While the boom is
+free those two are the same thing and the twist comes out as exactly the
+gradient's spread.
+
+Once the boom is against the shrouds the sheet has run out of travel, the foot
+is stuck well past its stall, and there is a real choice: twist the head back to
+where the flow reattaches, or leave it stalled. Which is faster is not the same
+at every angle, because lift acts across the flow and its forward component dies
+away as the boat bears away, while stalled drag acts along it and grows. On a
+broad reach reattaching the head is worth 1%; by a dead run the same move throws
+away almost all the drive, since a running sail does its job *by* being stalled.
+The trim compares the drive each choice would make, read out of the same
+coefficient tables the sail forces come from, rather than hard-coding the angle
+where they cross.
+
 Twist has a second job, and measurement says it is the more valuable one:
 **twisting the head open depowers the boat**. The head has the longest lever on
 heel, so spilling it sheds heeling moment while the foot keeps driving. Hard on
-the wind in 20 knots, full twist is 13% faster than gradient-matched trim. The
-auto-trim therefore matches the gradient until the boat is overpowered and then
-twists off, and because that band sits below the auto-reef's trigger, the cheap
-depowering is spent before the expensive one.
+the wind in 20 knots, full twist is 13% faster than the trim that makes most
+power. The auto-trim therefore trims for power until the boat is overpowered and
+then twists off, and because that band sits below the auto-reef's trigger, the
+cheap depowering is spent before the expensive one.
+
+All of this is held in place by a test that sweeps fixed twist angles at each
+operating point and requires the auto-trim to land within 1% of the best of
+them. It is the check that would have caught both wrong rules tried on the way
+here, and it is why the deep angles are in its grid.
 
 Under-twisting, by contrast, costs almost nothing — under 1% at every angle
 measured. The sail's lift curve is flat near its peak, so a head a few degrees

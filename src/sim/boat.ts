@@ -250,23 +250,51 @@ export function step(
   const awaMast = awaAtHeight(windVelW, velW, s.heading, shearFactor(cfg.mastHeight + zCg, zRef));
 
   if (ctl.autoTrim) {
-    // Matching the gradient is only the light-air answer. Once the boat is
-    // overpowered the head of the sail is doing more harm than good -- it is
-    // the part with the longest lever on the heel -- and letting it twist open
-    // spills it while the foot keeps driving. Measured on this boat: hard on
-    // the wind in 20 knots, full twist is 13% faster than the gradient-matched
-    // trim. That is the real reason a crew reaches for the vang, and it comes
-    // before reefing, which is why the band starts at the auto-reef's target
-    // heel and is fully on before the reef pennant is touched.
+    // Trim the *foot* to the target angle with the sheet, then put the head at
+    // the same angle with the twist. Sheeting to the mid-height wind instead,
+    // as the untwisted model did, would leave the whole plan a third of the
+    // twist under-trimmed.
+    const wantSheet = clamp(Math.abs(awaFoot) - cfg.targetAoA, cfg.minSheet, cfg.maxSheet);
+    s.sheet = approach(s.sheet, wantSheet, 0.6, dt);
+
+    // The head wants the angle of attack the foot has ended up with, which
+    // while the boom is free is the target -- making the twist exactly the
+    // gradient's spread. Once the boom is against the shrouds the sheet has run
+    // out of travel and the foot is stuck well past its stall, and then there
+    // is a choice: twist the head back to an angle where the flow reattaches,
+    // or leave it stalled alongside the foot.
+    //
+    // Which one is faster is not a matter of taste and is not the same at every
+    // angle. Lift acts across the flow, so its forward component dies away as
+    // the boat bears away, while stalled drag acts along it and grows. On a
+    // broad reach reattaching the head is worth over 1%; by a dead run the same
+    // move throws away almost all the drive, because a sail running square is
+    // doing its job precisely by being stalled.
+    //
+    // So compare what the two would actually make at the head's own apparent
+    // wind, out of the same tables the sail forces come from. Reading the
+    // crossover off the tables rather than writing the angle in by hand means
+    // it follows them if they are ever retuned.
+    const footAoA = Math.abs(awaFoot) - wantSheet;
+    const aHead = Math.abs(awaHead);
+    const sinH = Math.sin(aHead);
+    const cosH = Math.cos(aHead);
+    const driveAt = (aoa: number): number => {
+      const d = Math.abs(aoa) * RAD;
+      return sample(SAIL_CL, d) * sinH - sample(SAIL_CD, d) * cosH;
+    };
+    const attached = Math.min(cfg.targetAoA, footAoA);
+    const headAoA = driveAt(attached) > driveAt(footAoA) ? attached : footAoA;
+    const idealTwist = clamp(aHead - wantSheet - headAoA, 0, cfg.maxTwist);
+    // Once the boat is overpowered, none of that matters: the head is the part
+    // with the longest lever on the heel, so letting it twist open spills it
+    // while the foot keeps driving. Measured on this boat, hard on the wind in
+    // 20 knots, full twist is 13% faster than the trim that makes most power.
+    // That is the real reason a crew reaches for the vang, and it comes before
+    // reefing -- hence a band that starts at the auto-reef's target heel and is
+    // fully on before the reef pennant is touched.
     const depower = clamp((s.heelAvg - TARGET_HEEL) / DEPOWER_BAND, 0, 1);
-    const wantTwist = twistWanted + depower * (cfg.maxTwist - twistWanted);
-    s.twist = approach(s.twist, wantTwist, 1.5, dt);
-    // Trim the *foot* to the target angle and let the twist carry the rest of
-    // the sail up to the head. Sheeting to the mid-height wind instead, as the
-    // untwisted model did, would leave the whole plan a third of the twist
-    // under-trimmed.
-    const want = clamp(Math.abs(awaFoot) - cfg.targetAoA, cfg.minSheet, cfg.maxSheet);
-    s.sheet = approach(s.sheet, want, 0.6, dt);
+    s.twist = approach(s.twist, idealTwist + depower * (cfg.maxTwist - idealTwist), 1.5, dt);
   } else {
     s.sheet = clamp(s.sheet + ctl.sheet * SHEET_RATE * dt, cfg.minSheet, cfg.maxSheet);
     s.twist = clamp(s.twist + ctl.twist * TWIST_RATE * dt, 0, cfg.maxTwist);

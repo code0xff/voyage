@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SHEAR_EXPONENT, shearFactor } from './shear';
-import { SAIL_STRIPS, STRIP_AREA, STRIP_U, sailPlan, windRefHeight } from './sailplan';
+import { SAIL_STRIPS, STRIP_AREA, STRIP_U, TARGET_HEEL, sailPlan, windRefHeight } from './sailplan';
 import { CRUISER, DEFAULT_ENV, cgHeight } from './config';
 import { initialState, step, type Controls } from './boat';
 import { DEG, RAD } from './math';
@@ -114,6 +114,23 @@ function settle(headingDeg: number, tws: number, seconds: number, reef = 0) {
   return { s, d };
 }
 
+/**
+ * Settle at a fixed true wind angle. `force` null lets the auto-trim choose the
+ * twist; a number holds that twist instead, with the sheet still trimmed
+ * automatically, so the two can be compared at the same operating point.
+ */
+function settleTwist(twsKn: number, twaDeg: number, force: number | null) {
+  const env = { ...DEFAULT_ENV, tws: knotsToMs(twsKn) };
+  const s = initialState({ heading: env.twd - twaDeg * DEG, u: 3 });
+  const opts = { lockHeading: true };
+  let d = step(s, CRUISER, env, AUTO, DT, opts);
+  for (let i = 1; i < Math.round(120 / DT); i++) {
+    d = step(s, CRUISER, env, AUTO, DT, opts);
+    if (force !== null) s.twist = force;
+  }
+  return { speed: d.speed, heelAvg: s.heelAvg };
+}
+
 describe('sail twist', () => {
   /**
    * The gradient is the reason twist exists. Upwind the boat's own speed
@@ -160,6 +177,57 @@ describe('sail twist', () => {
     const { s, d } = settle(315, knotsToMs(8), 90);
     expect(s.heelAvg * RAD).toBeLessThan(24);
     expect(s.twist).toBeCloseTo(d.twistWanted, 2);
+  });
+
+  /**
+   * The auto-trim must actually be a good helmsman, not merely a plausible one.
+   *
+   * This is the check that was missing the first time round, and the gap is not
+   * hypothetical: a rule that read perfectly well in the source -- set the twist
+   * to the gradient's spread -- gave away 2.3% dead downwind, because once the
+   * boom is on the shrouds the foot is stalled and the head should not be
+   * dragged down there with it. That is invisible from reading the code, and
+   * invisible in a polar unless you have something to compare the polar against.
+   *
+   * The comparison is a brute-force sweep of fixed twist angles at the same
+   * operating point. Auto-trim has to land within 1% of the best of them; the
+   * correct rule is within 0.43%, and that worst case is a broad reach where
+   * reattaching the head and leaving it stalled are so nearly equal that which
+   * one wins is genuinely marginal.
+   *
+   * The deep angles are in the grid on purpose. A first attempt at this passed
+   * a grid that stopped at 150 degrees while being 0.8% slow dead downwind,
+   * where the rule it had been given demanded full twist and a running sail
+   * wants none: a test whose grid excludes the case it gets wrong is not a test.
+   *
+   * One percent does not catch everything. The opposite error -- aiming the head
+   * at the target angle even when the boom cannot come in far enough for the
+   * foot to reach it -- costs 0.2% and slips through here. What catches that one
+   * is the gradient test above: while the boom is free, twist must equal the
+   * spread exactly.
+   */
+  it('trims within one percent of the best twist available', { timeout: 60_000 }, () => {
+    let checked = 0;
+    for (const tws of [6, 10, 14]) {
+      for (const twa of [40, 70, 110, 150, 180]) {
+        const auto = settleTwist(tws, twa, null);
+        // Overpowered is a different question and is deliberately not a speed
+        // optimum: there the auto-trim is spilling wind to hold the boat on her
+        // feet, and giving speed away is the whole point of doing it. Those
+        // points are covered by the depowering test above.
+        if (auto.heelAvg >= TARGET_HEEL) continue;
+        checked++;
+
+        let best = 0;
+        for (let t = 0; t <= CRUISER.maxTwist + 1e-9; t += 5 * DEG) {
+          best = Math.max(best, settleTwist(tws, twa, t).speed);
+        }
+        expect(auto.speed / best).toBeGreaterThan(0.99);
+      }
+    }
+    // Without this the test would quietly pass if every point became
+    // heel-limited, which is exactly how a check like this rots.
+    expect(checked).toBeGreaterThanOrEqual(10);
   });
 
   /**
