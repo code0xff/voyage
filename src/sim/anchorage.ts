@@ -1,6 +1,6 @@
 import { clamp, type Vec2 } from './math';
 import type { BoatConfig } from './config';
-import type { Terrain } from './terrain';
+import type { TerrainQuery } from './terrain';
 
 /**
  * Whether this is a place to stop.
@@ -49,7 +49,7 @@ export interface Anchorage {
 }
 
 export function anchorage(
-  terrain: Terrain,
+  terrain: TerrainQuery,
   cfg: BoatConfig,
   pos: Vec2,
   sog: number,

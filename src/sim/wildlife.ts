@@ -1,5 +1,5 @@
 import { TAU, clamp, compassVec, type Vec2 } from './math';
-import type { Terrain } from './terrain';
+import type { TerrainQuery } from './terrain';
 
 /**
  * Gulls, and nothing else.
@@ -56,7 +56,7 @@ export class Wildlife {
    * The rate rises as the shore closes, so standing in towards an island fills
    * with noise and open water stays quiet.
    */
-  update(dt: number, boat: Vec2, terrain: Terrain): void {
+  update(dt: number, boat: Vec2, terrain: TerrainQuery): void {
     this.events.length = 0;
 
     this.timer -= dt;
@@ -70,10 +70,11 @@ export class Wildlife {
 
     // Put the bird between you and the beach rather than at your masthead, so
     // the call fades in as you approach rather than switching on.
-    const island = terrain.nearestIsland(boat.x, boat.y);
-    const bearing = island
-      ? Math.atan2(island.pos.x - boat.x, island.pos.y - boat.y)
-      : this.rand() * TAU;
+    //
+    // Asked of the terrain rather than worked out from an island centre here.
+    // A circle can only offer its middle, which put the gull over the hill; a
+    // surveyed coast points at the piece of shore actually being closed with.
+    const bearing = terrain.bearingToShore(boat.x, boat.y) ?? this.rand() * TAU;
     const spread = (this.rand() - 0.5) * 1.2;
     const dir = compassVec(bearing + spread);
     const range = 25 + this.rand() * Math.max(40, shore * 0.8);

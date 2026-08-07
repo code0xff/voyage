@@ -23,6 +23,38 @@ import { fbm2, valueNoise2 } from './noise';
  * physics can call them at 120 Hz without noticing.
  */
 
+/**
+ * What the rest of the simulator asks of ground.
+ *
+ * There are two answers to it now: `Terrain`, which works from a list of
+ * circles and can stream forever, and `RegionTerrain`, which works from a
+ * surveyed raster of one fixed place. The wind, the tide, the anchorage judge
+ * and the boat's depth under the keel all ask through this and are indifferent
+ * to which they hold -- which is the whole reason a real coast was a small
+ * change rather than a rewrite.
+ *
+ * The island list is deliberately *not* in here. `terrain.islands` is a
+ * work-list of circles to build meshes from, and a coastline has no such thing;
+ * the three places in `src/view` that still need it name `Terrain` directly and
+ * so stop compiling if they are ever handed a region by mistake.
+ */
+export interface TerrainQuery {
+  /** Ground relative to sea level: positive above water, negative below. */
+  elevationAt(x: number, y: number): number;
+  /** Water depth in metres. Zero or less means land. */
+  depthAt(x: number, y: number): number;
+  /** True if a hull of this draft would touch bottom here. */
+  isAground(x: number, y: number, draft: number): boolean;
+  /** How much of the wind survives here, 0..1. */
+  windExposure(x: number, y: number, twd: number): number;
+  /** Wave height multiplier here, 0..1. */
+  waveShelter(x: number, y: number, twd: number): number;
+  /** Distance to the nearest shoreline, positive offshore. */
+  distanceToShore(x: number, y: number): number;
+  /** Compass bearing to the nearest shore, or null with none in reach. */
+  bearingToShore(x: number, y: number): number | null;
+}
+
 export interface Island {
   /** Centre position. */
   pos: Vec2;
@@ -88,7 +120,7 @@ function shoreRadius(island: Island, bearing: number): number {
   return island.radius * (0.72 + 0.56 * n);
 }
 
-export class Terrain {
+export class Terrain implements TerrainQuery {
   readonly islands: Island[];
   /**
    * Landmass id per island, aligned with `islands` and sorted ascending.
@@ -298,6 +330,18 @@ export class Terrain {
       }
     }
     return best;
+  }
+
+  /**
+   * Which way the nearest shore lies, or null in an empty ocean.
+   *
+   * The island's centre, which is the best a circle can offer: it has no
+   * shoreline to point at, only a middle. `RegionTerrain` does better, from the
+   * gradient of its distance field.
+   */
+  bearingToShore(x: number, y: number): number | null {
+    const isl = this.nearestIsland(x, y);
+    return isl ? Math.atan2(isl.pos.x - x, isl.pos.y - y) : null;
   }
 
   /** Distance to the nearest shoreline, positive offshore. Infinity with no islands. */

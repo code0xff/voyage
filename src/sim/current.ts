@@ -1,5 +1,5 @@
 import { DEG, clamp, compassVec, scale, smoothstep, type Vec2 } from './math';
-import { EMPTY_TERRAIN, type Terrain } from './terrain';
+import { EMPTY_TERRAIN, type TerrainQuery } from './terrain';
 import { knotsToMs } from './units';
 
 /**
@@ -75,7 +75,7 @@ export class CurrentField {
   peak: Vec2;
   fullDepth: number;
   /** The land the stream runs past. Assigned by the engine as the world loads. */
-  terrain: Terrain = EMPTY_TERRAIN;
+  terrain: TerrainQuery = EMPTY_TERRAIN;
 
   constructor(opts: CurrentFieldOptions) {
     this.peak = opts.peak;

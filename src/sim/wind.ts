@@ -1,7 +1,7 @@
 import { compassVec, wrap2Pi, type Vec2 } from './math';
 import { fbm2 } from './noise';
 import type { Environment } from './config';
-import { EMPTY_TERRAIN, type Terrain } from './terrain';
+import { EMPTY_TERRAIN, type TerrainQuery } from './terrain';
 
 /**
  * A wind field that varies with position and drifts downwind over time.
@@ -50,7 +50,7 @@ export class WindField {
    * outside it so that "the wind at a point" has exactly one definition, shared
    * by the physics and by the streaks drawn on the water.
    */
-  terrain: Terrain = EMPTY_TERRAIN;
+  terrain: TerrainQuery = EMPTY_TERRAIN;
 
   private t = 0;
   /**
