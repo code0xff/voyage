@@ -80,7 +80,10 @@ feel bad.
 
 ## 4. Development methodology
 
-Every non-trivial change follows the same three phases.
+Every non-trivial change follows the same phases, in order: **plan → implement →
+self-review → external review**. Genuinely trivial changes — a rename, a
+comment, a one-line fix — may skip the plan and go straight to implementing.
+Nothing else may.
 
 ### Plan
 
@@ -131,6 +134,23 @@ fixing until a full pass finds nothing. Look for:
 
 State plainly what you verified and what you did not. Do not report a clean pass
 you did not actually run.
+
+### Then have someone else review it
+
+A clean self-review is not the last step. Hand the branch range to an external
+reviewer — the Codex subagent is what this project uses — and work through what
+it reports.
+
+It has earned the step. Every run so far has found something real that a clean
+self-review had already passed over: a formula that agreed in TypeScript and
+disagreed in GLSL, a setting that silently did not rebuild the world, a README
+claim that had gone stale under a feature built on top of it.
+
+Two rules for reading the results. **Verify each finding yourself before acting
+on it** — reviews have overstated things as well as caught them, and a finding
+you cannot reproduce is not a finding. And **run the tests and the polar
+locally**: a sandboxed reviewer often cannot, and will say so, and that half of
+the verification is then still yours.
 
 ## 5. Verification before pushing
 
