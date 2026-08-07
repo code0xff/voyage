@@ -129,21 +129,21 @@ export function App() {
                   <PassageBar />
                 </div>
                 {/*
-                  The polar and the chart share the right column, and the chart
-                  hangs off the top rather than standing on the bottom.
+                  The polar and the chart share the right column, matched in
+                  width, and hang off the top rather than standing on the
+                  bottom.
 
-                  It used to sit bottom-right, opposite the hint bar, which
-                  reads better but only holds while it is small. Enlarged, the
-                  chart and the instruments are stacked in the same column of
-                  flow -- instruments above, chart below -- and their combined
-                  height ran 125 px past the bottom of a 760 px window, which is
-                  the shortest this game is played on. Nothing clipped it into
-                  view; the bottom of the chart was simply not on the screen.
+                  The chart used to sit bottom-right, opposite the hint bar,
+                  which reads better -- but bottom-right puts it in the same
+                  column of flow as the instruments, and their heights simply
+                  add. Measured at 1280x760, the shortest window this game is
+                  played on: the instruments run to y 517, leaving 231 px, and
+                  the chart card is 254. It does not clip or scroll -- the
+                  bottom of it is simply not on the screen.
 
-                  Sharing the column with the polar puts the two reference
-                  panels together and the two live ones opposite, and it means
-                  the chart grows downward into space the layout knows is free
-                  instead of pushing against an edge.
+                  Here the two reference panels sit together and the two live
+                  ones -- instruments and hint bar -- sit opposite, and the
+                  chart grows downward into space the layout knows is free.
                 */}
                 <div className="flex flex-col items-end gap-3">
                   <PolarCard />

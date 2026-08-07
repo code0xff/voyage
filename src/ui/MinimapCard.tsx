@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Crosshair, Maximize2, Minimize2 } from 'lucide-react';
+import { Crosshair } from 'lucide-react';
 import { RANGES, createMinimap } from '@/view/minimap';
 import { CRUISER } from '@/sim/config';
 import { formatDistance } from '@/sim/units';
@@ -10,21 +10,20 @@ import type { Vec2 } from '@/sim/math';
 import { useEngine, useEngineFrame, useReadout } from './engine-context';
 
 /**
- * The two chart sizes, px.
+ * The chart, px. One size, matching the polar exactly -- 208 in a 232 px card.
  *
- * Two rather than a drag-handle, because a chart is read at a glance and the
- * only two things anyone wants are "out of my way" and "let me actually look at
- * this".
+ * There used to be a second, 320 px, on a toggle. It was not worth it. A bigger
+ * picture of the same chart is not more chart: the range control is what
+ * answers "let me actually look at this", and it was already on the wheel, on
+ * `N`, and on a drag to pan. The toggle only made the card fight the layout --
+ * enlarged and placed bottom-right it ran 125 px off the bottom of a 760 px
+ * window, which is the shortest this game is played on.
  *
- * The large one is sized to sit under the polar and still clear the bottom of a
- * 760 px window, which is the shortest this game is played on. That is a claim
- * about where the card is placed as much as about how big it is: this comment
- * used to say the same thing while the chart lived bottom-right, where it was
- * false -- stacked below the instruments it ran 125 px off the bottom. Moving
- * it made it true. Measure again if either moves.
+ * Matching the polar rather than picking a number: the two share a column, and
+ * two reference panels of different widths down the right-hand side read as a
+ * mistake rather than as a choice.
  */
-const SIZE_SMALL = 176;
-const SIZE_LARGE = 320;
+const SIZE = 208;
 
 /**
  * Wheel travel per range step, px. One mouse notch is 100 or so, so a notch is
@@ -48,18 +47,16 @@ const DRAG_SLOP = 4;
  * through React would be a reconciler pass per frame for a picture React
  * cannot help with.
  *
- * The range and the size are the pieces of state here that change rarely, so
- * they are ordinary React state. The pan is a ref: it changes on every pointer
- * move while a drag is running, and the canvas is redrawn every frame anyway,
- * so putting it through the reconciler would buy nothing.
+ * The range is the one piece of state here that changes rarely, so it is
+ * ordinary React state. The pan is a ref: it changes on every pointer move
+ * while a drag is running, and the canvas is redrawn every frame anyway, so
+ * putting it through the reconciler would buy nothing.
  */
 export function MinimapCard() {
   const ref = useRef<HTMLCanvasElement>(null);
   const engine = useEngine();
   const [range, setRange] = useState(1);
-  const [large, setLarge] = useState(false);
   const minimap = useRef(createMinimap());
-  const size = large ? SIZE_LARGE : SIZE_SMALL;
 
   /**
    * Where the chart is held, or null while it follows the boat.
@@ -79,14 +76,13 @@ export function MinimapCard() {
     const c = ref.current;
     if (!c) return;
     const dpr = Math.min(devicePixelRatio, 2);
-    c.width = size * dpr;
-    c.height = size * dpr;
-    // setTransform rather than scale: this runs again whenever the size
-    // changes, and scale() compounds on the transform already there, so the
-    // second pass would draw the chart at four times the scale in a quarter of
-    // the canvas.
+    c.width = SIZE * dpr;
+    c.height = SIZE * dpr;
+    // setTransform rather than scale, so this does not depend on the transform
+    // it inherits: assigning `width` above resets it today, and a rewrite that
+    // stopped doing so would make scale() compound instead of fail.
     c.getContext('2d')?.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }, [engine, size]);
+  }, [engine]);
 
   const cycle = useCallback(() => setRange((r) => (r + 1) % RANGES.length), []);
 
@@ -152,14 +148,14 @@ export function MinimapCard() {
       if (!d.moved && Math.hypot(dx, dy) < DRAG_SLOP) return;
       d.moved = true;
       // Metres per pixel at this range, and the chart is twice the range across.
-      const perPixel = (RANGES[range] * 2) / size;
+      const perPixel = (RANGES[range] * 2) / SIZE;
       // Dragging right moves the *chart* right, which means looking at water to
       // the west -- so the centre goes the other way. Screen y grows downward
       // and north is up, so that axis flips again.
       pan.current = { x: d.from.x - dx * perPixel, y: d.from.y + dy * perPixel };
       setPanned(true);
     },
-    [range, size],
+    [range],
   );
 
   const onPointerUp = useCallback(
@@ -170,10 +166,10 @@ export function MinimapCard() {
       // It never became a drag, so it was a click: say where she is bound.
       const r = e.currentTarget.getBoundingClientRect();
       engine.setDestination(
-        minimap.current.worldAt(e.clientX - r.left, e.clientY - r.top, size, range),
+        minimap.current.worldAt(e.clientX - r.left, e.clientY - r.top, SIZE, range),
       );
     },
-    [engine, range, size],
+    [engine, range],
   );
 
   // The rest of the controls are keys, so this one is too. The engine owns the
@@ -188,7 +184,7 @@ export function MinimapCard() {
   useEngineFrame((s) => {
     const ctx = ref.current?.getContext('2d');
     if (!ctx) return;
-    minimap.current.draw(ctx, size, {
+    minimap.current.draw(ctx, SIZE, {
       state: s.state,
       wind: s.wind,
       terrain: s.terrain,
@@ -203,7 +199,7 @@ export function MinimapCard() {
   });
 
   return (
-    <Card className="pointer-events-auto gap-0 p-3 backdrop-blur-md bg-card/85">
+    <Card className="pointer-events-auto w-[232px] gap-0 p-3 backdrop-blur-md bg-card/85">
       <div className="flex items-center justify-between gap-2 pb-1.5">
         <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
           Chart
@@ -230,16 +226,6 @@ export function MinimapCard() {
               <Crosshair />
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-5 w-5 p-0 [&_svg]:size-3"
-            aria-label={large ? 'Smaller chart' : 'Larger chart'}
-            title={large ? 'Smaller chart' : 'Larger chart'}
-            onClick={() => setLarge((v) => !v)}
-          >
-            {large ? <Minimize2 /> : <Maximize2 />}
-          </Button>
         </div>
       </div>
       {/*
@@ -267,7 +253,7 @@ export function MinimapCard() {
         onWheel={onWheel}
         title="Click to set where you are bound · drag to look around · double-click to recentre · right-click to clear · wheel or N for range"
         className="block cursor-crosshair touch-none"
-        style={{ width: size, height: size }}
+        style={{ width: SIZE, height: SIZE }}
       />
     </Card>
   );
