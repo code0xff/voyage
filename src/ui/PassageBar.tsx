@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { DEG, RAD, wrapPi } from '@/sim/math';
 import { mustTack } from '@/sim/passage';
-import { formatTime } from '@/sim/race';
+import { formatTime } from '@/sim/units';
 import { useReadout } from './engine-context';
 
 /**

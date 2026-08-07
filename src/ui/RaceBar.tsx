@@ -2,7 +2,8 @@ import { useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { RAD, wrapPi } from '@/sim/math';
-import { formatTime, guidance } from '@/sim/race';
+import { guidance } from '@/sim/race';
+import { formatTime } from '@/sim/units';
 import { useEngineFrame, useReadout } from './engine-context';
 
 /**

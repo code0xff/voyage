@@ -1,4 +1,5 @@
 import { compassVec, type Vec2 } from './math';
+import { formatTime } from './units';
 
 /**
  * A windward-leeward race.
@@ -285,13 +286,6 @@ export function updateRace(rs: RaceState, course: Course, pos: Vec2, dt: number)
   }
 }
 
-export function formatTime(seconds: number): string {
-  const neg = seconds < 0;
-  const s = Math.abs(seconds);
-  const m = Math.floor(s / 60);
-  const r = s - m * 60;
-  return `${neg ? '-' : ''}${m}:${r.toFixed(1).padStart(4, '0')}`;
-}
 
 /**
  * Distance and bearing to the next target. On an upwind leg the straight-line

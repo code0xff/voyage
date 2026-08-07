@@ -11,3 +11,18 @@ export const knotsToMs = (v: number): number => v * KNOT;
  * equals the waterline: sqrt(g*L / 2pi) ~= 1.25 * sqrt(L).
  */
 export const hullSpeed = (lwl: number): number => Math.sqrt((9.81 * lwl) / (2 * Math.PI));
+
+/**
+ * Seconds as a clock: minutes, seconds and a tenth.
+ *
+ * Here with the other conversions between what the physics holds and what a
+ * person reads, rather than in whichever feature happened to need it first --
+ * a duration is a duration whether it is a race, a passage or an ETA.
+ */
+export function formatTime(seconds: number): string {
+  const neg = seconds < 0;
+  const s = Math.abs(seconds);
+  const m = Math.floor(s / 60);
+  const r = s - m * 60;
+  return `${neg ? '-' : ''}${m}:${r.toFixed(1).padStart(4, '0')}`;
+}

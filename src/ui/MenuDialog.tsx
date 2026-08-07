@@ -24,13 +24,14 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { formatTime, type Course, type RaceState } from "@/sim/race";
+import type { Course, RaceState } from "@/sim/race";
 import { formatClock } from "@/sim/sky";
 import { WEATHER_KINDS, WEATHER_LABEL, type WeatherKind } from "@/sim/weather";
 import { withVenue, withoutVenue, type Settings } from "@/settings";
 import { VENUES, venueById } from "@/sim/venues";
 import { Logbook } from "./Logbook";
 import type { LogStore } from "@/logbook";
+import { formatTime } from "@/sim/units";
 import { cn } from "@/lib/utils";
 
 export interface RaceResult {

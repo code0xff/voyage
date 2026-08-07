@@ -2,8 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, Trash2, Upload } from 'lucide-react';
 import { fromExport, toExport, type LogStore } from '@/logbook';
-import { formatTime } from '@/sim/race';
-import { msToKnots } from '@/sim/units';
+import { formatTime, msToKnots } from '@/sim/units';
 import { venueById } from '@/sim/venues';
 import type { PassageRecord } from '@/sim/passage';
 
