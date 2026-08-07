@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, Trash2, Upload } from 'lucide-react';
 import { fromExport, toExport, type LogStore } from '@/logbook';
@@ -68,11 +68,35 @@ function Entry({ p, onRemove }: { p: PassageRecord; onRemove: () => void }) {
 
 export function Logbook({ store, version }: { store: LogStore; version: number }) {
   const [passages, setPassages] = useState<PassageRecord[] | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  /**
+   * Which read is the newest.
+   *
+   * The store is async, so two reloads in flight -- an import finishing while a
+   * version bump lands, say -- can come back in either order, and the slower one
+   * would overwrite the newer answer with an older logbook.
+   */
+  const generation = useRef(0);
 
   const reload = useCallback(() => {
+    const mine = ++generation.current;
     // Null while loading rather than an empty array, so an empty logbook and a
     // logbook that has not answered yet do not print the same thing.
-    void store.list().then(setPassages);
+    store.list().then(
+      (rows) => {
+        if (mine !== generation.current) return;
+        setPassages(rows);
+        setProblem(null);
+      },
+      () => {
+        if (mine !== generation.current) return;
+        // An empty list rather than a permanent spinner: the reader must not be
+        // able to leave the panel saying "reading" forever, which is what an
+        // unhandled rejection did.
+        setPassages([]);
+        setProblem('The logbook could not be read.');
+      },
+    );
   }, [store]);
 
   // `version` is bumped by whoever knows a passage was written. Reloading on it
@@ -91,15 +115,39 @@ export function Logbook({ store, version }: { store: LogStore; version: number }
   };
 
   const upload = (file: File) => {
-    void file.text().then(async (raw) => {
-      const rows = fromExport(raw);
-      if (!rows) return;
-      // Added rather than replacing, and keyed on the record's own id, so
-      // importing the same file twice is the same logbook and not two of it.
-      for (const r of rows) await store.add(r);
-      reload();
-    });
+    void file.text().then(
+      async (raw) => {
+        const rows = fromExport(raw);
+        if (!rows) {
+          setProblem('That is not a voyage logbook, or it is a version this cannot read.');
+          return;
+        }
+        try {
+          // Added rather than replacing, and keyed on the record's own id, so
+          // importing the same file twice is the same logbook and not two of it.
+          for (const r of rows) await store.add(r);
+          setProblem(null);
+        } catch {
+          setProblem('Some of that file could not be saved.');
+        } finally {
+          // Reloaded either way. A partial import has written real rows, and
+          // leaving them off the screen would show a logbook that is not the
+          // one on disk.
+          reload();
+        }
+      },
+      () => setProblem('That file could not be read.'),
+    );
   };
+
+  const remove = (id: string) =>
+    void store.remove(id).then(
+      () => reload(),
+      () => {
+        setProblem('That passage could not be removed.');
+        reload();
+      },
+    );
 
   if (passages === null) {
     return <p className="py-4 text-[11px] text-muted-foreground">Reading the logbook…</p>;
@@ -118,7 +166,7 @@ export function Logbook({ store, version }: { store: LogStore; version: number }
             <Entry
               key={p.id}
               p={p}
-              onRemove={() => void store.remove(p.id).then(reload)}
+              onRemove={() => remove(p.id)}
             />
           ))}
         </div>
@@ -151,6 +199,7 @@ export function Logbook({ store, version }: { store: LogStore; version: number }
         who never finds it can lose a year of passages to a routine clear of
         site data without ever having been told.
       */}
+      {problem && <p className="pt-2 text-[10px] text-destructive">{problem}</p>}
       <p className="pt-2 text-[10px] leading-relaxed text-muted-foreground">
         Kept in this browser only. Export it to keep it — clearing site data will take it.
       </p>
