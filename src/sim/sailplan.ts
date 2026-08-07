@@ -146,10 +146,29 @@ const STRIPS = stripGeometry();
 export const STRIP_U: readonly number[] = STRIPS.u;
 export const STRIP_AREA: readonly number[] = STRIPS.area;
 
-/** Heel angle the auto-reef aims to hold. */
-export const TARGET_HEEL = 24 * DEG;
-const REEF_UP = 30 * DEG; // shorten sail above this
-const REEF_DOWN = 15 * DEG; // shake out below this
+/**
+ * Heel at which the auto-trim starts twisting the head open to spill wind.
+ *
+ * Lives here, next to the reef thresholds, because the three numbers are one
+ * ladder of responses to being overpowered and are only meaningful in order:
+ * twist off first because it is cheap, reef second because it is not.
+ *
+ * Not a heel the boat is held at, which the old name `TARGET_HEEL` promised and
+ * nothing delivers. What the boat settles at is set by `REEF_UP` below.
+ */
+export const DEPOWER_HEEL = 24 * DEG;
+/**
+ * Shorten sail above this sustained heel; shake out below `REEF_DOWN`.
+ *
+ * These two are what actually decide how far over the boat lies. Hysteresis is
+ * not a detail here: the reef only fires once the average has climbed past
+ * `REEF_UP`, and then takes enough sail off to put it back under, so the
+ * settled heel in a blow sits just below 30 degrees and never at
+ * `DEPOWER_HEEL`. Hard on the wind in 35 knots the polar reports 28 degrees,
+ * and that is the mechanism, not a tuning miss.
+ */
+const REEF_UP = 30 * DEG;
+const REEF_DOWN = 15 * DEG;
 const DWELL = 6; // s of hysteresis; without it the reef chatters
 
 export interface ReefState {

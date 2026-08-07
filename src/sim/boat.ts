@@ -20,11 +20,11 @@ import {
 import { FOIL_CD, FOIL_CL, SAIL_CD, SAIL_CL, sample } from './tables';
 import { boatHullSpeed, cgHeight, type BoatConfig, type Environment } from './config';
 import {
+  DEPOWER_HEEL,
   HEEL_TAU,
   SAIL_STRIPS,
   STRIP_AREA,
   STRIP_U,
-  TARGET_HEEL,
   sailPlan,
   windRefHeight,
 } from './sailplan';
@@ -321,7 +321,7 @@ export function step(
     // That is the real reason a crew reaches for the vang, and it comes before
     // reefing -- hence a band that starts at the auto-reef's target heel and is
     // fully on before the reef pennant is touched.
-    const depower = clamp((s.heelAvg - TARGET_HEEL) / DEPOWER_BAND, 0, 1);
+    const depower = clamp((s.heelAvg - DEPOWER_HEEL) / DEPOWER_BAND, 0, 1);
     s.twist = approach(s.twist, twistWanted + depower * (cfg.maxTwist - twistWanted), 1.5, dt);
   } else {
     s.twist = clamp(s.twist + ctl.twist * TWIST_RATE * dt, 0, cfg.maxTwist);

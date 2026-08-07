@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SHEAR_EXPONENT, shearFactor } from './shear';
-import { SAIL_STRIPS, STRIP_AREA, STRIP_U, TARGET_HEEL, sailPlan, windRefHeight } from './sailplan';
+import { DEPOWER_HEEL, SAIL_STRIPS, STRIP_AREA, STRIP_U, sailPlan, windRefHeight } from './sailplan';
 import { CRUISER, DEFAULT_ENV, cgHeight } from './config';
 import { initialState, step, type Controls } from './boat';
 import { DEG, RAD } from './math';
@@ -239,7 +239,7 @@ describe('sail twist', () => {
         // optimum: there the auto-trim is spilling wind to hold the boat on her
         // feet, and giving speed away is the whole point of doing it. Those
         // points are covered by the depowering test above.
-        if (auto.heelAvg >= TARGET_HEEL) continue;
+        if (auto.heelAvg >= DEPOWER_HEEL) continue;
         checked++;
 
         let best = 0;
