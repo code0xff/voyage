@@ -11,8 +11,10 @@ import { solvePolar, type Polar } from './sim/polar';
 import { WindField } from './sim/wind';
 import { CurrentField, DEFAULT_FULL_DEPTH } from './sim/current';
 import { venueById } from './sim/venues';
-import { passageInfo, type PassageInfo } from './sim/passage';
+import { passageInfo, type PassageInfo, type PassageRecord } from './sim/passage';
 import { anchorage, type Anchorage } from './sim/anchorage';
+import { PassageLog } from './sim/passage';
+import { createLogStore, type LogStore } from './logbook';
 import { WaveField, sampleHull, type HullWaveSample } from './sim/waves';
 import { MAX_REEF, autoReef, type ReefState } from './sim/sailplan';
 import { cyclePilot, initialPilot, pilotRudder, type PilotState } from './sim/autopilot';
@@ -129,6 +131,8 @@ export type EngineEvent =
   | { type: 'world'; seed: number }
   /** `N` was pressed: the chart should step to its next range. */
   | { type: 'chartRange' }
+  /** A passage was completed and written to the logbook. */
+  | { type: 'arrived'; record: PassageRecord }
   | { type: 'finished'; time: number; isBest: boolean };
 
 export interface Engine {
@@ -139,6 +143,8 @@ export interface Engine {
   freeSail(): void;
   /** Point her at somewhere, or pass null to just go sailing. */
   setDestination(pos: Vec2 | null): void;
+  /** The logbook. Exposed so the UI can read and manage it without a second store. */
+  readonly logbook: LogStore;
   setPaused(paused: boolean): void;
   applySettings(s: Settings): void;
   toggleCamera(): void;
@@ -218,6 +224,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   const pilot = initialPilot();
   let destination: Vec2 | null = null;
   let anchored = false;
+  /** The passage under way, or null when she is just out sailing. */
+  let log: PassageLog | null = null;
+  const logbook: LogStore = createLogStore();
   let current = settings;
 
   const view: SceneView = createScene(canvas, cfg);
@@ -492,6 +501,13 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
   /** Put the boat on station below the start line. */
   function placeAtStart(): void {
+    // She is about to be picked up and put somewhere else, and a passage cannot
+    // survive that: the log integrates the distance she sails, so a teleport
+    // would write a record whose track is shorter than the straight line
+    // between its own two ends. Abandoning is the only honest answer -- the
+    // passage did not happen.
+    setDestination(null);
+
     const up = compassVec(wind.baseTwd);
     state = initialState({
       pos: { x: -up.x * 90, y: -up.y * 90 },
@@ -557,12 +573,48 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   function setDestination(pos: Vec2 | null): void {
+    // A passage begins the moment she is pointed at somewhere, and is abandoned
+    // rather than recorded if the destination is cleared or moved. Half a
+    // passage to somewhere the player changed their mind about is not a passage,
+    // and a logbook of them would be worth nothing.
+    log = pos ? new PassageLog({ ...state.pos }, pos, Date.now()) : null;
     destination = pos;
     snapshot.destination = pos;
     // Cleared immediately rather than left to the next step, so a readout that
     // reads between now and then does not show the passage to a place the boat
     // is no longer bound for.
     if (!pos) snapshot.passage = null;
+  }
+
+  /**
+   * How near the destination the anchor has to go down for the passage to count
+   * as made, m.
+   *
+   * Generous, because an anchorage is a place and not a point: the player picks
+   * a spot on a chart and then finds the water that will actually hold her,
+   * which is never the pixel they clicked. Anchoring further off than this is
+   * simply anchoring -- the passage stays open and she can weigh and carry on.
+   */
+  const ARRIVED = 150;
+
+  /** Close the passage if this is where it was going, and write it down. */
+  function arrive(): void {
+    if (!log || !destination) return;
+    if (Math.hypot(state.pos.x - destination.x, state.pos.y - destination.y) > ARRIVED) return;
+
+    const record = log.finish(
+      // crypto.randomUUID is the browser's, so it stays out of the sim core --
+      // which is also why PassageLog takes an id rather than making one.
+      crypto.randomUUID(),
+      { ...state.pos },
+      current.venue,
+    );
+    log = null;
+    setDestination(null);
+    // Written without waiting: a failed write must not stall the physics loop,
+    // and a logbook that quietly lost one passage is better than a frame hitch.
+    void logbook.add(record).catch(() => undefined);
+    emit({ type: 'arrived', record });
   }
 
   function startRace(): void {
@@ -680,6 +732,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // Judged where she is, every step, because the answer is what the player is
     // reading while deciding whether to round up here or carry on a bit further.
     snapshot.anchorage = anchorage(snapshot.terrain, cfg, state.pos, diag.sog, wind.baseTwd);
+    // Real seconds, not world ones: a passage took as long as it took to sail,
+    // and the time scale is a convenience for watching the sun rather than a
+    // claim about how long the boat was at sea.
+    if (log && !anchored) log.advance(diag.sog, msToKnots(env.tws), PHYS_DT);
 
     // Worked from what the boat is actually doing over the ground, so it costs
     // one call a step rather than being recomputed by every readout that wants
@@ -810,7 +866,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // the readout is showing rather than a second copy of the rules.
     if (input.wasPressed('a')) {
       if (anchored) anchored = false;
-      else if (snapshot.anchorage?.canAnchor) anchored = true;
+      else if (snapshot.anchorage?.canAnchor) {
+        anchored = true;
+        arrive();
+      }
       snapshot.anchored = anchored;
     }
     if (input.wasPressed('n')) emit({ type: 'chartRange' });
@@ -901,6 +960,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     startRace,
     freeSail,
     setDestination,
+    logbook,
     setPaused(p) {
       paused = p;
       snapshot.paused = p;
