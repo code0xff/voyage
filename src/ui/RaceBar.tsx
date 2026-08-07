@@ -2,7 +2,6 @@ import { useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { RAD, wrapPi } from '@/sim/math';
-import { hasCurrent } from '@/sim/config';
 import { formatTime, guidance } from '@/sim/race';
 import { useEngineFrame, useReadout } from './engine-context';
 
@@ -88,7 +87,7 @@ export function RaceBar() {
     // number is a still-water polar and structurally cannot say where the
     // layline has gone, so with a drift running the honest output is silence
     // rather than an angle that is confidently wrong.
-    if (g && currentLeg?.mark?.id === 'W' && s.polar?.bestUpwind && !polarStale && !hasCurrent(s.env)) {
+    if (g && currentLeg?.mark?.id === 'W' && s.polar?.bestUpwind && !polarStale && !s.currents.running) {
       // If the bearing to the mark is further off the wind than the best upwind
       // angle, the layline is already behind us.
       const twaToMark = wrapPi(s.course.twd - g.bearing);

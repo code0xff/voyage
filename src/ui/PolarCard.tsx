@@ -3,7 +3,6 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { drawPolar } from '@/view/polarplot';
 import { RAD } from '@/sim/math';
-import { hasCurrent } from '@/sim/config';
 import { msToKnots } from '@/sim/units';
 import { useEngine, useEngineFrame, useReadout } from './engine-context';
 
@@ -31,13 +30,13 @@ export function PolarCard() {
   useEngineFrame((s) => {
     const ctx = ref.current?.getContext('2d');
     if (!ctx) return;
-    drawPolar(ctx, SIZE, SIZE, s.polar, s.diag, s.polarBusy, hasCurrent(s.env));
+    drawPolar(ctx, SIZE, SIZE, s.polar, s.diag, s.polarBusy, s.currents.running);
   });
 
   const caption = useReadout<HTMLSpanElement>((s) =>
     s.polar
       ? `${msToKnots(s.polar.tws).toFixed(0)} kn · ${
-          hasCurrent(s.env)
+          s.currents.running
             ? 'tide — no marker'
             : `best ${s.polar.bestUpwind ? (s.polar.bestUpwind.twa * RAD).toFixed(0) : '--'}°`
         }`

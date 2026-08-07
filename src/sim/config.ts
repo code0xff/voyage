@@ -201,21 +201,6 @@ export interface Environment {
   current?: Vec2;
 }
 
-/**
- * Whether there is enough tide under the boat to matter.
- *
- * Two readouts turn themselves off when there is -- the layline advice and the
- * polar's live marker -- because both are built on a still-water polar and stop
- * meaning what they say once the water is moving. They have to agree about when
- * that starts, or the boat could be given a layline by one and refused a polar
- * marker by the other.
- *
- * A tenth of a knot over a windward leg is a couple of metres, which is smaller
- * than the mark is.
- */
-export const hasCurrent = (env: Environment): boolean =>
-  !!env.current && Math.hypot(env.current.x, env.current.y) > 0.05;
-
 export const DEFAULT_ENV: Environment = {
   twd: 0, // northerly
   tws: 6.17, // 12 knots

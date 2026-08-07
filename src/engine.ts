@@ -9,6 +9,7 @@ import {
 } from './sim/boat';
 import { solvePolar, type Polar } from './sim/polar';
 import { WindField } from './sim/wind';
+import { CurrentField } from './sim/current';
 import { WaveField, sampleHull, type HullWaveSample } from './sim/waves';
 import { MAX_REEF, autoReef, type ReefState } from './sim/sailplan';
 import { cyclePilot, initialPilot, pilotRudder, type PilotState } from './sim/autopilot';
@@ -56,6 +57,14 @@ export interface Snapshot {
   diag: Diagnostics | null;
   env: Environment;
   wind: WindField;
+  /**
+   * The tidal streams. Published whole rather than as a flag, because the two
+   * readouts that switch themselves off in a tide have to ask about the world
+   * and not about the water under the boat: `env.current` goes slack every time
+   * she crosses into the shallows, and a polar marker blinking on and off as
+   * she does would be worse than either answer.
+   */
+  currents: CurrentField;
   waves: WaveField;
   terrain: Terrain;
   course: Course;
@@ -151,6 +160,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   const cfg = CRUISER;
   const env: Environment = { ...DEFAULT_ENV };
   const wind = new WindField(windMs(settings), 0, settings.gustiness);
+  const currents = new CurrentField({ peak: currentVec(settings) });
   const waves = new WaveField(windMs(settings), 0);
   const weather = new Weather(settings.seed, 'fair');
   const wildlife = new Wildlife(settings.seed);
@@ -203,6 +213,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     diag: null,
     env,
     wind,
+    currents,
     waves,
     terrain: EMPTY_TERRAIN,
     course,
@@ -341,6 +352,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
         visibleIslands = [];
         published = true;
         wind.terrain = EMPTY_TERRAIN;
+        // The stream needs the same land the wind does: it is the depth that
+        // decides where it runs, and it must never be reading last world's.
+        currents.terrain = EMPTY_TERRAIN;
         snapshot.terrain = EMPTY_TERRAIN;
         view.setTerrain(EMPTY_TERRAIN, EMPTY_TERRAIN);
       }
@@ -372,6 +386,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
     const terrain = new Terrain(active);
     wind.terrain = terrain;
+    currents.terrain = terrain;
     snapshot.terrain = terrain;
     view.setTerrain(terrain, new Terrain(visible));
   }
@@ -394,8 +409,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     wind.baseTws = windMs(s) * weather.state.windScale;
     // The tide is not weather: it runs at the rate it runs whatever the front
     // overhead is doing, so it is set straight from the player's number and
-    // never scaled by `weather.state`.
-    env.current = currentVec(s);
+    // never scaled by `weather.state`. This is the rate in deep water; where
+    // the boat actually is, the field decides.
+    currents.peak = currentVec(s);
     wind.gustiness = s.gustiness * weather.state.gustScale;
     wind.shiftAmplitude = 0.19 * s.gustiness * 2.2;
     waves.setFromWind(wind.baseTws * s.seaScale, wind.baseTwd);
@@ -535,6 +551,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     const w = wind.sample(state.pos);
     env.tws = w.tws;
     env.twd = w.twd;
+    // And the stream where she is, for the same reason: it is not the same
+    // across the course, and sampling it anywhere but under the boat would
+    // hand her a tide she is not in.
+    env.current = currents.sample(state.pos);
 
     // The pilot steers at the physics rate, from the wind where the boat is,
     // so in wind mode it follows the shift she is actually in.

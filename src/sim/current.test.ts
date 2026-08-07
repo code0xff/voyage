@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { CRUISER, DEFAULT_ENV } from './config';
 import { initialState, step, type Controls, type SeaState } from './boat';
 import { DEG, RAD, type Vec2 } from './math';
+import { CurrentField, SLACK } from './current';
 import { solveOne } from './polar';
+import { Terrain } from './terrain';
 import { knotsToMs } from './units';
 
 /**
@@ -162,5 +164,97 @@ describe('current', () => {
     expect(d.sog).toBeLessThan(0.01);
     // Five minutes at the full 1 m/s set would be 300 m downtide of here.
     expect(Math.hypot(s.pos.x, s.pos.y)).toBeLessThan(1);
+  });
+});
+
+/**
+ * The stream as a function of position.
+ *
+ * A tide that ran at one rate everywhere would be a headwind you cannot point
+ * at: it slows one leg, speeds the other, and is over. The whole reason to name
+ * a real venue is that the stream is *not* the same across the course, so where
+ * you put the boat becomes a decision.
+ */
+describe('current field', () => {
+  /** A bank of land at the origin, so there is somewhere shallow to hide. */
+  const shore = new Terrain([{ pos: { x: 0, y: 0 }, radius: 300, height: 40, seed: 5 }]);
+
+  const field = (peak: Vec2, fullDepth = 14) => {
+    const f = new CurrentField({ peak, fullDepth });
+    f.terrain = shore;
+    return f;
+  };
+
+  it('runs at its full rate in deep water', () => {
+    const f = field({ x: 1.5, y: 0 });
+    // Far offshore the bottom stops mattering and the stream is the quoted one.
+    const v = f.sample({ x: 4000, y: 0 });
+    expect(v.x).toBeCloseTo(1.5, 6);
+    expect(v.y).toBeCloseTo(0, 6);
+  });
+
+  /**
+   * The oldest piece of tidal tactics there is: cheat the tide inshore. If this
+   * did not hold there would be no reason to sail anywhere in particular, and
+   * the field would be an expensive way to write one vector.
+   */
+  it('gives up in the shallows, so there is slack water to use inshore', () => {
+    const f = field({ x: 1.5, y: 0 });
+    const offshore = Math.hypot(f.sample({ x: 4000, y: 0 }).x, f.sample({ x: 4000, y: 0 }).y);
+    const inshore = f.rateAt(0, 380); // just outside the shoreline, over the shelf
+    expect(inshore).toBeLessThan(0.75);
+    expect(inshore).toBeGreaterThan(0);
+    expect(offshore).toBeGreaterThan(1.4);
+  });
+
+  it('stops the stream dead at the beach, so it never runs onto the land', () => {
+    const f = field({ x: 1.5, y: 0 });
+    // Inside the shoreline the depth is negative and there is no water to move.
+    expect(f.rateAt(0, 0)).toBe(0);
+    expect(f.rateAt(150, 0)).toBe(0);
+  });
+
+  it('gets stronger the further offshore you go, all the way out', () => {
+    const f = field({ x: 1.5, y: 0 });
+    let last = -1;
+    for (let y = 300; y <= 900; y += 50) {
+      const r = f.rateAt(0, y);
+      expect(r).toBeGreaterThanOrEqual(last);
+      last = r;
+    }
+  });
+
+  /**
+   * Open water has no land, so `depthAt` answers with the deep-water constant
+   * and the field is uniform. That is what keeps the plain set-and-drift
+   * settings meaning exactly what they say for a player who never goes near a
+   * venue.
+   */
+  it('is a plain uniform set and drift when there is no land', () => {
+    const f = new CurrentField({ peak: { x: 0.9, y: -0.4 } });
+    for (const p of [{ x: 0, y: 0 }, { x: 5000, y: -2000 }]) {
+      expect(f.sample(p).x).toBeCloseTo(0.9, 9);
+      expect(f.sample(p).y).toBeCloseTo(-0.4, 9);
+    }
+  });
+
+  it('reports slack water as not running, so the readouts stay on', () => {
+    expect(new CurrentField({ peak: { x: 0, y: 0 } }).running).toBe(false);
+    expect(new CurrentField({ peak: { x: SLACK / 2, y: 0 } }).running).toBe(false);
+    expect(new CurrentField({ peak: { x: 1, y: 0 } }).running).toBe(true);
+  });
+
+  it('is exactly nothing at slack, everywhere, whatever the bottom does', () => {
+    const f = field({ x: 0, y: 0 });
+    for (const p of [{ x: 0, y: 320 }, { x: 4000, y: 0 }]) {
+      expect(f.sample(p)).toEqual({ x: 0, y: 0 });
+    }
+  });
+
+  /** The dial a venue is tuned with: how far offshore the useful slack reaches. */
+  it('widens the band of slack water as fullDepth rises', () => {
+    const narrow = field({ x: 1.5, y: 0 }, 6);
+    const wide = field({ x: 1.5, y: 0 }, 30);
+    expect(wide.rateAt(0, 420)).toBeLessThan(narrow.rateAt(0, 420));
   });
 });
