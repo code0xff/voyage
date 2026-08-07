@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   BookOpen,
   Compass,
+  LifeBuoy,
   SlidersHorizontal,
   Waves,
   Wind,
@@ -26,10 +27,10 @@ import { withRegion, withVenue, withoutRegion, withoutVenue, type Settings } fro
 import { VENUES, venueById } from "@/sim/venues";
 import { REGIONS, placeName, regionById } from "@/sim/regions";
 import { Logbook } from "./Logbook";
+import { SailingGuide } from "./SailingGuide";
 import type { LogStore } from "@/logbook";
 import type { PassageRecord } from "@/sim/passage";
 import { formatDistance, formatDuration, formatWhen } from "@/sim/units";
-import { cn } from "@/lib/utils";
 
 /** A labelled range control. Sliders read better than numeric inputs for conditions. */
 function Slider({
@@ -308,6 +309,26 @@ export function MenuDialog({
               </Button>
             </div>
 
+            {/* On the front page, and not only as a tab behind "Adjust".
+                Someone who has never sailed is not looking for a guide under a
+                button that says it changes the weather, and they are exactly
+                who it is for -- so the one line that admits the boat will not
+                do the obvious thing sits where they will actually be. */}
+            <button
+              type="button"
+              onClick={() => {
+                setTab("sailing");
+                setView("settings");
+              }}
+              className="mt-2 w-full rounded-md border border-border/60 px-3 py-2 text-left text-[11px] leading-relaxed text-muted-foreground transition-colors hover:border-border hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <span className="font-medium text-foreground">
+                Never sailed before?
+              </span>{" "}
+              A boat cannot sail straight at the wind, and that changes
+              everything else. Read the guide →
+            </button>
+
             {/* Under the conditions rather than over them: what you are about
                 to sail in is the more useful of the two with a hand already on
                 the door, and where you last got to is the reason to open it. */}
@@ -348,6 +369,9 @@ export function MenuDialog({
             </TabsTrigger>
             <TabsTrigger value="log" className={TAB_TRIGGER}>
               <BookOpen /> Log
+            </TabsTrigger>
+            <TabsTrigger value="sailing" className={TAB_TRIGGER}>
+              <LifeBuoy /> Sailing
             </TabsTrigger>
             <TabsTrigger value="keys" className={TAB_TRIGGER}>
               <Waves /> Controls
@@ -561,6 +585,10 @@ export function MenuDialog({
             <Logbook store={logbook} version={logVersion} onChanged={onLogChanged} />
           </TabsContent>
 
+          <TabsContent value="sailing" className="mt-4">
+            <SailingGuide />
+          </TabsContent>
+
           <TabsContent value="keys" className="mt-4">
             <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-[11px]">
               {[
@@ -600,20 +628,10 @@ export function MenuDialog({
                 </div>
               ))}
             </div>
-            <div
-              className={cn(
-                "mt-4 rounded-md border border-warning/40 bg-warning/10 p-3",
-              )}
-            >
-              <p className="text-[11px] leading-relaxed">
-                <span className="font-medium text-warning">
-                  You cannot sail straight at anywhere upwind.
-                </span>{" "}
-                Zig-zag towards it at roughly 45° to the wind. The polar panel
-                shows the best angle, and the chart says when you are pointed at
-                something you cannot lay.
-              </p>
-            </div>
+            <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
+              New to this? The <span className="text-foreground">Sailing</span>{" "}
+              tab explains what the boat is doing and what every reading means.
+            </p>
           </TabsContent>
         </Tabs>
       </div>
