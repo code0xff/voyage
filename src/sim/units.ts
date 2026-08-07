@@ -43,9 +43,10 @@ export function formatDuration(seconds: number): string {
 /**
  * Metres as a person reads them: metres below a kilometre, kilometres above.
  *
- * Here with formatTime and for the same reason. The chart's distance run and
- * the logbook's distance sailed are the same quantity written the same way, and
- * they had a copy of this line each to write it with.
+ * Here with formatDuration and for the same reason. The chart's distance run,
+ * the logbook's distance sailed and the passage bar's distance to run are the
+ * same quantity written the same way, and they had a copy of this line each to
+ * write it with.
  */
 export function formatDistance(metres: number): string {
   return metres < 1000 ? `${metres.toFixed(0)} m` : `${(metres / 1000).toFixed(2)} km`;
