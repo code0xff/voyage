@@ -169,9 +169,17 @@ export function MenuDialog({
         {view === "play" && (
           <>
             {/* Going back to a session in progress is the likeliest thing
-                anyone here wants, so it leads and it is the wide one. The two
-                below it both throw that session away, which is why they are
-                not sitting in the same row as it. */}
+                anyone here wants, so it leads and it is the wide one. The one
+                below throws that session away, which is why it is not sitting
+                in the same row as it. */}
+            {canResume && (
+              <Button className="mb-2 w-full justify-between" onClick={() => onOpenChange(false)}>
+                <span className="flex items-center gap-2">
+                  <Anchor /> Resume
+                </span>
+                <span className="opacity-60">Esc</span>
+              </Button>
+            )}
             <div className="space-y-2">
               <Button
                 variant={canResume ? "secondary" : "default"}
