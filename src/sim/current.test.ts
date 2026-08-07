@@ -5,7 +5,7 @@ import { DEG, RAD, type Vec2 } from './math';
 import { CurrentField, SLACK } from './current';
 import { solveOne } from './polar';
 import { Terrain } from './terrain';
-import { knotsToMs } from './units';
+import { knotsToMs, msToKnots } from './units';
 
 /**
  * Set and drift.
@@ -256,5 +256,52 @@ describe('current field', () => {
     const narrow = field({ x: 1.5, y: 0 }, 6);
     const wide = field({ x: 1.5, y: 0 }, 30);
     expect(wide.rateAt(0, 420)).toBeLessThan(narrow.rateAt(0, 420));
+  });
+});
+
+/**
+ * The anchor holds her exactly as the ground does, because it is the same thing
+ * happening: she stays put over the ground and the tide runs past her. The only
+ * difference is that one is a decision and the other is a mistake.
+ */
+describe('anchored', () => {
+  const anchored = (seconds: number, current: Vec2) => {
+    const e = { ...DEFAULT_ENV, tws: knotsToMs(14), current };
+    const s = initialState({ heading: 315 * DEG, u: 3 });
+    const opts = { anchored: true, sea: FLAT };
+    let d = step(s, CRUISER, e, AUTO, DT, opts);
+    for (let i = 1; i < Math.round(seconds / DT); i++) d = step(s, CRUISER, e, AUTO, DT, opts);
+    return { s, d };
+  };
+
+  it('brings her up and keeps her there, sails or no sails', () => {
+    // Full sail in fourteen knots: the rig is still pulling the whole time.
+    const { s, d } = anchored(120, { x: 0, y: 0 });
+    expect(d.sog).toBeLessThan(0.05);
+    expect(Math.hypot(s.pos.x, s.pos.y)).toBeLessThan(30);
+  });
+
+  it('lets the tide run past her instead of carrying her with it', () => {
+    const { s, d } = anchored(180, { x: 1.4, y: 0 });
+    expect(d.sog).toBeLessThan(0.05);
+    // Three minutes at that set would be 250 m downtide.
+    expect(Math.abs(s.pos.x)).toBeLessThan(30);
+  });
+
+  it('is not the same as being aground, which is still only about the bottom', () => {
+    // The alert and the diagnostic mean "you have run out of water", and a boat
+    // lying to her anchor in deep water has not.
+    const { d } = anchored(30, { x: 0, y: 0 });
+    expect(d.aground).toBe(0);
+  });
+
+  it('lets her go again when the anchor comes up', () => {
+    const e = { ...DEFAULT_ENV, tws: knotsToMs(14) };
+    const s = initialState({ heading: 315 * DEG, u: 3 });
+    for (let i = 0; i < Math.round(60 / DT); i++)
+      step(s, CRUISER, e, AUTO, DT, { anchored: true, sea: FLAT });
+    let d = step(s, CRUISER, e, AUTO, DT, { sea: FLAT });
+    for (let i = 1; i < Math.round(90 / DT); i++) d = step(s, CRUISER, e, AUTO, DT, { sea: FLAT });
+    expect(msToKnots(d.speed)).toBeGreaterThan(3);
   });
 });

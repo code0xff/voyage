@@ -191,6 +191,16 @@ export function initialState(overrides: Partial<BoatState> = {}): BoatState {
 export interface StepOptions {
   /** For the polar solver: freeze the heading and disable the yaw degree of freedom. */
   lockHeading?: boolean;
+  /**
+   * Whether the anchor is down.
+   *
+   * Held exactly as the ground holds her, because it is the same thing
+   * happening: she stays where she is over the ground and the tide runs past
+   * instead of carrying her. The only difference is that one of them is a
+   * decision and the other is a mistake, and that difference lives in the HUD
+   * rather than in the physics.
+   */
+  anchored?: boolean;
   /** Sea state where the boat is. Omit for flat water. */
   sea?: SeaState;
 }
@@ -337,7 +347,16 @@ export function step(
   // ends up alike -- one of them alone would have her stopped on the bank and
   // still feeling the breeze of a drift she is not making.
   const aground = clamp((cfg.draft - sea.depth) / 0.8, 0, 1);
-  const drift = scale(env.current ?? STILL, 1 - aground);
+  // What has hold of her, whichever it is. Kept apart from `aground` itself,
+  // which is still only about the bottom: the alert and the diagnostic mean
+  // "you have run out of water", and an anchored boat has not.
+  const held = opts.anchored ? 1 : aground;
+  // Chain and a hook set in the bottom hold a great deal harder than a keel
+  // resting on it -- a grounded boat is dragged on and off by the sea, and an
+  // anchored one is not. Measured: at the grounding's rate she crept 12 m in
+  // two minutes under full sail in fourteen knots, which is a boat dragging.
+  const holdRate = opts.anchored ? 40 : 6;
+  const drift = scale(env.current ?? STILL, 1 - held);
   const velGroundW = add(velWaterW, drift);
 
   // --- 2. Wind: true -> apparent -------------------------------------------
@@ -631,9 +650,9 @@ export function step(
   // stiff contact spring at this timestep would explode, and what matters for
   // gameplay is simply that the boat stops. It is deliberately not a total
   // freeze -- the sails can still work you off again, which is what happens.
-  // `aground` itself is worked out up in section 1, where the drift needs it.
-  if (aground > 0) {
-    const bite = Math.exp(-dt * 6 * aground);
+  // `held` is worked out up in section 1, where the drift needs it.
+  if (held > 0) {
+    const bite = Math.exp(-dt * holdRate * held);
     s.u *= bite;
     s.v *= bite;
     s.r *= bite;
