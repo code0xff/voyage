@@ -562,6 +562,7 @@ with a personal best updates the ghost you race against next time.
 | `Q E` | mean wind direction |
 | `[ ]` | mean wind speed |
 | `C` | camera (chase / top-down) |
+| `0` | hand all sail, or set it again |
 | `A` | let go the anchor, or weigh it |
 | `N` | chart range |
 | click the chart | set where you are bound; right-click clears it |

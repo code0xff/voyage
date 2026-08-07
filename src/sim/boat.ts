@@ -59,6 +59,15 @@ export interface BoatState {
   rudder: number; // rad, positive = turning to starboard
   reef: number; // 0..MAX_REEF
   jibFurl: number; // 0..1
+  /**
+   * Sails handed and off her.
+   *
+   * The verb the boat was missing. Without it she could never actually be
+   * stopped: three reefs still leaves 40% of the main, and a boat rounded up
+   * under that took a minute to lose her way and sailed 36 m doing it -- far
+   * enough, measured, to carry her out of the water she was trying to anchor in.
+   */
+  stowed: boolean;
 }
 
 /**
@@ -184,6 +193,7 @@ export function initialState(overrides: Partial<BoatState> = {}): BoatState {
     rudder: 0,
     reef: 0,
     jibFurl: 0,
+    stowed: false,
     ...overrides,
   };
 }
@@ -377,7 +387,7 @@ export function step(
   const twa = wrapPi(env.twd - s.heading);
 
   // --- 3. Sail trim ---------------------------------------------------------
-  const plan = sailPlan(cfg, s.reef, s.jibFurl);
+  const plan = sailPlan(cfg, s.reef, s.jibFurl, s.stowed);
   const zCg = cgHeight(cfg);
   const zRef = windRefHeight(cfg);
 

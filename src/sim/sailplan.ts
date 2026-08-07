@@ -63,12 +63,26 @@ function fullCeHeight(cfg: BoatConfig): number {
  */
 export const windRefHeight = (cfg: BoatConfig): number => fullCeHeight(cfg) + cgHeight(cfg);
 
-export function sailPlan(cfg: BoatConfig, reef: number, jibFurl: number): SailPlan {
+/**
+ * @param stowed sails handed and off her -- bare poles.
+ *
+ * A separate state and not a fourth reef, deliberately. Reefing is a ladder of
+ * sail area for *sailing*, and the auto-reef climbs it; a zero rung on that
+ * ladder would let a squall take every stitch off and leave the boat lying
+ * helpless, which is the opposite of what shortening sail is for. Handing the
+ * sails is a thing a crew does on purpose, to stop.
+ */
+export function sailPlan(
+  cfg: BoatConfig,
+  reef: number,
+  jibFurl: number,
+  stowed = false,
+): SailPlan {
   const r = clamp(Math.round(reef), 0, MAX_REEF);
   const furl = clamp(jibFurl, 0, 1);
 
-  const am = cfg.mainArea * REEF_AREA[r];
-  const aj = cfg.jibArea * (1 - furl);
+  const am = stowed ? 0 : cfg.mainArea * REEF_AREA[r];
+  const aj = stowed ? 0 : cfg.jibArea * (1 - furl);
   const area = am + aj;
 
   // The main sets the top of the rig, so only reefing shortens the plan --

@@ -34,8 +34,14 @@ export function HintBar() {
           s.anchorage.shelter > 0.4 ? ', sheltered' : ''
         } — A to let go`,
       );
-    else if (s.anchorage && s.diag.sog < MAX_WAY * 2 && s.anchorage.holding !== 'deep')
+    // Deep water is included now. It was left out to stop the message following
+    // the boat round an ocean that is 40 m deep everywhere -- but the condition
+    // above already requires her to be nearly stopped, and a boat drifting to a
+    // halt in the middle of a bay is a boat trying to anchor. Excluding it meant
+    // the depth rule could never be learned by anyone who tried.
+    else if (s.anchorage && s.diag.sog < MAX_WAY * 2)
       parts.push(`Nowhere to anchor: ${anchorProblem(s.anchorage)}`);
+    else if (s.state.stowed) parts.push('Sails handed — 0 to set sail again, 1-4 to reef');
     else if (Math.abs(s.diag.twa) * (180 / Math.PI) < 35) parts.push('Too close to the wind — bear away');
     else parts.push('Esc for menu and settings');
 

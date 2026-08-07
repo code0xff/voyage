@@ -902,8 +902,21 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       // Tell React so the change is persisted with the rest of the settings.
       emit({ type: 'sound', on });
     }
+    // `0` hands every stitch, which is what a crew does to stop rather than to
+    // sail slower. It sits with the reef keys because that is where a player
+    // looks for how much sail is up, and it turns the auto-reef off: leaving it
+    // on would have the crew setting sail again the moment she heeled.
+    if (input.wasPressed('0')) {
+      state.stowed = !state.stowed;
+      if (state.stowed) {
+        autoReefOn = false;
+        snapshot.autoReef = false;
+      }
+    }
     for (let i = 0; i <= MAX_REEF; i++) {
       if (input.wasPressed(String(i + 1))) {
+        // Asking for a reef is asking for sail, so it puts her back to work.
+        state.stowed = false;
         reefState.reef = i;
         autoReefOn = false;
         snapshot.autoReef = false;
