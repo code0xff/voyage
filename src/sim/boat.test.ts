@@ -96,6 +96,28 @@ describe('numerical health', () => {
     expect(Number.isFinite(d.speed)).toBe(true);
   });
 
+  /**
+   * Regression. The apparent wind angle is an `atan2`, and `atan2` of two zeroes
+   * is decided by their *signs*. In a dead calm with the boat stopped the
+   * apparent wind is built from `tws * 0`, and the components came out as -0 or
+   * +0 depending only on which way the wind had been blowing: measured, a
+   * northerly read 0 degrees and a southerly read 180. The gauge swung between
+   * dead ahead and dead astern over a difference that does not exist.
+   *
+   * There is no apparent wind angle when there is no apparent wind. The point is
+   * only that the answer must not depend on the sign of a zero.
+   */
+  it('does not invent an apparent wind angle out of a dead calm', () => {
+    for (const twdDeg of [0, 90, 180, 212, 270]) {
+      const env = { ...DEFAULT_ENV, tws: 0, twd: twdDeg * DEG };
+      const s = initialState({ heading: 40 * DEG, u: 0, v: 0 });
+      const d = step(s, CRUISER, env, AUTO, DT, { lockHeading: true });
+      expect(d.awa).toBe(0);
+      expect(d.awaMast).toBe(0);
+      expect(d.aws).toBe(0);
+    }
+  });
+
   it('stays bounded in survival conditions', () => {
     const s = initialState({ heading: 300 * DEG, u: 3 });
     run(s, 90, AUTO, knotsToMs(45));

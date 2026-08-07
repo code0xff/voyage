@@ -283,8 +283,21 @@ function apparentAtHeight(windVelW: Vec2, velGroundW: Vec2, f: number): Vec2 {
   return sub(scale(windVelW, f), velGroundW);
 }
 
-/** Signed apparent wind angle of an apparent wind vector; positive = from starboard. */
+/**
+ * Signed apparent wind angle of an apparent wind vector; positive = from
+ * starboard.
+ *
+ * The guard is not defensive padding. `compassAngle` is `atan2`, and `atan2` of
+ * two zeroes depends on their *signs*: a dead calm with the boat stopped builds
+ * the apparent wind out of `tws * 0`, whose components come out as -0 or +0
+ * according to where the wind was blowing from before it died. Measured, that
+ * put the readout at 0 degrees for a northerly and 180 for a southerly -- a
+ * gauge swinging between dead ahead and dead astern over a difference that does
+ * not exist. There is no angle when there is no wind; report the one number that
+ * at least does not flip.
+ */
 function awaOf(app: Vec2, heading: number): number {
+  if (Math.abs(app.x) < 1e-9 && Math.abs(app.y) < 1e-9) return 0;
   return wrapPi(compassAngle(scale(app, -1)) - heading);
 }
 
