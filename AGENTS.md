@@ -102,6 +102,17 @@ Comments carry the reasoning that is not recoverable from the code — why the
 righting moment is referenced to the water surface normal, why swept angle is
 the wrong way to judge a mark rounding. Keep writing them that way.
 
+### Fix what you find on the way
+
+If you notice documentation that has gone out of date, a refactor worth making
+or a bug, fix it in the same session rather than filing it. This project's value
+is that its claims are true — the README carries measured numbers and the
+comments carry reasoning — so a stale claim is a defect in the thing itself.
+
+**In its own commit, though.** Permission to fix is not permission to bundle:
+the rule below about refactors never riding along in a feature commit still
+holds, and a bug fix still owes a regression test.
+
 ### Self-review to a clean pass
 
 After implementing, review your own diff as if someone else wrote it, and keep
