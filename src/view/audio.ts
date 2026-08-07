@@ -402,6 +402,25 @@ export class SoundEngine {
       voice.gain.gain.setTargetAtTime(song * 0.075, t, 0.25);
     }
 
+    /*
+     * And nothing here for fog, deliberately.
+     *
+     * The obvious move is to dull and quieten the mix, and it would have been
+     * wrong twice over. Fog does attenuate sound -- droplets exchange heat and
+     * mass with the air and the loss is real and rises with frequency -- but it
+     * is measured over kilometres, and nothing in this game is heard beyond a
+     * few hundred metres. Modelling it audibly would mean exaggerating a real
+     * effect by a large factor to reach for a cliche.
+     *
+     * And it is already handled, honestly, by something else. Fog forms in calm
+     * air, so the fog profile scales the wind to 0.55, and every layer here is
+     * downstream of the apparent wind. Measured at a 20 knot setting: the
+     * rigging band falls from 0.114 to 0.062 and the song from 0.011 to
+     * 0.0001 -- half the wind noise and no howl at all. The mix goes quiet in
+     * fog because there is no wind in fog, which is the actual reason.
+     *
+     * What fog does change is `gullCall`, where sound reaches further.
+     */
     const wet = clamp(weather.rain, 0, 1);
     // Under the wind, not over it. The first attempt at this coefficient was
     // 0.34, which put a squall's rain at 0.31 against the rigging's own ceiling
@@ -429,10 +448,21 @@ export class SoundEngine {
    * A gull. Tonal rather than noisy, so this is an oscillator: two or three
    * descending cries, which is the shape of the call people know.
    */
-  gullCall(distance: number, strength: number): void {
+  gullCall(distance: number, strength: number, fog = 0): void {
     const ctx = this.ctx;
     if (!ctx || !this.master || ctx.state !== 'running') return;
-    const gain = this.carry(distance, 200) * strength * 0.16;
+    /*
+     * Fog carries it further, which is the opposite of what fog is supposed to
+     * do to sound and is the thing that is actually true.
+     *
+     * Fog forms under a temperature inversion, and an inversion bends sound
+     * back down instead of letting it escape upward. That is why a fog signal
+     * is heard a long way before anything is seen, and it is the whole
+     * character of fog at sea: you hear what you cannot see. Doubling and a
+     * half at full fog, so a gull at 500 m goes from a quarter of its close
+     * loudness to a half.
+     */
+    const gain = this.carry(distance, 200 * (1 + clamp(fog, 0, 1) * 1.5)) * strength * 0.16;
     if (gain < 0.01) return;
 
     const t0 = ctx.currentTime;

@@ -777,7 +777,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     wildlife.update(PHYS_DT, state.pos, query);
     for (const ev of wildlife.events) {
       const d = Math.hypot(ev.pos.x - state.pos.x, ev.pos.y - state.pos.y);
-      sound.gullCall(d, ev.strength);
+      sound.gullCall(d, ev.strength, weather.state.fog);
     }
 
     diag = step(state, cfg, env, ctl, PHYS_DT, { sea, anchored });
