@@ -129,6 +129,24 @@ describe('sail twist', () => {
     expect(beat.twistWanted * RAD).toBeLessThan(6);
   });
 
+  /**
+   * The masthead vane is drawn 14 m up and must be given the wind from 14 m up.
+   * Handing it `awa` -- the wind at the sail's centre of effort, half that
+   * height -- would draw an instrument pointing somewhere nothing at its own
+   * height is pointing, which is exactly the sort of renderer-physics
+   * disagreement this project cannot afford: the vane is steered by.
+   */
+  it('reads the masthead wind further aft than the sail feels', () => {
+    for (const heading of [315, 270, 225]) {
+      const d = settle(heading, knotsToMs(12), 60).d;
+      expect(Math.abs(d.awaMast)).toBeGreaterThan(Math.abs(d.awa));
+      // Same wind, so the two only differ by the gradient -- a few degrees on
+      // a beat, more as the boat bears away. Never a different quadrant.
+      expect(Math.abs(d.awaMast - d.awa) * RAD).toBeLessThan(25);
+      expect(Math.sign(d.awaMast)).toBe(Math.sign(d.awa));
+    }
+  });
+
   it('twists the head open when the boat is overpowered', () => {
     // Full sail in 28 knots is far too much. A crew reaches for the vang before
     // the reef pennant, so the auto-trim must be well beyond what the gradient

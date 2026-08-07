@@ -105,6 +105,16 @@ export interface Diagnostics {
   twa: number; // true wind angle, rad (signed)
   sailAoA: number; // sail angle of attack, rad, averaged over the sail's area
   luffing: number; // 0..1; 1 = drawing properly, 0 = flogging. Area-averaged.
+  /**
+   * rad, apparent wind angle at the masthead, which is not `awa`.
+   *
+   * The gradient is the whole reason these differ: the masthead stands in more
+   * wind than the sail's centre of effort, so its apparent wind comes from
+   * further aft -- by a couple of degrees on a beat and the better part of
+   * twenty on a broad reach. This is what a masthead vane physically points
+   * along, and drawing one with `awa` would have it lying about its own height.
+   */
+  awaMast: number;
   twist: number; // rad, the twist actually set
   /**
    * rad, the twist the gradient is asking for: the apparent wind angle at the
@@ -235,6 +245,9 @@ export function step(
   const awaFoot = awaAtHeight(windVelW, velW, s.heading, shearFactor(plan.footHeight + zCg, zRef));
   const awaHead = awaAtHeight(windVelW, velW, s.heading, shearFactor(plan.headHeight + zCg, zRef));
   const twistWanted = clamp(Math.abs(awaHead) - Math.abs(awaFoot), 0, cfg.maxTwist);
+  // The masthead is higher than any part of the sail and does not come down
+  // with a reef, so it gets its own sample rather than reusing the head's.
+  const awaMast = awaAtHeight(windVelW, velW, s.heading, shearFactor(cfg.mastHeight + zCg, zRef));
 
   if (ctl.autoTrim) {
     // Matching the gradient is only the light-air answer. Once the boat is
@@ -500,6 +513,7 @@ export function step(
     twa,
     sailAoA,
     luffing,
+    awaMast,
     twist: s.twist,
     twistWanted,
     drive,

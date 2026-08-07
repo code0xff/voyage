@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { BoatConfig } from '../sim/config';
+import { cgHeight, type BoatConfig } from '../sim/config';
 import type { BoatState, Diagnostics } from '../sim/boat';
 import { clamp, compassVec, side } from '../sim/math';
 import { REEF_AREA_FACTOR } from '../sim/sailplan';
@@ -392,7 +392,10 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
 
   const DECK_Y = 1.02; // deck height at the mast, matching the hull freeboard
 
-  const mastHeight = cfg.loa * 1.3;
+  // Length of stick above the deck. Derived from the physics' masthead height
+  // rather than from a proportion of its own, so that the vane at the top of it
+  // is drawn at the height whose wind it is being given.
+  const mastHeight = cfg.mastHeight + cgHeight(cfg) - DECK_Y;
 
   // Navigation lights, the spreader flood and the cabin glow. They ride with
   // the hull, so they heel and pitch with her -- and so does the pool the
@@ -551,7 +554,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     twistSail(main, -tack * state.twist);
     twistSail(jib, -tack * state.twist);
     rudderPivot.rotation.y = state.rudder;
-    vanePivot.rotation.y = -diag.awa;
+    vanePivot.rotation.y = -diag.awaMast;
 
     // Make it visible that a luffing sail is not producing drive
     sailMat.opacity = 0.4 + 0.55 * diag.luffing;

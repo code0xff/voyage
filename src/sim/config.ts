@@ -44,6 +44,15 @@ export interface BoatConfig {
 
   sailAR: number; // aspect ratio; governs induced drag CDi = CL^2 / (pi * AR)
   mastX: number; // m, mast position (rendering)
+  /**
+   * m, height of the masthead above the centre of gravity.
+   *
+   * Where the wind instruments live. Unlike the head of the sail it does not
+   * move when the boat reefs, and the renderer builds its mast from this same
+   * number, so the vane drawn up there and the wind reported up there cannot
+   * drift apart.
+   */
+  mastHeight: number;
   minSheet: number; // rad, boom angle when sheeted hard in
   maxSheet: number; // rad, fully eased
   targetAoA: number; // rad, angle of attack the auto-trim aims for
@@ -116,6 +125,8 @@ export const CRUISER: BoatConfig = {
 
   sailAR: 2.8,
   mastX: 1.2,
+  // 14.0 m above the water, just clear of the head of a full mainsail.
+  mastHeight: 13.3,
   minSheet: 11 * DEG,
   maxSheet: 85 * DEG,
   targetAoA: 19 * DEG,
