@@ -138,6 +138,10 @@ describe('sail twist', () => {
    * rig; on a broad reach it does not, and the head ends up a long way aft of
    * the foot. That is why sails are trimmed nearly flat upwind and let right
    * open downwind, and it has to fall out of the model rather than be asserted.
+   *
+   * Asserted on the trim target rather than on the raw spread, because that is
+   * the number the boat and the player both act on. The two are the same thing
+   * while the boom is clear of the shrouds, which on these two headings it is.
    */
   it('asks for far more twist off the wind than on it', () => {
     const beat = settle(315, knotsToMs(12), 60).d;
@@ -173,10 +177,30 @@ describe('sail twist', () => {
     expect(s.heelAvg * RAD).toBeGreaterThan(20);
   });
 
-  it('leaves the twist to the gradient when there is nothing to depower', () => {
+  it('trims for power, not heel, when there is nothing to depower', () => {
     const { s, d } = settle(315, knotsToMs(8), 90);
     expect(s.heelAvg * RAD).toBeLessThan(24);
     expect(s.twist).toBeCloseTo(d.twistWanted, 2);
+  });
+
+  /**
+   * Close-hauled the boom is already against its inhaul, so the sheet cannot
+   * come in far enough and the foot ends up at *less* angle of attack than it
+   * wants. The head must then be trimmed to the angle the foot actually has,
+   * not to the angle it was aiming for -- otherwise the sail comes out flat,
+   * with the head over-trimmed relative to a foot that is itself under-trimmed.
+   *
+   * The cost of getting this wrong is only about 0.2%, too small for the
+   * optimality sweep below to resolve, so it is pinned here as a value instead:
+   * the twist must be the couple of degrees of apparent wind spread across the
+   * rig, and a rule that aims the head at the target angle regardless collapses
+   * it to zero.
+   */
+  it('still twists to the gradient when the boom is on its inhaul', () => {
+    const { s } = settle(315, knotsToMs(8), 90);
+    expect(s.sheet).toBeCloseTo(CRUISER.minSheet, 4); // the premise: sheet pinned
+    expect(s.twist * RAD).toBeGreaterThan(1.5);
+    expect(s.twist * RAD).toBeLessThan(5);
   });
 
   /**

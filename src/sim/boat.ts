@@ -117,9 +117,14 @@ export interface Diagnostics {
   awaMast: number;
   twist: number; // rad, the twist actually set
   /**
-   * rad, the twist the gradient is asking for: the apparent wind angle at the
-   * head minus the one at the foot. The gap between this and `twist` is what
-   * the player is trimming against, so it has to be visible.
+   * rad, the twist that would make the most drive with the sheet as it is set.
+   *
+   * The gap between this and `twist` is what the player trims against, so it
+   * has to be visible -- and it has to be the *power* optimum rather than the
+   * gradient's spread of apparent wind, which the two only agree on while the
+   * boom is free of the shrouds. Off the wind they diverge a long way, and a
+   * readout marking the spread would have told the player to give away a
+   * percent for being correctly trimmed.
    */
   twistWanted: number;
   drive: number; // N, forward component of the sail force
@@ -190,6 +195,46 @@ const DEPOWER_BAND = 8 * DEG;
 const RUDDER_RATE = 60 * DEG; // rad/s, how fast the helm can be moved
 
 /**
+ * The twist that makes the most drive, given the sheet as it is set.
+ *
+ * The head wants the angle of attack the foot has ended up with, which while
+ * the boom is free is the target angle -- making the twist exactly the
+ * gradient's spread of apparent wind over the rig. Once the boom is against the
+ * shrouds the sheet has run out of travel and the foot is stuck well past its
+ * stall, and then there is a real choice: twist the head back to where the flow
+ * reattaches, or leave it stalled alongside the foot.
+ *
+ * Which is faster is not a matter of taste, and is not the same at every angle.
+ * Lift acts across the flow, so its forward component dies away as the boat
+ * bears away, while stalled drag acts along it and grows. On a broad reach
+ * reattaching the head is worth over 1%; by a dead run the same move throws
+ * away almost all the drive, because a sail running square is doing its job
+ * precisely by being stalled.
+ *
+ * So compare what the two would actually make at the head's own apparent wind,
+ * out of the same tables the sail forces come from. Reading the crossover off
+ * the tables beats writing the angle in by hand, because it then follows them
+ * if they are ever retuned.
+ */
+function powerTwist(cfg: BoatConfig, awaFoot: number, awaHead: number, sheet: number): number {
+  const aHead = Math.abs(awaHead);
+  const sinH = Math.sin(aHead);
+  const cosH = Math.cos(aHead);
+  // Drive per unit dynamic pressure: lift acts across the apparent wind, drag
+  // along it, and this is their forward component. Same decomposition as the
+  // strip loop, which is why the two cannot disagree about what is fast.
+  const driveAt = (aoa: number): number => {
+    const d = Math.abs(aoa) * RAD;
+    return sample(SAIL_CL, d) * sinH - sample(SAIL_CD, d) * cosH;
+  };
+
+  const footAoA = Math.abs(awaFoot) - sheet;
+  const attached = Math.min(cfg.targetAoA, footAoA);
+  const headAoA = driveAt(attached) > driveAt(footAoA) ? attached : footAoA;
+  return clamp(aHead - sheet - headAoA, 0, cfg.maxTwist);
+}
+
+/**
  * Signed apparent wind angle at one height, given the wind gradient's speed
  * factor `f` there. The boat's own velocity is the same at every height, which
  * is the whole reason the angle is not.
@@ -244,59 +289,40 @@ export function step(
   // upwind and let right open downwind.
   const awaFoot = awaAtHeight(windVelW, velW, s.heading, shearFactor(plan.footHeight + zCg, zRef));
   const awaHead = awaAtHeight(windVelW, velW, s.heading, shearFactor(plan.headHeight + zCg, zRef));
-  const twistWanted = clamp(Math.abs(awaHead) - Math.abs(awaFoot), 0, cfg.maxTwist);
   // The masthead is higher than any part of the sail and does not come down
   // with a reef, so it gets its own sample rather than reusing the head's.
   const awaMast = awaAtHeight(windVelW, velW, s.heading, shearFactor(cfg.mastHeight + zCg, zRef));
 
+  // Sheet first, twist second, because the twist that makes most power depends
+  // on where the boom has ended up -- and in particular on whether it has run
+  // out of travel. Hence two passes over the same branch rather than one.
   if (ctl.autoTrim) {
-    // Trim the *foot* to the target angle with the sheet, then put the head at
-    // the same angle with the twist. Sheeting to the mid-height wind instead,
-    // as the untwisted model did, would leave the whole plan a third of the
-    // twist under-trimmed.
+    // Trim the *foot* to the target angle and let the twist carry the rest of
+    // the sail up to the head. Sheeting to the mid-height wind instead, as the
+    // untwisted model did, would leave the whole plan a third of the twist
+    // under-trimmed.
     const wantSheet = clamp(Math.abs(awaFoot) - cfg.targetAoA, cfg.minSheet, cfg.maxSheet);
     s.sheet = approach(s.sheet, wantSheet, 0.6, dt);
-
-    // The head wants the angle of attack the foot has ended up with, which
-    // while the boom is free is the target -- making the twist exactly the
-    // gradient's spread. Once the boom is against the shrouds the sheet has run
-    // out of travel and the foot is stuck well past its stall, and then there
-    // is a choice: twist the head back to an angle where the flow reattaches,
-    // or leave it stalled alongside the foot.
-    //
-    // Which one is faster is not a matter of taste and is not the same at every
-    // angle. Lift acts across the flow, so its forward component dies away as
-    // the boat bears away, while stalled drag acts along it and grows. On a
-    // broad reach reattaching the head is worth over 1%; by a dead run the same
-    // move throws away almost all the drive, because a sail running square is
-    // doing its job precisely by being stalled.
-    //
-    // So compare what the two would actually make at the head's own apparent
-    // wind, out of the same tables the sail forces come from. Reading the
-    // crossover off the tables rather than writing the angle in by hand means
-    // it follows them if they are ever retuned.
-    const footAoA = Math.abs(awaFoot) - wantSheet;
-    const aHead = Math.abs(awaHead);
-    const sinH = Math.sin(aHead);
-    const cosH = Math.cos(aHead);
-    const driveAt = (aoa: number): number => {
-      const d = Math.abs(aoa) * RAD;
-      return sample(SAIL_CL, d) * sinH - sample(SAIL_CD, d) * cosH;
-    };
-    const attached = Math.min(cfg.targetAoA, footAoA);
-    const headAoA = driveAt(attached) > driveAt(footAoA) ? attached : footAoA;
-    const idealTwist = clamp(aHead - wantSheet - headAoA, 0, cfg.maxTwist);
-    // Once the boat is overpowered, none of that matters: the head is the part
-    // with the longest lever on the heel, so letting it twist open spills it
-    // while the foot keeps driving. Measured on this boat, hard on the wind in
-    // 20 knots, full twist is 13% faster than the trim that makes most power.
-    // That is the real reason a crew reaches for the vang, and it comes before
-    // reefing -- hence a band that starts at the auto-reef's target heel and is
-    // fully on before the reef pennant is touched.
-    const depower = clamp((s.heelAvg - TARGET_HEEL) / DEPOWER_BAND, 0, 1);
-    s.twist = approach(s.twist, idealTwist + depower * (cfg.maxTwist - idealTwist), 1.5, dt);
   } else {
     s.sheet = clamp(s.sheet + ctl.sheet * SHEET_RATE * dt, cfg.minSheet, cfg.maxSheet);
+  }
+
+  // Computed in both modes and from the sheet actually set, because this is the
+  // number the player is shown and trims against. Reporting it only while the
+  // auto-trim is on would leave the readout dead in the one mode that needs it.
+  const twistWanted = powerTwist(cfg, awaFoot, awaHead, s.sheet);
+
+  if (ctl.autoTrim) {
+    // Once the boat is overpowered, power is not what is wanted: the head is
+    // the part with the longest lever on the heel, so letting it twist open
+    // spills it while the foot keeps driving. Measured on this boat, hard on
+    // the wind in 20 knots, full twist is 13% faster than the trim that makes
+    // most power. That is the real reason a crew reaches for the vang, and it
+    // comes before reefing -- hence a band that starts at the auto-reef's
+    // target heel and is fully on before the reef pennant is touched.
+    const depower = clamp((s.heelAvg - TARGET_HEEL) / DEPOWER_BAND, 0, 1);
+    s.twist = approach(s.twist, twistWanted + depower * (cfg.maxTwist - twistWanted), 1.5, dt);
+  } else {
     s.twist = clamp(s.twist + ctl.twist * TWIST_RATE * dt, 0, cfg.maxTwist);
   }
 

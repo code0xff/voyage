@@ -120,17 +120,24 @@ function SailPlan() {
 }
 
 /**
- * Sail twist, against what the wind gradient is asking for.
+ * Sail twist, against the twist that would make the most drive.
  *
- * The number alone would be useless. Twist is only meaningful relative to the
- * spread of apparent wind angle over the rig, and that changes with every
- * course alteration -- a few degrees hard on the wind, twenty on a broad reach.
- * So the bar carries a mark at the gradient's ask, and the player trims to it.
+ * The number alone would be useless. Twist is only meaningful relative to what
+ * the sail wants at this moment, and that changes with every course alteration
+ * -- a couple of degrees hard on the wind, thirty on a broad reach, back to
+ * nothing on a dead run. So the bar carries a mark at the optimum and the
+ * player trims to it.
+ *
+ * The mark is the *power* optimum, deliberately, and not the gradient's spread
+ * of apparent wind over the rig. Those two agree only while the boom is clear
+ * of the shrouds; off the wind they part company completely, and a mark at the
+ * spread would be telling the player to give away a percent of boat speed for
+ * being correctly trimmed.
  *
  * Sitting past the mark is not an error, and the bar deliberately does not
- * scold: twisting off beyond the gradient is how you depower without reefing,
- * and in a breeze it is the fastest thing to do. The mark says what the sail
- * wants for power; the decision to give power away is the player's.
+ * scold: twisting off beyond the optimum is how you depower without reefing,
+ * and in a breeze it is the fastest thing to do. The mark says what makes most
+ * power; the decision to give power away is the player's.
  */
 function Twist() {
   const angle = useReadout<HTMLSpanElement>((s) =>
@@ -143,9 +150,9 @@ function Twist() {
     if (!s.diag) return;
     if (fill.current) {
       fill.current.style.width = `${clamp(s.state.twist / CRUISER.maxTwist, 0, 1) * 100}%`;
-      // Twisted well past what the gradient wants means the sail is being used
-      // to spill wind rather than to make power, which is worth seeing at a
-      // glance -- it is the difference between trimmed and depowered.
+      // Twisted well past the optimum means the sail is being used to spill
+      // wind rather than to make power, which is worth seeing at a glance --
+      // it is the difference between trimmed and depowered.
       const tone =
         s.state.twist > s.diag.twistWanted + 4 * (Math.PI / 180) ? 'bg-info' : 'bg-foreground';
       const cls = `absolute inset-y-0 left-0 rounded-sm ${tone}`;
@@ -159,7 +166,7 @@ function Twist() {
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[10.5px] text-muted-foreground">Twist · gradient</span>
+        <span className="text-[10.5px] text-muted-foreground">Twist · best</span>
         <span ref={angle} className="font-mono text-[10.5px] tabular-nums" />
       </div>
       <div className="relative h-1.5 overflow-hidden rounded-sm bg-secondary">
