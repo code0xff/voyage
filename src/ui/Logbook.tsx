@@ -76,7 +76,10 @@ export function Logbook({ store, version }: { store: LogStore; version: number }
       (rows) => {
         if (mine !== generation.current) return;
         setPassages(rows);
-        setProblem(null);
+        // Deliberately does not clear `problem`. Reading the list back is how
+        // every write finishes, so clearing it here wiped the message the write
+        // had just set: a failed delete reported itself for one frame and then
+        // silently un-reported itself. Whoever succeeded clears it.
       },
       () => {
         if (mine !== generation.current) return;
@@ -132,9 +135,14 @@ export function Logbook({ store, version }: { store: LogStore; version: number }
 
   const remove = (id: string) =>
     void store.remove(id).then(
-      () => reload(),
+      () => {
+        setProblem(null);
+        reload();
+      },
       () => {
         setProblem('That passage could not be removed.');
+        // Reloaded on the failure too: the row may or may not have gone, and
+        // the list on screen has to be the one in the store either way.
         reload();
       },
     );
