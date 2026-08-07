@@ -23,6 +23,7 @@ import {
   RAD,
   approach,
   clamp,
+  compassAngle,
   compassVec,
   len,
   scale,
@@ -532,7 +533,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     weather.reseed(current.seed);
     // A new session starts with the sea its weather implies, not the one the
     // last session left behind.
-    seaTws = windMs(current) * weather.state.windScale;
+    // Seeded from the same relative wind the step uses, not from the breeze
+    // alone. With the clock stopped the easing below never runs, so a session
+    // that started on the wrong number would have shown that sea for ever.
+    seaTws = len(
+      sub(
+        scale(compassVec(wind.baseTwd), -windMs(current) * weather.state.windScale),
+        currents.peak,
+      ),
+    );
     weather.evolve = current.weatherMode === 'auto';
     if (current.weatherMode !== 'auto') weather.set(current.weatherMode);
     rebuildWorld();
@@ -630,9 +639,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // exactly what these places are known for, and it costs one subtraction
     // rather than a model. Two and a half knots of foul stream under a
     // twenty-knot breeze is a twenty-two-knot sea.
-    const overWater = len(sub(scale(compassVec(wind.baseTwd), -wind.baseTws), currents.peak));
-    seaTws = approach(seaTws, overWater, SEA_BUILD_TAU, PHYS_DT * current.timeScale);
-    waves.setFromWind(seaTws * current.seaScale, wind.baseTwd);
+    const overWater = sub(scale(compassVec(wind.baseTwd), -wind.baseTws), currents.peak);
+    seaTws = approach(seaTws, len(overWater), SEA_BUILD_TAU, PHYS_DT * current.timeScale);
+    // The direction goes with the speed. Taking the magnitude of the relative
+    // wind and then building the sea on the *true* wind's bearing was half the
+    // change: a stream running across the breeze turns the sea as well as
+    // raising it, and the boat would have met waves from a direction nothing
+    // was blowing from. `compassAngle` of the travel direction, reversed, is
+    // the bearing it is coming from.
+    waves.setFromWind(seaTws * current.seaScale, compassAngle(scale(overWater, -1)));
 
     wind.update(PHYS_DT);
     // Wind is a function of position: sample it where the boat actually is.
