@@ -541,6 +541,17 @@ meaning anything.
   shear veers a degree or so over a rig this size, which no helmsman notices.
 - No spinnaker, so downwind is slower than reality.
 - Wind sea only: no swell.
+- The current moves the boat but not the sea around her. Waves are a function of
+  world position and time, and they stay that way with a tide running instead of
+  being carried along by it; the wake is a trail of ground positions rather than
+  something laid in the water and drifting with it. Physics and renderer agree
+  with each other here — both read the same wave field — so this is a
+  simplification and not the kind of divergence the water shader exists to
+  avoid.
+- The layline readout goes quiet when a tide is running. A layline is where the
+  ground track fetches the mark, and the still-water polar behind that number
+  cannot say where the tide has moved it to. Silence beats a confident lie; a
+  tidal layline is a feature not yet built.
 - There is a current, but no **tide**. The set and drift are uniform over the
   whole world and constant in time: no cycle, no springs and neaps, no change of
   depth with the height of tide, and no tide gate that opens and shuts. Adding
