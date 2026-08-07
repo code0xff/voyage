@@ -1,4 +1,4 @@
-import { DEG } from './math';
+import { DEG, type Vec2 } from './math';
 import { hullSpeed } from './units';
 
 /**
@@ -184,6 +184,21 @@ export interface Environment {
   tws: number;
   rhoAir: number;
   rhoWater: number;
+  /**
+   * m/s, world frame: the velocity of the water itself. Set and drift.
+   *
+   * Optional, and absent means still water. That is not laziness about a
+   * default: a polar is a still-water measurement by definition, so the solver
+   * and every test tuned against it must be unable to acquire a current by
+   * accident. Leaving the field off says so in the type.
+   *
+   * Note this is a *velocity*, the direction the water goes, which is how a
+   * tidal atlas quotes a set -- and the opposite of the convention for `twd`,
+   * which is where the wind comes from. The two are quoted that way at sea and
+   * changing one of them here to match the other would only move the confusion
+   * to the boundary with the player.
+   */
+  current?: Vec2;
 }
 
 export const DEFAULT_ENV: Environment = {

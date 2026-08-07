@@ -104,8 +104,44 @@ Where everything starts. The moment the boat moves, the sail feels the true
 wind minus the boat's own velocity.
 
 ```
-A = W_true - V_boat
+A = W_true - V_ground
 ```
+
+**Over the ground, not through the water.** The two are the same until a tide
+runs; see below.
+
+### 1b. Set and drift
+
+The water itself can move. That splits the boat's velocity in two, and the whole
+current model is the discipline of keeping them apart:
+
+```
+V_ground = V_water + set*(1 - aground)
+```
+
+- **Through the water** drives everything hydrodynamic — hull resistance, keel
+  lift, leeway, rudder, wave-making, yaw damping. A boat carried along by a
+  current is not sailing through anything and feels no force from it. Leeway in
+  particular is an angle of attack, and a keel being set sideways by the tide is
+  not at an angle to anything.
+- **Over the ground** drives position, the apparent wind, and VMG. Air is not
+  carried along by the water, which is why a boat drifting in a dead calm makes
+  her own breeze from dead ahead at exactly the rate she is drifting — the model
+  reproduces this, and it is the check that the split is the right way round.
+
+The consequence worth knowing: **the polar stops describing the boat the moment
+there is a current**, because the apparent wind is no longer what still water
+would give at that speed. `Environment.current` is therefore optional, and the
+polar solver leaves it off, so a still-water measurement cannot acquire a tide
+by accident.
+
+A boat hard aground is held by the ground and the tide runs past her instead of
+carrying her, so the drift is scaled by the same grip that kills her way. The
+apparent wind uses that same scaled drift: otherwise she would sit stopped on
+the bank while feeling the breeze of a passage she is not making.
+
+There is a set and a drift; there is no tidal *cycle*. See the deliberate
+simplifications.
 
 ### 2. Sails
 
@@ -504,7 +540,12 @@ meaning anything.
 - The wind gradient changes wind *speed* with height but not direction. Real
   shear veers a degree or so over a rig this size, which no helmsman notices.
 - No spinnaker, so downwind is slower than reality.
-- Wind sea only: no swell, no current and no tide.
+- Wind sea only: no swell.
+- There is a current, but no **tide**. The set and drift are uniform over the
+  whole world and constant in time: no cycle, no springs and neaps, no change of
+  depth with the height of tide, and no tide gate that opens and shuts. Adding
+  the height would mean deciding what a falling tide does to a boat anchored
+  over a bank, and that is a design question, not a formula.
 - No wave orbital velocity acting on the hull, and no surfing.
 - No AI opponents; the only thing to race is your own ghost.
 - No boat-to-boat collision.

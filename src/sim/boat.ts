@@ -139,9 +139,20 @@ export interface Diagnostics {
   drive: number; // N, forward component of the sail force
   sideForce: number; // N, side force (positive = to starboard)
   heelMoment: number; // N*m
-  leeway: number; // rad, angle between heading and actual track
-  speed: number; // m/s through the water
-  vmg: number; // m/s made good to windward (positive = upwind)
+  leeway: number; // rad, angle between heading and the track through the water
+  speed: number; // m/s through the water -- BSP, what a log reads
+  /**
+   * m/s over the ground, and rad, the compass course over the ground.
+   *
+   * These differ from `speed` and `heading + leeway` by the current, and by
+   * nothing else. In still water they are the same numbers under different
+   * names; with a tide running they are the pair that says where the boat is
+   * actually going, which is not a question the boat's own instruments through
+   * the water can answer.
+   */
+  sog: number;
+  cog: number;
+  vmg: number; // m/s made good to windward over the ground (positive = upwind)
   hullDrag: number; // N
   keelLift: number; // N
   rudderForce: number; // N
@@ -208,6 +219,9 @@ const TWIST_RATE = 14 * DEG;
 const DEPOWER_BAND = 8 * DEG;
 const RUDDER_RATE = 60 * DEG; // rad/s, how fast the helm can be moved
 
+/** Still water, for an `Environment` that does not mention a current. */
+const STILL: Vec2 = { x: 0, y: 0 };
+
 /**
  * The twist that makes the most drive, given the sheet as it is set.
  *
@@ -260,9 +274,13 @@ function powerTwist(cfg: BoatConfig, awaFoot: number, awaHead: number, sheet: nu
  * the strip loop, so the trim cannot end up aiming at an angle the sail is not
  * actually working at. That used to be two copies of one expression held in
  * step by a comment.
+ *
+ * The velocity subtracted is over the ground, and the parameter is named for it
+ * because the difference has no visible symptom until there is a current, by
+ * which time the wrong one would be four call sites deep.
  */
-function apparentAtHeight(windVelW: Vec2, velW: Vec2, f: number): Vec2 {
-  return sub(scale(windVelW, f), velW);
+function apparentAtHeight(windVelW: Vec2, velGroundW: Vec2, f: number): Vec2 {
+  return sub(scale(windVelW, f), velGroundW);
 }
 
 /** Signed apparent wind angle of an apparent wind vector; positive = from starboard. */
@@ -270,8 +288,8 @@ function awaOf(app: Vec2, heading: number): number {
   return wrapPi(compassAngle(scale(app, -1)) - heading);
 }
 
-const awaAtHeight = (windVelW: Vec2, velW: Vec2, heading: number, f: number): number =>
-  awaOf(apparentAtHeight(windVelW, velW, f), heading);
+const awaAtHeight = (windVelW: Vec2, velGroundW: Vec2, heading: number, f: number): number =>
+  awaOf(apparentAtHeight(windVelW, velGroundW, f), heading);
 
 /**
  * One physics step. Call only with a fixed dt (1/120 s is the intended value).
@@ -287,19 +305,41 @@ export function step(
 ): Diagnostics {
   const sea = opts.sea ?? CALM;
 
-  // --- 1. Geometry: hull axes and world velocity ---------------------------
+  // --- 1. Geometry: hull axes and the two velocities ------------------------
+  //
+  // `u` and `v` are the boat's velocity *through the water*, and everything the
+  // hull, keel and rudder do is a function of that alone -- a boat carried along
+  // by a current is not sailing through anything and feels no force from it.
+  // Adding the current gives velocity *over the ground*, which is what the
+  // position, the wind and the racing all care about. Keeping these two apart
+  // is the whole of the current model; conflating them is the entire bug
+  // surface.
   const fwd = compassVec(s.heading);
   const stb = rotCW90(fwd);
-  const velW = add(scale(fwd, s.u), scale(stb, s.v));
-  const speed = len(velW);
+  const velWaterW = add(scale(fwd, s.u), scale(stb, s.v));
+  const speed = len(velWaterW);
+  // How hard the ground has hold of her. Needed here as well as at the
+  // integration, because a boat the ground is holding is not being carried by
+  // the tide, and that has to be true of the wind she feels and of where she
+  // ends up alike -- one of them alone would have her stopped on the bank and
+  // still feeling the breeze of a drift she is not making.
+  const aground = clamp((cfg.draft - sea.depth) / 0.8, 0, 1);
+  const drift = scale(env.current ?? STILL, 1 - aground);
+  const velGroundW = add(velWaterW, drift);
 
   // --- 2. Wind: true -> apparent -------------------------------------------
   // Everything in sailing starts here. The moment the boat moves, the sail
   // feels not the true wind but the true wind minus the boat's own velocity.
+  //
+  // Over the ground, not through the water. The air is not carried along by the
+  // current, so it is ground velocity that has to be subtracted from it -- which
+  // is why a boat drifting in a calm with the tide feels a breeze from dead
+  // ahead at exactly the drift, and why the still-water polar stops describing
+  // her the moment there is a current.
   const windVelW = scale(compassVec(env.twd), -env.tws); // the direction air travels
   // The reference height is where the quoted wind is quoted, so it is the f = 1
   // member of the same family every other height is drawn from.
-  const appW = apparentAtHeight(windVelW, velW, 1);
+  const appW = apparentAtHeight(windVelW, velGroundW, 1);
   const aws = len(appW);
   const awa = awaOf(appW, s.heading); // measured from where it blows from
   const twa = wrapPi(env.twd - s.heading);
@@ -316,11 +356,13 @@ export function step(
   // same angle of attack. It comes out at a couple of degrees on a beat and
   // nearer twenty on a broad reach, which is why sails are trimmed almost flat
   // upwind and let right open downwind.
-  const awaFoot = awaAtHeight(windVelW, velW, s.heading, shearFactor(plan.footHeight + zCg, zRef));
-  const awaHead = awaAtHeight(windVelW, velW, s.heading, shearFactor(plan.headHeight + zCg, zRef));
+  const fFoot = shearFactor(plan.footHeight + zCg, zRef);
+  const fHead = shearFactor(plan.headHeight + zCg, zRef);
+  const awaFoot = awaAtHeight(windVelW, velGroundW, s.heading, fFoot);
+  const awaHead = awaAtHeight(windVelW, velGroundW, s.heading, fHead);
   // The masthead is higher than any part of the sail and does not come down
   // with a reef, so it gets its own sample rather than reusing the head's.
-  const appMast = apparentAtHeight(windVelW, velW, shearFactor(cfg.mastHeight + zCg, zRef));
+  const appMast = apparentAtHeight(windVelW, velGroundW, shearFactor(cfg.mastHeight + zCg, zRef));
   const awaMast = awaOf(appMast, s.heading);
   const awsMast = len(appMast);
 
@@ -375,7 +417,7 @@ export function step(
   for (let i = 0; i < SAIL_STRIPS; i++) {
     const z = plan.footHeight + STRIP_U[i] * span;
     const f = shearFactor(z + zCg, zRef);
-    const ap = apparentAtHeight(windVelW, velW, f);
+    const ap = apparentAtHeight(windVelW, velGroundW, f);
     const awaI = awaOf(ap, s.heading);
 
     // The boom always swings to leeward, so the angle of attack is a
@@ -431,7 +473,12 @@ export function step(
   // angle -- leeway -- is the keel's angle of attack, and the lift it produces
   // is what balances the sail's side force. Without it the boat would just
   // slide downwind.
-  const leeway = speed > 0.05 ? wrapPi(compassAngle(velW) - s.heading) : 0;
+  //
+  // Against the water track, never the ground track. Leeway is an angle of
+  // attack, and a keel being carried sideways by a current is not at an angle to
+  // anything. The two differ by the set, and reporting the ground track here
+  // would have the boat generate keel lift out of the tide.
+  const leeway = speed > 0.05 ? wrapPi(compassAngle(velWaterW) - s.heading) : 0;
   let keelLift = 0;
   let hullDrag = 0;
   let addedResistance = 0;
@@ -440,7 +487,7 @@ export function step(
   let keelFy = 0;
 
   if (speed > 0.02) {
-    const flowW = scale(norm(velW), -1); // water flow the hull sees
+    const flowW = scale(norm(velWaterW), -1); // water flow the hull sees
     const qWater = 0.5 * env.rhoWater * speed * speed;
 
     const bDeg = Math.abs(leeway) * RAD;
@@ -571,7 +618,7 @@ export function step(
   // stiff contact spring at this timestep would explode, and what matters for
   // gameplay is simply that the boat stops. It is deliberately not a total
   // freeze -- the sails can still work you off again, which is what happens.
-  const aground = clamp((cfg.draft - sea.depth) / 0.8, 0, 1);
+  // `aground` itself is worked out up in section 1, where the drift needs it.
   if (aground > 0) {
     const bite = Math.exp(-dt * 6 * aground);
     s.u *= bite;
@@ -587,11 +634,17 @@ export function step(
   }
 
   const newVel = add(scale(compassVec(s.heading), s.u), scale(rotCW90(compassVec(s.heading)), s.v));
-  s.pos = add(s.pos, scale(newVel, dt));
+  // The same `drift` the apparent wind was built from, so where she ends up and
+  // what she feels getting there cannot disagree about the tide.
+  const newVelGround = add(newVel, drift);
+  s.pos = add(s.pos, scale(newVelGround, dt));
+  const sog = len(newVelGround);
 
   // VMG: speed made good towards the wind. This is the number that decides the
-  // best tacking angle.
-  const vmg = dot(newVel, compassVec(env.twd));
+  // best tacking angle -- and it is made good over the ground, because that is
+  // where the marks are. In a foul tide it can be negative on a heading that is
+  // sailing perfectly well.
+  const vmg = dot(newVelGround, compassVec(env.twd));
 
   return {
     aws,
@@ -608,6 +661,10 @@ export function step(
     heelMoment,
     leeway,
     speed: len(newVel),
+    sog,
+    // A course over the ground needs a track to measure; when there is none,
+    // report the heading rather than the direction of the last rounding error.
+    cog: sog > 0.05 ? compassAngle(newVelGround) : s.heading,
     vmg,
     hullDrag,
     keelLift,
