@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { heightFieldFromBytes } from './heightfield';
-import { RegionTerrain } from './region-terrain';
+import { EDGE_FADE, RegionTerrain } from './region-terrain';
 import { regionById } from './regions';
 import { worldFromLatLon } from './geo';
 import { DEG, RAD } from './math';
@@ -125,6 +125,36 @@ describe('sailing off the chart', () => {
       expect(Math.abs(depth - previous)).toBeLessThan(15);
       previous = depth;
     }
+  });
+
+  /*
+   * The fade is the one part of the shelter model that is *not* shared as data.
+   * Inside the square both sides read the same texels; outside there are none,
+   * so the water shader computes the same blend from the same EDGE_FADE. That
+   * makes this the one place they can drift apart, and they did: the shader
+   * returned open sea the instant the boundary was crossed while the boat went
+   * on feeling the lee for another 800 m -- 0.35 against 1.0 at the north edge
+   * in a westerly, a hard seam on a line drawn on nothing.
+   *
+   * This holds the constant the shader is built against and the shape of the
+   * blend. It cannot reach into GLSL, so it is not proof; it is the half of the
+   * agreement that can be checked, and the constant is imported by both.
+   */
+  it('fades over exactly the distance the shader is given', () => {
+    const y = terrain.height.halfHeight;
+    const twd = WESTERLY;
+    const atEdge = terrain.waveShelter(-3000, y - 1, twd);
+    // Sheltered water, or this proves nothing about a blend towards open sea.
+    expect(atEdge).toBeLessThan(0.6);
+
+    // Just outside, still essentially what the boat felt a metre back.
+    expect(terrain.waveShelter(-3000, y + 1, twd)).toBeCloseTo(atEdge, 2);
+    // Half way through the band, half way to open sea.
+    const half = terrain.waveShelter(-3000, y + EDGE_FADE / 2, twd);
+    expect(half).toBeCloseTo(atEdge + (1 - atEdge) * 0.5, 2);
+    // And fully open at the end of it, not before.
+    expect(terrain.waveShelter(-3000, y + EDGE_FADE * 0.99, twd)).toBeLessThan(1);
+    expect(terrain.waveShelter(-3000, y + EDGE_FADE, twd)).toBeCloseTo(1, 6);
   });
 
   it('is still finite a very long way out', () => {

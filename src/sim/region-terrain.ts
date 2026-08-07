@@ -28,8 +28,15 @@ import { compassAngle } from './math';
  * shore you are actually closing with.
  */
 
-/** How far outside the surveyed square the coast fades into open sea, m. */
-const EDGE_FADE = 800;
+/**
+ * How far outside the surveyed square the coast fades into open sea, m.
+ *
+ * Exported because the water shader has to fade over exactly the same distance.
+ * Everything inside the square is shared as data, but the band *outside* it has
+ * no texels to carry it, so the fade is the one piece of this model that both
+ * sides compute -- and therefore the one piece that can diverge.
+ */
+export const EDGE_FADE = 800;
 /** What the sea becomes out there: deep, unsheltered, and blowing full. */
 const OPEN_DEPTH = 60;
 

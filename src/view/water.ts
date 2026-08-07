@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { MAX_WAVES, type WaveField } from '../sim/waves';
 import { MAX_ACTIVE_ISLANDS, WAKE_FADE, WAKE_MAX, type Terrain } from '../sim/terrain';
-import type { RegionTerrain } from '../sim/region-terrain';
+import { EDGE_FADE, type RegionTerrain } from '../sim/region-terrain';
 import type { SkyState } from '../sim/sky';
 import { compassVec } from '../sim/math';
 
@@ -129,8 +129,21 @@ const vertexShader = /* glsl */ `
     );
   }
 
-  bool inRegion(vec2 uv) {
-    return uRegion.z > 0.5 && uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0;
+  /**
+   * How far out of the surveyed square a point is, 0..1, matching
+   * RegionTerrain.beyond().
+   *
+   * The band outside the square is the one part of this model that is not
+   * shared as data -- there are no texels out there to carry it -- so it is the
+   * one part that can diverge, and it did: the shader returned open sea the
+   * instant the boundary was crossed while the boat went on feeling the lee for
+   * another 800 m. Measured at the north edge in a westerly, 0.35 against 1.0,
+   * which is a hard seam on a line drawn on nothing.
+   */
+  float regionFade(vec2 p) {
+    float dx = max(0.0, abs(p.x) - uRegion.x);
+    float dy = max(0.0, abs(p.y) - uRegion.y);
+    return min(1.0, max(dx, dy) / ${EDGE_FADE.toFixed(1)});
   }
 
   float waveShelter(vec2 p) {
@@ -138,8 +151,15 @@ const vertexShader = /* glsl */ `
     // physics reads -- so this is not a copy of the model, it *is* the model's
     // output. The duplication below survives only for the procedural ocean,
     // where there is no field to sample and the islands are the whole world.
-    vec2 uv = fieldUv(p);
-    if (inRegion(uv)) return max(0.05, texture2D(uField, uv).r);
+    if (uRegion.z > 0.5) {
+      float beyond = regionFade(p);
+      if (beyond >= 1.0) return 1.0;
+      // Clamped, so a point in the fade band reads the edge of the field --
+      // which is what RegionTerrain does, its sampler clamping the same way.
+      vec2 uv = clamp(fieldUv(p), 0.0, 1.0);
+      float inside = max(0.05, texture2D(uField, uv).r);
+      return inside + (1.0 - inside) * beyond;
+    }
 
     float shelter = 1.0;
     float groupMax = 0.0;
@@ -278,11 +298,19 @@ const fragmentShader = /* glsl */ `
       (simP.x + uRegion.x) / (2.0 * uRegion.x),
       1.0 - (simP.y + uRegion.y) / (2.0 * uRegion.y)
     );
-    if (uRegion.z > 0.5 && fuv.x >= 0.0 && fuv.x <= 1.0 && fuv.y >= 0.0 && fuv.y <= 1.0) {
+    float beyond = 0.0;
+    if (uRegion.z > 0.5) {
+      float ox = max(0.0, abs(simP.x) - uRegion.x);
+      float oy = max(0.0, abs(simP.y) - uRegion.y);
+      beyond = min(1.0, max(ox, oy) / ${EDGE_FADE.toFixed(1)});
+    }
+    if (uRegion.z > 0.5 && beyond < 1.0) {
       // Straight off the surveyed depth, so the pale water is where the water
       // really is shallow rather than where a circle's radius happened to fall.
-      float depth = texture2D(uField, fuv).g * ${FIELD_DEPTH.toFixed(1)};
-      shoal = 1.0 - smoothstep(0.0, ${SHOAL_DEPTH.toFixed(1)}, depth);
+      // Faded out over the same band as the shelter, so the shoal shading does
+      // not run on past the edge of the data that justified it.
+      float depth = texture2D(uField, clamp(fuv, 0.0, 1.0)).g * ${FIELD_DEPTH.toFixed(1)};
+      shoal = (1.0 - smoothstep(0.0, ${SHOAL_DEPTH.toFixed(1)}, depth)) * (1.0 - beyond);
     } else {
       for (int i = 0; i < ${MAX_ISLANDS}; i++) {
         if (uIslands[i].w < 0.5) continue;
