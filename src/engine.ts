@@ -10,6 +10,7 @@ import {
 import { solvePolar, type Polar } from './sim/polar';
 import { WindField } from './sim/wind';
 import { CurrentField } from './sim/current';
+import { venueById } from './sim/venues';
 import { WaveField, sampleHull, type HullWaveSample } from './sim/waves';
 import { MAX_REEF, autoReef, type ReefState } from './sim/sailplan';
 import { cyclePilot, initialPilot, pilotRudder, type PilotState } from './sim/autopilot';
@@ -285,6 +286,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   /** The islands currently loaded, so a refresh that changes nothing costs nothing. */
   let activeIslands: readonly Island[] = [];
   let visibleIslands: readonly Island[] = [];
+  /** The venue's land, or EMPTY_TERRAIN in the open ocean. Fixed for a session. */
+  let venueTerrain: Terrain = EMPTY_TERRAIN;
   let streamedFrom = { x: Infinity, y: Infinity };
   let streamedTwd = Infinity;
   /**
@@ -309,9 +312,16 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // kilometres away is scenery; one a few hundred metres off the layline is a
     // decision. Only the marks themselves and the starting position are kept
     // clear, so that a race is always sailable.
+    // A venue brings its own land, fixed and known, so there is nothing to
+    // stream: the whole place is always loaded. The procedural field is the
+    // other case, an endless ocean that has to be looked at through a window.
+    const venue = venueById(current.venue);
+    venueTerrain = venue ? new Terrain(venue.islands) : EMPTY_TERRAIN;
+    currents.fullDepth = venue ? venue.fullDepth : 14;
+
     const up = compassVec(wind.baseTwd);
     field =
-      current.islandCount > 0
+      !venue && current.islandCount > 0
         ? new IslandField({
             seed: current.seed,
             // The slider is 0..10 islands' worth of thickness, not a count: in
@@ -347,16 +357,18 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    */
   function streamWorld(x: number, y: number): void {
     if (!field) {
-      if (!published || snapshot.terrain !== EMPTY_TERRAIN) {
+      // Either open water or a venue, and both are the same job: one fixed
+      // terrain, installed once and never slid along.
+      if (!published || snapshot.terrain !== venueTerrain) {
         activeIslands = [];
         visibleIslands = [];
         published = true;
-        wind.terrain = EMPTY_TERRAIN;
+        wind.terrain = venueTerrain;
         // The stream needs the same land the wind does: it is the depth that
         // decides where it runs, and it must never be reading last world's.
-        currents.terrain = EMPTY_TERRAIN;
-        snapshot.terrain = EMPTY_TERRAIN;
-        view.setTerrain(EMPTY_TERRAIN, EMPTY_TERRAIN);
+        currents.terrain = venueTerrain;
+        snapshot.terrain = venueTerrain;
+        view.setTerrain(venueTerrain, venueTerrain);
       }
       return;
     }
@@ -480,6 +492,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // engine was built, so the Start hour setting did nothing after the first
     // load and every race began wherever the last one's clock had wandered to.
     hour = current.startHour;
+    // So does the wind's direction at a venue. It has no slider -- the land is
+    // laid out around it, and a beat that started on a random bearing would put
+    // the course somewhere the place was not designed for. Free to shift with
+    // Q/E afterwards, like anywhere else.
+    const venue = venueById(current.venue);
+    if (venue) wind.baseTwd = venue.windTwd;
     session++;
     snapshot.session = session;
     weather.reseed(current.seed);

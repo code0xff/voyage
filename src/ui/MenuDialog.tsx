@@ -26,7 +26,8 @@ import { Badge } from "@/components/ui/badge";
 import { formatTime, type Course, type RaceState } from "@/sim/race";
 import { formatClock } from "@/sim/sky";
 import { WEATHER_KINDS, WEATHER_LABEL, type WeatherKind } from "@/sim/weather";
-import type { Settings } from "@/settings";
+import { withVenue, withoutVenue, type Settings } from "@/settings";
+import { VENUES, venueById } from "@/sim/venues";
 import { cn } from "@/lib/utils";
 
 export interface RaceResult {
@@ -352,15 +353,52 @@ export function MenuDialog({
               format={(v) => `${v}s`}
               onChange={(v) => set("countdown", v)}
             />
-            <Slider
-              label="Islands"
-              min={0}
-              max={10}
-              step={1}
-              value={settings.islandCount}
-              format={(v) => (v === 0 ? "open sea" : `${v}/10`)}
-              onChange={(v) => set("islandCount", v)}
-            />
+            <div className="grid grid-cols-[104px_1fr] items-center gap-3">
+              <span className="text-[11px] text-muted-foreground">Venue</span>
+              <Select
+                value={settings.venue || "open"}
+                onValueChange={(v) => {
+                  const venue = venueById(v);
+                  // Picking a place writes its conditions into the settings
+                  // rather than overriding them, so every slider below keeps
+                  // showing what is actually being sailed and stays live.
+                  onSettings(venue ? withVenue(settings, venue) : withoutVenue(settings));
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="open">Open ocean (procedural)</SelectItem>
+                  {VENUES.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {settings.venue ? (
+              <p className="text-[10px] leading-relaxed text-muted-foreground">
+                {venueById(settings.venue)?.brief}
+                <br />
+                <span className="text-warning">
+                  Approximate, and not for navigation.
+                </span>{" "}
+                The land, depths and stream are a sketch meant to reproduce the
+                decisions the place asks of you, not its geography.
+              </p>
+            ) : (
+              <Slider
+                label="Islands"
+                min={0}
+                max={10}
+                step={1}
+                value={settings.islandCount}
+                format={(v) => (v === 0 ? "open sea" : `${v}/10`)}
+                onChange={(v) => set("islandCount", v)}
+              />
+            )}
             <div className="grid grid-cols-[104px_1fr] items-center gap-3">
               <span className="text-[11px] text-muted-foreground">
                 World seed

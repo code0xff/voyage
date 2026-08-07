@@ -140,8 +140,53 @@ carrying her, so the drift is scaled by the same grip that kills her way. The
 apparent wind uses that same scaled drift: otherwise she would sit stopped on
 the bank while feeling the breeze of a passage she is not making.
 
+The stream is a **field**, not one vector. It runs at its full rate in deep
+water and gives up in the shallows, which is the oldest piece of tidal tactics
+there is — cheat the tide inshore — and falls out of bottom friction and of the
+shallow margins sitting outside the main flux. It costs nothing to compute,
+because the depth is already there for grounding.
+
+Two useful things fall out. The stream reaches zero at the shoreline, so the
+model never has to think about flow running onto a beach. And open water has no
+land, so the depth is the deep-water constant and the field is uniform — a
+player who sets a plain set and drift gets exactly that, everywhere.
+
 There is a set and a drift; there is no tidal *cycle*. See the deliberate
 simplifications.
+
+### 1c. Venues
+
+**Approximate, and not for navigation.** A venue is a named place laid out as a
+sketch: land drawn from overlapping circles, one uniform shelf slope for depth,
+a stream that does not turn with the tide. It is meant to reproduce *the
+decisions a place asks of a sailor*, not its geography, and nothing in it should
+be used to take a boat anywhere.
+
+The figures are the broad, well-known character of each place rather than values
+read off an atlas. A real tidal diamond would be worth having; inventing one and
+writing it down as though it were measured would be worse than admitting the
+sketch.
+
+Land is built from circles because that is the shape primitive the physics and
+the water shader already share, and `elevationAt` takes the highest of every
+island — so overlapping circles union into one continuous shore for free, and a
+mainland or the two sides of a channel need no new geometry anywhere. What is
+*not* free is shelter: the wake models compose one island at a time, so a coast
+drawn as eight circles would shade its own lee eight times over. Islands
+therefore carry a landmass id, and shelter is the strongest wake within a
+landmass, multiplied across landmasses.
+
+**San Francisco, the city front** is the venue the tidal field exists for. A
+hard summer westerly, a flood setting east against it, and the beat has to go
+out into both. Measured across the course: 2.4 knots of foul stream offshore
+against 0.2 inshore, bought with a quarter of the wind and forty metres of depth
+down to six. That is the shape of a decision — a lane that were only better
+would be the answer, not a choice.
+
+The set is the flood and not the ebb deliberately, and the first layout had it
+the other way. An ebb runs out of the Gate within twenty degrees of the
+direction a westerly makes you beat in, so it carried the boat towards the
+windward mark and there was nothing to escape.
 
 ### 2. Sails
 

@@ -2,6 +2,7 @@ import type { WeatherKind } from './sim/weather';
 import { WEATHER_KINDS } from './sim/weather';
 import { knotsToMs, msToKnots } from './sim/units';
 import { DEG, compassVec, scale, type Vec2 } from './sim/math';
+import { venueById, type Venue } from './sim/venues';
 
 /**
  * Player settings, persisted to localStorage.
@@ -44,6 +45,16 @@ export interface Settings {
   weatherMode: 'auto' | WeatherKind;
   /** How thickly islands are scattered through the ocean, 0..10. Zero is open water. */
   islandCount: number;
+  /**
+   * A named place to sail, or '' for the procedural ocean.
+   *
+   * Picking one writes its conditions into the settings above rather than
+   * overriding them, so the sliders keep showing what is actually being sailed
+   * and stay adjustable. Only the things that have no slider -- the land, the
+   * wind's direction, how far offshore the slack water reaches -- are read from
+   * the venue by the engine.
+   */
+  venue: string;
   /** Seed for islands and weather, so a session can be reproduced. */
   seed: number;
   /** Roll a new seed at the start of every race. Off pins the world to `seed`. */
@@ -64,6 +75,7 @@ export const DEFAULT_SETTINGS: Settings = {
   timeScale: 60,
   weatherMode: 'auto',
   islandCount: 4,
+  venue: '',
   seed: 20260806,
   randomWorld: true,
 };
@@ -97,6 +109,10 @@ export function loadSettings(): Settings {
       timeScale: num(o.timeScale, DEFAULT_SETTINGS.timeScale, 0, 600),
       weatherMode: mode,
       islandCount: Math.round(num(o.islandCount, DEFAULT_SETTINGS.islandCount, 0, 10)),
+      // Checked against the list rather than trusted: a venue removed or
+      // renamed between versions must fall back to open water, not strand the
+      // player in a world the engine cannot build.
+      venue: typeof o.venue === 'string' && venueById(o.venue) ? o.venue : DEFAULT_SETTINGS.venue,
       seed: Math.round(num(o.seed, DEFAULT_SETTINGS.seed, 1, 2 ** 31)),
       randomWorld:
         typeof o.randomWorld === 'boolean' ? o.randomWorld : DEFAULT_SETTINGS.randomWorld,
@@ -128,3 +144,32 @@ export const windKn = (ms: number): number => msToKnots(ms);
  */
 export const currentVec = (s: Settings): Vec2 =>
   scale(compassVec(s.setDeg * DEG), knotsToMs(s.driftKnots));
+
+/**
+ * Settings for sailing a venue: its conditions written into the player's own,
+ * rather than held apart and overriding them.
+ *
+ * One source of truth is the point. Kept separate, the wind slider would read
+ * 12 knots while the boat sailed in 20, and the player would be adjusting a
+ * number nothing was listening to.
+ */
+export const withVenue = (s: Settings, v: Venue): Settings => ({
+  ...s,
+  venue: v.id,
+  windKnots: Math.round(v.windKnots),
+  gustiness: v.gustiness,
+  seaScale: v.seaScale,
+  driftKnots: v.driftKnots,
+  setDeg: v.setDeg,
+  startHour: v.startHour,
+  // A venue brings its own land, so the procedural ocean has to stand down.
+  islandCount: 0,
+});
+
+/** Back to the open ocean, with a plausible sea rather than whatever the venue had. */
+export const withoutVenue = (s: Settings): Settings => ({
+  ...s,
+  venue: '',
+  driftKnots: 0,
+  islandCount: DEFAULT_SETTINGS.islandCount,
+});

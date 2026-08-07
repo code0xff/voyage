@@ -124,7 +124,7 @@ const browser = await chromium.launch({
 
 let failed = 0;
 for (const c of cases) {
-  const { label, settings = {}, pitch = 0, seconds = 2.5 } = c;
+  const { label, settings = {}, pitch = 0, seconds = 2.5, keys = [] } = c;
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 760 } });
   await ctx.addInitScript((s) => {
     localStorage.setItem('voyage.settings.v2', JSON.stringify(s));
@@ -151,6 +151,13 @@ for (const c of cases) {
   // the one that does not start a countdown.
   await page.getByRole('button', { name: /Free sail/ }).click();
   await page.waitForTimeout(1200);
+
+  // Anything the keyboard drives and no setting does: `c` for the top-down
+  // camera, `n` for the chart range, `h` for the autopilot.
+  for (const k of keys) {
+    await page.keyboard.press(k);
+    await page.waitForTimeout(250);
+  }
 
   // The chase camera looks along the boat's heading, which puts the horizon
   // low and the sky mostly out of frame. Orbit it up.
