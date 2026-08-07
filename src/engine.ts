@@ -1000,6 +1000,20 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     setPaused(p) {
       paused = p;
       snapshot.paused = p;
+      /*
+       * And drop whatever was pressed on the way through the boundary.
+       *
+       * Escape is the case that made this necessary. Closing the menu with it
+       * did nothing visible, because it did two things: the dialog's own
+       * handler closed it, and the same press was still sitting in `pressed`
+       * when React unpaused the engine -- so the very next frame read it, ran
+       * the branch below, and reopened the menu.
+       *
+       * The `!paused` guard on that branch cannot prevent this. It is evaluated
+       * at frame time and the unpause happens first; the press has to be
+       * discarded at the boundary itself, which is here.
+       */
+      input.clearPending();
       // Reset the clock so unpausing does not jump the world forward.
       last = performance.now();
       accumulator = 0;

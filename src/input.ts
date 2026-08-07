@@ -49,8 +49,18 @@ export class Input {
   autoTrim = true;
 
   constructor() {
-    window.addEventListener('keydown', this.onDown);
-    window.addEventListener('keyup', this.onUp);
+    // Capture, so the keys are recorded before any UI reacts to them.
+    //
+    // Bubbling put this after every document listener, and the menu dialog is
+    // one: closing it with Escape ran its handler first, which unpaused the
+    // engine, which discarded the pending keys -- and only then did this record
+    // the very Escape that had closed it. The next frame read it as a fresh
+    // press and reopened the menu, so Escape appeared not to close it at all.
+    //
+    // Recording early costs nothing: `onDown` still ignores keys aimed at a
+    // text field, which is decided by the event's target and not by its phase.
+    window.addEventListener('keydown', this.onDown, true);
+    window.addEventListener('keyup', this.onUp, true);
     window.addEventListener('blur', this.onBlur);
     document.addEventListener('visibilitychange', this.onBlur);
   }
@@ -100,16 +110,25 @@ export class Input {
   };
 
   /**
-   * Drop every pending key when focus is lost or the tab is hidden.
+   * Drop every pending key.
    *
-   * Clearing `pressed` is the important half. A hidden tab stops receiving
-   * requestAnimationFrame callbacks, so endFrame() never runs and one-shot keys
-   * pile up. Switching back would then fire all of them at once: the menu
-   * opens, the reef changes, the world resets.
+   * Clearing `pressed` is the important half. Anything that stops the frame
+   * loop -- a hidden tab, a pause -- stops `endFrame()` running, so one-shot
+   * keys pile up and all fire on the far side of it: the menu opens, the reef
+   * changes, the world resets.
+   *
+   * The subtler case is a boundary the loop runs *through* rather than stops
+   * at. A key pressed while the world is paused belongs to whatever had the
+   * screen, and must not be handed to the world a frame later just because the
+   * pause lifted in between.
    */
-  private onBlur = () => {
+  clearPending(): void {
     this.held.clear();
     this.pressed.clear();
+  }
+
+  private onBlur = () => {
+    this.clearPending();
   };
 
   private axis(neg: string[], pos: string[]): number {
@@ -172,8 +191,8 @@ export class Input {
   }
 
   dispose(): void {
-    window.removeEventListener('keydown', this.onDown);
-    window.removeEventListener('keyup', this.onUp);
+    window.removeEventListener('keydown', this.onDown, true);
+    window.removeEventListener('keyup', this.onUp, true);
     window.removeEventListener('blur', this.onBlur);
     document.removeEventListener('visibilitychange', this.onBlur);
   }
