@@ -223,11 +223,14 @@ exactly that reason. A real tidal atlas is a piece of work in its own right.
 **Only US waters.** CUDEM reaches no further, so a region anywhere else is back
 to a real coastline over an invented shelf — see the table above.
 
-The region does not yet bring its own wind, tide or start time the way a venue
-does — pick San Francisco Bay and you sail it in whatever the sliders say.
-`Region` has no fields for it, deliberately: a venue's figures are admitted
-guesses, and a surveyed region inviting the same guesses beside real soundings
-would be the one place this project's labelling could mislead.
+This paragraph used to say the opposite of the one above it: that a region
+brings no wind, tide or start time, that `Region` has no fields for it
+deliberately, and that you sail a region in whatever the sliders say. That was
+the plan, and it was reversed — `Region.conditions` exists, `withRegion` writes
+it into the settings and `engine.ts` takes the wind direction from it — but the
+paragraph stayed. The concern behind it was real and was answered differently:
+the conditions are labelled apart from the survey rather than omitted, in the
+menu and in `regions.ts`, so a sketched breeze never reads as a sounded depth.
 
 ---
 
