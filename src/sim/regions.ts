@@ -240,7 +240,92 @@ const NEWPORT: Region = {
   },
 };
 
-export const REGIONS: readonly Region[] = [SF_BAY, NEWPORT];
+/**
+ * Merchant Row: the islands between Stonington and Isle au Haut.
+ *
+ * The third region, and the third question -- but not the question first
+ * proposed for it, which the measurements refused.
+ *
+ * The plan was Penobscot Bay proper, some eighteen kilometres west of here, on
+ * the argument that the Camden Hills stand 398 m straight off the water and a
+ * hill that size makes a lee you park in rather than sail through. That square
+ * was baked and its shelter field measured against the other two regions. It
+ * came last: a mean wind deficit over water of 0.038, against Newport's 0.041
+ * and San Francisco's 0.173. Swept across every wind direction the place
+ * plausibly gets, it never beat 0.098. The hills are real; the water is too open
+ * to sit behind them, and 21% land is the least of any region here. **San
+ * Francisco is the region the shelter model matters most in, and no Maine
+ * square was going to take that from it.**
+ *
+ * This square is the one that measured as genuinely different. Of the water the
+ * boat can actually sail, **16% of it is within 200 m of a shore, against 8-9%
+ * everywhere else** -- the archipelago is not scenery here, it is the thing in
+ * the way. San Francisco asks where the tide is and Newport asks where the
+ * breeze is; this asks which side of the island to take, and answers in metres.
+ *
+ * What is in the square: the deep channel of East Penobscot Bay down the west
+ * side, reaching 107 m; Deer Isle across the north with Stonington at its foot;
+ * Merchant Row itself, the scatter of islands south of the town; and the north
+ * of Isle au Haut, whose Champlain Mountain at 164 m is the highest ground
+ * here. The south of Isle au Haut falls off the bottom edge, which is the one
+ * thing worth wanting that would not fit.
+ *
+ * On the projection, since Newport had to apologise for it: this sits 0.28
+ * degrees from the central meridian of zone 19, so grid north is within 0.2
+ * degrees of true north -- the cleanest of the three, by luck rather than
+ * choosing.
+ */
+const MERCHANT_ROW: Region = {
+  id: 'merchant-row',
+  name: 'Merchant Row',
+  area: 'Maine, USA',
+  brief:
+    'Stonington, the islands south of it, and the north of Isle au Haut. ' +
+    'Twice as much of the sailable water is close aboard a shore as anywhere else here.',
+  // In the channel south-west of Stonington. Mid-channel and not merely
+  // thereabouts -- see NEWPORT, where this was learned the hard way: the centre
+  // is the world origin and the boat is put on station 90 m from it.
+  centre: { lat: 44.13, lon: -68.72 },
+  utmZone: 19,
+  grid: { width: 800, height: 800, cell: 25, unit: 0.1 },
+  raster: '/terrain/merchant-row.bin',
+  source:
+    'NOAA NCEI continuously updated digital elevation model (CUDEM), 1/9 arc-second ' +
+    'topobathymetry, resampled to 25 m',
+  licence: 'US Government work, public domain',
+
+  /*
+   * A summer afternoon in Maine, which means the sou'wester.
+   *
+   * The softest breeze of the three and the shiftiest for its strength, which
+   * is what a gradient wind arriving over a hundred islands actually does. The
+   * gustiness here stands for that rather than for squalls.
+   *
+   * The sea is the smallest of the three by some way: there is no fetch worth
+   * the name in any direction that is not blocked within a few kilometres.
+   *
+   * The tide, unlike at Penobscot Bay proper, is worth having. The range here
+   * is around three metres and it has to get in and out through the channels,
+   * so `fullDepth` is set deep enough that the stream runs where the water is
+   * and goes slack over the flats -- which is the same trade San Francisco
+   * makes, arrived at from the opposite direction. There it is deep water that
+   * is foul and the shallows that are safe from it; here the deep water is also
+   * the only water, so the stream and the pilotage pull the same way rather
+   * than against each other.
+   */
+  conditions: {
+    windTwd: 210 * DEG,
+    windKnots: 11,
+    gustiness: 0.4,
+    seaScale: 0.5,
+    setDeg: 20,
+    driftKnots: 1.1,
+    fullDepth: 30,
+    startHour: 13,
+  },
+};
+
+export const REGIONS: readonly Region[] = [SF_BAY, NEWPORT, MERCHANT_ROW];
 
 export const regionById = (id: string): Region | null =>
   REGIONS.find((r) => r.id === id) ?? null;

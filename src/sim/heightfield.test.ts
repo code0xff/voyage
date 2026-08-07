@@ -300,6 +300,71 @@ describe('Newport, against the chart', () => {
 });
 
 /**
+ * And for Merchant Row, where the thing to check is that the archipelago
+ * survived the bake.
+ *
+ * A 25 m cell is coarse against islands this size, and the failure that would
+ * matter here is not a flip or a shift -- it is a square that came back
+ * smoothed, with the small islands averaged away into shallow water. The land
+ * claims below are therefore small islands and not just the two big ones, and
+ * `region-terrain.test.ts` holds the property that makes the place what it is.
+ */
+describe('Merchant Row, against the chart', () => {
+  const region = regionById('merchant-row');
+  if (!region) throw new Error('merchant-row region is missing');
+
+  const raw = readFileSync('public/terrain/merchant-row.bin');
+  const field = heightFieldFromBytes(
+    raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
+    region,
+  );
+  const elevation = (lat: number, lon: number) => {
+    const p = worldFromLatLon(region, lat, lon);
+    return field.elevationAt(p.x, p.y);
+  };
+
+  it('is the size the region says it is', () => {
+    expect(raw.byteLength).toBe(rasterBytes(region));
+  });
+
+  it('has Isle au Haut standing up in the south-east', () => {
+    // Champlain Mountain, and by a long way the highest ground in the square.
+    expect(elevation(44.068, -68.617)).toBeGreaterThan(120);
+  });
+
+  it('has Deer Isle and Stonington above water in the north', () => {
+    expect(elevation(44.2, -68.675)).toBeGreaterThan(5); // Deer Isle, inland
+    expect(elevation(44.16, -68.667)).toBeGreaterThan(5); // behind Stonington
+  });
+
+  it('has the East Penobscot Bay channel deep, down the west side', () => {
+    expect(elevation(44.128, -68.76)).toBeLessThan(-70);
+    expect(elevation(44.11, -68.75)).toBeLessThan(-60);
+  });
+
+  it('is far deeper in that channel than in among the islands', () => {
+    // The comparison that pins the east-west orientation on its own: the deep
+    // water is all on the west side, and the east side is the archipelago.
+    expect(elevation(44.11, -68.75)).toBeLessThan(elevation(44.13, -68.66) - 40);
+  });
+
+  it('has the water among the islands shallow but still water', () => {
+    for (const [lat, lon] of [
+      [44.13, -68.66],
+      [44.14, -68.69],
+    ] as [number, number][]) {
+      const e = elevation(lat, lon);
+      expect(e).toBeLessThan(0);
+      expect(e).toBeGreaterThan(-30);
+    }
+  });
+
+  it('opens to the sea off the south edge', () => {
+    expect(elevation(44.045, -68.72)).toBeLessThan(-20);
+  });
+});
+
+/**
  * What must hold for *every* region, including the next one.
  *
  * The centre is not only where the square is framed from: it is the world

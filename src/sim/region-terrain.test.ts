@@ -320,3 +320,60 @@ describe('the city front, and the price of the inshore lane', () => {
     expect(terrain.isAground(tooFar.x, tooFar.y, CRUISER.draft)).toBe(true);
   });
 });
+
+/**
+ * What each region is *for*, as a property rather than a description.
+ *
+ * Three regions is the point at which "they are all different" stops being
+ * obvious and starts needing checking. Each was chosen for one measured claim
+ * about the water, and each of those claims is a number this can hold.
+ *
+ * The Merchant Row one is the reason that region exists at all. The square
+ * first proposed for Maine was Penobscot Bay proper, on the argument that the
+ * Camden Hills would make the biggest lee in the project; measuring the shelter
+ * field said otherwise -- it came last of the three, and San Francisco won by a
+ * factor of four. What did survive measurement was pilotage: twice as much of
+ * this square's sailable water is close aboard a shore as anywhere else. That
+ * is the claim, so that is what is tested.
+ */
+describe('the regions are each for something different', () => {
+  const load = (id: string) => {
+    const r = regionById(id);
+    if (!r) throw new Error(`${id} region is missing`);
+    const raw = readFileSync(`public${r.raster}`);
+    const field = heightFieldFromBytes(
+      raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
+      r,
+    );
+    return new RegionTerrain(r, field);
+  };
+
+  /**
+   * The fraction of sailable water lying within 200 m of something that would
+   * stop her. Sampled on a 50 m lattice, which is four times the grid and far
+   * finer than the difference being measured.
+   */
+  const closeAboard = (t: RegionTerrain, span: number): number => {
+    let sailable = 0;
+    let tight = 0;
+    for (let y = -span / 2; y <= span / 2; y += 50) {
+      for (let x = -span / 2; x <= span / 2; x += 50) {
+        if (t.depthAt(x, y) <= CRUISER.draft + 1) continue;
+        sailable++;
+        if (t.distanceToShore(x, y) < 200) tight++;
+      }
+    }
+    return tight / sailable;
+  };
+
+  it('puts the boat close aboard far more often at Merchant Row', () => {
+    const span = 800 * 25;
+    const mr = closeAboard(load('merchant-row'), span);
+    const sf = closeAboard(load('sf-bay'), span);
+    const np = closeAboard(load('newport'), span);
+    // Measured at 16% against 8% and 9%. Asserted as "clearly more" rather than
+    // on the figures, which a resurvey is entitled to move a little.
+    expect(mr).toBeGreaterThan(sf * 1.5);
+    expect(mr).toBeGreaterThan(np * 1.5);
+  });
+});

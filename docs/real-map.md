@@ -3,14 +3,16 @@
 The goal: a bounded region of a real coast, sailed freely, where the shape of
 the land is genuinely that place rather than a suggestion of it.
 
-Built. All three pieces below are done, and two regions are sailable from the
-menu: San Francisco Bay and Newport. What follows is the design and the evidence
-behind it, updated as each piece lands rather than left as it was first written.
+Built. All three pieces below are done, and three regions are sailable from the
+menu: San Francisco Bay, Newport and Merchant Row. What follows is the design
+and the evidence behind it, updated as each piece lands rather than left as it
+was first written.
 
-The second region is the real test of the machinery, and it passed: adding
-Newport took a `Region` entry and a run of `scripts/fetch-terrain.ts`, and not
-one line of engine, renderer or shader code. What it did cost was
-reconnaissance — see "Choosing where the square goes" below.
+The second and third regions were the real test of the machinery, and it
+passed: each took a `Region` entry and a run of `scripts/fetch-terrain.ts`, and
+not one line of engine, renderer or shader code. What they cost instead was
+reconnaissance and measurement — see "Choosing where the square goes" below,
+which is now the longest-earned section in this document.
 
 ---
 
@@ -195,6 +197,28 @@ have to be found in the raster and named afterwards, not named and assumed. And
 a lighthouse is a poor assertion in the first place — Castle Hill Light stands
 on a rock at the water's edge, and the 25 m cell holding it correctly averages
 to a metre below the surface. Assert island interiors and mid-channel water.
+
+**Decide what the region is *for* by measuring, not by arguing.** Maine was
+going to be Penobscot Bay proper, because the Camden Hills stand 398 m off the
+water and a hill that size should make the biggest lee in the project. The
+square was baked and its shelter field measured against the other two regions.
+It came last — a mean wind deficit over water of 0.038 against Newport's 0.041
+and San Francisco's 0.173 — and swept across every wind direction the place
+plausibly gets it never beat 0.098. The hills are real; the bay is too open to
+sit behind them, and at 21% land it has the least of any region here.
+
+What did survive measurement was something the argument had not thought of: of
+the water the boat can actually sail, the square 20 km east has 16% of it
+within 200 m of a shore, against 8% and 9% elsewhere. So the region moved and
+the claim changed to the one the data supported. Both numbers are now
+regression tests — `region-terrain.test.ts` holds the pilotage property that
+justifies the region existing, because a claim worth choosing on is a claim
+worth locking down.
+
+The general point: a region is chosen for a reason, the reason is a claim about
+the water, and claims about the water can be computed from the raster in
+seconds. Baking a candidate square costs four requests and a minute. Do that
+before writing prose about what a place is like.
 
 **Look at the whole square before baking it.** A coarse `exportImage` over the
 20 km box, drawn as ASCII, answers "is this the shape of the place" for the cost

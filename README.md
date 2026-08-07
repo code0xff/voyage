@@ -160,18 +160,31 @@ simplifications.
 ### 1c. Regions
 
 A region is a bounded piece of a **real coast**, sailed freely, where the shape
-of the land is genuinely that place. Two ship, both 20 km square at 25 m:
-**San Francisco Bay**, from the Golden Gate to the Berkeley flats, and
-**Newport**, holding the East Passage from Prudence Island out past Beavertail
-and Castle Hill into Rhode Island Sound.
+of the land is genuinely that place. Three ship, each 20 km square at 25 m:
 
-They are two regions rather than two of the same one because they ask different
-questions. San Francisco is a bay, and the decision is the tide and where the
-bottom is: a hard westerly, two and a half knots of foul flood, and a shallow
-lane inshore that costs breeze and eventually the keel. Newport is a coast, and
-the decision is the sea breeze and when to leave shelter — a steadier southerly
-at 14 knots, a little over a knot of stream, and a passage deep almost to the
-rocks, with swell outside that is not there inside.
+| | | asks |
+|---|---|---|
+| **San Francisco Bay** | the Golden Gate to the Berkeley flats | where is the tide, and where is the bottom |
+| **Newport** | the East Passage, Prudence Island out past Beavertail into Rhode Island Sound | where is the breeze, and when do you leave shelter |
+| **Merchant Row** | Stonington, the islands below it, the north of Isle au Haut | which side of the island do you take |
+
+They ask different questions on purpose, and the questions are measured rather
+than asserted. San Francisco is the one the wind shadow matters most in, by a
+long way — a mean deficit of 0.17 over its water against 0.04 and 0.07, with
+43% of it losing a tenth of the breeze or more. Newport is the one that opens
+onto ocean, so the sea state outside is not the sea state inside. Merchant Row
+is the close-quarters one: **16% of its sailable water lies within 200 m of a
+shore, against 8% and 9%** — twice as much, which is the archipelago being an
+obstacle rather than scenery.
+
+That last one is also the clearest case of the measurement overruling the plan.
+Maine was going to be Penobscot Bay proper, on the argument that the Camden
+Hills stand 398 m off the water and would cast the biggest lee in the project.
+That square was baked and measured: it came *last* of the three for shelter, at
+0.038, and swept across every wind it plausibly gets it never beat 0.098. The
+hills are real; the bay is simply too open to sit behind them. The region moved
+some 18 km east to the water where the archipelago is, and the claim changed to
+the one that survived.
 
 The land and the depths are surveyed, not sketched. They come from NOAA NCEI's
 CUDEM 1/9 arc-second topobathymetry — one continuous measured surface carrying
@@ -180,12 +193,15 @@ the hills and the sea floor together — baked to a committed raster by
 against the chart by latitude and longitude: Alcatraz 39 m, Angel Island 180 m,
 Raccoon Strait −20 m, the Berkeley flats −2.6 m. And at Newport: Beavertail
 8.1 m, the East Passage entrance −55 m where it scours between the headlands,
-the West Passage −15 m at the same latitude, Newport Harbour −7.4 m.
+the West Passage −15 m at the same latitude, Newport Harbour −7.4 m. And at
+Merchant Row: Champlain Mountain on Isle au Haut 163 m, the East Penobscot Bay
+channel −96 m, the water among the islands −9 to −13 m.
 
 **Still not a chart.** 25 m between soundings, no height of tide, and the grid
-is UTM so bearings are grid bearings — 0.35° off true at San Francisco, and
-1.55° at Newport, which sits further from its zone's central meridian. Do not
-take a boat anywhere on it.
+is UTM so bearings are grid bearings — how far off true depends on where the
+region sits in its zone: 0.35° at San Francisco, 0.2° at Merchant Row, and
+1.55° at Newport, which is furthest from its central meridian. Do not take a
+boat anywhere on it.
 
 Shelter is *data*, not a formula, and this is what a fixed region buys. Fetch
 and wind shadow are swept over the whole grid once per two degrees of wind
