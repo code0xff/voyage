@@ -12,6 +12,7 @@ import { WindField } from './sim/wind';
 import { CurrentField, DEFAULT_FULL_DEPTH } from './sim/current';
 import { venueById } from './sim/venues';
 import { passageInfo, type PassageInfo } from './sim/passage';
+import { anchorage, type Anchorage } from './sim/anchorage';
 import { WaveField, sampleHull, type HullWaveSample } from './sim/waves';
 import { MAX_REEF, autoReef, type ReefState } from './sim/sailplan';
 import { cyclePilot, initialPilot, pilotRudder, type PilotState } from './sim/autopilot';
@@ -104,6 +105,10 @@ export interface Snapshot {
    * meaningless until they are in the same units.
    */
   darkIn: number;
+  /** Whether the anchor is down. */
+  anchored: boolean;
+  /** Where she could lie here, and what is stopping her if she cannot. */
+  anchorage: Anchorage | null;
   /** Where she is bound, or null when she is just out sailing. */
   destination: Vec2 | null;
   /**
@@ -212,6 +217,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let seaTws = windMs(settings);
   const pilot = initialPilot();
   let destination: Vec2 | null = null;
+  let anchored = false;
   let current = settings;
 
   const view: SceneView = createScene(canvas, cfg);
@@ -235,6 +241,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   const snapshot: Snapshot = {
     state,
     diag: null,
+    anchored: false,
+    anchorage: null,
     darkIn: Infinity,
     destination: null,
     passage: null,
@@ -666,8 +674,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       sound.gullCall(d, ev.strength);
     }
 
-    diag = step(state, cfg, env, ctl, PHYS_DT, { sea });
+    diag = step(state, cfg, env, ctl, PHYS_DT, { sea, anchored });
     snapshot.diag = diag;
+
+    // Judged where she is, every step, because the answer is what the player is
+    // reading while deciding whether to round up here or carry on a bit further.
+    snapshot.anchorage = anchorage(snapshot.terrain, cfg, state.pos, diag.sog, wind.baseTwd);
 
     // Worked from what the boat is actually doing over the ground, so it costs
     // one call a step rather than being recomputed by every readout that wants
@@ -793,6 +805,14 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (input.wasPressed('h')) cyclePilot(pilot, state.heading, wrapPi(env.twd - state.heading));
     if (input.wasPressed('c')) view.toggleCamera();
     if (input.wasPressed('l')) snapshot.lightsOn = !snapshot.lightsOn;
+    // Weighing is always allowed; letting go is not. A refusal that says why is
+    // the whole of the anchoring decision, so it goes through the same judgement
+    // the readout is showing rather than a second copy of the rules.
+    if (input.wasPressed('a')) {
+      if (anchored) anchored = false;
+      else if (snapshot.anchorage?.canAnchor) anchored = true;
+      snapshot.anchored = anchored;
+    }
     if (input.wasPressed('n')) emit({ type: 'chartRange' });
     if (input.wasPressed('p')) schedulePolar(0);
     if (input.wasPressed('r')) (racing ? startRace : freeSail)();

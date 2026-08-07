@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { Card } from '@/components/ui/card';
+import { MAX_WAY, anchorProblem } from '@/sim/anchorage';
 import { useEngineFrame } from './engine-context';
 
 /**
@@ -17,11 +18,24 @@ export function HintBar() {
     const w = s.wind.sample(s.state.pos);
     const parts: string[] = [];
 
-    if (s.clearance < 0) parts.push('Aground — sail off before you lose the race');
+    // At anchor first: it is a state she is in, not advice about one, and while
+    // she is lying to it nothing else on this list is worth saying.
+    if (s.anchored) parts.push('At anchor — A to weigh');
+    else if (s.clearance < 0) parts.push('Aground — sail off before you lose the race');
     else if (w.exposure < 0.6) parts.push('In the lee of the land — get back into clear air');
     else if (s.weather.state.kind === 'squall') parts.push('Squall — reef before it hits');
     else if (s.weather.state.fog > 0.5) parts.push('Thick fog — steer on the bearing readout');
     else if (s.race.phase === 'prestart' && s.racing) parts.push('Time the line: cross on zero, not before');
+    // Only once she is nearly stopped, because that is when it becomes a
+    // decision. Offered at six knots it would be noise on every passage.
+    else if (s.anchorage?.canAnchor)
+      parts.push(
+        `Good holding in ${s.anchorage.depth.toFixed(0)} m${
+          s.anchorage.shelter > 0.4 ? ', sheltered' : ''
+        } — A to let go`,
+      );
+    else if (s.anchorage && s.diag.sog < MAX_WAY * 2 && s.anchorage.holding !== 'deep')
+      parts.push(`Nowhere to anchor: ${anchorProblem(s.anchorage)}`);
     else if (Math.abs(s.diag.twa) * (180 / Math.PI) < 35) parts.push('Too close to the wind — bear away');
     else parts.push('Esc for menu and settings');
 

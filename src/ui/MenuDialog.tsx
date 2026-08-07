@@ -545,6 +545,7 @@ export function MenuDialog({
                 ["Y", "auto-reef"],
                 ["Q E", "mean wind direction"],
                 ["C", "camera"],
+                ["A", "let go / weigh anchor"],
                 ["N", "chart range"],
                 ["click chart", "set where you are bound"],
                 ["drag", "orbit around the boat"],
