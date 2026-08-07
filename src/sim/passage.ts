@@ -99,3 +99,98 @@ export function passageInfo(
  */
 export const mustTack = (info: PassageInfo, noGo: number): boolean =>
   Math.abs(info.twaDirect) < noGo;
+
+/**
+ * What a completed passage was, once she has arrived.
+ *
+ * A plain serialisable row on purpose. The logbook lives in the browser today
+ * and may be synced to a server later, and that later should be a new storage
+ * adapter rather than a migration -- so nothing here is a class, a Map or a
+ * typed array, and every record carries a stable id and a timestamp.
+ *
+ * Distances and speeds are over the ground, because a passage is a thing that
+ * happened between two places.
+ */
+export interface PassageRecord {
+  id: string;
+  /** When she sailed, ms since the epoch. Real time, not world time. */
+  startedAt: number;
+  /** Seconds under way. */
+  duration: number;
+  /** Metres over the ground -- the track sailed, not the distance between the ends. */
+  distance: number;
+  from: Vec2;
+  to: Vec2;
+  /** Straight-line distance between the ends, m. Distance over it is how much was tacked. */
+  direct: number;
+  avgSog: number;
+  maxSog: number;
+  /** Venue id, or '' in the open ocean. */
+  venue: string;
+  /** Mean true wind while under way, knots. */
+  windKnots: number;
+}
+
+/**
+ * A passage in progress.
+ *
+ * An accumulator rather than a track: the logbook wants what the passage *was*,
+ * and keeping every position to work that out afterwards would store megabytes
+ * to answer questions that are four running totals.
+ *
+ * Pure, and holds no clock of its own -- the caller supplies dt, because the
+ * only two things here that must not drift are what "under way" means and which
+ * seconds count.
+ */
+export class PassageLog {
+  distance = 0;
+  duration = 0;
+  maxSog = 0;
+  private sogIntegral = 0;
+  private windIntegral = 0;
+
+  constructor(
+    readonly from: Vec2,
+    readonly to: Vec2,
+    /** ms since the epoch, supplied because the sim core has no clock. */
+    readonly startedAt: number,
+  ) {}
+
+  /**
+   * @param sog speed over the ground, m/s
+   * @param twsKn true wind, knots
+   */
+  advance(sog: number, twsKn: number, dt: number): void {
+    this.duration += dt;
+    this.distance += sog * dt;
+    this.sogIntegral += sog * dt;
+    this.windIntegral += twsKn * dt;
+    if (sog > this.maxSog) this.maxSog = sog;
+  }
+
+  /**
+   * The record, given an id and where she ended up.
+   *
+   * `to` is passed in rather than taken from the constructor because a passage
+   * ends where the anchor went down, which is near the destination and never
+   * exactly on it.
+   */
+  finish(id: string, at: Vec2, venue: string): PassageRecord {
+    // Time-weighted, so lying becalmed for an hour drags the average down as it
+    // should. Guarded because a passage can be ended the instant it is begun.
+    const avgSog = this.duration > 0 ? this.sogIntegral / this.duration : 0;
+    return {
+      id,
+      startedAt: this.startedAt,
+      duration: this.duration,
+      distance: this.distance,
+      from: { ...this.from },
+      to: { ...at },
+      direct: len(sub(at, this.from)),
+      avgSog,
+      maxSog: this.maxSog,
+      venue,
+      windKnots: this.duration > 0 ? this.windIntegral / this.duration : 0,
+    };
+  }
+}

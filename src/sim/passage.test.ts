@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEG, RAD, add, compassVec, scale, wrapPi, type Vec2 } from './math';
-import { mustTack, passageInfo } from './passage';
+import { PassageLog, mustTack, passageInfo } from './passage';
 
 const HERE: Vec2 = { x: 0, y: 0 };
 const NO_TIDE: Vec2 = { x: 0, y: 0 };
@@ -134,5 +134,70 @@ describe('course to steer', () => {
     // Zero, not "no arrival": she has arrived. Asserting null here was my own
     // assumption rather than anything the passage owes the navigator.
     expect(p.eta).toBe(0);
+  });
+});
+
+describe('passage log', () => {
+  const from = { x: 0, y: 0 };
+  const to = { x: 0, y: 1000 };
+
+  it('accumulates what the passage was, not where she went', () => {
+    const log = new PassageLog(from, to, 1000);
+    for (let i = 0; i < 600; i++) log.advance(3, 12, 1); // ten minutes at 3 m/s
+    const r = log.finish('a', { x: 0, y: 1800 }, 'sf');
+    expect(r.duration).toBeCloseTo(600, 6);
+    expect(r.distance).toBeCloseTo(1800, 6);
+    expect(r.avgSog).toBeCloseTo(3, 6);
+    expect(r.maxSog).toBeCloseTo(3, 6);
+    expect(r.windKnots).toBeCloseTo(12, 6);
+    expect(r.venue).toBe('sf');
+  });
+
+  /**
+   * Time-weighted, so an hour becalmed drags the average down as it should. A
+   * mean of the samples would report the speed she sailed at when she was
+   * sailing, which is a different and much more flattering number.
+   */
+  it('averages over time, so a calm counts against the passage', () => {
+    const log = new PassageLog(from, to, 0);
+    for (let i = 0; i < 100; i++) log.advance(4, 14, 1);
+    for (let i = 0; i < 300; i++) log.advance(0, 1, 1); // becalmed
+    const r = log.finish('a', to, '');
+    expect(r.avgSog).toBeCloseTo(400 / 400, 6);
+    expect(r.maxSog).toBeCloseTo(4, 6);
+  });
+
+  /** How much was tacked: the track over the straight line between the ends. */
+  it('records the direct distance as well as the track', () => {
+    const log = new PassageLog(from, to, 0);
+    for (let i = 0; i < 500; i++) log.advance(3, 12, 1);
+    const r = log.finish('a', to, '');
+    expect(r.direct).toBeCloseTo(1000, 6);
+    expect(r.distance / r.direct).toBeCloseTo(1.5, 6);
+  });
+
+  it('ends where the anchor went down, not where she was aiming', () => {
+    // A passage never finishes exactly on the point that was clicked.
+    const log = new PassageLog(from, to, 0);
+    log.advance(3, 12, 1);
+    const r = log.finish('a', { x: 20, y: 980 }, '');
+    expect(r.to).toEqual({ x: 20, y: 980 });
+    expect(r.to).not.toBe(to);
+  });
+
+  it('survives being finished the instant it began', () => {
+    const r = new PassageLog(from, to, 0).finish('a', from, '');
+    expect(r.duration).toBe(0);
+    expect(r.avgSog).toBe(0);
+    expect(r.windKnots).toBe(0);
+    expect(Number.isFinite(r.direct)).toBe(true);
+  });
+
+  it('copies its endpoints, so a moving boat cannot rewrite history', () => {
+    const start = { x: 5, y: 5 };
+    const log = new PassageLog(start, to, 0);
+    const r = log.finish('a', to, '');
+    start.x = 999;
+    expect(r.from.x).toBe(5);
   });
 });
