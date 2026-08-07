@@ -156,8 +156,6 @@ export interface ReefState {
   reef: number;
   jibFurl: number;
   timer: number;
-  /** Low-pass filtered heel, so single gusts do not trigger a reef. */
-  avgHeel?: number;
 }
 
 /**
@@ -170,15 +168,20 @@ export const HEEL_TAU = 6;
 /**
  * Automatic reefing. This is crew judgement, not physics, so it lives outside
  * step() and is driven from the game loop and the polar solver alike.
+ *
+ * `heelAvg` is the filtered |heel| that `step()` already maintains, and `heel`
+ * is this instant's value. Both are needed, and they are arguments rather than
+ * a filter of its own because the reef and the auto-trim's depowering are two
+ * halves of one decision about how overpowered the boat is: running a second
+ * copy of the same lag here meant they could disagree about how far over she
+ * was staying, which is a difference with no physical meaning.
  */
-export function autoReef(rs: ReefState, heel: number, dt: number): void {
-  const inst = Math.abs(heel);
-
+export function autoReef(rs: ReefState, heelAvg: number, heel: number, dt: number): void {
   // Judging on instantaneous heel is wrong. Roll is a second-order system, so
   // it overshoots on every gust, and reacting to one peak reefs the boat in
   // 12 knots. Real crews look at how far over it *stays*.
-  rs.avgHeel = (rs.avgHeel ?? inst) + (inst - (rs.avgHeel ?? inst)) * (1 - Math.exp(-dt / HEEL_TAU));
-  const h = rs.avgHeel;
+  const h = Math.abs(heelAvg);
+  const inst = Math.abs(heel);
 
   rs.timer += dt;
   // A knockdown past 45 degrees is an emergency: there is no time to wait for

@@ -75,7 +75,7 @@ export function solveOne(
     // A polar is "the speed you could hold if you sailed it well". Lying on
     // your ear at 60 degrees of heel under full sail in a gale is not a number
     // worth recording, so reefing is optimised alongside.
-    autoReef(rs, s.heel, dt);
+    autoReef(rs, s.heelAvg, s.heel, dt);
     s.reef = rs.reef;
     s.jibFurl = rs.jibFurl;
     d = step(s, cfg, env, AUTO, dt, opts);

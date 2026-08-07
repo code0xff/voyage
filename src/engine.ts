@@ -538,7 +538,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       ctl.rudder = pilotRudder(pilot, state.heading, env.twd, state.r);
     }
 
-    if (autoReefOn) autoReef(reefState, state.heel, PHYS_DT);
+    if (autoReefOn) autoReef(reefState, state.heelAvg, state.heel, PHYS_DT);
     state.reef = reefState.reef;
     state.jibFurl = reefState.jibFurl;
 
