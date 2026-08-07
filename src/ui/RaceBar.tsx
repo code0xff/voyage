@@ -77,7 +77,16 @@ export function RaceBar() {
     const polarStale =
       !!s.polar && Math.abs(s.wind.baseTws - s.polar.tws) > 0.15 * s.polar.tws;
 
-    if (g && currentLeg?.mark?.id === 'W' && s.polar?.bestUpwind && !polarStale) {
+    // The same argument as staleness, for the same reason. A layline is where
+    // the *ground* track fetches the mark, so a tide across the course moves it
+    // -- which is most of what makes a tide interesting. The polar behind this
+    // number is a still-water polar and structurally cannot say where the
+    // layline has gone, so with a drift running the honest output is silence
+    // rather than an angle that is confidently wrong.
+    const cur = s.env.current;
+    const tideRunning = !!cur && Math.hypot(cur.x, cur.y) > 0.05;
+
+    if (g && currentLeg?.mark?.id === 'W' && s.polar?.bestUpwind && !polarStale && !tideRunning) {
       // If the bearing to the mark is further off the wind than the best upwind
       // angle, the layline is already behind us.
       const twaToMark = wrapPi(s.course.twd - g.bearing);
@@ -90,7 +99,12 @@ export function RaceBar() {
       }
     } else if (g && currentLeg?.kind === 'start' && s.race.phase === 'prestart') {
       const t = -s.race.clock;
-      const closing = Math.max(s.diag.speed * Math.cos(wrapPi(g.bearing - s.state.heading)), 0.01);
+      // How fast the *line* is coming, which is a question about the ground and
+      // not about the water. Reading BSP against the heading here was already
+      // ignoring leeway, which is a degree or three and does not matter; in a
+      // tide it is the difference between hitting the line on the gun and
+      // arriving twenty seconds after it.
+      const closing = Math.max(s.diag.sog * Math.cos(wrapPi(g.bearing - s.diag.cog)), 0.01);
       const slack = t - g.distance / closing;
       if (Math.abs(slack) < 900) {
         if (slack > 2) text = `${slack.toFixed(0)}s early — burn time`;
