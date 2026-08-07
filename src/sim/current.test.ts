@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CRUISER, DEFAULT_ENV } from './config';
 import { initialState, step, type Controls, type SeaState } from './boat';
 import { DEG, RAD, type Vec2 } from './math';
+import { solveOne } from './polar';
 import { knotsToMs } from './units';
 
 /**
@@ -128,6 +129,23 @@ describe('current', () => {
     // Through the water she is still sailing, and close to as fast: the tide
     // shifts the apparent wind a little, it does not stop the boat.
     expect(foul.d.speed).toBeGreaterThan(0.9 * still.d.speed);
+  });
+
+  /**
+   * A polar is a still-water measurement, and the solver drops any current
+   * rather than trusting its caller not to pass one. The engine builds the
+   * in-game polar from DEFAULT_ENV today, so this holds either way -- which is
+   * exactly why it is worth pinning, because the day someone hands the solver
+   * the live sailing environment instead, the diagram would quietly stop being
+   * a polar and there would be nothing on screen to say so.
+   */
+  it('cannot be measured into a polar', () => {
+    const env = { ...DEFAULT_ENV, tws: knotsToMs(12) };
+    const still = solveOne(CRUISER, env, 60, 120);
+    const tidal = solveOne(CRUISER, { ...env, current: { x: 1.2, y: -0.8 } }, 60, 120);
+    expect(tidal.speed).toBe(still.speed);
+    expect(tidal.vmg).toBe(still.vmg);
+    expect(tidal.awa).toBe(still.awa);
   });
 
   /**

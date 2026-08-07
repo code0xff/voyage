@@ -41,11 +41,18 @@ const AUTO: Controls = { rudder: 0, sheet: 0, twist: 0, autoTrim: true };
 /** Run with the heading frozen until the boat settles. */
 export function solveOne(
   cfg: BoatConfig,
-  env: Environment,
+  environment: Environment,
   twaDeg: number,
   settleSeconds = 240,
   dt = 1 / 60,
 ): PolarPoint {
+  // A polar is a still-water measurement by definition -- the speed the boat can
+  // hold, not the rate the ground goes past -- so any current is dropped here
+  // rather than trusted not to have been passed. `Environment.current` being
+  // optional keeps a caller from acquiring one by accident; this keeps the
+  // guarantee even from a caller who hands over the live sailing environment.
+  const env: Environment = { ...environment, current: undefined };
+
   // To hold a given true wind angle with the wind coming from twd, point the
   // bow at twd - twa.
   const heading = env.twd - twaDeg * DEG;
