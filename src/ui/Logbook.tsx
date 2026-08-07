@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, Trash2, Upload } from 'lucide-react';
 import { fromExport, toExport, type LogStore } from '@/logbook';
-import { formatTime, msToKnots } from '@/sim/units';
+import { formatDistance, formatTime, msToKnots } from '@/sim/units';
 import { venueById } from '@/sim/venues';
 import type { PassageRecord } from '@/sim/passage';
 
@@ -17,8 +17,6 @@ import type { PassageRecord } from '@/sim/passage';
  * Ordinary React state: this changes when a passage ends or a file is imported,
  * which is nothing like every frame.
  */
-
-const km = (m: number) => (m < 1000 ? `${m.toFixed(0)} m` : `${(m / 1000).toFixed(2)} km`);
 
 const when = (ms: number) =>
   new Date(ms).toLocaleString(undefined, {
@@ -37,7 +35,8 @@ function Entry({ p, onRemove }: { p: PassageRecord; onRemove: () => void }) {
           <span className="ml-2 text-[10px] text-muted-foreground">{when(p.startedAt)}</span>
         </div>
         <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
-          {formatTime(p.duration)} · {km(p.distance)} · {msToKnots(p.avgSog).toFixed(1)} kn avg ·{' '}
+          {formatTime(p.duration)} · {formatDistance(p.distance)} ·{' '}
+          {msToKnots(p.avgSog).toFixed(1)} kn avg ·{' '}
           {msToKnots(p.maxSog).toFixed(1)} max · {p.windKnots.toFixed(0)} kn wind
           {/*
             How much was tacked, which is the number here a sailor reads first:

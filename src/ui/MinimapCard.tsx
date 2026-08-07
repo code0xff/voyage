@@ -3,6 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RANGES, createMinimap } from '@/view/minimap';
 import { CRUISER } from '@/sim/config';
+import { formatDistance } from '@/sim/units';
 import { useEngine, useEngineFrame, useReadout } from './engine-context';
 
 const SIZE = 176;
@@ -85,9 +86,7 @@ export function MinimapCard() {
   // Distance run answers "how far have I actually got" as a number, which the
   // picture only answers by eye. It changes every frame, so it goes straight
   // to the DOM rather than through React.
-  const runLabel = useReadout<HTMLSpanElement>((s) =>
-    s.run < 1000 ? `${s.run.toFixed(0)} m` : `${(s.run / 1000).toFixed(2)} km`,
-  );
+  const runLabel = useReadout<HTMLSpanElement>((s) => formatDistance(s.run));
 
   useEngineFrame((s) => {
     const ctx = ref.current?.getContext('2d');
