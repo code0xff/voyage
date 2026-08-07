@@ -54,7 +54,15 @@ const run = <T>(
         const req = body(tx.objectStore(STORE));
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
-        tx.oncomplete = () => db.close();
+        // Closed on every way out, not only the happy one. A transaction that
+        // aborts never fires `oncomplete`, so closing there alone leaks a
+        // connection per failed write -- and the write that fails is the one
+        // that happens when the disk is full, which is exactly when the next
+        // one needs the handle.
+        const done = () => db.close();
+        tx.oncomplete = done;
+        tx.onabort = done;
+        tx.onerror = done;
       }),
   );
 

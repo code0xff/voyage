@@ -342,6 +342,13 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let published = false;
 
   function rebuildWorld(): void {
+    // The world she was sailing in is being replaced, so the passage through it
+    // is over whether or not she moved. `arrive()` stamps a record with the
+    // venue that is current when the anchor goes down, so a passage carried
+    // across a venue change would be filed under a place most of it did not
+    // happen in.
+    setDestination(null);
+
     course = buildCourse(raceCfg(current), wind.baseTwd);
     race = initialRaceState(raceCfg(current));
     snapshot.course = course;
@@ -504,6 +511,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // between its own two ends. Abandoning is the only honest answer -- the
     // passage did not happen.
     setDestination(null);
+    // And the anchor comes up with her. It is engine state rather than boat
+    // state, so a fresh `initialState()` does not clear it -- leaving her held
+    // fast on the start line of a race she had just been put on, with the hint
+    // bar cheerfully reporting that she was at anchor.
+    anchored = false;
+    snapshot.anchored = false;
 
     const up = compassVec(wind.baseTwd);
     state = initialState({
