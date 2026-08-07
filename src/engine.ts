@@ -122,7 +122,6 @@ export interface Snapshot {
 
 export type EngineEvent =
   | { type: 'toggleMenu' }
-  | { type: 'polar' }
   | { type: 'sound'; on: boolean }
   /** A fresh world was rolled. The settings hold the seed so it can be sailed again. */
   | { type: 'world'; seed: number }
@@ -285,13 +284,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   function schedulePolar(delay = 400): void {
     if (polarTimer !== null) clearTimeout(polarTimer);
     snapshot.polarBusy = true;
-    emit({ type: 'polar' });
     polarTimer = window.setTimeout(() => {
       polarTimer = null;
       // A polar must be based on the mean wind, not the instantaneous gust.
       snapshot.polar = solvePolar(cfg, wind.meanEnv(DEFAULT_ENV));
       snapshot.polarBusy = false;
-      emit({ type: 'polar' });
     }, delay);
   }
 
@@ -516,7 +513,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (current.randomWorld) {
       const seed = Math.floor(Math.random() * 1e8) + 1;
       current = { ...current, seed };
-      emit({ type: 'world', seed });
+      // Announced on a microtask, not now. The engine rolls its first world
+      // during construction, before the caller has had a chance to subscribe --
+      // so a synchronous emit was heard by nobody and the settings kept, and
+      // showed, a seed the boat was not sailing in.
+      queueMicrotask(() => emit({ type: 'world', seed }));
     }
     // The clock belongs to the session too. `hour` was read once when the
     // engine was built, so the Start hour setting did nothing after the first
