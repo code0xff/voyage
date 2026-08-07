@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { HeightField, heightFieldFromBytes } from './heightfield';
 import { EDGE_FADE, RegionTerrain } from './region-terrain';
-import { regionById } from './regions';
+import { REGIONS, regionById } from './regions';
 import { worldFromLatLon } from './geo';
 import { DEG, RAD } from './math';
 import { CRUISER } from './config';
@@ -324,17 +324,22 @@ describe('the city front, and the price of the inshore lane', () => {
 /**
  * What each region is *for*, as a property rather than a description.
  *
- * Three regions is the point at which "they are all different" stops being
- * obvious and starts needing checking. Each was chosen for one measured claim
- * about the water, and each of those claims is a number this can hold.
+ * Six regions is well past the point where "they are all different" needs
+ * checking rather than asserting. Each was chosen because it is extreme on one
+ * measured axis, and each of those is a number this holds.
  *
- * The Merchant Row one is the reason that region exists at all. The square
- * first proposed for Maine was Penobscot Bay proper, on the argument that the
- * Camden Hills would make the biggest lee in the project; measuring the shelter
- * field said otherwise -- it came last of the three, and San Francisco won by a
- * factor of four. What did survive measurement was pilotage: twice as much of
- * this square's sailable water is close aboard a shore as anywhere else. That
- * is the claim, so that is what is tested.
+ * Two of the six were chosen *against* an argument that measurement refused.
+ * Maine was going to be Penobscot Bay proper, because the Camden Hills stand
+ * 398 m off the water and should make the biggest lee in the project; the
+ * shelter field put it last of three, and San Francisco first by a factor of
+ * four. What survived measurement there was pilotage, so Merchant Row shipped
+ * instead. Three further candidates -- Long Island Sound, Charleston and
+ * Biscayne Bay -- were baked and dropped for being extreme on nothing, or on
+ * nothing but absences. Those reasons are recorded in `regions.ts`.
+ *
+ * Assertions are ratios and orderings rather than the measured figures, because
+ * a resurvey is entitled to move a raster a little and must not be made to look
+ * like a regression when it does.
  */
 describe('the regions are each for something different', () => {
   const load = (id: string) => {
@@ -349,31 +354,84 @@ describe('the regions are each for something different', () => {
   };
 
   /**
-   * The fraction of sailable water lying within 200 m of something that would
-   * stop her. Sampled on a 50 m lattice, which is four times the grid and far
-   * finer than the difference being measured.
+   * Sampled on a 100 m lattice: four times the grid, and far finer than any of
+   * the differences being measured. Every region is profiled in one pass
+   * because the claims are all comparative.
    */
-  const closeAboard = (t: RegionTerrain, span: number): number => {
+  const profile = (id: string) => {
+    const t = load(id);
+    const span = 800 * 25;
     let sailable = 0;
     let tight = 0;
-    for (let y = -span / 2; y <= span / 2; y += 50) {
-      for (let x = -span / 2; x <= span / 2; x += 50) {
-        if (t.depthAt(x, y) <= CRUISER.draft + 1) continue;
+    let shoal = 0;
+    let cells = 0;
+    const depths: number[] = [];
+    for (let y = -span / 2; y <= span / 2; y += 100) {
+      for (let x = -span / 2; x <= span / 2; x += 100) {
+        cells++;
+        const d = t.depthAt(x, y);
+        if (d <= 0) continue;
+        depths.push(d);
+        if (d <= CRUISER.draft + 1) {
+          shoal++;
+          continue;
+        }
         sailable++;
         if (t.distanceToShore(x, y) < 200) tight++;
       }
     }
-    return tight / sailable;
+    depths.sort((a, b) => a - b);
+    return {
+      median: depths[Math.floor(depths.length / 2)],
+      tight: tight / sailable,
+      shoal: shoal / cells,
+    };
   };
 
+  const p = Object.fromEntries(
+    REGIONS.map((r) => [r.id, profile(r.id)]),
+  ) as Record<string, ReturnType<typeof profile>>;
+  const others = (id: string) => REGIONS.filter((r) => r.id !== id).map((r) => p[r.id]);
+
   it('puts the boat close aboard far more often at Merchant Row', () => {
+    // The claim the region was chosen on: 16% against 8% and 9% at the time.
+    for (const o of others('merchant-row')) {
+      expect(p['merchant-row'].tight).toBeGreaterThan(o.tight * 1.5);
+    }
+  });
+
+  it('gives Puget Sound water no other region comes close to', () => {
+    // 85 m median against 20 m for the next deepest: depth never decides there.
+    for (const o of others('puget-sound')) {
+      expect(p['puget-sound'].median).toBeGreaterThan(o.median * 2.5);
+    }
+  });
+
+  it('leaves the least water under her at Chesapeake Bay', () => {
+    // The opposite pole to Puget Sound, and the most water too shoal to sail.
+    for (const o of others('chesapeake')) {
+      expect(p['chesapeake'].median).toBeLessThan(o.median);
+      expect(p['chesapeake'].shoal).toBeGreaterThan(o.shoal);
+    }
+  });
+
+  it('gives Buzzards Bay the most water it can actually sail', () => {
     const span = 800 * 25;
-    const mr = closeAboard(load('merchant-row'), span);
-    const sf = closeAboard(load('sf-bay'), span);
-    const np = closeAboard(load('newport'), span);
-    // Measured at 16% against 8% and 9%. Asserted as "clearly more" rather than
-    // on the figures, which a resurvey is entitled to move a little.
-    expect(mr).toBeGreaterThan(sf * 1.5);
-    expect(mr).toBeGreaterThan(np * 1.5);
+    const sailableFraction = (id: string) => {
+      const t = load(id);
+      let cells = 0;
+      let sail = 0;
+      for (let y = -span / 2; y <= span / 2; y += 100) {
+        for (let x = -span / 2; x <= span / 2; x += 100) {
+          cells++;
+          if (t.depthAt(x, y) > CRUISER.draft + 1) sail++;
+        }
+      }
+      return sail / cells;
+    };
+    const bb = sailableFraction('buzzards-bay');
+    for (const r of REGIONS) {
+      if (r.id !== 'buzzards-bay') expect(bb).toBeGreaterThan(sailableFraction(r.id));
+    }
   });
 });

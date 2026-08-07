@@ -365,6 +365,144 @@ describe('Merchant Row, against the chart', () => {
 });
 
 /**
+ * Puget Sound, against the chart. The claim here is the trench: a two kilometre
+ * channel past 280 m with the land standing close on both sides of it.
+ */
+describe('Puget Sound, against the chart', () => {
+  const region = regionById('puget-sound');
+  if (!region) throw new Error('puget-sound region is missing');
+  const raw = readFileSync('public/terrain/puget-sound.bin');
+  const field = heightFieldFromBytes(
+    raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
+    region,
+  );
+  const elevation = (lat: number, lon: number) => {
+    const p = worldFromLatLon(region, lat, lon);
+    return field.elevationAt(p.x, p.y);
+  };
+
+  it('is the size the region says it is', () => {
+    expect(raw.byteLength).toBe(rasterBytes(region));
+  });
+
+  it('has the main basin deeper than any other region gets', () => {
+    expect(elevation(47.681, -122.464)).toBeLessThan(-250);
+    expect(elevation(47.6, -122.44)).toBeLessThan(-150);
+  });
+
+  it('has Bainbridge to the west and Seattle to the east', () => {
+    expect(elevation(47.665, -122.535)).toBeGreaterThan(20); // Bainbridge
+    expect(elevation(47.63, -122.53)).toBeGreaterThan(10); // Bainbridge, inland
+    expect(elevation(47.71, -122.35)).toBeGreaterThan(80); // the Magnolia bluff
+  });
+
+  it('drops from the bluff to the trench inside two kilometres', () => {
+    // The thing that makes the wind here what it is, and the comparison that
+    // pins the east-west orientation: high land east, deep water just off it.
+    expect(elevation(47.71, -122.35) - elevation(47.681, -122.464)).toBeGreaterThan(350);
+  });
+
+  it('has Elliott Bay deep too, which is why the port is there', () => {
+    expect(elevation(47.6, -122.375)).toBeLessThan(-50);
+  });
+});
+
+/**
+ * Chesapeake Bay, against the chart. The claim is the opposite one: that there
+ * is barely any water under her anywhere.
+ */
+describe('Chesapeake Bay, against the chart', () => {
+  const region = regionById('chesapeake');
+  if (!region) throw new Error('chesapeake region is missing');
+  const raw = readFileSync('public/terrain/chesapeake.bin');
+  const field = heightFieldFromBytes(
+    raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
+    region,
+  );
+  const elevation = (lat: number, lon: number) => {
+    const p = worldFromLatLon(region, lat, lon);
+    return field.elevationAt(p.x, p.y);
+  };
+
+  it('is the size the region says it is', () => {
+    expect(raw.byteLength).toBe(rasterBytes(region));
+  });
+
+  it('has the western shore above water', () => {
+    expect(elevation(39.02, -76.485)).toBeGreaterThan(5); // Annapolis side
+    expect(elevation(39.035, -76.502)).toBeGreaterThan(20);
+  });
+
+  it('has a dredged channel, and nothing else deep', () => {
+    // The deepest water in the square is a shipping channel, and even that is
+    // shallower than the *median* depth at Puget Sound.
+    expect(elevation(38.917, -76.389)).toBeLessThan(-30);
+    expect(elevation(38.917, -76.389)).toBeGreaterThan(-60);
+  });
+
+  it('is shoal over most of it, which is the whole character', () => {
+    for (const [lat, lon] of [
+      [38.96, -76.3],
+      [38.9, -76.44],
+    ] as [number, number][]) {
+      const e = elevation(lat, lon);
+      expect(e).toBeLessThan(0);
+      expect(e).toBeGreaterThan(-6);
+    }
+  });
+});
+
+/**
+ * Buzzards Bay, against the chart. The claim is open water: land only round the
+ * edges, and an even, moderate depth across the middle.
+ */
+describe('Buzzards Bay, against the chart', () => {
+  const region = regionById('buzzards-bay');
+  if (!region) throw new Error('buzzards-bay region is missing');
+  const raw = readFileSync('public/terrain/buzzards-bay.bin');
+  const field = heightFieldFromBytes(
+    raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
+    region,
+  );
+  const elevation = (lat: number, lon: number) => {
+    const p = worldFromLatLon(region, lat, lon);
+    return field.elevationAt(p.x, p.y);
+  };
+
+  it('is the size the region says it is', () => {
+    expect(raw.byteLength).toBe(rasterBytes(region));
+  });
+
+  it('has the Elizabeth Islands and Cape Cod above water', () => {
+    expect(elevation(41.47, -70.78)).toBeGreaterThan(5); // Naushon
+    expect(elevation(41.603, -70.617)).toBeGreaterThan(20); // Falmouth
+  });
+
+  it('is open and evenly moderate across the middle', () => {
+    // No trench and no flats: the thing that makes it the most sailable square
+    // here is that almost all of it reads the same.
+    for (const [lat, lon] of [
+      [41.58, -70.78],
+      [41.55, -70.75],
+      [41.52, -70.81],
+    ] as [number, number][]) {
+      const e = elevation(lat, lon);
+      expect(e).toBeLessThan(-8);
+      expect(e).toBeGreaterThan(-30);
+    }
+  });
+
+  it('never gets deep anywhere, unlike Puget Sound', () => {
+    let min = Infinity;
+    for (let y = -9000; y <= 9000; y += 250) {
+      for (let x = -9000; x <= 9000; x += 250) min = Math.min(min, field.elevationAt(x, y));
+    }
+    expect(min).toBeLessThan(-25);
+    expect(min).toBeGreaterThan(-60);
+  });
+});
+
+/**
  * What must hold for *every* region, including the next one.
  *
  * The centre is not only where the square is framed from: it is the world

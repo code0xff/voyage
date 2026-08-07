@@ -325,7 +325,172 @@ const MERCHANT_ROW: Region = {
   },
 };
 
-export const REGIONS: readonly Region[] = [SF_BAY, NEWPORT, MERCHANT_ROW];
+/**
+ * Shared by every region baked in the second survey.
+ *
+ * Nine US coasts were reconnoitred, six had CUDEM under the whole square, and
+ * three earned a place. What the other three failed on is recorded at the foot
+ * of this file, because a region rejected for a measured reason is worth as
+ * much to the next person as one accepted.
+ */
+const SURVEY = {
+  source:
+    'NOAA NCEI continuously updated digital elevation model (CUDEM), 1/9 arc-second ' +
+    'topobathymetry, resampled to 25 m',
+  licence: 'US Government work, public domain',
+  grid: { width: 800, height: 800, cell: 25, unit: 0.1 },
+} as const;
+
+/**
+ * Puget Sound: Elliott Bay, Bainbridge, and the main basin between them.
+ *
+ * The region with no bottom. Median depth over its water is **85 m**, where the
+ * next deepest region manages 20 and San Francisco 11; the main basin runs past
+ * 280 m within sight of the city. Nothing else here is remotely like it, and it
+ * matters to how the place sails: depth never decides anything, the anchor is
+ * useless over most of the square, and a mistake costs distance rather than the
+ * keel. Every other region in this list is partly a conversation with the
+ * bottom. This one is not.
+ *
+ * What it has instead is land that stands steep -- the Bainbridge bluffs to the
+ * west, Magnolia and Queen Anne to the east at 128 m -- and a long way apart.
+ * The basin is 7 km across at this latitude and 12 at the south of the square,
+ * which is wider than it feels on a chart. 45% of the square is land and almost
+ * all of it is round the edges. That geometry gives the second highest wind
+ * deficit of any region, 0.100 against San Francisco's 0.173, and it arrives as
+ * shifts off the bluffs rather than as one large lee you can plan around.
+ *
+ * Worth knowing before sailing it: **this is the region where you mostly cannot
+ * see the land you are feeling.** `weather.ts` caps visibility at 2600 m in any
+ * conditions and the scene fog starts closing at a third of that, so the west
+ * shore at 1.7 km comes up as a smudge and the east shore at 5 km not at all.
+ * That cap was set for the procedural ocean, where nothing is ever far away and
+ * drawing to the horizon would be unaffordable; a 20 km square with its shores
+ * 5 km apart is the first thing in this project it actually binds. The wind
+ * shadow is computed from the terrain and not from what is drawn, so the shifts
+ * are there either way -- but it does mean the place looks emptier than it is.
+ */
+const PUGET: Region = {
+  id: 'puget-sound',
+  name: 'Puget Sound',
+  area: 'Washington, USA',
+  brief:
+    'Elliott Bay, Bainbridge and the main basin. Deep enough that the bottom never ' +
+    'enters into it — the decision is the breeze under the bluffs.',
+  // Deep, and with a shore 1.3 km off. Both halves matter: `weather.ts` caps
+  // visibility at 2600 m in any conditions, and centred a kilometre further out
+  // in the basin the nearest land was 1.7 km away on one side and 4.9 km on the
+  // other -- so the region with the most dramatic shoreline in the list opened
+  // on an empty horizon that looked like the procedural ocean.
+  centre: { lat: 47.6375, lon: -122.4753 },
+  utmZone: 10,
+  ...SURVEY,
+  raster: '/terrain/puget-sound.bin',
+  conditions: {
+    windTwd: 350 * DEG,
+    windKnots: 10,
+    gustiness: 0.45,
+    seaScale: 0.6,
+    setDeg: 180,
+    driftKnots: 1.5,
+    fullDepth: 60,
+    startHour: 15,
+  },
+};
+
+/**
+ * Chesapeake Bay off Annapolis: the Severn, the Bay Bridge and the flats.
+ *
+ * Puget Sound's exact opposite, and shipped for that reason. Median depth 6 m
+ * against Puget's 85, and **18% of the square is water too shoal for this boat
+ * to sail** -- the most of any region, San Francisco's 13% included. The bottom
+ * is never far, everywhere, all the time.
+ *
+ * It also carries the lightest breeze in the list at 9 knots, and almost no
+ * stream. That combination is the point: with no tide to play and no lee worth
+ * having -- a wind deficit of 0.025, second lowest -- what is left is finding
+ * pressure in light air over water that will ground you if you stop looking.
+ * The other regions all hand you something to fight; this one hands you very
+ * little and asks what you do with it.
+ */
+const CHESAPEAKE: Region = {
+  id: 'chesapeake',
+  name: 'Chesapeake Bay',
+  area: 'Maryland, USA',
+  brief:
+    'Annapolis, the Severn and the Bay Bridge. The shallowest and the lightest — ' +
+    'more of it is too shoal to sail than anywhere else here.',
+  centre: { lat: 38.9484, lon: -76.3923 },
+  utmZone: 18,
+  ...SURVEY,
+  raster: '/terrain/chesapeake.bin',
+  conditions: {
+    windTwd: 190 * DEG,
+    windKnots: 9,
+    gustiness: 0.35,
+    seaScale: 0.5,
+    setDeg: 340,
+    driftKnots: 0.6,
+    fullDepth: 12,
+    startHour: 14,
+  },
+};
+
+/**
+ * Buzzards Bay, with Woods Hole, Falmouth and the Elizabeth Islands.
+ *
+ * San Francisco's wind and tide with nothing in the way. It has the second
+ * hardest breeze here at 18 knots and, after San Francisco, the hardest stream
+ * at 2 knots -- but only 19% land, the most sailable water of any region at
+ * 78%, and a wind deficit of 0.015, the lowest of the six. San Francisco puts
+ * an island, a shoal and a city front between you and the mark; here there is
+ * open water and a lot of weather in it.
+ *
+ * The famous Buzzards Bay south-wester really does fill to 18 knots on a summer
+ * afternoon with the reliability of a timetable, which is why the gustiness is
+ * the lowest of any region: it is a strong wind that is not a squally one.
+ *
+ * One thing not modelled, said plainly because the place is known for it: Woods
+ * Hole runs four knots and more through a gap a few hundred metres wide. The
+ * stream here is a deep-water rate scaled by depth, so it gives the sound its
+ * two knots and does not give the Hole its gate. That would need a flow model
+ * this project does not have, and inventing the gate by hand would be a number
+ * pretending to be a measurement.
+ */
+const BUZZARDS: Region = {
+  id: 'buzzards-bay',
+  name: 'Buzzards Bay',
+  area: 'Massachusetts, USA',
+  brief:
+    'Woods Hole, Vineyard Sound and the Elizabeth Islands. Hard breeze and hard ' +
+    'stream over open water — the most sailable square here.',
+  centre: { lat: 41.5335, lon: -70.7284 },
+  utmZone: 19,
+  ...SURVEY,
+  raster: '/terrain/buzzards-bay.bin',
+  conditions: {
+    windTwd: 225 * DEG,
+    windKnots: 18,
+    gustiness: 0.3,
+    seaScale: 1,
+    setDeg: 60,
+    driftKnots: 2,
+    fullDepth: 20,
+    startHour: 14,
+  },
+};
+
+
+
+
+export const REGIONS: readonly Region[] = [
+  SF_BAY,
+  NEWPORT,
+  MERCHANT_ROW,
+  PUGET,
+  CHESAPEAKE,
+  BUZZARDS,
+];
 
 export const regionById = (id: string): Region | null =>
   REGIONS.find((r) => r.id === id) ?? null;
@@ -358,3 +523,32 @@ export const rasterBytes = (r: Region): number => r.grid.width * r.grid.height *
 export function placeName(id: string, venueName: (id: string) => string | null): string {
   return regionByStoredId(id)?.name ?? venueName(id) ?? 'Open ocean';
 }
+
+/**
+ * The six candidates that were baked and not kept, and why.
+ *
+ * Kept here rather than deleted because "we looked at it" is worth as much as
+ * "we shipped it", and because the next person to want a US region should not
+ * re-survey these three from scratch. All were measured on the same axes as the
+ * table in `region-terrain.test.ts` compares.
+ *
+ *  - **Long Island Sound (west, off Norwalk).** Extreme on nothing. Land 24%,
+ *    sailable 71%, 2% of it close aboard, wind deficit 0.016, median depth 17 m,
+ *    11 knots, a knot of stream. Every one of those sits inside the range the
+ *    six shipped regions already cover. A square, not a region.
+ *  - **Charleston.** Median depth 6 m and 14% too shoal to sail, which is
+ *    Chesapeake; its only distinction was 1.6 knots of stream, which is less
+ *    than Buzzards Bay's 2. Dominated on both axes it might have won on.
+ *  - **Biscayne Bay.** Extreme on four axes and all of them absences: the least
+ *    land at 9%, the least shelter at 0.006, the least close-aboard water at 1%,
+ *    and the least stream at half a knot, over a median depth of 4 m. Being the
+ *    emptiest square measured is not a reason to sail it.
+ *
+ * Three more never got as far as a bake, for want of data rather than
+ * character. The DEM mosaic has no CUDEM over **San Diego** or the **Channel
+ * Islands** -- both return ETOPO at 15 arc-seconds, which is roughly 450 m and
+ * would be an invented coastline under a 25 m grid. **Chicago** returns a Great
+ * Lakes product rather than ETOPO, but a lake surface sits at 176 m of
+ * elevation and every depth in this project is measured from zero, so a Great
+ * Lakes region needs a datum offset that `Region` does not have.
+ */

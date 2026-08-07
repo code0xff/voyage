@@ -160,31 +160,42 @@ simplifications.
 ### 1c. Regions
 
 A region is a bounded piece of a **real coast**, sailed freely, where the shape
-of the land is genuinely that place. Three ship, each 20 km square at 25 m:
+of the land is genuinely that place. Six ship, each 20 km square at 25 m:
 
 | | | asks |
 |---|---|---|
 | **San Francisco Bay** | the Golden Gate to the Berkeley flats | where is the tide, and where is the bottom |
-| **Newport** | the East Passage, Prudence Island out past Beavertail into Rhode Island Sound | where is the breeze, and when do you leave shelter |
+| **Newport** | the East Passage out into Rhode Island Sound | where is the breeze, and when do you leave shelter |
 | **Merchant Row** | Stonington, the islands below it, the north of Isle au Haut | which side of the island do you take |
+| **Puget Sound** | Elliott Bay, Bainbridge, the main basin | nothing about the bottom — only the breeze under the bluffs |
+| **Chesapeake Bay** | Annapolis, the Severn, the Bay Bridge | how do you find pressure before you find the mud |
+| **Buzzards Bay** | Woods Hole, Vineyard Sound, the Elizabeth Islands | how much of a hard breeze and a hard tide can you hold |
 
-They ask different questions on purpose, and the questions are measured rather
-than asserted. San Francisco is the one the wind shadow matters most in, by a
-long way — a mean deficit of 0.17 over its water against 0.04 and 0.07, with
-43% of it losing a tenth of the breeze or more. Newport is the one that opens
-onto ocean, so the sea state outside is not the sea state inside. Merchant Row
-is the close-quarters one: **16% of its sailable water lies within 200 m of a
-shore, against 8% and 9%** — twice as much, which is the archipelago being an
-obstacle rather than scenery.
+**Each is extreme on some measured axis, and that is the entry requirement.**
 
-That last one is also the clearest case of the measurement overruling the plan.
-Maine was going to be Penobscot Bay proper, on the argument that the Camden
-Hills stand 398 m off the water and would cast the biggest lee in the project.
-That square was baked and measured: it came *last* of the three for shelter, at
-0.038, and swept across every wind it plausibly gets it never beat 0.098. The
-hills are real; the bay is simply too open to sit behind them. The region moved
-some 18 km east to the water where the archipelago is, and the claim changed to
-the one that survived.
+| | land | sailable | too shoal | close aboard | wind deficit | median depth |
+|---|---|---|---|---|---|---|
+| San Francisco Bay | 41% | 47% | 13% | 7% | **0.173** | 11 m |
+| Newport | 43% | 53% | 4% | 8% | 0.041 | 16 m |
+| Merchant Row | 29% | 65% | 5% | **15%** | 0.067 | 20 m |
+| Puget Sound | 45% | 52% | 3% | 8% | 0.100 | **85 m** |
+| Chesapeake Bay | 34% | 48% | **18%** | 2% | 0.025 | **6 m** |
+| Buzzards Bay | 18% | **78%** | 3% | 3% | 0.015 | 14 m |
+
+*Close aboard* is the share of sailable water within 200 m of a shore; *wind
+deficit* is the mean loss to land shadow at the prevailing wind. Both are
+computed from the committed rasters, and `region-terrain.test.ts` holds each
+region to the axis it was chosen for.
+
+**Measurement has overruled the plan twice.** Maine was going to be Penobscot
+Bay proper, because the Camden Hills stand 398 m off the water and should make
+the biggest lee here; it measured *last* of three at 0.038, and never beat 0.098
+under any wind it plausibly gets. The region moved some 18 km east to the water
+where the archipelago is. Then a survey of nine US coasts baked six and kept
+three: **Long Island Sound** was extreme on nothing, **Charleston** was
+Chesapeake with less tide than Buzzards Bay, and **Biscayne Bay** was extreme on
+four axes that were all absences. San Diego, the Channel Islands and Chicago
+never got as far as a bake — see the data note below.
 
 The land and the depths are surveyed, not sketched. They come from NOAA NCEI's
 CUDEM 1/9 arc-second topobathymetry — one continuous measured surface carrying
@@ -195,13 +206,20 @@ Raccoon Strait −20 m, the Berkeley flats −2.6 m. And at Newport: Beavertail
 8.1 m, the East Passage entrance −55 m where it scours between the headlands,
 the West Passage −15 m at the same latitude, Newport Harbour −7.4 m. And at
 Merchant Row: Champlain Mountain on Isle au Haut 163 m, the East Penobscot Bay
-channel −96 m, the water among the islands −9 to −13 m.
+channel −96 m, the water among the islands −9 to −13 m. Puget Sound drops from
+the Magnolia bluff at 128 m to −284 m in the main basin inside two kilometres.
 
 **Still not a chart.** 25 m between soundings, no height of tide, and the grid
 is UTM so bearings are grid bearings — how far off true depends on where the
-region sits in its zone: 0.35° at San Francisco, 0.2° at Merchant Row, and
-1.55° at Newport, which is furthest from its central meridian. Do not take a
-boat anywhere on it.
+region sits in its zone, from 0.2° at Merchant Row to 1.55° at Newport, which is
+furthest from its central meridian. Do not take a boat anywhere on it.
+
+**And only where there is a survey.** CUDEM is the reason the depths are real,
+and it does not reach everywhere: the DEM mosaic returns nothing better than
+ETOPO at ~450 m over San Diego and the Channel Islands, which under a 25 m grid
+would be an invented coastline. The Great Lakes have their own product, but a
+lake surface sits at 176 m of elevation and every depth here is measured from
+zero. Those are gaps in the data, not in the ambition.
 
 Shelter is *data*, not a formula, and this is what a fixed region buys. Fetch
 and wind shadow are swept over the whole grid once per two degrees of wind

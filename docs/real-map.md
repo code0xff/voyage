@@ -3,16 +3,17 @@
 The goal: a bounded region of a real coast, sailed freely, where the shape of
 the land is genuinely that place rather than a suggestion of it.
 
-Built. All three pieces below are done, and three regions are sailable from the
-menu: San Francisco Bay, Newport and Merchant Row. What follows is the design
-and the evidence behind it, updated as each piece lands rather than left as it
-was first written.
+Built. All three pieces below are done, and six regions are sailable from the
+menu: San Francisco Bay, Newport, Merchant Row, Puget Sound, Chesapeake Bay and
+Buzzards Bay. What follows is the design and the evidence behind it, updated as
+each piece lands rather than left as it was first written.
 
-The second and third regions were the real test of the machinery, and it
-passed: each took a `Region` entry and a run of `scripts/fetch-terrain.ts`, and
-not one line of engine, renderer or shader code. What they cost instead was
-reconnaissance and measurement — see "Choosing where the square goes" below,
-which is now the longest-earned section in this document.
+Everything after the first was the real test of the machinery, and it passed:
+each region took a `Region` entry and a run of `scripts/fetch-terrain.ts`, and
+not one line of engine, renderer or shader code. Nine US coasts were surveyed to
+get the last three, six were baked, and three were dropped. What that cost was
+reconnaissance and measurement rather than code — see "Choosing where the square
+goes" below, which is now the longest-earned section in this document.
 
 ---
 
@@ -126,8 +127,10 @@ colours by what is under you, which is how a chart is actually made.
 Two chart changes came with it, both forced by the scale. The ranges gained
 2.5 km and 5 km, because a 20 km bay cannot be planned on a 1200 m chart where
 the Gate is off the edge from the city front. And the chart can be dragged
-around and enlarged, because a passage is planned by looking at water you have
-not reached yet.
+around, because a passage is planned by looking at water you have not reached
+yet. A size toggle came with those and has since gone: range is what answers
+"let me look at this properly", and a second, worse way to ask the same question
+only made the card fight the layout.
 
 ---
 
@@ -219,6 +222,19 @@ The general point: a region is chosen for a reason, the reason is a claim about
 the water, and claims about the water can be computed from the raster in
 seconds. Baking a candidate square costs four requests and a minute. Do that
 before writing prose about what a place is like.
+
+**Bake the rejects too, and say why they lost.** The nine-coast survey kept
+three and dropped three after baking — Long Island Sound was extreme on nothing,
+Charleston was Chesapeake with a smaller tide than Buzzards Bay, and Biscayne
+Bay was extreme only on absences. Those three are written up in `regions.ts`
+beside the ones that shipped, so nobody re-surveys them, and so "extreme on some
+axis" stays a visible entry requirement rather than a private one.
+
+**Check the source, not the coverage map.** Three candidates never reached a
+bake: the mosaic returns only ETOPO at ~450 m over San Diego and the Channel
+Islands, and a Great Lakes product over Chicago whose datum is a lake surface
+176 m above sea level. Both are one `identify` call away and neither is visible
+in a coarse elevation grid — the numbers come back looking perfectly plausible.
 
 **Look at the whole square before baking it.** A coarse `exportImage` over the
 20 km box, drawn as ASCII, answers "is this the shape of the place" for the cost
