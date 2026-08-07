@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, Trash2, Upload } from 'lucide-react';
 import { fromExport, toExport, type LogStore } from '@/logbook';
-import { formatDistance, formatDuration, msToKnots } from '@/sim/units';
+import { formatDistance, formatDuration, formatWhen, msToKnots } from '@/sim/units';
 import { venueById } from '@/sim/venues';
 import type { PassageRecord } from '@/sim/passage';
 
@@ -18,21 +18,13 @@ import type { PassageRecord } from '@/sim/passage';
  * which is nothing like every frame.
  */
 
-const when = (ms: number) =>
-  new Date(ms).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
 function Entry({ p, onRemove }: { p: PassageRecord; onRemove: () => void }) {
   return (
     <div className="group grid grid-cols-[1fr_auto] items-start gap-2 border-b border-border/60 py-2 last:border-0">
       <div>
         <div className="text-[11px]">
           {venueById(p.venue)?.name ?? 'Open ocean'}
-          <span className="ml-2 text-[10px] text-muted-foreground">{when(p.startedAt)}</span>
+          <span className="ml-2 text-[10px] text-muted-foreground">{formatWhen(p.startedAt)}</span>
         </div>
         <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
           {formatDuration(p.duration)} · {formatDistance(p.distance)} ·{' '}

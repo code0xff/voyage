@@ -51,3 +51,26 @@ export function formatDuration(seconds: number): string {
 export function formatDistance(metres: number): string {
   return metres < 1000 ? `${metres.toFixed(0)} m` : `${(metres / 1000).toFixed(2)} km`;
 }
+
+/**
+ * When something happened, in the reader's own locale and time zone.
+ *
+ * For `PassageRecord.startedAt`, which is real time rather than world time --
+ * the one date in this project a person reads. No year: a logbook is read as
+ * "when did I last go out", and every entry in it carrying 2026 is noise until
+ * the day one of them does not, which is a problem to have.
+ *
+ * Here rather than in whichever panel needed it first because two of them do,
+ * and a date the front page and the logbook wrote differently would read as two
+ * different facts. `toLocaleString` is ECMA-402 and not a browser API, so this
+ * does not breach the rule about what `src/sim` may touch -- it resolves the
+ * same way under `tsx` as it does in the browser.
+ */
+export function formatWhen(msSinceEpoch: number): string {
+  return new Date(msSinceEpoch).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}

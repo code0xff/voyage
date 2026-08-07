@@ -27,7 +27,7 @@ import { VENUES, venueById } from "@/sim/venues";
 import { Logbook } from "./Logbook";
 import type { LogStore } from "@/logbook";
 import type { PassageRecord } from "@/sim/passage";
-import { formatDistance, formatDuration } from "@/sim/units";
+import { formatDistance, formatDuration, formatWhen } from "@/sim/units";
 import { cn } from "@/lib/utils";
 
 /** A labelled range control. Sliders read better than numeric inputs for conditions. */
@@ -109,14 +109,7 @@ function LastPassage({ p }: { p: PassageRecord }) {
           <BookOpen className="size-3.5 shrink-0" />
           Last passage
         </span>
-        <span className="text-muted-foreground">
-          {new Date(p.startedAt).toLocaleString(undefined, {
-            month: "short",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </span>
+        <span className="text-muted-foreground">{formatWhen(p.startedAt)}</span>
       </div>
       <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
         {venueById(p.venue)?.name ?? "Open ocean"} · {formatDistance(p.distance)}{" "}
