@@ -3,7 +3,7 @@ import type { Course, RaceState } from '../sim/race';
 import type { GhostSample } from '../sim/replay';
 import { sameIslands, type Island, type Terrain } from '../sim/terrain';
 import type { WindField } from '../sim/wind';
-import { clamp, compassVec } from '../sim/math';
+import { clamp, compassVec, type Vec2 } from '../sim/math';
 import { token } from '../ui/tokens';
 
 /**
@@ -79,6 +79,8 @@ export interface MinimapInput {
   range: number;
   /** Bumped by the engine on every new session; the track starts over on it. */
   session: number;
+  /** Where the boat is bound, or null when she is just out sailing. */
+  destination: Vec2 | null;
 }
 
 /** Shore and safe-water radius at each bearing, both measured from the centre. */
@@ -95,6 +97,13 @@ interface Outline {
 
 export interface Minimap {
   draw(ctx: CanvasRenderingContext2D, size: number, input: MinimapInput): void;
+  /**
+   * The world position under a canvas pixel, for pointing at somewhere to go.
+   *
+   * Only meaningful after a draw, since the chart's centre pans with the boat
+   * and it is the last drawn centre a click is being read against.
+   */
+  worldAt(px: number, py: number, size: number, rangeIndex: number): Vec2;
 }
 
 /**
@@ -242,13 +251,33 @@ export function createMinimap(): Minimap {
     ctx.globalAlpha = 1;
   }
 
+  /**
+   * The chart's scale and centre, in one place.
+   *
+   * Shared by drawing and by reading a click back out, because they are the
+   * same transform in opposite directions -- and a second copy of it would put
+   * the destination somewhere other than where the player pointed, which is the
+   * kind of wrong that looks like a physics bug.
+   */
+  const view = (size: number, range: number) => ({
+    k: size / (2 * range), // px per metre
+    cx: size / 2,
+    cy: size / 2,
+  });
+
   return {
+    /** Where on the chart a canvas pixel is, in world coordinates. */
+    worldAt(px, py, size, rangeIndex) {
+      const range = RANGES[clamp(rangeIndex, 0, RANGES.length - 1)];
+      const { k, cx, cy } = view(size, range);
+      // The y axis is flipped on the way out, so it flips back on the way in.
+      return { x: centreX + (px - cx) / k, y: centreY - (py - cy) / k };
+    },
+
     draw(ctx, size, input) {
       const rangeIndex = clamp(input.range, 0, RANGES.length - 1);
       const range = RANGES[rangeIndex];
-      const k = size / (2 * range); // px per metre
-      const cx = size / 2;
-      const cy = size / 2;
+      const { k, cx, cy } = view(size, range);
       const bx = input.state.pos.x;
       const by = input.state.pos.y;
 
@@ -425,6 +454,34 @@ export function createMinimap(): Minimap {
         ctx.fillStyle = token('--muted-foreground', 0.8);
         ctx.beginPath();
         ctx.arc(sx(input.ghost.x), sy(input.ghost.y), 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // --- Where she is bound --------------------------------------------------
+      // Drawn before the boat so the boat sits on top of it on arrival, and as a
+      // ring with the rhumb line to it rather than a filled dot: the line is the
+      // useful part, because the gap between it and the track astern is the tide
+      // and the leeway, made visible without a number.
+      if (input.destination) {
+        const dx = sx(input.destination.x);
+        const dy = sy(input.destination.y);
+        ctx.strokeStyle = token('--info', 0.55);
+        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(sx(bx), sy(by));
+        ctx.lineTo(dx, dy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.strokeStyle = token('--info');
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(dx, dy, 5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(dx, dy, 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = token('--info');
         ctx.fill();
       }
 

@@ -14,7 +14,9 @@ const SIZE = 176;
  * cannot help with.
  *
  * The range is the one piece of state here that changes rarely, so it is
- * ordinary React state. Click the chart or press `N` to cycle it.
+ * ordinary React state; `N` cycles it. Clicking the chart sets where the boat
+ * is bound, which is the thing worth doing to a chart in a game about getting
+ * somewhere.
  */
 export function MinimapCard() {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -58,6 +60,7 @@ export function MinimapCard() {
       draft: CRUISER.draft,
       range,
       session: s.session,
+      destination: s.destination,
     });
   });
 
@@ -74,11 +77,28 @@ export function MinimapCard() {
           <span ref={runLabel} className="ml-1" />
         </Badge>
       </div>
+      {/*
+        Click sets where she is bound; N changes the range. The click used to
+        cycle the range, and that was the right binding for a chart you glance
+        at during a race. Pointing at somewhere to go is the more valuable thing
+        to do to a chart now, and N already existed as the documented way to
+        change scale. Right-click clears it -- a destination you cannot put down
+        is an obligation, which is the one thing this is not for.
+      */}
       <canvas
         ref={ref}
-        onClick={cycle}
-        title="Click or press N to change range"
-        className="block cursor-pointer"
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          engine.setDestination(
+            minimap.current.worldAt(e.clientX - r.left, e.clientY - r.top, SIZE, range),
+          );
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          engine.setDestination(null);
+        }}
+        title="Click to set where you are bound · right-click to clear · N for range"
+        className="block cursor-crosshair"
         style={{ width: SIZE, height: SIZE }}
       />
     </Card>

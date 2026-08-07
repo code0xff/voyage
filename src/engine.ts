@@ -11,10 +11,11 @@ import { solvePolar, type Polar } from './sim/polar';
 import { WindField } from './sim/wind';
 import { CurrentField, DEFAULT_FULL_DEPTH } from './sim/current';
 import { venueById } from './sim/venues';
+import { passageInfo, type PassageInfo } from './sim/passage';
 import { WaveField, sampleHull, type HullWaveSample } from './sim/waves';
 import { MAX_REEF, autoReef, type ReefState } from './sim/sailplan';
 import { cyclePilot, initialPilot, pilotRudder, type PilotState } from './sim/autopilot';
-import { DEG, RAD, approach, clamp, compassVec, wrap2Pi, wrapPi } from './sim/math';
+import { DEG, RAD, approach, clamp, compassVec, wrap2Pi, wrapPi, type Vec2 } from './sim/math';
 import { msToKnots } from './sim/units';
 import { buildCourse, initialRaceState, updateRace, type Course, type RaceState } from './sim/race';
 import {
@@ -25,7 +26,7 @@ import {
   sameIslands,
   type Island,
 } from './sim/terrain';
-import { skyState, type SkyState } from './sim/sky';
+import { hoursUntilSunset, skyState, type SkyState } from './sim/sky';
 import { Wildlife } from './sim/wildlife';
 import { Weather } from './sim/weather';
 import {
@@ -94,6 +95,25 @@ export interface Snapshot {
   pilot: PilotState;
   /** Whether the boat is showing her lights. */
   lightsOn: boolean;
+  /**
+   * Real seconds until sunset, or Infinity with the clock stopped.
+   *
+   * Real seconds, not world ones, so it can be compared with an arrival time
+   * directly. The boat moves in real time and the sun at the time scale, so the
+   * two are only the same number at 1x -- and "do I get there before dark" is
+   * meaningless until they are in the same units.
+   */
+  darkIn: number;
+  /** Where she is bound, or null when she is just out sailing. */
+  destination: Vec2 | null;
+  /**
+   * The navigation to that destination, recomputed every step.
+   *
+   * Null when there is nowhere to be, which is a state worth having rather than
+   * a gap to fill: sailing about with no destination is the default, and the
+   * readouts hide themselves rather than showing zeroes.
+   */
+  passage: PassageInfo | null;
 }
 
 export type EngineEvent =
@@ -112,6 +132,8 @@ export interface Engine {
   onEvent(cb: (e: EngineEvent) => void): () => void;
   startRace(): void;
   freeSail(): void;
+  /** Point her at somewhere, or pass null to just go sailing. */
+  setDestination(pos: Vec2 | null): void;
   setPaused(paused: boolean): void;
   applySettings(s: Settings): void;
   toggleCamera(): void;
@@ -189,6 +211,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   /** The wind the wave field is currently built from; it lags the real one. */
   let seaTws = windMs(settings);
   const pilot = initialPilot();
+  let destination: Vec2 | null = null;
   let current = settings;
 
   const view: SceneView = createScene(canvas, cfg);
@@ -212,6 +235,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   const snapshot: Snapshot = {
     state,
     diag: null,
+    darkIn: Infinity,
+    destination: null,
+    passage: null,
     env,
     wind,
     currents,
@@ -522,6 +548,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     rebuildWorld();
   }
 
+  function setDestination(pos: Vec2 | null): void {
+    destination = pos;
+    snapshot.destination = pos;
+    // Cleared immediately rather than left to the next step, so a readout that
+    // reads between now and then does not show the passage to a place the boat
+    // is no longer bound for.
+    if (!pos) snapshot.passage = null;
+  }
+
   function startRace(): void {
     newSession();
     racing = true;
@@ -633,6 +668,22 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
     diag = step(state, cfg, env, ctl, PHYS_DT, { sea });
     snapshot.diag = diag;
+
+    // Worked from what the boat is actually doing over the ground, so it costs
+    // one call a step rather than being recomputed by every readout that wants
+    // a piece of it.
+    snapshot.darkIn =
+      current.timeScale > 1e-6 ? (hoursUntilSunset(hour) * 3600) / current.timeScale : Infinity;
+    snapshot.passage = destination
+      ? passageInfo(
+          state.pos,
+          destination,
+          { x: diag.sog * Math.sin(diag.cog), y: diag.sog * Math.cos(diag.cog) },
+          diag.speed,
+          env.current ?? { x: 0, y: 0 },
+          env.twd,
+        )
+      : null;
 
     // Distance over the ground, which is not distance through the water: it
     // includes leeway, and it is the number that answers "how far have I
@@ -829,6 +880,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     },
     startRace,
     freeSail,
+    setDestination,
     setPaused(p) {
       paused = p;
       snapshot.paused = p;

@@ -562,7 +562,8 @@ with a personal best updates the ghost you race against next time.
 | `Q E` | mean wind direction |
 | `[ ]` | mean wind speed |
 | `C` | camera (chase / top-down) |
-| `N` | chart range (also click the chart) |
+| `N` | chart range |
+| click the chart | set where you are bound; right-click clears it |
 | drag | orbit the camera around the boat |
 | wheel | zoom |
 | double-click | recentre the view astern |

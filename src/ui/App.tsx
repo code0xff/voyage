@@ -8,6 +8,7 @@ import { RaceBar } from './RaceBar';
 import { MenuDialog, type RaceResult } from './MenuDialog';
 import { HintBar } from './HintBar';
 import { MinimapCard } from './MinimapCard';
+import { PassageBar } from './PassageBar';
 
 /**
  * The app shell.
@@ -122,8 +123,12 @@ export function App() {
             <div className="flex h-full flex-col">
               <div className="flex items-start justify-between gap-3">
                 <Instruments />
-                <div className="flex-1">
+                {/* The race clock and the passage share this slot: they are the
+                    same question -- where am I going and how is it going -- and
+                    you are never asking both. */}
+                <div className="flex-1 space-y-2">
                   <RaceBar />
+                  <PassageBar />
                 </div>
                 <PolarCard />
               </div>

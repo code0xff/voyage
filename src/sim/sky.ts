@@ -177,6 +177,20 @@ function blend(a: typeof DAY, b: typeof DAY, k: number): typeof DAY {
   };
 }
 
+/**
+ * World hours until the sun goes down, or zero once it already has.
+ *
+ * The passage question -- will I get there before dark -- needs this in the
+ * same units as an arrival time, and the two are not naturally in the same
+ * units at all: the boat moves in real seconds while the sun moves at the time
+ * scale. Converting is the caller's job, because the clock rate is a setting
+ * and this file is a pure function of the hour.
+ */
+export function hoursUntilSunset(hourRaw: number): number {
+  const h = wrapHour(hourRaw);
+  return h < SUNSET ? SUNSET - h : 0;
+}
+
 /** Label for the HUD. */
 export function phaseName(sky: SkyState): string {
   const e = sky.sunElevation;
