@@ -86,6 +86,17 @@ export function createLogStore(): LogStore {
   };
 }
 
+/**
+ * The logbook, shared.
+ *
+ * One store rather than one per owner: the engine writes to it and the menu
+ * reads it, and two instances would be two answers to one question the moment a
+ * delete or an import touched only one of them. It is app-level persistence
+ * like the settings are, not something the engine owns -- which also means the
+ * menu can read it before an engine exists.
+ */
+export const logbook: LogStore = createLogStore();
+
 /** Version stamp on an exported file, so a future format can recognise this one. */
 export const EXPORT_VERSION = 1;
 

@@ -6,6 +6,7 @@ import { Instruments } from './Instruments';
 import { PolarCard } from './PolarCard';
 import { RaceBar } from './RaceBar';
 import { MenuDialog, type RaceResult } from './MenuDialog';
+import { logbook } from '@/logbook';
 import { HintBar } from './HintBar';
 import { MinimapCard } from './MinimapCard';
 import { PassageBar } from './PassageBar';
@@ -24,6 +25,14 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(true);
   const [result, setResult] = useState<RaceResult | null>(null);
   const [started, setStarted] = useState(false);
+  /**
+   * Bumped when a passage is written, so the logbook reloads on it.
+   *
+   * A counter rather than the records themselves: they live in IndexedDB behind
+   * an async store, and holding a second copy in React would be two answers to
+   * one question the moment an import or a delete touched only one of them.
+   */
+  const [logVersion, setLogVersion] = useState(0);
 
   // Keep the latest settings reachable from the engine callbacks without
   // re-creating the engine on every keystroke.
@@ -38,6 +47,7 @@ export function App() {
 
     const offEvent = e.onEvent((ev) => {
       if (ev.type === 'toggleMenu') setMenuOpen((v) => !v);
+      if (ev.type === 'arrived') setLogVersion((v) => v + 1);
       // The engine rolls the world, so the seed shown in the menu has to follow
       // it -- otherwise the field would name a sea the player is not sailing in.
       if (ev.type === 'world') {
@@ -150,6 +160,8 @@ export function App() {
         onFreeSail={freeSail}
         result={result}
         canResume={started}
+        logbook={logbook}
+        logVersion={logVersion}
       />
     </div>
   );

@@ -14,7 +14,7 @@ import { venueById } from './sim/venues';
 import { passageInfo, type PassageInfo, type PassageRecord } from './sim/passage';
 import { anchorage, type Anchorage } from './sim/anchorage';
 import { PassageLog } from './sim/passage';
-import { createLogStore, type LogStore } from './logbook';
+import { logbook } from './logbook';
 import { WaveField, sampleHull, type HullWaveSample } from './sim/waves';
 import { MAX_REEF, autoReef, type ReefState } from './sim/sailplan';
 import { cyclePilot, initialPilot, pilotRudder, type PilotState } from './sim/autopilot';
@@ -143,8 +143,6 @@ export interface Engine {
   freeSail(): void;
   /** Point her at somewhere, or pass null to just go sailing. */
   setDestination(pos: Vec2 | null): void;
-  /** The logbook. Exposed so the UI can read and manage it without a second store. */
-  readonly logbook: LogStore;
   setPaused(paused: boolean): void;
   applySettings(s: Settings): void;
   toggleCamera(): void;
@@ -226,7 +224,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let anchored = false;
   /** The passage under way, or null when she is just out sailing. */
   let log: PassageLog | null = null;
-  const logbook: LogStore = createLogStore();
   let current = settings;
 
   const view: SceneView = createScene(canvas, cfg);
@@ -960,7 +957,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     startRace,
     freeSail,
     setDestination,
-    logbook,
     setPaused(p) {
       paused = p;
       snapshot.paused = p;

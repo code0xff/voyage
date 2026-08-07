@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Anchor,
   ArrowLeft,
+  BookOpen,
   Compass,
   Play,
   Sailboat,
@@ -28,6 +29,8 @@ import { formatClock } from "@/sim/sky";
 import { WEATHER_KINDS, WEATHER_LABEL, type WeatherKind } from "@/sim/weather";
 import { withVenue, withoutVenue, type Settings } from "@/settings";
 import { VENUES, venueById } from "@/sim/venues";
+import { Logbook } from "./Logbook";
+import type { LogStore } from "@/logbook";
 import { cn } from "@/lib/utils";
 
 export interface RaceResult {
@@ -125,6 +128,8 @@ export function MenuDialog({
   onFreeSail,
   result,
   canResume,
+  logbook,
+  logVersion,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -134,6 +139,9 @@ export function MenuDialog({
   onFreeSail: () => void;
   result: RaceResult | null;
   canResume: boolean;
+  logbook: LogStore;
+  /** Bumped whenever a passage is written, so the log reloads instead of polling. */
+  logVersion: number;
 }) {
   const [tab, setTab] = useState("race");
   /**
@@ -324,6 +332,9 @@ export function MenuDialog({
             </TabsTrigger>
             <TabsTrigger value="conditions" className="flex-1">
               <Wind /> Conditions
+            </TabsTrigger>
+            <TabsTrigger value="log" className="flex-1">
+              <BookOpen /> Log
             </TabsTrigger>
             <TabsTrigger value="keys" className="flex-1">
               <Waves /> Controls
@@ -529,6 +540,10 @@ export function MenuDialog({
               different. A squall on the second beat forces a reef and changes
               which side pays.
             </p>
+          </TabsContent>
+
+          <TabsContent value="log" className="mt-4">
+            <Logbook store={logbook} version={logVersion} />
           </TabsContent>
 
           <TabsContent value="keys" className="mt-4">
