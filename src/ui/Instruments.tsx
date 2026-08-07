@@ -288,14 +288,17 @@ export function Instruments() {
       <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
         <Gauge label="BSP" unit="kn" emphasis read={(s) => (s.diag ? msToKnots(s.diag.speed).toFixed(2) : '--')} />
         <Gauge label="VMG" unit="kn" emphasis read={(s) => (s.diag ? msToKnots(s.diag.vmg).toFixed(2) : '--')} />
-        <Gauge label="HDG" read={(s) => deg(wrap2Pi(s.state.heading) * RAD)} />
         {/*
-          SOG and COG sit next to BSP and HDG because the pairs are only worth
-          reading against each other: the gap between them *is* the tide, and on
-          slack water they agree and say so.
+          Their own row rather than slotted into the next gap, so BSP sits
+          directly above SOG and the two can be read as a column: through the
+          water above, over the ground below. The difference between them is the
+          tide, and on slack water they agree and say so. HDG follows on the row
+          under, which keeps all four of the where-am-I-going numbers in the top
+          three rows.
         */}
         <Gauge label="SOG" unit="kn" read={(s) => (s.diag ? msToKnots(s.diag.sog).toFixed(2) : '--')} />
         <Gauge label="COG" read={(s) => (s.diag ? deg(wrap2Pi(s.diag.cog) * RAD) : '--')} />
+        <Gauge label="HDG" read={(s) => deg(wrap2Pi(s.state.heading) * RAD)} />
         <Gauge label="TWS" unit="kn" read={(s) => msToKnots(s.env.tws).toFixed(1)} />
         <Gauge label="TWA" read={(s) => (s.diag ? deg(s.diag.twa * RAD) : '--')} />
         <Gauge label="TWD" read={(s) => deg(wrap2Pi(s.env.twd) * RAD)} />
