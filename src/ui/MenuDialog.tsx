@@ -128,6 +128,7 @@ export function MenuDialog({
   canResume,
   logbook,
   logVersion,
+  onLogChanged,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -138,6 +139,8 @@ export function MenuDialog({
   logbook: LogStore;
   /** Bumped whenever a passage is written, so the log reloads instead of polling. */
   logVersion: number;
+  /** Called when the log panel writes to the store, so `logVersion` can follow. */
+  onLogChanged: () => void;
 }) {
   const [tab, setTab] = useState("world");
   /**
@@ -523,7 +526,7 @@ export function MenuDialog({
           </TabsContent>
 
           <TabsContent value="log" className="mt-4">
-            <Logbook store={logbook} version={logVersion} />
+            <Logbook store={logbook} version={logVersion} onChanged={onLogChanged} />
           </TabsContent>
 
           <TabsContent value="keys" className="mt-4">

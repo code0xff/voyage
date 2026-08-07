@@ -86,6 +86,16 @@ export function App() {
     engine?.setPaused(menuOpen);
   }, [engine, menuOpen]);
 
+  /**
+   * One signal that the logbook changed, for every panel that reads it.
+   *
+   * Arrivals come through the engine, and the log panel's own imports and
+   * deletes come through here. Both land on the same counter so that the
+   * logbook list and the last-passage row on the front page can never be
+   * looking at two different versions of the store.
+   */
+  const bumpLog = useCallback(() => setLogVersion((v) => v + 1), []);
+
   const applySettings = useCallback(
     (next: Settings) => {
       setSettings(next);
@@ -138,6 +148,7 @@ export function App() {
         canResume={started}
         logbook={logbook}
         logVersion={logVersion}
+        onLogChanged={bumpLog}
       />
     </div>
   );

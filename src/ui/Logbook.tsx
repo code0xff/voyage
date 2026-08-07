@@ -56,7 +56,24 @@ function Entry({ p, onRemove }: { p: PassageRecord; onRemove: () => void }) {
   );
 }
 
-export function Logbook({ store, version }: { store: LogStore; version: number }) {
+export function Logbook({
+  store,
+  version,
+  onChanged,
+}: {
+  store: LogStore;
+  version: number;
+  /**
+   * Called after this panel writes to the store, so that whoever owns `version`
+   * can bump it and everything reading the logbook reloads together.
+   *
+   * The panel used to just reload itself, which was enough while it was the
+   * only thing showing a passage. It is not: the front page shows the last one,
+   * and deleting that one here left it sitting on the way in, naming a passage
+   * that no longer existed.
+   */
+  onChanged: () => void;
+}) {
   const [passages, setPassages] = useState<PassageRecord[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   /**
@@ -123,10 +140,10 @@ export function Logbook({ store, version }: { store: LogStore; version: number }
         } catch {
           setProblem('Some of that file could not be saved.');
         } finally {
-          // Reloaded either way. A partial import has written real rows, and
+          // Announced either way. A partial import has written real rows, and
           // leaving them off the screen would show a logbook that is not the
           // one on disk.
-          reload();
+          onChanged();
         }
       },
       () => setProblem('That file could not be read.'),
@@ -137,13 +154,13 @@ export function Logbook({ store, version }: { store: LogStore; version: number }
     void store.remove(id).then(
       () => {
         setProblem(null);
-        reload();
+        onChanged();
       },
       () => {
         setProblem('That passage could not be removed.');
-        // Reloaded on the failure too: the row may or may not have gone, and
-        // the list on screen has to be the one in the store either way.
-        reload();
+        // Announced on the failure too: the row may or may not have gone, and
+        // every reader has to end up looking at the store either way.
+        onChanged();
       },
     );
 
