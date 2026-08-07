@@ -21,11 +21,10 @@ export function HintBar() {
     // At anchor first: it is a state she is in, not advice about one, and while
     // she is lying to it nothing else on this list is worth saying.
     if (s.anchored) parts.push('At anchor — A to weigh');
-    else if (s.clearance < 0) parts.push('Aground — sail off before you lose the race');
+    else if (s.clearance < 0) parts.push('Aground — sail her off before the tide leaves you');
     else if (w.exposure < 0.6) parts.push('In the lee of the land — get back into clear air');
     else if (s.weather.state.kind === 'squall') parts.push('Squall — reef before it hits');
     else if (s.weather.state.fog > 0.5) parts.push('Thick fog — steer on the bearing readout');
-    else if (s.race.phase === 'prestart' && s.racing) parts.push('Time the line: cross on zero, not before');
     // Only once she is nearly stopped, because that is when it becomes a
     // decision. Offered at six knots it would be noise on every passage.
     else if (s.anchorage?.canAnchor)

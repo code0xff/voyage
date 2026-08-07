@@ -149,7 +149,7 @@ for (const c of cases) {
 
   // The opening menu does not take Escape -- it wants a choice. Free sail is
   // the one that does not start a countdown.
-  await page.getByRole('button', { name: /Free sail/ }).click();
+  await page.getByRole('button', { name: /Put to sea|Free sail/ }).click();
   await page.waitForTimeout(1200);
 
   // Anything the keyboard drives and no setting does: `c` for the top-down

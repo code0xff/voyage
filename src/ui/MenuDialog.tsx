@@ -4,9 +4,6 @@ import {
   ArrowLeft,
   BookOpen,
   Compass,
-  Play,
-  Sailboat,
-  Settings2,
   SlidersHorizontal,
   Waves,
   Wind,
@@ -22,25 +19,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import type { Course, RaceState } from "@/sim/race";
 import { formatClock } from "@/sim/sky";
 import { WEATHER_KINDS, WEATHER_LABEL, type WeatherKind } from "@/sim/weather";
 import { withVenue, withoutVenue, type Settings } from "@/settings";
 import { VENUES, venueById } from "@/sim/venues";
 import { Logbook } from "./Logbook";
 import type { LogStore } from "@/logbook";
-import { formatTime } from "@/sim/units";
 import { cn } from "@/lib/utils";
-
-export interface RaceResult {
-  time: number;
-  isBest: boolean;
-  race: RaceState;
-  course: Course;
-  best: number | null;
-}
 
 /** A labelled range control. Sliders read better than numeric inputs for conditions. */
 function Slider({
@@ -81,53 +67,12 @@ function Slider({
   );
 }
 
-function Results({ result }: { result: RaceResult }) {
-  const labels = result.course.legs.map((l) => l.label);
-  return (
-    <div className="rounded-lg border border-border bg-secondary/40 p-4">
-      <div className="text-center font-mono text-3xl tabular-nums text-success">
-        {formatTime(result.time)}
-      </div>
-      <div className="mt-1 text-center text-[11px]">
-        {result.isBest ? (
-          <span className="text-warning">
-            New personal best — ghost updated
-          </span>
-        ) : result.best !== null ? (
-          <span className="text-muted-foreground">
-            Personal best {formatTime(result.best)} ·{" "}
-            {result.time - result.best >= 0 ? "+" : ""}
-            {(result.time - result.best).toFixed(1)}s
-          </span>
-        ) : null}
-      </div>
-      <Separator className="my-3" />
-      <div className="space-y-0.5">
-        {result.race.splits.map((t, i) => (
-          <div
-            key={i}
-            className="grid grid-cols-[1fr_auto_58px] gap-3 font-mono text-[10.5px] tabular-nums text-muted-foreground"
-          >
-            <span className="truncate font-sans">{labels[i] ?? ""}</span>
-            <span>{formatTime(t)}</span>
-            <span className="text-right opacity-70">
-              +{(t - (i === 0 ? 0 : result.race.splits[i - 1])).toFixed(1)}s
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function MenuDialog({
   open,
   onOpenChange,
   settings,
   onSettings,
-  onStartRace,
-  onFreeSail,
-  result,
+  onPutToSea,
   canResume,
   logbook,
   logVersion,
@@ -136,15 +81,13 @@ export function MenuDialog({
   onOpenChange: (v: boolean) => void;
   settings: Settings;
   onSettings: (s: Settings) => void;
-  onStartRace: () => void;
-  onFreeSail: () => void;
-  result: RaceResult | null;
+  onPutToSea: () => void;
   canResume: boolean;
   logbook: LogStore;
   /** Bumped whenever a passage is written, so the log reloads instead of polling. */
   logVersion: number;
 }) {
-  const [tab, setTab] = useState("race");
+  const [tab, setTab] = useState("world");
   /**
    * The dialog is two screens, not one.
    *
@@ -223,52 +166,22 @@ export function MenuDialog({
       </button>
 
       <div>
-        {result && (
-          <div className="mb-4">
-            <Results result={result} />
-          </div>
-        )}
-
         {view === "play" && (
           <>
             {/* Going back to a session in progress is the likeliest thing
                 anyone here wants, so it leads and it is the wide one. The two
                 below it both throw that session away, which is why they are
                 not sitting in the same row as it. */}
-            {/* Stacked, not side by side. A row of two reads as one choice
-                against another, the way Cancel sits next to OK -- but these are
-                not opposites, they are two different games, and a list is how
-                you offer those. It also absorbs a third mode without becoming a
-                cramped row of three. Weight comes from the variant, not the
-                width, so Resume still leads. */}
-            {canResume && (
-              <Button className="mb-2 w-full justify-between" onClick={() => onOpenChange(false)}>
-                <span className="flex items-center gap-2">
-                  <Sailboat /> Resume
-                </span>
-                <span className="opacity-60">Esc</span>
-              </Button>
-            )}
             <div className="space-y-2">
               <Button
                 variant={canResume ? "secondary" : "default"}
                 className="w-full justify-between"
-                onClick={onStartRace}
+                onClick={onPutToSea}
               >
                 <span className="flex items-center gap-2">
-                  <Play /> {result ? "Race again" : "Start race"}
+                  <Compass /> Put to sea
                 </span>
-                <span className="font-normal opacity-60">round the marks, timed</span>
-              </Button>
-              <Button
-                variant="secondary"
-                className="w-full justify-between"
-                onClick={onFreeSail}
-              >
-                <span className="flex items-center gap-2">
-                  <Compass /> Free sail
-                </span>
-                <span className="font-normal opacity-60">no course, no clock</span>
+                <span className="font-normal opacity-60">a new world, and time to sail it</span>
               </Button>
             </div>
 
@@ -284,8 +197,6 @@ export function MenuDialog({
                   · {formatClock(settings.startHour)}
                 </div>
                 <div>
-                  {settings.legLength} m × {settings.laps}{" "}
-                  {settings.laps === 1 ? "lap" : "laps"} ·{" "}
                   {/* A venue sets the island count to zero because it brings its
                       own land, so reading "open sea" off that field alone
                       announced San Francisco as an empty ocean. */}
@@ -328,8 +239,8 @@ export function MenuDialog({
           className={view === "settings" ? "" : "hidden"}
         >
           <TabsList className="w-full">
-            <TabsTrigger value="race" className="flex-1">
-              <Settings2 /> Course
+            <TabsTrigger value="world" className="flex-1">
+              <Compass /> World
             </TabsTrigger>
             <TabsTrigger value="conditions" className="flex-1">
               <Wind /> Conditions
@@ -342,34 +253,7 @@ export function MenuDialog({
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="race" className="mt-4 space-y-2.5">
-            <Slider
-              label="Leg length"
-              min={150}
-              max={1000}
-              step={10}
-              value={settings.legLength}
-              format={(v) => `${v} m`}
-              onChange={(v) => set("legLength", v)}
-            />
-            <Slider
-              label="Laps"
-              min={1}
-              max={5}
-              step={1}
-              value={settings.laps}
-              format={(v) => String(v)}
-              onChange={(v) => set("laps", v)}
-            />
-            <Slider
-              label="Countdown"
-              min={5}
-              max={180}
-              step={5}
-              value={settings.countdown}
-              format={(v) => `${v}s`}
-              onChange={(v) => set("countdown", v)}
-            />
+          <TabsContent value="world" className="mt-4 space-y-2.5">
             <div className="grid grid-cols-[104px_1fr] items-center gap-3">
               <span className="text-[11px] text-muted-foreground">Venue</span>
               <Select
@@ -433,7 +317,7 @@ export function MenuDialog({
                   className="shrink-0"
                   onClick={() => set("randomWorld", !settings.randomWorld)}
                 >
-                  {settings.randomWorld ? "New each race" : "Pinned"}
+                  {settings.randomWorld ? "New each time" : "Pinned"}
                 </Button>
               </div>
             </div>

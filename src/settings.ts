@@ -32,10 +32,6 @@ export interface Settings {
    * consistency would only mean the player had to translate.
    */
   setDeg: number;
-  /** Distance to the windward mark, m. */
-  legLength: number;
-  laps: number;
-  countdown: number;
   sound: boolean;
 
   /** Hour of day the session starts at, 0..24. */
@@ -68,9 +64,6 @@ export const DEFAULT_SETTINGS: Settings = {
   seaScale: 1,
   driftKnots: 0,
   setDeg: 90,
-  legLength: 380,
-  laps: 2,
-  countdown: 45,
   sound: true,
   startHour: 9,
   timeScale: 60,
@@ -102,9 +95,6 @@ export function loadSettings(): Settings {
       seaScale: num(o.seaScale, DEFAULT_SETTINGS.seaScale, 0, 2),
       driftKnots: num(o.driftKnots, DEFAULT_SETTINGS.driftKnots, 0, 4),
       setDeg: num(o.setDeg, DEFAULT_SETTINGS.setDeg, 0, 359),
-      legLength: num(o.legLength, DEFAULT_SETTINGS.legLength, 150, 1200),
-      laps: Math.round(num(o.laps, DEFAULT_SETTINGS.laps, 1, 5)),
-      countdown: Math.round(num(o.countdown, DEFAULT_SETTINGS.countdown, 5, 300)),
       sound: typeof o.sound === 'boolean' ? o.sound : DEFAULT_SETTINGS.sound,
       startHour: num(o.startHour, DEFAULT_SETTINGS.startHour, 0, 24),
       timeScale: num(o.timeScale, DEFAULT_SETTINGS.timeScale, 0, 600),

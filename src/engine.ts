@@ -20,7 +20,6 @@ import { MAX_REEF, autoReef, type ReefState } from './sim/sailplan';
 import { cyclePilot, initialPilot, pilotRudder, type PilotState } from './sim/autopilot';
 import { DEG, RAD, approach, clamp, compassVec, wrap2Pi, wrapPi, type Vec2 } from './sim/math';
 import { msToKnots } from './sim/units';
-import { buildCourse, initialRaceState, updateRace, type Course, type RaceState } from './sim/race';
 import {
   EMPTY_TERRAIN,
   IslandField,
@@ -32,15 +31,6 @@ import {
 import { hoursUntilSunset, skyState, type SkyState } from './sim/sky';
 import { Wildlife } from './sim/wildlife';
 import { Weather } from './sim/weather';
-import {
-  Ghost,
-  Recorder,
-  loadBest,
-  loadGhost,
-  saveBest,
-  saveGhost,
-  type GhostSample,
-} from './sim/replay';
 import { currentVec, windMs, type Settings } from './settings';
 import { Input } from './input';
 import { createScene, type SceneView } from './view/scene';
@@ -54,7 +44,7 @@ import { Telemetry } from './view/telemetry';
  * through a reconciler. The engine owns the loop and publishes a single mutable
  * snapshot; the UI reads it every frame and writes numbers straight into the
  * DOM. React is only used for structure and for state that actually changes
- * rarely -- menus, race results, settings.
+ * rarely -- menus and settings.
  */
 
 export interface Snapshot {
@@ -72,14 +62,10 @@ export interface Snapshot {
   currents: CurrentField;
   waves: WaveField;
   terrain: Terrain;
-  course: Course;
-  race: RaceState;
   sky: SkyState;
   weather: Weather;
   polar: Polar | null;
   telemetry: Telemetry;
-  best: number | null;
-  racing: boolean;
   paused: boolean;
   autoTrim: boolean;
   autoReef: boolean;
@@ -89,8 +75,6 @@ export interface Snapshot {
   depth: number;
   /** Depth under the keel, m. Negative means aground. */
   clearance: number;
-  /** Where the ghost is right now, or null when there is nothing to chase. */
-  ghost: GhostSample | null;
   /** Distance sailed over the ground since this session began, m. */
   run: number;
   /** Increments whenever a new session starts. A view can reset its own state on it. */
@@ -132,15 +116,14 @@ export type EngineEvent =
   /** `N` was pressed: the chart should step to its next range. */
   | { type: 'chartRange' }
   /** A passage was completed and written to the logbook. */
-  | { type: 'arrived'; record: PassageRecord }
-  | { type: 'finished'; time: number; isBest: boolean };
+  | { type: 'arrived'; record: PassageRecord };
 
 export interface Engine {
   readonly snapshot: Snapshot;
   onFrame(cb: (s: Snapshot) => void): () => void;
   onEvent(cb: (e: EngineEvent) => void): () => void;
-  startRace(): void;
-  freeSail(): void;
+  /** Start a fresh session: a new world, and the boat put to sea in it. */
+  putToSea(): void;
   /** Point her at somewhere, or pass null to just go sailing. */
   setDestination(pos: Vec2 | null): void;
   setPaused(paused: boolean): void;
@@ -209,9 +192,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   };
 
   let state = initialState();
-  let course = buildCourse(raceCfg(settings), wind.baseTwd);
-  let race = initialRaceState(raceCfg(settings));
-  let racing = false;
   let paused = false;
   let hour = settings.startHour;
   let run = 0;
@@ -229,7 +209,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   const view: SceneView = createScene(canvas, cfg);
   const input = new Input();
   const sound = new SoundEngine();
-  const recorder = new Recorder();
   const telemetry = new Telemetry(
     [
       { label: 'BSP', color: '#4fd1c5', min: 0, max: 10 },
@@ -240,9 +219,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     50,
   );
 
-  let ghost: Ghost | null = loadGhost()?.ghost ?? null;
-  let best = loadBest();
-  const ghostSample: GhostSample = { x: 0, y: 0, heading: 0, heel: 0 };
 
   const snapshot: Snapshot = {
     state,
@@ -257,14 +233,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     currents,
     waves,
     terrain: EMPTY_TERRAIN,
-    course,
-    race,
     sky: skyState(hour),
     weather,
     polar: null,
     telemetry,
-    best,
-    racing,
     paused,
     autoTrim: true,
     autoReef: true,
@@ -272,7 +244,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     polarBusy: false,
     depth: Infinity,
     clearance: Infinity,
-    ghost: null,
     run: 0,
     session: 0,
     pilot,
@@ -282,15 +253,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   const frameSubs = new Set<(s: Snapshot) => void>();
   const eventSubs = new Set<(e: EngineEvent) => void>();
   const emit = (e: EngineEvent) => eventSubs.forEach((f) => f(e));
-
-  function raceCfg(s: Settings) {
-    return {
-      legLength: s.legLength,
-      lineLength: 110,
-      laps: s.laps,
-      countdown: s.countdown,
-    };
-  }
 
   // Browsers block audio until a user gesture. The context must be created here
   // even when sound is off in settings: switching it on later happens inside a
@@ -355,16 +317,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     anchored = false;
     snapshot.anchored = false;
 
-    course = buildCourse(raceCfg(current), wind.baseTwd);
-    race = initialRaceState(raceCfg(current));
-    snapshot.course = course;
-    snapshot.race = race;
-
-    // The sea is endless and the same everywhere, so islands are as likely to
-    // be on the course as anywhere else -- which is the point. An island two
-    // kilometres away is scenery; one a few hundred metres off the layline is a
-    // decision. Only the marks themselves and the starting position are kept
-    // clear, so that a race is always sailable.
     // A venue brings its own land, fixed and known, so there is nothing to
     // stream: the whole place is always loaded. The procedural field is the
     // other case, an endless ocean that has to be looked at through a window.
@@ -382,13 +334,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
             // which is not a round number but the thickest sea the island
             // window is measured to handle without leaving anything out.
             density: (current.islandCount / 10) * MAX_DENSITY,
-            keepClear: [
-              course.start.a,
-              course.start.b,
-              course.windward.pos,
-              course.leeward.pos,
-              { x: -up.x * 90, y: -up.y * 90 },
-            ],
+            // Only where the boat starts is kept clear. An island two
+            // kilometres off is scenery and one a few hundred metres away is a
+            // decision, so the sea is otherwise left to put land wherever it
+            // falls -- that is the point of an endless one.
+            keepClear: [{ x: -up.x * 90, y: -up.y * 90 }],
             clearance: 130,
           })
         : null;
@@ -468,17 +418,13 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     const worldChanged =
       s.islandCount !== current.islandCount ||
       venueChanged ||
-      s.seed !== current.seed ||
-      s.legLength !== current.legLength ||
-      s.laps !== current.laps;
+      s.seed !== current.seed;
     current = s;
 
-    // Arriving at a venue brings its breeze with it, and it has to land before
-    // the world is rebuilt below: the land is laid out around that direction,
-    // and rebuildWorld() builds the course from whatever `baseTwd` says. Left
-    // to the new-session path alone, picking a venue mid-session laid its shore
-    // out for one wind and set the beat by another. Only on arrival, so that
-    // Q/E still work afterwards and editing the leg length does not undo them.
+    // Arriving at a venue brings its breeze with it: its land is laid out
+    // around that direction, so a venue picked mid-session was otherwise
+    // arranged for one wind and sailed in another. Only on arrival, so that
+    // Q/E still work afterwards and a later edit does not undo them.
     if (venueChanged) {
       const arriving = venueById(s.venue);
       if (arriving) wind.baseTwd = arriving.windTwd;
@@ -497,15 +443,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (s.weatherMode !== 'auto') weather.set(s.weatherMode);
     sound.setEnabled(s.sound);
     snapshot.soundOn = s.sound;
-    if (worldChanged) {
-      // rebuildWorld() puts the course and the race back to the prestart, but
-      // the boat stays where she was. Carrying on from there is not the race
-      // that was interrupted and not a fresh one either, so the edit ends it
-      // and what is left is a free sail in the new world.
-      racing = false;
-      snapshot.racing = false;
-      rebuildWorld();
-    }
+    if (worldChanged) rebuildWorld();
     schedulePolar();
   }
 
@@ -633,19 +571,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     emit({ type: 'arrived', record });
   }
 
-  function startRace(): void {
+  function putToSea(): void {
     newSession();
-    racing = true;
-    snapshot.racing = true;
-    recorder.reset();
-    placeAtStart();
-  }
-
-  function freeSail(): void {
-    newSession();
-    racing = false;
-    snapshot.racing = false;
-    recorder.reset();
     placeAtStart();
   }
 
@@ -775,27 +702,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     run += Math.hypot(state.pos.x - wasX, state.pos.y - wasY);
     snapshot.run = run;
 
-    if (!racing) return;
-
-    const wasFinished = race.phase === 'finished';
-    updateRace(race, course, state.pos, PHYS_DT);
-    if (race.phase === 'racing') {
-      recorder.record(race.clock, state.pos.x, state.pos.y, state.heading, state.heel, PHYS_DT);
-    }
-    if (!wasFinished && race.phase === 'finished' && race.finishTime !== null) {
-      // Only overwrite the ghost on a personal best. Replacing it with a slower
-      // run would leave nothing worth chasing next time.
-      const isBest = best === null || race.finishTime < best;
-      if (isBest) {
-        best = race.finishTime;
-        snapshot.best = best;
-        saveBest(best);
-        const data = recorder.toArray();
-        saveGhost(data, race.finishTime);
-        ghost = new Ghost(data);
-      }
-      emit({ type: 'finished', time: race.finishTime, isBest });
-    }
   }
 
   let raf = 0;
@@ -890,7 +796,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     }
     if (input.wasPressed('n')) emit({ type: 'chartRange' });
     if (input.wasPressed('p')) schedulePolar(0);
-    if (input.wasPressed('r')) (racing ? startRace : freeSail)();
+    if (input.wasPressed('r')) putToSea();
     if (input.wasPressed('y')) {
       autoReefOn = !autoReefOn;
       snapshot.autoReef = autoReefOn;
@@ -941,25 +847,17 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
   function render(dt: number): void {
     if (!diag) return;
-    const showGhost =
-      racing && ghost !== null && race.phase === 'racing' && ghost.sampleAt(race.clock, ghostSample);
-    // Published as well as drawn: the chart wants the same ghost the scene has,
-    // and sampling it twice would be two answers to one question.
-    snapshot.ghost = showGhost ? ghostSample : null;
     view.render({
       state,
       diag,
       wind,
       waves,
-      course,
-      race,
-      sky: snapshot.sky,
+          sky: snapshot.sky,
       weather: weather.state,
       // `hour` is unwrapped and counts on from the session's start hour, which
       // is exactly the monotonic world clock the sky effects want.
       elapsedHours: hour,
       visibility: weather.visibility,
-      ghost: showGhost ? ghostSample : null,
       lightsOn: snapshot.lightsOn,
       session,
       dt,
@@ -968,7 +866,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
   applySettings(settings);
   rebuildWorld();
-  startRace();
+  putToSea();
   // Prime the diagnostics with a single step. The game opens with the menu up,
   // which pauses the physics -- without this the scene has nothing to draw and
   // the player is greeted by a black canvas behind the dialog.
@@ -986,8 +884,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       eventSubs.add(cb);
       return () => eventSubs.delete(cb);
     },
-    startRace,
-    freeSail,
+    putToSea,
     setDestination,
     setPaused(p) {
       paused = p;

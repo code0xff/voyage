@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { WindField } from './wind';
 import { sailPlan } from './sailplan';
 import { CRUISER } from './config';
-import { Ghost } from './replay';
 import { knotsToMs } from './units';
 
 describe('wind field', () => {
@@ -105,25 +104,3 @@ describe('sail plan', () => {
   });
 });
 
-describe('ghost replay', () => {
-  it('interpolates heading the short way around the compass', () => {
-    // Two samples straddling north: 359 degrees then 1 degree.
-    const data = new Float32Array([
-      0, 0, 0, (359 * Math.PI) / 180, 0, 1, 0, 0, (1 * Math.PI) / 180, 0,
-    ]);
-    const g = new Ghost(data);
-    const out = { x: 0, y: 0, heading: 0, heel: 0 };
-    expect(g.sampleAt(0.5, out)).toBe(true);
-    // Naive interpolation would spin the boat 358 degrees the wrong way.
-    const deg = ((out.heading * 180) / Math.PI + 720) % 360;
-    expect(Math.min(deg, 360 - deg)).toBeLessThan(1);
-  });
-
-  it('reports out-of-range times instead of extrapolating', () => {
-    const g = new Ghost(new Float32Array([0, 0, 0, 0, 0, 1, 5, 5, 0, 0]));
-    const out = { x: 0, y: 0, heading: 0, heel: 0 };
-    expect(g.sampleAt(-1, out)).toBe(false);
-    expect(g.sampleAt(99, out)).toBe(false);
-    expect(g.sampleAt(0.5, out)).toBe(true);
-  });
-});

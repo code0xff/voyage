@@ -5,13 +5,10 @@ import { clamp, compassVec, side } from '../sim/math';
 import { REEF_AREA_FACTOR } from '../sim/sailplan';
 import { ADVECTION, type WindField } from '../sim/wind';
 import type { WaveField } from '../sim/waves';
-import type { Course, RaceState } from '../sim/race';
-import type { GhostSample } from '../sim/replay';
 import type { Terrain } from '../sim/terrain';
 import type { SkyState } from '../sim/sky';
 import type { WeatherState } from '../sim/weather';
 import { createWater } from './water';
-import { createCourseView } from './course';
 import { createIslandView } from './islands';
 import { createRain } from './rain';
 import { createSkyDome } from './skydome';
@@ -43,8 +40,6 @@ export interface FrameInput {
   diag: Diagnostics;
   wind: WindField;
   waves: WaveField;
-  course: Course;
-  race: RaceState;
   sky: SkyState;
   weather: WeatherState;
   /**
@@ -56,7 +51,6 @@ export interface FrameInput {
    */
   elapsedHours: number;
   visibility: number;
-  ghost: GhostSample | null;
   /** Whether the boat is showing her lights. */
   lightsOn: boolean;
   /** Bumped on every new session, so the view can drop what it was trailing. */
@@ -304,8 +298,6 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   const rain = createRain();
   scene.add(rain.object);
 
-  const courseView = createCourseView();
-  scene.add(courseView.group);
 
   // --- Wind streaks -------------------------------------------------------
   // Colour and length come from the very same wind field the physics samples.
@@ -518,8 +510,6 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     skyDome.update(sky, f.weather.cloud, f.elapsedHours, wind.baseTwd);
     islandView.update(sky);
 
-    courseView.update(f.course, f.race, waves);
-    courseView.setGhost(f.ghost);
 
     const bx = state.pos.x;
     const bz = -state.pos.y;
@@ -678,7 +668,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     }
 
     // Camera
-    // Restarting a race teleports the boat, and a smoothed camera then flies
+    // Restarting teleports the boat, and a smoothed camera then flies
     // across the ocean for several seconds showing nothing. Snap instead.
     const jumped = camTarget.distanceTo(new THREE.Vector3(bx, 3, bz)) > 150;
 

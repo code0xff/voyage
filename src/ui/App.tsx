@@ -4,8 +4,7 @@ import { loadSettings, saveSettings, type Settings } from '@/settings';
 import { EngineProvider } from './engine-context';
 import { Instruments } from './Instruments';
 import { PolarCard } from './PolarCard';
-import { RaceBar } from './RaceBar';
-import { MenuDialog, type RaceResult } from './MenuDialog';
+import { MenuDialog } from './MenuDialog';
 import { logbook } from '@/logbook';
 import { HintBar } from './HintBar';
 import { MinimapCard } from './MinimapCard';
@@ -23,7 +22,6 @@ export function App() {
   const [engine, setEngine] = useState<Engine | null>(null);
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [menuOpen, setMenuOpen] = useState(true);
-  const [result, setResult] = useState<RaceResult | null>(null);
   const [started, setStarted] = useState(false);
   /**
    * Bumped when a passage is written, so the logbook reloads on it.
@@ -64,16 +62,6 @@ export function App() {
           return next;
         });
       }
-      if (ev.type === 'finished') {
-        setResult({
-          time: ev.time,
-          isBest: ev.isBest,
-          race: e.snapshot.race,
-          course: e.snapshot.course,
-          best: e.snapshot.best,
-        });
-        setMenuOpen(true);
-      }
     });
 
     const onResize = () => e.resize();
@@ -107,18 +95,9 @@ export function App() {
     [engine],
   );
 
-  const startRace = useCallback(() => {
+  const putToSea = useCallback(() => {
     engine?.applySettings(settingsRef.current);
-    engine?.startRace();
-    setResult(null);
-    setMenuOpen(false);
-    setStarted(true);
-  }, [engine]);
-
-  const freeSail = useCallback(() => {
-    engine?.applySettings(settingsRef.current);
-    engine?.freeSail();
-    setResult(null);
+    engine?.putToSea();
     setMenuOpen(false);
     setStarted(true);
   }, [engine]);
@@ -137,7 +116,6 @@ export function App() {
                     same question -- where am I going and how is it going -- and
                     you are never asking both. */}
                 <div className="flex-1 space-y-2">
-                  <RaceBar />
                   <PassageBar />
                 </div>
                 <PolarCard />
@@ -156,9 +134,7 @@ export function App() {
         onOpenChange={setMenuOpen}
         settings={settings}
         onSettings={applySettings}
-        onStartRace={startRace}
-        onFreeSail={freeSail}
-        result={result}
+        onPutToSea={putToSea}
         canResume={started}
         logbook={logbook}
         logVersion={logVersion}

@@ -1,6 +1,4 @@
 import type { BoatState } from '../sim/boat';
-import type { Course, RaceState } from '../sim/race';
-import type { GhostSample } from '../sim/replay';
 import { sameIslands, type Island, type Terrain } from '../sim/terrain';
 import type { WindField } from '../sim/wind';
 import { clamp, compassVec, type Vec2 } from '../sim/math';
@@ -9,9 +7,10 @@ import { token } from '../ui/tokens';
 /**
  * The chart.
  *
- * A minimap in a sailing game is not there to stop you getting lost -- the
- * course is four marks and you can see them. It is there to show the two
- * things that decide a leg and that a helmsman cannot see from the deck:
+ * A chart in a sailing game is not there to stop you getting lost. It is there
+ * to show the two things that decide where to sail and that a helmsman cannot
+ * see from the deck, and to be the thing you point at to say where you are
+ * bound:
  *
  *   1. **Where the breeze is.** The wind is a pure function of position, so it
  *      can simply be drawn: blue where there is more of it, grey where there
@@ -69,10 +68,6 @@ export interface MinimapInput {
   state: BoatState;
   wind: WindField;
   terrain: Terrain;
-  course: Course;
-  race: RaceState;
-  racing: boolean;
-  ghost: GhostSample | null;
   /** Depth the hull needs, m. The shoal contour is drawn at exactly this. */
   draft: number;
   /** Index into RANGES. */
@@ -155,8 +150,7 @@ export function createMinimap(): Minimap {
   // hundred elevation samples and must not happen per frame.
   const outlines = new Map<Island, Outline>();
 
-  // The track is the chart's own record: the recorder only runs during a race,
-  // and a track is worth having while free sailing too.
+  // The chart keeps its own track of where she has been.
   const track = new Float32Array(TRACK_MAX * 2);
   let trackCount = 0;
 
@@ -303,7 +297,7 @@ export function createMinimap(): Minimap {
 
       // A new session is a new track. Guessing from a teleport did not work:
       // the finish gate is the start gate, so a restart moves the boat about
-      // ninety metres and the next race drew on joined to the last one.
+      // ninety metres and the next session drew on joined to the last one.
       if (input.session !== session) {
         session = input.session;
         trackCount = 0;
@@ -410,52 +404,6 @@ export function createMinimap(): Minimap {
         ctx.stroke();
       }
 
-      // --- Course -----------------------------------------------------------
-      if (input.racing) {
-        const c = input.course;
-        const target = c.legs[input.race.legIndex]?.target;
-
-        ctx.strokeStyle = token('--success', 0.9);
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(sx(c.start.a.x), sy(c.start.a.y));
-        ctx.lineTo(sx(c.start.b.x), sy(c.start.b.y));
-        ctx.stroke();
-
-        ctx.strokeStyle = token('--warning');
-        ctx.fillStyle = token('--warning');
-        for (const mark of [c.windward, c.leeward]) {
-          ctx.beginPath();
-          ctx.arc(sx(mark.pos.x), sy(mark.pos.y), 3, 0, Math.PI * 2);
-          ctx.fill();
-          // The rounding zone, at its true radius: whether you are inside it
-          // is a rule, not a feeling.
-          ctx.globalAlpha = 0.4;
-          ctx.beginPath();
-          ctx.arc(sx(mark.pos.x), sy(mark.pos.y), mark.radius * k, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.globalAlpha = 1;
-        }
-
-        // The leg being sailed. Without it the chart shows where everything is
-        // and not which way you are supposed to be going.
-        if (target) {
-          ctx.strokeStyle = token('--warning', 0.55);
-          ctx.setLineDash([3, 3]);
-          ctx.beginPath();
-          ctx.moveTo(sx(bx), sy(by));
-          ctx.lineTo(sx(target.x), sy(target.y));
-          ctx.stroke();
-          ctx.setLineDash([]);
-        }
-      }
-
-      if (input.ghost) {
-        ctx.fillStyle = token('--muted-foreground', 0.8);
-        ctx.beginPath();
-        ctx.arc(sx(input.ghost.x), sy(input.ghost.y), 2.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
 
       // --- Where she is bound --------------------------------------------------
       // Drawn before the boat so the boat sits on top of it on arrival, and as a
