@@ -27,7 +27,7 @@ import { VENUES, venueById } from "@/sim/venues";
 import { Logbook } from "./Logbook";
 import type { LogStore } from "@/logbook";
 import type { PassageRecord } from "@/sim/passage";
-import { formatDistance, formatTime } from "@/sim/units";
+import { formatDistance, formatDuration } from "@/sim/units";
 import { cn } from "@/lib/utils";
 
 /** A labelled range control. Sliders read better than numeric inputs for conditions. */
@@ -120,7 +120,7 @@ function LastPassage({ p }: { p: PassageRecord }) {
       </div>
       <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
         {venueById(p.venue)?.name ?? "Open ocean"} · {formatDistance(p.distance)}{" "}
-        in {formatTime(p.duration)}
+        in {formatDuration(p.duration)}
       </div>
     </div>
   );

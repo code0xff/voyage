@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, Trash2, Upload } from 'lucide-react';
 import { fromExport, toExport, type LogStore } from '@/logbook';
-import { formatDistance, formatTime, msToKnots } from '@/sim/units';
+import { formatDistance, formatDuration, msToKnots } from '@/sim/units';
 import { venueById } from '@/sim/venues';
 import type { PassageRecord } from '@/sim/passage';
 
@@ -35,7 +35,7 @@ function Entry({ p, onRemove }: { p: PassageRecord; onRemove: () => void }) {
           <span className="ml-2 text-[10px] text-muted-foreground">{when(p.startedAt)}</span>
         </div>
         <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
-          {formatTime(p.duration)} · {formatDistance(p.distance)} ·{' '}
+          {formatDuration(p.duration)} · {formatDistance(p.distance)} ·{' '}
           {msToKnots(p.avgSog).toFixed(1)} kn avg ·{' '}
           {msToKnots(p.maxSog).toFixed(1)} max · {p.windKnots.toFixed(0)} kn wind
           {/*

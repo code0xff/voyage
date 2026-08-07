@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { DEG, RAD, wrapPi } from '@/sim/math';
 import { mustTack } from '@/sim/passage';
-import { formatTime } from '@/sim/units';
+import { formatDistance, formatDuration } from '@/sim/units';
 import { useReadout } from './engine-context';
 
 /**
@@ -24,11 +24,12 @@ export function PassageBar() {
     if (root.current) root.current.style.display = p ? '' : 'none';
     if (!p) return '';
     const brg = (((p.bearing * RAD) % 360) + 360) % 360;
-    const dist =
-      p.distance < 1000 ? `${p.distance.toFixed(0)} m` : `${(p.distance / 1000).toFixed(2)} km`;
     // No arrival at all rather than a very large one: a boat that is not closing
     // gets a dash, where four days would read as a number worth acting on.
-    return `${brg.toFixed(0)}°  ·  ${dist}  ·  ${p.eta === null ? '—' : formatTime(p.eta)}`;
+    return (
+      `${brg.toFixed(0)}°  ·  ${formatDistance(p.distance)}  ·  ` +
+      `${p.eta === null ? '—' : formatDuration(p.eta)}`
+    );
   });
 
   /**
