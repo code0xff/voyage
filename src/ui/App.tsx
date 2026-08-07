@@ -128,11 +128,30 @@ export function App() {
                 <div className="flex-1 space-y-2">
                   <PassageBar />
                 </div>
-                <PolarCard />
+                {/*
+                  The polar and the chart share the right column, and the chart
+                  hangs off the top rather than standing on the bottom.
+
+                  It used to sit bottom-right, opposite the hint bar, which
+                  reads better but only holds while it is small. Enlarged, the
+                  chart and the instruments are stacked in the same column of
+                  flow -- instruments above, chart below -- and their combined
+                  height ran 125 px past the bottom of a 760 px window, which is
+                  the shortest this game is played on. Nothing clipped it into
+                  view; the bottom of the chart was simply not on the screen.
+
+                  Sharing the column with the polar puts the two reference
+                  panels together and the two live ones opposite, and it means
+                  the chart grows downward into space the layout knows is free
+                  instead of pushing against an edge.
+                */}
+                <div className="flex flex-col items-end gap-3">
+                  <PolarCard />
+                  <MinimapCard />
+                </div>
               </div>
-              <div className="mt-auto flex items-end justify-between gap-3">
+              <div className="mt-auto flex items-end">
                 <HintBar />
-                <MinimapCard />
               </div>
             </div>
           </div>

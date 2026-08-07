@@ -14,8 +14,14 @@ import { useEngine, useEngineFrame, useReadout } from './engine-context';
  *
  * Two rather than a drag-handle, because a chart is read at a glance and the
  * only two things anyone wants are "out of my way" and "let me actually look at
- * this". The large one is sized to leave the instruments and the hint bar
- * clear on a 760 px window, which is the shortest this game is played on.
+ * this".
+ *
+ * The large one is sized to sit under the polar and still clear the bottom of a
+ * 760 px window, which is the shortest this game is played on. That is a claim
+ * about where the card is placed as much as about how big it is: this comment
+ * used to say the same thing while the chart lived bottom-right, where it was
+ * false -- stacked below the instruments it ran 125 px off the bottom. Moving
+ * it made it true. Measure again if either moves.
  */
 const SIZE_SMALL = 176;
 const SIZE_LARGE = 320;
