@@ -19,7 +19,8 @@ npm run build
 
 Press `Esc` for the menu and settings.
 
-Contributing? Read [AGENTS.md](AGENTS.md) first.
+Contributing? Read [AGENTS.md](AGENTS.md) first. Known limitations and designs
+for what is not built yet are in [docs/](docs/).
 
 ---
 
