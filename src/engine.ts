@@ -745,6 +745,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       race,
       sky: snapshot.sky,
       weather: weather.state,
+      // `hour` is unwrapped and counts on from the session's start hour, which
+      // is exactly the monotonic world clock the sky effects want.
+      elapsedHours: hour,
       visibility: weather.visibility,
       ghost: showGhost ? ghostSample : null,
       lightsOn: snapshot.lightsOn,

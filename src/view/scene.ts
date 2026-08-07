@@ -47,6 +47,14 @@ export interface FrameInput {
   race: RaceState;
   sky: SkyState;
   weather: WeatherState;
+  /**
+   * World hours since the session began, unwrapped.
+   *
+   * `sky.hour` is the clock face and wraps at midnight; this is the clock. Sky
+   * effects that accumulate -- the stars turning, the cloud drifting -- need
+   * time that does not go backwards once a night.
+   */
+  elapsedHours: number;
   visibility: number;
   ghost: GhostSample | null;
   /** Whether the boat is showing her lights. */
@@ -506,7 +514,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     (scene.fog as THREE.Fog).color.copy(fogColor);
     (scene.fog as THREE.Fog).near = f.visibility * 0.35;
     (scene.fog as THREE.Fog).far = f.visibility;
-    skyDome.update(sky, f.weather.cloud);
+    skyDome.update(sky, f.weather.cloud, f.elapsedHours);
     islandView.update(sky);
 
     courseView.update(f.course, f.race, waves);
