@@ -9,7 +9,7 @@ import {
 } from './sim/boat';
 import { solvePolar, type Polar } from './sim/polar';
 import { WindField } from './sim/wind';
-import { CurrentField } from './sim/current';
+import { CurrentField, DEFAULT_FULL_DEPTH } from './sim/current';
 import { venueById } from './sim/venues';
 import { WaveField, sampleHull, type HullWaveSample } from './sim/waves';
 import { MAX_REEF, autoReef, type ReefState } from './sim/sailplan';
@@ -317,7 +317,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // other case, an endless ocean that has to be looked at through a window.
     const venue = venueById(current.venue);
     venueTerrain = venue ? new Terrain(venue.islands) : EMPTY_TERRAIN;
-    currents.fullDepth = venue ? venue.fullDepth : 14;
+    currents.fullDepth = venue ? venue.fullDepth : DEFAULT_FULL_DEPTH;
 
     const up = compassVec(wind.baseTwd);
     field =
@@ -411,12 +411,25 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let diag: Diagnostics | null = null;
 
   function applySettings(s: Settings): void {
+    const venueChanged = s.venue !== current.venue;
     const worldChanged =
       s.islandCount !== current.islandCount ||
+      venueChanged ||
       s.seed !== current.seed ||
       s.legLength !== current.legLength ||
       s.laps !== current.laps;
     current = s;
+
+    // Arriving at a venue brings its breeze with it, and it has to land before
+    // the world is rebuilt below: the land is laid out around that direction,
+    // and rebuildWorld() builds the course from whatever `baseTwd` says. Left
+    // to the new-session path alone, picking a venue mid-session laid its shore
+    // out for one wind and set the beat by another. Only on arrival, so that
+    // Q/E still work afterwards and editing the leg length does not undo them.
+    if (venueChanged) {
+      const arriving = venueById(s.venue);
+      if (arriving) wind.baseTwd = arriving.windTwd;
+    }
 
     wind.baseTws = windMs(s) * weather.state.windScale;
     // The tide is not weather: it runs at the rate it runs whatever the front

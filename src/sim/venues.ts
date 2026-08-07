@@ -1,5 +1,5 @@
 import { DEG, type Vec2 } from './math';
-import { knotsToMs } from './units';
+import { setDriftVec } from './current';
 import type { Island } from './terrain';
 
 /**
@@ -151,8 +151,12 @@ export const VENUES: readonly Venue[] = [SF];
 
 export const venueById = (id: string): Venue | null => VENUES.find((v) => v.id === id) ?? null;
 
-/** The venue's deep-water stream as the velocity vector the physics wants. */
-export const venueCurrent = (v: Venue): Vec2 => ({
-  x: Math.sin(v.setDeg * DEG) * knotsToMs(v.driftKnots),
-  y: Math.cos(v.setDeg * DEG) * knotsToMs(v.driftKnots),
-});
+/**
+ * The venue's deep-water stream as the velocity vector the physics wants.
+ *
+ * Goes through the same `setDriftVec` the settings do rather than repeating the
+ * conversion. The engine reads the tide out of the settings -- a venue writes
+ * its set and drift into them -- so a second copy here would be a conversion
+ * only the tests exercised, free to drift away from the one the game runs on.
+ */
+export const venueCurrent = (v: Venue): Vec2 => setDriftVec(v.setDeg, v.driftKnots);

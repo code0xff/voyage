@@ -1,7 +1,8 @@
 import type { WeatherKind } from './sim/weather';
 import { WEATHER_KINDS } from './sim/weather';
 import { knotsToMs, msToKnots } from './sim/units';
-import { DEG, compassVec, scale, type Vec2 } from './sim/math';
+import type { Vec2 } from './sim/math';
+import { setDriftVec } from './sim/current';
 import { venueById, type Venue } from './sim/venues';
 
 /**
@@ -134,16 +135,13 @@ export const windMs = (s: Settings): number => knotsToMs(s.windKnots);
 export const windKn = (ms: number): number => msToKnots(ms);
 
 /**
- * The set and drift as the velocity vector the physics wants, world frame.
+ * The player's set and drift as the velocity vector the physics wants.
  *
- * The conversion lives here rather than in `src/sim/` because it is the point
- * where a player-facing pair of numbers becomes a physical quantity, and the
- * compass-to-vector part of it is the one thing about a set that is easy to get
- * backwards: the set is where the water goes, so it is `compassVec(set)` and
- * not its negation.
+ * The conversion itself lives in `src/sim/current.ts`, with the model that uses
+ * it, because venues need it too and a second copy would be a compass-to-vector
+ * sign only one caller exercised.
  */
-export const currentVec = (s: Settings): Vec2 =>
-  scale(compassVec(s.setDeg * DEG), knotsToMs(s.driftKnots));
+export const currentVec = (s: Settings): Vec2 => setDriftVec(s.setDeg, s.driftKnots);
 
 /**
  * Settings for sailing a venue: its conditions written into the player's own,

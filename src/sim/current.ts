@@ -1,5 +1,6 @@
-import { clamp, scale, smoothstep, type Vec2 } from './math';
+import { DEG, clamp, compassVec, scale, smoothstep, type Vec2 } from './math';
 import { EMPTY_TERRAIN, type Terrain } from './terrain';
+import { knotsToMs } from './units';
 
 /**
  * Tidal streams.
@@ -54,7 +55,20 @@ export interface CurrentFieldOptions {
   fullDepth?: number;
 }
 
-const DEFAULT_FULL_DEPTH = 14;
+export const DEFAULT_FULL_DEPTH = 14;
+
+/**
+ * Set and drift as the velocity vector the physics wants.
+ *
+ * The one place a compass set becomes a vector, because it is the one thing
+ * about a tide that is easy to get backwards: the set is where the water is
+ * going *to*, the opposite of the convention for wind direction, so it is
+ * `compassVec(set)` and not its negation. A second copy of this -- one for the
+ * settings and one for venues -- would let a test pass against one while the
+ * game ran on the other.
+ */
+export const setDriftVec = (setDeg: number, driftKnots: number): Vec2 =>
+  scale(compassVec(setDeg * DEG), knotsToMs(driftKnots));
 
 export class CurrentField {
   /** Mutable, like WindField's mean wind: a setting can move it mid-session. */
