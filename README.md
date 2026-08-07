@@ -41,8 +41,10 @@ src/sim/     pure physics core -- no Three.js, no React, no browser APIs
   weather    conditions that evolve on their own
   noise      deterministic value noise
   polar      steady-state polar solver -- the physics validation tool
-  race       course generation, start/mark/finish judging
-  replay     ghost recording and playback, personal bests
+  passage    where you are bound: bearing, VMC, ETA and the course to steer
+  anchorage  whether a spot will hold her
+  current    tidal streams as a function of position
+  venues     named places, laid out approximately
 
 src/engine.ts  the 120 Hz loop, the render loop and everything imperative
 
@@ -53,7 +55,6 @@ src/view/    3D rendering
   skydome    sky gradient and sun glow
   islands    island meshes, sampled from the same elevation field
   rain       wind-slanted rain around the camera
-  course     marks, start line, ghost boat
   telemetry  rolling time-series graph
   polarplot  polar diagram, drawn with the UI design tokens
   audio      procedural sound, no external assets
@@ -62,7 +63,8 @@ src/ui/      React overlay, built on the shadcn/ui design system
   App             layout shell
   engine-context  the bridge that keeps 60 Hz readouts out of React
   Instruments     gauges, sail plan, alerts
-  RaceBar         clock, leg, layline and start timing
+  PassageBar      where she is bound, and what to steer
+  Logbook         the passages she has made
   PolarCard       the polar diagram
   MenuDialog      menu, settings, results
 
@@ -387,7 +389,7 @@ from the boat, so land outside the window cannot change any answer. That bound
 is why the wake is faded to exactly zero at the end of its reach rather than
 being left to decay forever: an unbounded tail and a finite window cannot both
 be honest. The cost is that a large island's flat water now ends by 1.5 km
-instead of thinning out to 2.5 km, which is four legs downwind of a course.
+instead of thinning out to 2.5 km, which is a long way downwind of anywhere.
 
 The meshes are drawn from a wider window than the physics uses, out past the fog
 at any visibility, so land is always born unseen rather than appearing out of
@@ -424,8 +426,8 @@ closes them again as the deck goes over.
 Weather is a slow random walk between named conditions (clear, fair, overcast,
 rain, squall, fog), with every continuous quantity easing towards its target
 rather than snapping. It drives mean wind, gustiness, visibility, cloud cover and
-rain. This is what makes two runs of the same course different: a squall arriving
-on the second beat forces a reef and changes which side pays. It is seeded, so a
+rain. This is what makes two passages over the same water different: a squall
+arriving halfway forces a reef and changes which side of the bay pays. It is seeded, so a
 given seed replays exactly.
 
 Weather runs on two clocks, deliberately. *When* it turns is world time — a
@@ -435,7 +437,7 @@ fast the change looks* is real time, eased over tens of seconds, because a
 squall that arrived in a third of a second would read as a bug rather than as
 weather. Counting the dwell in wall-clock seconds, as it once did, meant the sun
 crossed the entire sky while the weather sat on `fair` — the one system meant to
-make two races differ never did anything inside one.
+make two sessions differ never did anything inside one.
 
 ### 9. The wind field
 
@@ -530,20 +532,26 @@ by the polar solver or the rule tests:
    once on return.
 
 Also fixed: sails not rendering at all because a `Shape` was closed with a
-duplicate vertex; the camera flying across the ocean on race restart; auto-reef
+duplicate vertex; the camera flying across the ocean on restart; auto-reef
 reacting to a single gust peak and reefing in 12 knots.
 
 ---
 
-## Racing
+## Passage making
 
-A windward-leeward course, because it forces every sailing skill: tacking,
-reading shifts and judging laylines upwind; gybing and trading angle against
-speed downwind; slowing and accelerating at the mark roundings.
+There is no race. A passage has a start, an end and a written record,
+which is everything a race supplied — a measured time, something kept, and a
+reason to sail well — without a gun, a penalty or an opponent.
 
-The course rotates with the true wind. Crossing the start line early (OCS)
-must be cleared by returning below the line, as in the real rules. Finishing
-with a personal best updates the ghost you race against next time.
+Click the chart to say where you are bound. The bar at the top carries the
+bearing, the distance, an arrival time worked from speed made good *on course*
+rather than boat speed, and the two judgements that decide a passage: what to
+steer so the tide sets you onto the track rather than off it, and whether the
+light will last.
+
+Arriving means bringing her to rest somewhere she will stay: water between
+three and twelve metres, the way off her, and the anchor down. Then the passage
+writes itself into the logbook.
 
 ---
 
@@ -591,7 +599,7 @@ coefficient curves are in `src/sim/tables.ts`. The loop:
 3. compare against a real yacht polar
 4. only then start the dev server and check the feel
 
-Player-facing conditions (wind, sea state, tidal set and drift, course) live in
+Player-facing conditions (wind, sea state, tidal set and drift, venue) live in
 `src/settings.ts`, deliberately separate from the physics constants. Mixing them would mean the
 boat's performance changed whenever a setting moved, and the polar would stop
 meaning anything.
@@ -607,29 +615,25 @@ meaning anything.
   shear veers a degree or so over a rig this size, which no helmsman notices.
 - No spinnaker, so downwind is slower than reality.
 - Wind sea only: no swell.
-- The current moves the boat but not the sea around her. Waves are a function of
+- Wind against tide *does* now raise the sea, and turn it: the wave field is
+  built from the wind relative to the moving water. What is still missing is
+  that the current moves the boat but not the sea around her. Waves are a function of
   world position and time, and they stay that way with a tide running instead of
   being carried along by it; the wake is a trail of ground positions rather than
   something laid in the water and drifting with it. Physics and renderer agree
   with each other here — both read the same wave field — so this is a
   simplification and not the kind of divergence the water shader exists to
   avoid.
-- The layline readout goes quiet when a tide is running. A layline is where the
-  ground track fetches the mark, and the still-water polar behind that number
-  cannot say where the tide has moved it to. Silence beats a confident lie; a
-  tidal layline is a feature not yet built.
 - There is a current, but no **tide**. The stream varies with depth — it runs in
   the channel and gives up in the shallows — but it does not vary with *time*:
-  no cycle, no turn of the tide mid-race, no springs and neaps, no change of
+  no cycle, no turn of the tide mid-passage, no springs and neaps, no change of
   depth with the height of tide, and no gate that opens and shuts. Reversing the
   stream is a phase term and nearly free; the height is not, because a falling
   tide has to decide what happens to a boat anchored over a bank, and the two
   belong together.
-- Wind against tide does not build a sea. A foul stream under a hard breeze is
-  what makes some of these places famous for their chop, and here the waves are
-  a function of the wind alone.
 - No wave orbital velocity acting on the hull, and no surfing.
-- No AI opponents; the only thing to race is your own ghost.
+- No AI opponents, and nothing to chase: the passage ghost is designed and not
+  built. See [docs/open-questions.md](docs/open-questions.md).
 - No boat-to-boat collision.
 - The sun is not astronomical, and islands shadow the wind without bending it
   around headlands. Both are deliberate: see AGENTS.md.

@@ -35,12 +35,15 @@ describe('venues', () => {
     expect(venueById('')).toBeNull();
   });
 
-  it('put their marks in water a boat can sail in', () => {
-    // The course is built around the origin, so the origin at least has to be
-    // afloat. A venue whose land had crept over the start would be unsailable.
+  it('put her to sea in water she can float in', () => {
+    // The boat is placed 90 m downwind of the origin, so that is the point that
+    // has to be afloat -- a venue whose land had crept over it would open with
+    // the boat already aground. Checked where she actually starts rather than
+    // at the origin, which is where the race course used to be built.
     for (const v of VENUES) {
       const { terrain } = fieldFor(v);
-      expect(terrain.isAground(0, 0, CRUISER.draft)).toBe(false);
+      const up = compassVec(v.windTwd);
+      expect(terrain.isAground(-up.x * 90, -up.y * 90, CRUISER.draft)).toBe(false);
     }
   });
 });

@@ -429,9 +429,9 @@ export function MenuDialog({
               </Select>
             </div>
             <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
-              Evolving weather is what makes two runs of the same course
-              different. A squall on the second beat forces a reef and changes
-              which side pays.
+              Evolving weather is what makes two passages over the same water
+              different. A squall halfway forces a reef and changes which side
+              of the bay pays.
             </p>
           </TabsContent>
 

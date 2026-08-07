@@ -3,11 +3,11 @@ import { clamp } from './math';
 /**
  * Weather that changes on its own.
  *
- * The point is not decoration: weather is what makes two runs of the same
- * course different. A squall arriving on the second beat forces a reef and
- * changes which side pays; fog takes the marks away and makes you steer on
- * instruments. If conditions never changed, the optimal line would be the same
- * every time and there would be nothing left to read.
+ * The point is not decoration: weather is what makes two passages over the same
+ * water different. A squall halfway forces a reef and changes which side of the
+ * bay pays; fog takes the land away and makes you steer on the bearing. If
+ * conditions never changed, the best route would be the same every time and
+ * there would be nothing left to read.
  *
  * The model is a slow Markov walk between named conditions, with every
  * continuous quantity easing towards the current target rather than snapping.

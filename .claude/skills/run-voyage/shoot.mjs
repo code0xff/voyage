@@ -100,9 +100,6 @@ const BASE = {
   seaScale: 1,
   driftKnots: 0,
   setDeg: 90,
-  legLength: 380,
-  laps: 2,
-  countdown: 45,
   // Off, or every run makes noise at whoever is watching.
   sound: false,
   startHour: 13,
@@ -147,9 +144,8 @@ for (const c of cases) {
   await page.goto(URL, { waitUntil: 'load' });
   await page.waitForSelector('canvas', { timeout: 20000 });
 
-  // The opening menu does not take Escape -- it wants a choice. Free sail is
-  // the one that does not start a countdown.
-  await page.getByRole('button', { name: /Put to sea|Free sail/ }).click();
+  // The opening menu does not take Escape -- it wants a choice.
+  await page.getByRole('button', { name: /Put to sea/ }).click();
   await page.waitForTimeout(1200);
 
   // Anything the keyboard drives and no setting does: `c` for the top-down

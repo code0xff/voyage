@@ -11,8 +11,8 @@ import type { PassageRecord } from './sim/passage';
  *
  * IndexedDB rather than localStorage, for the one reason that decided it: this
  * grows. A few hundred passages of a few hundred bytes is nothing to IndexedDB
- * and is a real fraction of localStorage's five megabytes, which `replay.ts` is
- * already packing a ghost into a flat array to fit.
+ * and is a real fraction of localStorage's five megabytes -- which the ghost
+ * recorder used to pack into a flat array of rounded values just to fit.
  */
 
 export interface LogStore {

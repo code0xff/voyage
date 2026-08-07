@@ -85,8 +85,8 @@ through the dialog. Anything in `Settings` (`src/settings.ts`) can go in
 
 ## Gotchas, all of them met in practice
 
-- **The opening menu ignores Escape.** It wants a choice. Click **Free
-  sail** (`Start race` begins a countdown you probably do not want).
+- **The opening menu ignores Escape.** It wants a choice. Click **Put to
+  sea** (or **Resume**, if a session is already running).
 - **The camera starts looking at the horizon.** The sky is barely in
   frame. Drag it up with `pitch` — about `-300` puts the sky across the
   top half.
