@@ -83,9 +83,18 @@ function tileMesh(
 
   const x0 = tile.cx - TILE / 2;
   const y0 = tile.cy - TILE / 2;
-  // One cell of overlap on each far edge, so neighbouring tiles share their
-  // boundary vertices exactly and no hairline of sea shows between them.
-  const span = TILE + TILE / (STEP - 1);
+  // Exactly the tile, with no overlap.
+  //
+  // The first version added a cell of it, meaning to make neighbours share
+  // their boundary vertices, and achieved the opposite: the span became 1025 m
+  // over 40 intervals, so the spacing was 25.625 m and no longer landed on the
+  // 25 m grid at all. Adjacent tiles then covered the same 25 m strip with
+  // vertices that did not coincide -- duplicated geometry to z-fight over.
+  //
+  // Spanning the tile exactly gives 25.000 m, which *is* the grid, and tile k
+  // ends at the same x as tile k+1 begins. The boundary is shared by
+  // construction, which is what the overlap was reaching for.
+  const span = TILE;
 
   for (let j = 0; j < STEP; j++) {
     const y = y0 + (j / (STEP - 1)) * span;
@@ -106,8 +115,15 @@ function tileMesh(
     for (let i = 0; i < STEP - 1; i++) {
       const a = j * STEP + i;
       const b = (j + 1) * STEP + i;
-      // Wound to match islands.ts, whose normals come out facing the sky.
-      idx.push(a, b, b + 1, a, b + 1, a + 1);
+      // Wound counter-clockwise seen from above, so computeVertexNormals()
+      // gives +Y and the land is lit by the sun rather than from beneath it.
+      //
+      // Not the winding islands.ts uses, and copying it was the mistake: there
+      // the two indices run ring and segment around a pole, here they run north
+      // and east across a plane, and (a, b, b+1) on this layout comes out
+      // facing -Y. A back-facing MeshStandardMaterial is culled from above, so
+      // the shore vanished exactly where a helmsman looks at it.
+      idx.push(a, b + 1, b, a, a + 1, b + 1);
     }
   }
 

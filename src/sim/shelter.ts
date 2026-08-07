@@ -82,7 +82,7 @@ const MAX_FETCH = 30000;
  * -- but it means retuning the wave model against the polar, which is its own
  * piece of work and not one to slip in behind a terrain change.
  */
-const REFERENCE_FETCH = 8000;
+export const REFERENCE_FETCH = 8000;
 
 /** The most wind land can take, matching what the circle model took at its worst. */
 const MAX_DEFICIT = 0.85;
@@ -352,8 +352,52 @@ export class ShelterField {
    * the room does not double the waves.
    */
   waveShelterAt(x: number, y: number): number {
-    const f = this.sample(this.fetch, x, y);
-    return Math.max(MIN_SHELTER, Math.min(1, Math.sqrt(f / REFERENCE_FETCH)));
+    return Math.max(MIN_SHELTER, Math.sqrt(this.shelterInputAt(x, y)));
+  }
+
+  /**
+   * Fetch capped at the reference and scaled to 0..1, bilinear.
+   *
+   * The cap is applied to each of the four samples *before* they are mixed,
+   * which is not the same as capping afterwards and is the whole reason this
+   * exists as its own method.
+   *
+   * The water shader cannot interpolate the way the CPU does. It gets a texture
+   * and the hardware mixes texels linearly, so whatever is stored is what gets
+   * mixed. Storing shelter meant the GPU interpolated a square root while the
+   * CPU took the square root of an interpolation -- different answers, because
+   * the root is not linear. Measured across the bay it was worth 0.0006 on
+   * average and mattered at 38 navigable points out of 636,006, all of them
+   * within a cell of a beach; small, but it is exactly the disagreement
+   * AGENTS.md says to hunt, and it costs nothing to not have.
+   *
+   * So this is the quantity that goes in the texture, and the shader takes the
+   * root itself. Both sides now interpolate the same linear thing and apply the
+   * same transform to the result.
+   *
+   * Capping before mixing is also what keeps the two identical: `sqrt(min(f,R)/R)`
+   * and `min(1, sqrt(f/R))` agree for a single sample, but only the first
+   * survives being averaged with a neighbour.
+   */
+  shelterInputAt(x: number, y: number): number {
+    const gx = (x + this.halfWidth) / this.cell - 0.5;
+    const gy = (this.halfHeight - y) / this.cell - 0.5;
+    const x0 = Math.floor(gx);
+    const y0 = Math.floor(gy);
+    const fx = gx - x0;
+    const fy = gy - y0;
+    const cx = this.clampMinor(x0, this.w);
+    const cy = this.clampMinor(y0, this.h);
+    const x1 = this.clampMinor(x0 + 1, this.w);
+    const y1 = this.clampMinor(y0 + 1, this.h);
+    const cap = (i: number) => Math.min(this.fetch[i], REFERENCE_FETCH) / REFERENCE_FETCH;
+    const a = cap(cy * this.w + cx);
+    const b = cap(cy * this.w + x1);
+    const c = cap(y1 * this.w + cx);
+    const d = cap(y1 * this.w + x1);
+    const top = a + (b - a) * fx;
+    const bottom = c + (d - c) * fx;
+    return top + (bottom - top) * fy;
   }
 
   /** How much of the wind survives here, 0..1. */

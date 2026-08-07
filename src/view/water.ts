@@ -157,7 +157,11 @@ const vertexShader = /* glsl */ `
       // Clamped, so a point in the fade band reads the edge of the field --
       // which is what RegionTerrain does, its sampler clamping the same way.
       vec2 uv = clamp(fieldUv(p), 0.0, 1.0);
-      float inside = max(0.05, texture2D(uField, uv).r);
+      // The texture carries capped fetch, not shelter, so the root is taken
+      // here -- see ShelterField.shelterInputAt. Storing shelter would have the
+      // hardware interpolate a square root while the physics takes the root of
+      // an interpolation, which are not the same number.
+      float inside = max(0.05, sqrt(texture2D(uField, uv).r));
       return inside + (1.0 - inside) * beyond;
     }
 
@@ -638,7 +642,7 @@ export function createWater(): Water {
         for (let col = 0; col < width; col++) {
           const x = -halfW + (col + 0.5) * cell;
           data[(row * width + col) * 4] = Math.round(
-            region.shelter.waveShelterAt(x, y) * 255,
+            region.shelter.shelterInputAt(x, y) * 255,
           );
         }
       }

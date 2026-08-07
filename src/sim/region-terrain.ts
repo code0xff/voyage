@@ -58,6 +58,8 @@ export class RegionTerrain {
 
   /** Metres to the waterline: positive afloat, negative inland. */
   private readonly shoreDistance: Float32Array;
+  /** Whether there is any shore at all to measure to. */
+  private readonly hasShore: boolean;
 
   private readonly w: number;
   private readonly h: number;
@@ -76,6 +78,13 @@ export class RegionTerrain {
     this.halfHeight = height.halfHeight;
     this.shelter = new ShelterField(height, width, rows, cell);
     this.shoreDistance = this.buildShoreDistance();
+    // A region of nothing but water leaves the chamfer transform at its
+    // sentinel everywhere, which would report a shore some ten thousand
+    // kilometres away rather than none. `Terrain` with no islands says Infinity
+    // and the callers are written for it -- the gulls fall silent -- so an
+    // all-sea region has to say the same thing rather than a large number that
+    // happens to behave like it most of the time.
+    this.hasShore = this.shoreDistance.some((d) => d <= 0);
   }
 
   /**
@@ -200,7 +209,7 @@ export class RegionTerrain {
 
   /** Metres to the waterline, positive offshore. */
   distanceToShore(x: number, y: number): number {
-    if (!this.height.contains(x, y)) {
+    if (!this.hasShore || !this.height.contains(x, y)) {
       // Off the chart there is no shore to be near, and saying "very far" is
       // both true and what the callers want -- the gulls fall silent.
       return Infinity;
@@ -218,7 +227,7 @@ export class RegionTerrain {
    * the boat moves instead of snapping between cells.
    */
   bearingToShore(x: number, y: number): number | null {
-    if (!this.height.contains(x, y)) return null;
+    if (!this.hasShore || !this.height.contains(x, y)) return null;
     const s = this.cell;
     const gx = this.sampleShore(x + s, y) - this.sampleShore(x - s, y);
     const gy = this.sampleShore(x, y + s) - this.sampleShore(x, y - s);
