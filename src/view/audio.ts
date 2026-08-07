@@ -217,7 +217,18 @@ export class SoundEngine {
     // Driven from JS rather than an audio-rate oscillator, unlike the luff:
     // this is well under a hertz, so a 60 Hz update is far finer than the shape
     // it is drawing, and setTargetAtTime smooths what is left.
-    const enc = dominantEncounter(waves, state.heading, state.u, state.v);
+    // Over the ground, not through the water. The wave field is a function of
+    // world position and time and does not drift with a current, so the rate the
+    // boat meets crests is set by how fast she crosses that field -- which is
+    // her ground track. In still water this is exactly `state.u`/`state.v`
+    // again, since SOG and COG then reduce to the water track.
+    const offBow = diag.cog - state.heading;
+    const enc = dominantEncounter(
+      waves,
+      state.heading,
+      diag.sog * Math.cos(offBow),
+      diag.sog * Math.sin(offBow),
+    );
     this.wavePhase += enc.omega * dt;
     if (this.wavePhase >= TAU) {
       this.wavePhase -= TAU;
