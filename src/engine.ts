@@ -348,6 +348,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // across a venue change would be filed under a place most of it did not
     // happen in.
     setDestination(null);
+    // And she cannot still be lying to an anchor she let go in a world that no
+    // longer exists. The other half of the same bug: `placeAtStart` was taught
+    // to weigh it and this path was not, so changing a venue while anchored
+    // left the new world held fast by the old ground.
+    anchored = false;
+    snapshot.anchored = false;
 
     course = buildCourse(raceCfg(current), wind.baseTwd);
     race = initialRaceState(raceCfg(current));

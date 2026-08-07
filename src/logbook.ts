@@ -43,54 +43,93 @@ function open(): Promise<IDBDatabase> {
   });
 }
 
+/**
+ * One request in one transaction, resolved when the transaction *commits*.
+ *
+ * Not when the request succeeds, which is the tempting and wrong place: in
+ * IndexedDB durability is defined by the transaction completing, and a write
+ * whose request succeeded can still be rolled back afterwards. Resolving on the
+ * request would have reported a passage as logged that was never written.
+ *
+ * The connection is closed on every way out. A transaction that aborts never
+ * fires `oncomplete`, so closing only there leaked a handle per failed write --
+ * and the write that fails is the one that happens when the disk is full, which
+ * is exactly when the next one needs it.
+ */
 const run = <T>(
+  db: IDBDatabase,
   mode: IDBTransactionMode,
   body: (store: IDBObjectStore) => IDBRequest<T>,
 ): Promise<T> =>
-  open().then(
-    (db) =>
-      new Promise<T>((resolve, reject) => {
-        const tx = db.transaction(STORE, mode);
-        const req = body(tx.objectStore(STORE));
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-        // Closed on every way out, not only the happy one. A transaction that
-        // aborts never fires `oncomplete`, so closing there alone leaks a
-        // connection per failed write -- and the write that fails is the one
-        // that happens when the disk is full, which is exactly when the next
-        // one needs the handle.
-        const done = () => db.close();
-        tx.oncomplete = done;
-        tx.onabort = done;
-        tx.onerror = done;
-      }),
-  );
+  new Promise<T>((resolve, reject) => {
+    let result: T;
+    const tx = db.transaction(STORE, mode);
+    const req = body(tx.objectStore(STORE));
+    req.onsuccess = () => {
+      result = req.result;
+    };
+    const fail = () => {
+      db.close();
+      reject(tx.error ?? req.error);
+    };
+    tx.oncomplete = () => {
+      db.close();
+      resolve(result);
+    };
+    tx.onabort = fail;
+    tx.onerror = fail;
+  });
+
+const NOTHING: LogStore = {
+  list: () => Promise.resolve([]),
+  add: () => Promise.resolve(),
+  remove: () => Promise.resolve(),
+  clear: () => Promise.resolve(),
+};
 
 /**
- * The real store, or a store that quietly holds nothing.
+ * The store, degrading to one that holds nothing if the browser will not have it.
  *
- * Private browsing and some embedded webviews refuse IndexedDB outright, and a
- * sailing game must not fail to start over a logbook. Losing the record is a
- * disappointment; a black screen is a bug.
+ * Checking that `indexedDB` exists is not enough, and that was the bug: private
+ * browsing and some embedded webviews expose the object and then refuse to open
+ * a database, throwing a SecurityError or failing on quota. So the fallback is
+ * decided by the first `open()` rather than by feature detection, and once it
+ * has failed the store stays a no-op instead of retrying on every write.
+ *
+ * The line it draws: a refusal to *store at all* is silent, because a sailing
+ * game must not fail over a logbook. A transaction that fails after the
+ * database opened is reported, because that is a real error about a real
+ * passage and the player should be told rather than shown a logbook that
+ * quietly is not theirs.
  */
 export function createLogStore(): LogStore {
-  const available = typeof indexedDB !== 'undefined';
-  if (!available) {
-    return {
-      list: () => Promise.resolve([]),
-      add: () => Promise.resolve(),
-      remove: () => Promise.resolve(),
-      clear: () => Promise.resolve(),
-    };
-  }
+  if (typeof indexedDB === 'undefined') return NOTHING;
+
+  let unavailable = false;
+  const connect = (): Promise<IDBDatabase | null> => {
+    if (unavailable) return Promise.resolve(null);
+    return open().catch(() => {
+      unavailable = true;
+      return null;
+    });
+  };
+
+  const withDb = <T>(fallback: T, body: (db: IDBDatabase) => Promise<T>): Promise<T> =>
+    connect().then((db) => (db ? body(db) : fallback));
+
   return {
-    async list() {
-      const all = await run<PassageRecord[]>('readonly', (s) => s.getAll());
-      return all.sort((a, b) => b.startedAt - a.startedAt);
-    },
-    add: (record) => run('readwrite', (s) => s.put(record)).then(() => undefined),
-    remove: (id) => run('readwrite', (s) => s.delete(id)).then(() => undefined),
-    clear: () => run('readwrite', (s) => s.clear()).then(() => undefined),
+    list: () =>
+      withDb<PassageRecord[]>([], (db) =>
+        run<PassageRecord[]>(db, 'readonly', (s) => s.getAll()).then((all) =>
+          all.sort((a, b) => b.startedAt - a.startedAt),
+        ),
+      ),
+    add: (record) =>
+      withDb(undefined, (db) => run(db, 'readwrite', (s) => s.put(record)).then(() => undefined)),
+    remove: (id) =>
+      withDb(undefined, (db) => run(db, 'readwrite', (s) => s.delete(id)).then(() => undefined)),
+    clear: () =>
+      withDb(undefined, (db) => run(db, 'readwrite', (s) => s.clear()).then(() => undefined)),
   };
 }
 
