@@ -240,16 +240,29 @@ function powerTwist(cfg: BoatConfig, awaFoot: number, awaHead: number, sheet: nu
 }
 
 /**
- * Signed apparent wind angle at one height, given the wind gradient's speed
- * factor `f` there. The boat's own velocity is the same at every height, which
- * is the whole reason the angle is not.
+ * The apparent wind vector at one height, given the wind gradient's speed factor
+ * `f` there.
+ *
+ * The true wind up there, less the boat's own velocity -- which is the same at
+ * every height. That asymmetry is the whole reason the apparent wind angle
+ * varies with height at all.
+ *
+ * Everything that asks about the wind at a height goes through here, including
+ * the strip loop, so the trim cannot end up aiming at an angle the sail is not
+ * actually working at. That used to be two copies of one expression held in
+ * step by a comment.
  */
-function awaAtHeight(windVelW: Vec2, velW: Vec2, heading: number, f: number): number {
-  // Deliberately the same expression as the one inside the strip loop, written
-  // with the same primitives, so the trim cannot end up aiming at an angle the
-  // sail is not actually working at.
-  return wrapPi(compassAngle(scale(sub(scale(windVelW, f), velW), -1)) - heading);
+function apparentAtHeight(windVelW: Vec2, velW: Vec2, f: number): Vec2 {
+  return sub(scale(windVelW, f), velW);
 }
+
+/** Signed apparent wind angle of an apparent wind vector; positive = from starboard. */
+function awaOf(app: Vec2, heading: number): number {
+  return wrapPi(compassAngle(scale(app, -1)) - heading);
+}
+
+const awaAtHeight = (windVelW: Vec2, velW: Vec2, heading: number, f: number): number =>
+  awaOf(apparentAtHeight(windVelW, velW, f), heading);
 
 /**
  * One physics step. Call only with a fixed dt (1/120 s is the intended value).
@@ -275,9 +288,11 @@ export function step(
   // Everything in sailing starts here. The moment the boat moves, the sail
   // feels not the true wind but the true wind minus the boat's own velocity.
   const windVelW = scale(compassVec(env.twd), -env.tws); // the direction air travels
-  const appW = sub(windVelW, velW);
+  // The reference height is where the quoted wind is quoted, so it is the f = 1
+  // member of the same family every other height is drawn from.
+  const appW = apparentAtHeight(windVelW, velW, 1);
   const aws = len(appW);
-  const awa = wrapPi(compassAngle(scale(appW, -1)) - s.heading); // measured from where it blows from
+  const awa = awaOf(appW, s.heading); // measured from where it blows from
   const twa = wrapPi(env.twd - s.heading);
 
   // --- 3. Sail trim ---------------------------------------------------------
@@ -349,8 +364,8 @@ export function step(
   for (let i = 0; i < SAIL_STRIPS; i++) {
     const z = plan.footHeight + STRIP_U[i] * span;
     const f = shearFactor(z + zCg, zRef);
-    const ap = sub(scale(windVelW, f), velW);
-    const awaI = wrapPi(compassAngle(scale(ap, -1)) - s.heading);
+    const ap = apparentAtHeight(windVelW, velW, f);
+    const awaI = awaOf(ap, s.heading);
 
     // The boom always swings to leeward, so the angle of attack is a
     // subtraction: apparent wind angle minus the sheet angle at this height.
