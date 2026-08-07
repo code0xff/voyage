@@ -3,9 +3,14 @@
 The goal: a bounded region of a real coast, sailed freely, where the shape of
 the land is genuinely that place rather than a suggestion of it.
 
-Built, for San Francisco Bay. All three pieces below are done and the region is
-sailable from the menu. What follows is the design and the evidence behind it, updated as
-each piece lands rather than left as it was first written.
+Built. All three pieces below are done, and two regions are sailable from the
+menu: San Francisco Bay and Newport. What follows is the design and the evidence
+behind it, updated as each piece lands rather than left as it was first written.
+
+The second region is the real test of the machinery, and it passed: adding
+Newport took a `Region` entry and a run of `scripts/fetch-terrain.ts`, and not
+one line of engine, renderer or shader code. What it did cost was
+reconnaissance — see "Choosing where the square goes" below.
 
 ---
 
@@ -167,6 +172,37 @@ different world with its own seed, and stitching one to the other is a larger
 question than the edge of the chart.
 
 **Scale.** As sketched: 20 km square, about 1.8 hours across at 6 knots.
+
+---
+
+## Choosing where the square goes
+
+Learned adding the second region, and the part that actually took the time. The
+code was ready; knowing where to point it was not.
+
+**The centre is the start line, not just the framing.** A region's centre is the
+world origin and `placeAtStart` puts the boat 90 m from it, so the centre has to
+be water she floats in — in every direction, because the offset is taken
+downwind and the wind can be anywhere. Newport was first centred where the
+square framed best, which put the origin on a two metre shoal for a boat drawing
+1.8. `heightfield.test.ts` now holds every region to this, not just the two that
+exist.
+
+**Landmarks remembered are landmarks wrong.** Coordinates recalled from memory
+came out one to three hundred metres off, which at a coastline is the wrong side
+of the waterline: Castle Hill and Brenton Point both read as water. Test points
+have to be found in the raster and named afterwards, not named and assumed. And
+a lighthouse is a poor assertion in the first place — Castle Hill Light stands
+on a rock at the water's edge, and the 25 m cell holding it correctly averages
+to a metre below the surface. Assert island interiors and mid-channel water.
+
+**Look at the whole square before baking it.** A coarse `exportImage` over the
+20 km box, drawn as ASCII, answers "is this the shape of the place" for the cost
+of one request — and the mosaic's `identify` endpoint names the source dataset
+per point, which is how CUDEM coverage was confirmed at all four edges rather
+than assumed from the table above. Rendering the already-baked SF raster the
+same way, and getting a picture identical row for row, is what made the tool
+trustworthy enough to choose on.
 
 ## What is still owed
 

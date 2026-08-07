@@ -21,18 +21,18 @@
  *
  * ## The projection
  *
- * The DEM comes back already in UTM zone 10N, so the grid is metres and square
- * by construction rather than by resampling a lat/lon grid. The world plane is
- * that grid with its origin moved to the region centre: world x is UTM easting,
- * world y is UTM northing.
+ * The DEM is requested in the region's own UTM zone and comes back in it, so
+ * the grid is metres and square by construction rather than by resampling a
+ * lat/lon grid. The world plane is that grid with its origin moved to the
+ * region centre: world x is UTM easting, world y is UTM northing.
  *
- * The cost is that world north is *grid* north, which at this longitude is
- * about 0.35 degrees off true north. That is below the resolution of every
- * bearing the game shows and far below anything a helmsman notices, and it buys
- * a plane with no distortion inside it at all -- which the alternative, a
- * latitude-scaled equirectangular grid, does not have: its metres-per-degree of
- * longitude changes by 0.28% across 20 km of latitude, so the map would stretch
- * at the top and bottom.
+ * The cost is that world north is *grid* north, off true north by the grid
+ * convergence -- 0.35 degrees at San Francisco, 1.55 at Newport, and larger the
+ * further a region sits from its zone's central meridian. Even the larger is
+ * far below anything a helmsman notices, and it buys a plane with no distortion
+ * inside it at all -- which the alternative, a latitude-scaled equirectangular
+ * grid, does not have: its metres-per-degree of longitude changes by 0.28%
+ * across 20 km of latitude, so the map would stretch at the top and bottom.
  *
  * ## Resolution
  *
@@ -187,8 +187,9 @@ async function bake(region: Region): Promise<void> {
     min = Math.min(min, m);
     max = Math.max(max, m);
     // Decimetres. A 10 cm quantum is finer than the survey, far finer than the
-    // 25 m cell, and keeps the whole range of this coast -- Twin Peaks at 282 m
-    // and the Gate's scour hole at -110 m -- inside a signed 16-bit value.
+    // 25 m cell, and leaves a signed 16-bit value reaching +-3276 m -- past the
+    // deepest and highest ground any coastal region will hold. The two baked so
+    // far span the Gate's scour hole at -110 m to Twin Peaks at 282 m.
     out[i] = Math.max(-32768, Math.min(32767, Math.round(m * 10)));
   }
 

@@ -68,12 +68,19 @@ export function utmForward(lat: number, lon: number, zone: number): Vec2 {
 /**
  * A latitude and longitude as a position on the world plane.
  *
- * Note what this does *not* correct for: world north is UTM grid north, which
- * at San Francisco is about 0.35 degrees west of true north. Every bearing the
- * game shows is therefore a grid bearing. That is below the half-degree the
- * compass is read to and far below what a helmsman could hold, and it buys a
- * plane with no distortion inside it -- which is worth more here than an
- * alignment nobody can perceive.
+ * Note what this does *not* correct for: world north is UTM grid north, and the
+ * two differ by the grid convergence, which is roughly the region's distance
+ * from its zone's central meridian times the sine of its latitude. That is
+ * about 0.35 degrees at San Francisco and about 1.55 at Newport, which sits
+ * 2.35 degrees off the meridian of zone 19. Every bearing the game shows is
+ * therefore a grid bearing.
+ *
+ * Even the larger of those is well inside what a helmsman can hold and well
+ * inside the error on a region's prevailing wind, which is a sketch. It buys a
+ * plane with no distortion inside it, which is worth more than an alignment
+ * nobody can perceive -- but it is worth knowing that the figure is a property
+ * of where the region sits, not a constant, and that a region placed at the
+ * edge of a zone would want checking rather than assuming.
  */
 export function worldFromLatLon(region: Region, lat: number, lon: number): Vec2 {
   const p = utmForward(lat, lon, region.utmZone);

@@ -160,19 +160,32 @@ simplifications.
 ### 1c. Regions
 
 A region is a bounded piece of a **real coast**, sailed freely, where the shape
-of the land is genuinely that place. **San Francisco Bay** is the first: 20 km
-square at 25 m, from the Golden Gate to the Berkeley flats.
+of the land is genuinely that place. Two ship, both 20 km square at 25 m:
+**San Francisco Bay**, from the Golden Gate to the Berkeley flats, and
+**Newport**, holding the East Passage from Prudence Island out past Beavertail
+and Castle Hill into Rhode Island Sound.
+
+They are two regions rather than two of the same one because they ask different
+questions. San Francisco is a bay, and the decision is the tide and where the
+bottom is: a hard westerly, two and a half knots of foul flood, and a shallow
+lane inshore that costs breeze and eventually the keel. Newport is a coast, and
+the decision is the sea breeze and when to leave shelter — a steadier southerly
+at 14 knots, a little over a knot of stream, and a passage deep almost to the
+rocks, with swell outside that is not there inside.
 
 The land and the depths are surveyed, not sketched. They come from NOAA NCEI's
 CUDEM 1/9 arc-second topobathymetry — one continuous measured surface carrying
 the hills and the sea floor together — baked to a committed raster by
 `scripts/fetch-terrain.ts`. The Gate is 100 m deep because it is. Checked
 against the chart by latitude and longitude: Alcatraz 39 m, Angel Island 180 m,
-Raccoon Strait −20 m, the Berkeley flats −2.6 m.
+Raccoon Strait −20 m, the Berkeley flats −2.6 m. And at Newport: Beavertail
+8.1 m, the East Passage entrance −55 m where it scours between the headlands,
+the West Passage −15 m at the same latitude, Newport Harbour −7.4 m.
 
 **Still not a chart.** 25 m between soundings, no height of tide, and the grid
-is UTM so bearings are grid bearings — 0.35° off true here. Do not take a boat
-anywhere on it.
+is UTM so bearings are grid bearings — 0.35° off true at San Francisco, and
+1.55° at Newport, which sits further from its zone's central meridian. Do not
+take a boat anywhere on it.
 
 Shelter is *data*, not a formula, and this is what a fixed region buys. Fetch
 and wind shadow are swept over the whole grid once per two degrees of wind

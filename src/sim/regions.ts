@@ -154,7 +154,93 @@ const SF_BAY: Region = {
   },
 };
 
-export const REGIONS: readonly Region[] = [SF_BAY];
+/**
+ * Newport, from Prudence Island down to the open sound.
+ *
+ * The second region, chosen because it asks a different question. San Francisco
+ * is a bay: the decision is the tide and where the bottom is. Newport is a
+ * coast, and the decision is the sea breeze and when to leave the shelter of
+ * the land for the swell outside. Two squares of the same kind of water would
+ * have been one region twice.
+ *
+ * The square holds the East Passage whole -- from the south end of Prudence,
+ * under the Pell Bridge, past Newport and Jamestown, out between Beavertail and
+ * Castle Hill -- with the West Passage behind Conanicut Island and about four
+ * kilometres of Rhode Island Sound south of Brenton. Centred any further south
+ * and half of it is featureless ocean; any further north and the way out to sea
+ * falls off the bottom edge.
+ *
+ * It is also the first region whose edge opens onto real ocean rather than more
+ * bay, which is the case `RegionTerrain`'s fade into deep water was written for
+ * and has never actually met.
+ *
+ * The cost, stated because it is larger here than at San Francisco: this is
+ * 2.34 degrees west of UTM zone 19's central meridian, so grid north is about
+ * 1.55 degrees east of true north, where at San Francisco it is 0.35. Every
+ * bearing the game shows is a grid bearing. That is still far inside the error
+ * on the conditions below, which are a sketch, and buys the same undistorted
+ * plane -- but it is no longer small enough to leave unsaid.
+ */
+const NEWPORT: Region = {
+  id: 'newport',
+  name: 'Newport',
+  area: 'Rhode Island, USA',
+  brief:
+    'The East Passage from Prudence to the sea, Conanicut and Aquidneck either side, ' +
+    'and the open sound beyond Brenton. A sea breeze rather than a tide.',
+  // Mid-channel in the East Passage abreast of Rose Island, so the passage runs
+  // down the middle of the square with both islands inside it.
+  //
+  // Mid-channel and not merely thereabouts: a region's centre is the world
+  // origin, and `placeAtStart` puts the boat 90 m from it. Centred 800 m east of
+  // here -- which framed the square just as well -- she went to sea on a two
+  // metre shoal drawing 1.8, and the first thing the player would have done is
+  // run aground. It is 39 m here, and the shallowest water within 150 m in any
+  // direction is 37.
+  centre: { lat: 41.5, lon: -71.35 },
+  utmZone: 19,
+  grid: { width: 800, height: 800, cell: 25, unit: 0.1 },
+  raster: '/terrain/newport.bin',
+  source:
+    'NOAA NCEI continuously updated digital elevation model (CUDEM), 1/9 arc-second ' +
+    'topobathymetry, resampled to 25 m',
+  licence: 'US Government work, public domain',
+
+  /*
+   * A summer afternoon, which at Newport means the southerly.
+   *
+   * The sea breeze here comes off open water rather than over a gap in a ridge,
+   * so it is softer and far steadier than San Francisco's westerly -- hence
+   * half the gustiness at two thirds the strength. What it brings instead is
+   * swell: the square is open to the south, and the sea state outside Brenton
+   * is not the sea state in the passage. That contrast is the point of the
+   * place, and `seaScale` is set above one to make leaving the land cost
+   * something.
+   *
+   * The stream is the flood, setting north up the passage, for the same reason
+   * San Francisco's is: it is the one that makes the sailing interesting. Beat
+   * south towards the sound in a southerly and a flood is foul, so the way out
+   * is to work the shore -- which here costs breeze rather than depth, since
+   * the passage is deep almost to the rocks. An ebb would simply carry you out
+   * and there would be nothing to decide. Both are real on any given afternoon.
+   *
+   * A little over a knot, and not San Francisco's two and a half: Narragansett
+   * Bay is a far smaller tidal prism than the Golden Gate drains, and pretending
+   * otherwise would make the tide the game here too.
+   */
+  conditions: {
+    windTwd: 195 * DEG,
+    windKnots: 14,
+    gustiness: 0.25,
+    seaScale: 1.3,
+    setDeg: 10,
+    driftKnots: 1.2,
+    fullDepth: 20,
+    startHour: 13,
+  },
+};
+
+export const REGIONS: readonly Region[] = [SF_BAY, NEWPORT];
 
 export const regionById = (id: string): Region | null =>
   REGIONS.find((r) => r.id === id) ?? null;

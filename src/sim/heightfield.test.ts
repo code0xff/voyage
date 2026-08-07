@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { HeightField, heightFieldFromBytes } from './heightfield';
-import { regionById, rasterBytes, type Region } from './regions';
+import { REGIONS, regionById, rasterBytes, type Region } from './regions';
 import { worldFromLatLon } from './geo';
+import { CRUISER } from './config';
 
 /**
  * A 4x4 grid, 10 m cells, whose value is its column index in metres. Small
@@ -212,4 +213,120 @@ describe('San Francisco Bay, against the chart', () => {
     expect(max).toBeGreaterThan(200);
     expect(max).toBeLessThan(1000);
   });
+});
+
+/**
+ * The same claim for Newport, on the same terms.
+ *
+ * One point of care that San Francisco did not need: a lighthouse is a poor
+ * assertion here. Castle Hill Light stands on a rock at the water's edge, and
+ * the 25 m cell holding it averages to about a metre *below* the waterline --
+ * correctly, since most of those 625 square metres are sea. The places named
+ * below are therefore island and mainland interiors and mid-channel water, and
+ * Beavertail is used because it is a headland the light happens to stand on
+ * rather than a light on a rock.
+ */
+describe('Newport, against the chart', () => {
+  const region = regionById('newport');
+  if (!region) throw new Error('newport region is missing');
+
+  const raw = readFileSync('public/terrain/newport.bin');
+  const field = heightFieldFromBytes(
+    raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
+    region,
+  );
+  const elevation = (lat: number, lon: number) => {
+    const p = worldFromLatLon(region, lat, lon);
+    return field.elevationAt(p.x, p.y);
+  };
+
+  it('is the size the region says it is', () => {
+    expect(raw.byteLength).toBe(rasterBytes(region));
+  });
+
+  it('has the two islands and the mainland above water', () => {
+    expect(elevation(41.4494, -71.3995)).toBeGreaterThan(2); // Conanicut, at Beavertail
+    expect(elevation(41.4971, -71.3673)).toBeGreaterThan(0); // Conanicut, Jamestown village
+    expect(elevation(41.4901, -71.3128)).toBeGreaterThan(2); // Aquidneck, Newport
+    expect(elevation(41.49, -71.46)).toBeGreaterThan(20); // the mainland, west shore
+  });
+
+  it('has the East Passage entrance deep, which is where it scours', () => {
+    // Between Beavertail and Castle Hill, and by a wide margin the deepest
+    // water in the square -- the one place a bad projection could not fake.
+    expect(elevation(41.465, -71.364)).toBeLessThan(-45);
+  });
+
+  it('is deeper in the East Passage than in the West', () => {
+    // The comparison that pins the east-west orientation on its own: the East
+    // Passage is the ship channel and the West is not, at the same latitude.
+    expect(elevation(41.51, -71.35)).toBeLessThan(elevation(41.51, -71.405));
+    expect(elevation(41.51, -71.35)).toBeLessThan(-25);
+    expect(elevation(41.51, -71.405)).toBeLessThan(0);
+  });
+
+  it('opens into Rhode Island Sound to the south', () => {
+    // The southern edge is the first region boundary that meets real ocean
+    // rather than more bay, so it had better be ocean: no land anywhere along
+    // the bottom of the square between the two shores.
+    for (let lon = -71.44; lon <= -71.2401; lon += 0.01) {
+      expect(elevation(41.42, lon)).toBeLessThan(0);
+    }
+  });
+
+  it('has Newport Harbour shallow but still water', () => {
+    const e = elevation(41.484, -71.325);
+    expect(e).toBeLessThan(0);
+    expect(e).toBeGreaterThan(-15);
+  });
+
+  it('reaches the sound in the south and the hills in the north-east', () => {
+    let min = Infinity;
+    let max = -Infinity;
+    for (let y = -9000; y <= 9000; y += 250) {
+      for (let x = -9000; x <= 9000; x += 250) {
+        const e = field.elevationAt(x, y);
+        min = Math.min(min, e);
+        max = Math.max(max, e);
+      }
+    }
+    // Sanity bounds again, and note how much shallower and lower this coast is
+    // than San Francisco: a drowned river valley rather than a scoured strait.
+    expect(min).toBeLessThan(-40);
+    expect(min).toBeGreaterThan(-150);
+    expect(max).toBeGreaterThan(50);
+    expect(max).toBeLessThan(400);
+  });
+});
+
+/**
+ * What must hold for *every* region, including the next one.
+ *
+ * The centre is not only where the square is framed from: it is the world
+ * origin, and `placeAtStart` puts the boat 90 m from it. Newport was first
+ * centred 800 m east of where it now is -- a framing that read just as well on
+ * a map -- and that put her on a two metre shoal drawing 1.8. She would have
+ * gone aground before the first frame.
+ */
+describe('every region', () => {
+  for (const region of REGIONS) {
+    it(`${region.id} puts the boat to sea in water she floats in`, () => {
+      const raw = readFileSync(`public${region.raster}`);
+      const field = heightFieldFromBytes(
+        raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
+        region,
+      );
+      // The whole circle, because the offset is taken downwind and the wind can
+      // be anywhere. Stated against the draft rather than as a depth, and with
+      // several metres to spare: she should start out sailing, not picking her
+      // way off a bank she was dropped onto.
+      for (let a = 0; a < 32; a++) {
+        for (const r of [0, 90, 150]) {
+          const x = r * Math.cos((a / 32) * 2 * Math.PI);
+          const y = r * Math.sin((a / 32) * 2 * Math.PI);
+          expect(-field.elevationAt(x, y)).toBeGreaterThan(CRUISER.draft + 3);
+        }
+      }
+    });
+  }
 });
