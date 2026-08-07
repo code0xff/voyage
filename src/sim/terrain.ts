@@ -35,6 +35,9 @@ export interface Island {
   /**
    * Which landmass this circle belongs to. Omit and it is a landmass of its own.
    *
+   * Any number will do -- it is a label, and `Terrain` renumbers them densely
+   * from zero, so nothing downstream depends on which one you pick.
+   *
    * `elevationAt` already takes the highest of every island, so overlapping
    * circles union into one continuous shore for free -- which is how a mainland
    * or the two sides of a channel get built without a new shape primitive. What
@@ -110,7 +113,23 @@ export class Terrain {
     // composes exactly as it did before landmasses existed.
     tagged.sort((a, b) => a.g - b.g);
     this.islands = tagged.map((t) => t.isl);
-    this.landGroup = tagged.map((t) => t.g);
+
+    // Renumbered to 0, 1, 2... rather than kept as authored. `Island.land` is a
+    // label an author picks, and the shader has to survive whatever they pick:
+    // it uploads the id plus one into a float slot where zero already means
+    // "no island here", so a `land: -1` would make a piece of coast silently
+    // vanish from the shader's shelter while the physics still felt it, and ids
+    // far apart enough to lose precision as float32 would merge two landmasses
+    // into one. Renumbering here means the contract holds by construction
+    // instead of by everyone remembering it.
+    const dense = new Map<number, number>();
+    this.landGroup = tagged.map((t) => {
+      const seen = dense.get(t.g);
+      if (seen !== undefined) return seen;
+      const id = dense.size;
+      dense.set(t.g, id);
+      return id;
+    });
   }
 
   /**

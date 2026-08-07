@@ -614,11 +614,16 @@ meaning anything.
   ground track fetches the mark, and the still-water polar behind that number
   cannot say where the tide has moved it to. Silence beats a confident lie; a
   tidal layline is a feature not yet built.
-- There is a current, but no **tide**. The set and drift are uniform over the
-  whole world and constant in time: no cycle, no springs and neaps, no change of
-  depth with the height of tide, and no tide gate that opens and shuts. Adding
-  the height would mean deciding what a falling tide does to a boat anchored
-  over a bank, and that is a design question, not a formula.
+- There is a current, but no **tide**. The stream varies with depth — it runs in
+  the channel and gives up in the shallows — but it does not vary with *time*:
+  no cycle, no turn of the tide mid-race, no springs and neaps, no change of
+  depth with the height of tide, and no gate that opens and shuts. Reversing the
+  stream is a phase term and nearly free; the height is not, because a falling
+  tide has to decide what happens to a boat anchored over a bank, and the two
+  belong together.
+- Wind against tide does not build a sea. A foul stream under a hard breeze is
+  what makes some of these places famous for their chop, and here the waves are
+  a function of the wind alone.
 - No wave orbital velocity acting on the hull, and no surfing.
 - No AI opponents; the only thing to race is your own ghost.
 - No boat-to-boat collision.

@@ -393,3 +393,43 @@ describe('wind field with land', () => {
     }
   });
 });
+
+/**
+ * The shader uploads the landmass id plus one into a float slot where zero
+ * already means "no island here", so the ids it is given have to be small
+ * non-negative integers whatever an author wrote in the venue data.
+ */
+describe('landmass ids', () => {
+  const at = (x: number, land?: number) => ({
+    pos: { x, y: 0 },
+    radius: 100,
+    height: 40,
+    seed: x,
+    land,
+  });
+
+  it('renumbers whatever ids it was given densely from zero', () => {
+    const t = new Terrain([at(0, -1), at(300, 9e9), at(600, -1), at(900, 7)]);
+    expect([...t.landGroup].sort((a, b) => a - b)).toEqual([0, 0, 1, 2]);
+  });
+
+  it('keeps a negative id from reading as an empty slot in the shader', () => {
+    // -1 + 1 = 0, and zero is how the shader is told there is no island there,
+    // so this coast would have sheltered in the physics and not in the water.
+    const t = new Terrain([at(0, -1), at(150, -1)]);
+    for (const g of t.landGroup) expect(g).toBeGreaterThanOrEqual(0);
+  });
+
+  it('keeps ids far enough apart to stay distinct as a float', () => {
+    // Two ids that differ by less than a float32 can resolve would have merged
+    // into one landmass in the shader and stayed separate in the physics.
+    const t = new Terrain([at(0, 16777216), at(400, 16777217)]);
+    expect(new Set(t.landGroup).size).toBe(2);
+    for (const g of t.landGroup) expect(g).toBeLessThan(16);
+  });
+
+  it('still groups together everything the author said was one coast', () => {
+    const t = new Terrain([at(0, 5), at(300, 5), at(600, 5)]);
+    expect(new Set(t.landGroup).size).toBe(1);
+  });
+});

@@ -277,9 +277,14 @@ export function MenuDialog({
                 <div>
                   {settings.legLength} m × {settings.laps}{" "}
                   {settings.laps === 1 ? "lap" : "laps"} ·{" "}
-                  {settings.islandCount === 0
-                    ? "open sea"
-                    : `${settings.islandCount} islands`}
+                  {/* A venue sets the island count to zero because it brings its
+                      own land, so reading "open sea" off that field alone
+                      announced San Francisco as an empty ocean. */}
+                  {settings.venue
+                    ? (venueById(settings.venue)?.name ?? "open sea")
+                    : settings.islandCount === 0
+                      ? "open sea"
+                      : `${settings.islandCount} islands`}
                 </div>
               </div>
               <Button variant="outline" size="sm" onClick={() => setView("settings")}>
@@ -421,10 +426,9 @@ export function MenuDialog({
               </div>
             </div>
             <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
-              The ocean has no edge: islands keep coming over the horizon for as
-              long as you sail. Their lee is flat water but almost no wind, and
-              the shoals around them will stop you dead. Pin the seed to race the
-              same water twice.
+              {settings.venue
+                ? "A venue brings its own land, breeze and tide, so the island slider stands down. The stream runs hardest in deep water and gives up in the shallows — which is where the wind gives up too."
+                : "The ocean has no edge: islands keep coming over the horizon for as long as you sail. Their lee is flat water but almost no wind, and the shoals around them will stop you dead. Pin the seed to race the same water twice."}
             </p>
           </TabsContent>
 
