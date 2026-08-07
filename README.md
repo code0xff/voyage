@@ -44,7 +44,7 @@ src/sim/     pure physics core -- no Three.js, no React, no browser APIs
   passage    where you are bound: bearing, VMC, ETA and the course to steer
   anchorage  whether a spot will hold her
   current    tidal streams as a function of position
-  venues     named places, laid out approximately
+  regions    bounded pieces of real coast, surveyed
 
 src/engine.ts  the 120 Hz loop, the render loop and everything imperative
 
@@ -157,39 +157,47 @@ player who sets a plain set and drift gets exactly that, everywhere.
 There is a set and a drift; there is no tidal *cycle*. See the deliberate
 simplifications.
 
-### 1c. Venues
+### 1c. Regions
 
-**Approximate, and not for navigation.** A venue is a named place laid out as a
-sketch: land drawn from overlapping circles, one uniform shelf slope for depth,
-a stream that does not turn with the tide. It is meant to reproduce *the
-decisions a place asks of a sailor*, not its geography, and nothing in it should
-be used to take a boat anywhere.
+A region is a bounded piece of a **real coast**, sailed freely, where the shape
+of the land is genuinely that place. **San Francisco Bay** is the first: 20 km
+square at 25 m, from the Golden Gate to the Berkeley flats.
 
-The figures are the broad, well-known character of each place rather than values
-read off an atlas. A real tidal diamond would be worth having; inventing one and
-writing it down as though it were measured would be worse than admitting the
-sketch.
+The land and the depths are surveyed, not sketched. They come from NOAA NCEI's
+CUDEM 1/9 arc-second topobathymetry — one continuous measured surface carrying
+the hills and the sea floor together — baked to a committed raster by
+`scripts/fetch-terrain.ts`. The Gate is 100 m deep because it is. Checked
+against the chart by latitude and longitude: Alcatraz 39 m, Angel Island 180 m,
+Raccoon Strait −20 m, the Berkeley flats −2.6 m.
 
-Land is built from circles because that is the shape primitive the physics and
-the water shader already share, and `elevationAt` takes the highest of every
-island — so overlapping circles union into one continuous shore for free, and a
-mainland or the two sides of a channel need no new geometry anywhere. What is
-*not* free is shelter: the wake models compose one island at a time, so a coast
-drawn as eight circles would shade its own lee eight times over. Islands
-therefore carry a landmass id, and shelter is the strongest wake within a
-landmass, multiplied across landmasses.
+**Still not a chart.** 25 m between soundings, no height of tide, and the grid
+is UTM so bearings are grid bearings — 0.35° off true here. Do not take a boat
+anywhere on it.
 
-**San Francisco, the city front** is the venue the tidal field exists for. A
-hard summer westerly, a flood setting east against it, and the beat has to go
-out into both. Measured across the course: 2.4 knots of foul stream offshore
-against 0.2 inshore, bought with a quarter of the wind and forty metres of depth
-down to six. That is the shape of a decision — a lane that were only better
-would be the answer, not a choice.
+Shelter is *data*, not a formula, and this is what a fixed region buys. Fetch
+and wind shadow are swept over the whole grid once per two degrees of wind
+shift, in 16 ms, and the water shader samples that same field as a texture. The
+hand-copied GLSL that had to be kept in step with the TypeScript is gone for a
+region: the shader is not a copy of the model, it reads the model's output.
 
-The set is the flood and not the ebb deliberately, and the first layout had it
-the other way. An ebb runs out of the Gate within twenty degrees of the
-direction a westerly makes you beat in, so it carried the boat towards the
-windward mark and there was nothing to escape.
+The conditions are a different matter and are labelled apart. The prevailing
+breeze and the stream on `Region.conditions` are the broad, well-known character
+of the place, not a climatological mean or a tidal diamond. A real one would be
+worth having; inventing one and writing it down beside real soundings would be
+worse than admitting the sketch.
+
+**The city front** is the decision the tidal field exists for. A hard summer
+westerly, a flood setting east against it, and the beat has to go out into both.
+Measured on the surveyed water: 1.4 knots of foul stream offshore in 17 m
+against 0.2 knots in the lane at 5 m, with the ground a hundred metres past it.
+That is the shape of a decision — a lane that were only better would be the
+answer, not a choice. The set is the flood and not the ebb deliberately: an ebb
+runs out of the Gate within twenty degrees of the way a westerly makes you beat,
+so it would carry the boat towards the mark and leave nothing to escape.
+
+Venues — named places sketched from overlapping circles — were the earlier
+answer and none ship now. The type survives because it is still right for a
+coast with no open survey behind it: CUDEM covers US waters and nothing else.
 
 ### 2. Sails
 
@@ -601,7 +609,7 @@ coefficient curves are in `src/sim/tables.ts`. The loop:
 3. compare against a real yacht polar
 4. only then start the dev server and check the feel
 
-Player-facing conditions (wind, sea state, tidal set and drift, venue) live in
+Player-facing conditions (wind, sea state, tidal set and drift, region) live in
 `src/settings.ts`, deliberately separate from the physics constants. Mixing them would mean the
 boat's performance changed whenever a setting moved, and the polar would stop
 meaning anything.

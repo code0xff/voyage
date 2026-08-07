@@ -4,6 +4,7 @@ import { Download, Trash2, Upload } from 'lucide-react';
 import { fromExport, toExport, type LogStore } from '@/logbook';
 import { formatDistance, formatDuration, formatWhen, msToKnots } from '@/sim/units';
 import { venueById } from '@/sim/venues';
+import { placeName } from '@/sim/regions';
 import type { PassageRecord } from '@/sim/passage';
 
 /**
@@ -23,7 +24,7 @@ function Entry({ p, onRemove }: { p: PassageRecord; onRemove: () => void }) {
     <div className="group grid grid-cols-[1fr_auto] items-start gap-2 border-b border-border/60 py-2 last:border-0">
       <div>
         <div className="text-[11px]">
-          {venueById(p.venue)?.name ?? 'Open ocean'}
+          {placeName(p.venue, (id) => venueById(id)?.name ?? null)}
           <span className="ml-2 text-[10px] text-muted-foreground">{formatWhen(p.startedAt)}</span>
         </div>
         <div className="font-mono text-[10px] tabular-nums text-muted-foreground">

@@ -4,7 +4,7 @@ import { knotsToMs, msToKnots } from './sim/units';
 import type { Vec2 } from './sim/math';
 import { setDriftVec } from './sim/current';
 import { venueById, type Venue } from './sim/venues';
-import { regionById } from './sim/regions';
+import { regionById, type Region } from './sim/regions';
 
 /**
  * Player settings, persisted to localStorage.
@@ -179,3 +179,31 @@ export const withoutVenue = (s: Settings): Settings => ({
   driftKnots: 0,
   islandCount: DEFAULT_SETTINGS.islandCount,
 });
+
+/**
+ * Settings for sailing a region: its conditions written into the player's own.
+ *
+ * Written in rather than overridden, exactly as `withVenue` does and for the
+ * same reason -- every slider then keeps showing what is actually being sailed
+ * and stays live, instead of displaying one thing while the world does another.
+ *
+ * The land is not among them. A region brings a surveyed coast and no islands,
+ * and the two cannot coexist: the island slider stands down.
+ */
+export function withRegion(s: Settings, r: Region): Settings {
+  return {
+    ...s,
+    region: r.id,
+    venue: '',
+    islandCount: 0,
+    windKnots: r.conditions.windKnots,
+    gustiness: r.conditions.gustiness,
+    seaScale: r.conditions.seaScale,
+    setDeg: r.conditions.setDeg,
+    driftKnots: r.conditions.driftKnots,
+    startHour: r.conditions.startHour,
+  };
+}
+
+/** Leaving a region for the open ocean. Conditions stay as they were left. */
+export const withoutRegion = (s: Settings): Settings => ({ ...s, region: '' });

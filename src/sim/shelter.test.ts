@@ -25,6 +25,16 @@ const PLAIN: Region = {
   raster: '',
   source: '',
   licence: '',
+  conditions: {
+    windTwd: 0,
+    windKnots: 12,
+    gustiness: 0.4,
+    seaScale: 1,
+    setDeg: 90,
+    driftKnots: 0,
+    fullDepth: 20,
+    startHour: 12,
+  },
 };
 
 const W = PLAIN.grid.width;

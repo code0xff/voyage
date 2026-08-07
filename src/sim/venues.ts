@@ -1,4 +1,4 @@
-import { DEG, type Vec2 } from './math';
+import type { Vec2 } from './math';
 import { setDriftVec } from './current';
 import type { Island } from './terrain';
 
@@ -65,89 +65,20 @@ export interface Venue {
 }
 
 /**
- * A run of overlapping circles making one continuous coast.
+ * No venues ship today, and the type is kept anyway.
  *
- * Overlapping is the point: `elevationAt` takes the highest of every island, so
- * circles that overlap union into one shore with no seam. They share a `land`
- * so the shelter models treat them as the one piece of ground they are drawing.
+ * San Francisco was the only one, and it has been replaced by the surveyed
+ * region of the same water -- two entries for one place, one of them a sketch
+ * of the other, was a menu asking the player to choose between a chart and a
+ * drawing of it.
+ *
+ * What is kept is the shape, because it is still the right answer for a coast
+ * with no open survey behind it. docs/real-map.md is plain about this: CUDEM
+ * covers US waters and nothing else, so a Korean or European place would be a
+ * real coastline over an invented shelf, and admitting that in circles beats
+ * inventing soundings and calling them depths.
  */
-function coast(
-  land: number,
-  from: Vec2,
-  to: Vec2,
-  count: number,
-  radius: number,
-  height: number,
-  seed: number,
-): Island[] {
-  const out: Island[] = [];
-  for (let i = 0; i < count; i++) {
-    const t = count === 1 ? 0.5 : i / (count - 1);
-    out.push({
-      pos: { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t },
-      radius,
-      height,
-      seed: seed + i * 17,
-      land,
-    });
-  }
-  return out;
-}
-
-/**
- * San Francisco, the city front.
- *
- * The one venue where the tide is the whole game. A summer afternoon westerly
- * comes in hard through the Gate, and the flood pushes in under it -- so the
- * beat out towards the Gate is dead into a foul stream, and the way to sail it
- * is to get out of the stream by working the shallow water along the city
- * shore. That costs wind and eventually the bottom, which is the trade.
- *
- * The set is the flood and not the ebb on purpose, and the first version had it
- * the other way round. An ebb runs out through the Gate, which is within about
- * twenty degrees of the direction a westerly makes you beat in -- so it carried
- * the boat towards the windward mark, and the whole inshore decision evaporated
- * because there was nothing to escape. Measured: 2.33 kn of *fair* stream on
- * the beat. Both states are real on any given afternoon; this is the one worth
- * building a course around.
- *
- * Laid out with the course off the city front, the shore to the south, Alcatraz
- * to the north, and Angel Island beyond it. The scale is compressed: the real
- * city front is some kilometres of shoreline and this is the part of it a
- * windward-leeward course fits into.
- */
-const SF: Venue = {
-  id: 'sf',
-  name: 'San Francisco — city front',
-  region: 'California, USA',
-  brief: 'Hard summer westerly over a foul flood. Work inshore out of the tide, or pay for it.',
-  islands: [
-    // The city shore, running roughly east-west to the south of the course.
-    ...coast(1, { x: -2300, y: -1300 }, { x: 2300, y: -1250 }, 7, 800, 70, 4100),
-    // A headland at the west end, standing up into the course: this is what
-    // puts land upwind of the beat and so gives the inshore lane a wind cost.
-    ...coast(1, { x: -2500, y: -900 }, { x: -2150, y: -650 }, 2, 520, 90, 4300),
-    // Alcatraz: small, steep, and right where it is in the way.
-    { pos: { x: 250, y: 1150 }, radius: 170, height: 35, seed: 4500 },
-    // Angel Island, further out and mostly scenery at this range.
-    { pos: { x: 1500, y: 2450 }, radius: 700, height: 85, seed: 4600 },
-  ],
-  // Afternoon sea breeze through the Gate: hard, from a little south of west.
-  windTwd: 262 * DEG,
-  windKnots: 20,
-  gustiness: 0.5,
-  seaScale: 1.1,
-  // The flood pushes in through the Gate and up the bay: east, and so straight
-  // into the teeth of a beat that has to go west into the breeze.
-  setDeg: 98,
-  driftKnots: 2.5,
-  // A wide band, because the inshore lane has to be worth the distance to reach
-  // it. This is the number to move if the venue plays too easy or too mean.
-  fullDepth: 30,
-  startHour: 14,
-};
-
-export const VENUES: readonly Venue[] = [SF];
+export const VENUES: readonly Venue[] = [];
 
 export const venueById = (id: string): Venue | null => VENUES.find((v) => v.id === id) ?? null;
 

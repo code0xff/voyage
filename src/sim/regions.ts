@@ -1,3 +1,5 @@
+import { DEG } from './math';
+
 /**
  * Regions: bounded pieces of a real coast, sailed freely.
  *
@@ -50,6 +52,45 @@ export interface Region {
   source: string;
   /** What that licence obliges, in the words that matter. */
   licence: string;
+
+  /**
+   * The conditions the place is known for.
+   *
+   * These are a *sketch*, and the region's land and depths are not, which is
+   * the one place in this project where the labelling could mislead if it were
+   * not said plainly. A surveyed coast sitting under an invented breeze invites
+   * the reader to assume the breeze was surveyed too.
+   *
+   * So: the coastline and the soundings are `source`. Everything below is the
+   * broad, well-known character of the place -- which way the wind usually
+   * blows and roughly how hard, which way the stream sets -- and not a
+   * climatological mean or a tidal diamond. A real one would be worth having;
+   * inventing one and writing it down as though it were measured would be worse
+   * than admitting the sketch.
+   *
+   * They live here rather than in a separate record because a place is one
+   * choice. Two controls for "where am I sailing" invited picking a surveyed
+   * coast and someone else's weather at the same time.
+   */
+  conditions: {
+    /** Prevailing wind: the direction it blows *from*, rad, and its mean speed. */
+    windTwd: number;
+    windKnots: number;
+    /** How shifty and puffy it is, 0..1, on the same scale as the setting. */
+    gustiness: number;
+    /** Wave height multiplier, on the same scale as the sea state setting. */
+    seaScale: number;
+    /** The deep-water stream: the direction the water *goes*, deg, and its rate. */
+    setDeg: number;
+    driftKnots: number;
+    /**
+     * Depth at which the stream reaches full rate, m -- how wide the band of
+     * useful slack water inshore is. The place's main tactical dial.
+     */
+    fullDepth: number;
+    /** Hour the session opens at, since the breeze at most of these is a clock. */
+    startHour: number;
+  };
 }
 
 /**
@@ -84,6 +125,33 @@ const SF_BAY: Region = {
   // anyway, because a depth is only worth anything if you can find out who
   // sounded it.
   licence: 'US Government work, public domain',
+
+  /*
+   * Inherited from the `sf` venue this replaces, where they were reasoned about
+   * at length and are worth keeping.
+   *
+   * The tide is the whole game here. A summer afternoon westerly comes in hard
+   * through the Gate and the flood pushes in under it, so the beat out towards
+   * the Gate is into a foul stream and the way to sail it is to work the
+   * shallow water along the city shore -- which costs wind, and eventually the
+   * bottom. Now that the bottom is surveyed, that trade is a real one.
+   *
+   * The set is the flood and not the ebb on purpose. An ebb runs out through
+   * the Gate within about twenty degrees of the direction a westerly makes you
+   * beat in, so it carries the boat towards the windward mark and the whole
+   * inshore decision evaporates. Both are real on any given afternoon; this is
+   * the one worth sailing.
+   */
+  conditions: {
+    windTwd: 262 * DEG,
+    windKnots: 20,
+    gustiness: 0.5,
+    seaScale: 1.1,
+    setDeg: 98,
+    driftKnots: 2.5,
+    fullDepth: 30,
+    startHour: 14,
+  },
 };
 
 export const REGIONS: readonly Region[] = [SF_BAY];
@@ -91,5 +159,31 @@ export const REGIONS: readonly Region[] = [SF_BAY];
 export const regionById = (id: string): Region | null =>
   REGIONS.find((r) => r.id === id) ?? null;
 
+/**
+ * Ids that used to mean somewhere else.
+ *
+ * `sf` was the San Francisco venue, and passages logged there carry it. The
+ * venue is gone and the surveyed region is the same water, so the id resolves
+ * forward rather than falling through to "Open ocean" -- a logbook that forgot
+ * where you had been would be a worse answer than a slightly generous one.
+ */
+const RENAMED: Record<string, string> = { sf: 'sf-bay' };
+
+export const regionByStoredId = (id: string): Region | null =>
+  regionById(RENAMED[id] ?? id);
+
 /** How many bytes the region's raster must be, for whoever loads it to check. */
 export const rasterBytes = (r: Region): number => r.grid.width * r.grid.height * 2;
+
+/**
+ * What to call the place a passage was sailed in.
+ *
+ * Regions first, then venues, then the open ocean. Both are consulted because
+ * `PassageRecord.venue` is a stored id and the logbook outlives the list it
+ * was written against: San Francisco was a venue when the earliest passages
+ * were logged and is a region now, and a row that quietly became "Open ocean"
+ * would be the logbook forgetting where someone went.
+ */
+export function placeName(id: string, venueName: (id: string) => string | null): string {
+  return regionByStoredId(id)?.name ?? venueName(id) ?? 'Open ocean';
+}

@@ -6,6 +6,9 @@ import { regionById } from './regions';
 import { worldFromLatLon } from './geo';
 import { DEG, RAD } from './math';
 import { CRUISER } from './config';
+import { CurrentField, setDriftVec } from './current';
+import { dot, compassVec } from './math';
+import { msToKnots } from './units';
 
 const region = regionById('sf-bay');
 if (!region) throw new Error('sf-bay region is missing');
@@ -249,5 +252,71 @@ describe('the shelter texture, as the shader will read it', () => {
     // Zero fetch is the floor on both sides, and fully capped fetch is 1.
     expect(Math.max(0.05, Math.sqrt(0))).toBeCloseTo(0.05, 10);
     expect(Math.max(0.05, Math.sqrt(255 / 255))).toBeCloseTo(1, 10);
+  });
+});
+
+/**
+ * The decision San Francisco is known for, now over surveyed water.
+ *
+ * This was the `sf` venue's test and it is the reason that venue existed: a
+ * hard summer westerly over a foul flood, so the beat out towards the Gate is
+ * into the tide, and the way to sail it is to work the shallow water along the
+ * city shore -- which costs wind and eventually the bottom.
+ *
+ * It moves here with the place. The venue drew its shore from seven circles and
+ * a uniform shelf slope, so the inshore lane was as deep as someone decided it
+ * should be; here it is as deep as it is, and the trade is a real one.
+ */
+describe('the city front, and the price of the inshore lane', () => {
+  const c = region.conditions;
+  const currents = new CurrentField({
+    peak: setDriftVec(c.setDeg, c.driftKnots),
+    fullDepth: c.fullDepth,
+  });
+  currents.terrain = terrain;
+  /** Upwind: the direction the beat has to make good. */
+  const up = compassVec(c.windTwd);
+  /** Knots of stream against the beat. Positive is foul. */
+  const foul = (p: { x: number; y: number }) => msToKnots(-dot(currents.sample(p), up));
+
+  /*
+   * Three points on one transect in towards the city shore, chosen by walking
+   * the real soundings rather than by picking coordinates that sounded right --
+   * which is how the first draft of this test put the inshore lane on a beach.
+   *
+   * 37.812: 17 m, well out.        37.808: 5.4 m, the lane.
+   * 37.807: dry. The shoal is a hundred metres past the lane, not a slope
+   * someone chose the gradient of, and that is the whole difference between
+   * this and the venue it replaces.
+   */
+  const offshore = at(37.812, -122.44);
+  const inshore = at(37.808, -122.44);
+  const tooFar = at(37.807, -122.44);
+
+  it('sets the flood against the beat, which is the whole point of the place', () => {
+    // The regression the venue carried: an ebb runs out of the Gate within
+    // twenty degrees of the way a westerly makes you beat, so it would carry
+    // the boat towards the mark and leave nothing to escape.
+    expect(foul(offshore)).toBeGreaterThan(1.2);
+  });
+
+  it('offers real shelter from the tide inshore', () => {
+    // 1.4 kn foul out here, a fifth of that in the lane: nearly slack water.
+    expect(foul(inshore)).toBeLessThan(foul(offshore) - 1);
+  });
+
+  /*
+   * And charges for it. A lane that were only better would not be a decision,
+   * it would be the answer, and the place would be a straight line.
+   */
+  it('charges depth for the tide it saves', () => {
+    expect(terrain.depthAt(inshore.x, inshore.y)).toBeLessThan(
+      terrain.depthAt(offshore.x, offshore.y) - 5,
+    );
+  });
+
+  it('keeps the lane afloat, and puts the ground just past it', () => {
+    expect(terrain.isAground(inshore.x, inshore.y, CRUISER.draft)).toBe(false);
+    expect(terrain.isAground(tooFar.x, tooFar.y, CRUISER.draft)).toBe(true);
   });
 });

@@ -362,7 +362,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // other case, an endless ocean that has to be looked at through a window.
     const venue = venueById(current.venue);
     venueTerrain = venue ? new Terrain(venue.islands) : EMPTY_TERRAIN;
-    currents.fullDepth = venue ? venue.fullDepth : DEFAULT_FULL_DEPTH;
+    // A region sets the tidal band too. Its stream is as much a part of the
+    // place as its coast -- at San Francisco it is the whole game -- and
+    // leaving fullDepth at the open-ocean default would run the tide flat out
+    // right up to the beach and delete the inshore lane.
+    const conditioned = regionById(current.region)?.conditions ?? venue;
+    currents.fullDepth = conditioned ? conditioned.fullDepth : DEFAULT_FULL_DEPTH;
 
     // A surveyed region is the third kind of world, and the only one that has
     // to be fetched. It is installed when it arrives; until then the session
@@ -491,7 +496,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let diag: Diagnostics | null = null;
 
   function applySettings(s: Settings): void {
-    const venueChanged = s.venue !== current.venue;
+    const venueChanged = s.venue !== current.venue || s.region !== current.region;
     const worldChanged =
       s.islandCount !== current.islandCount ||
       venueChanged ||
@@ -504,7 +509,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // arranged for one wind and sailed in another. Only on arrival, so that
     // Q/E still work afterwards and a later edit does not undo them.
     if (venueChanged) {
-      const arriving = venueById(s.venue);
+      const arriving = regionById(s.region)?.conditions ?? venueById(s.venue);
       if (arriving) wind.baseTwd = arriving.windTwd;
     }
 
@@ -595,8 +600,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // laid out around it, and a beat that started on a random bearing would put
     // the course somewhere the place was not designed for. Free to shift with
     // Q/E afterwards, like anywhere else.
-    const venue = venueById(current.venue);
-    if (venue) wind.baseTwd = venue.windTwd;
+    const place = regionById(current.region)?.conditions ?? venueById(current.venue);
+    if (place) wind.baseTwd = place.windTwd;
     session++;
     snapshot.session = session;
     weather.reseed(current.seed);
@@ -651,7 +656,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       // which is also why PassageLog takes an id rather than making one.
       crypto.randomUUID(),
       { ...state.pos },
-      current.venue,
+      // Where she was, whichever kind of place it is. The field is named for
+      // the venue that used to be the only answer; the id it holds is now a
+      // region's as often as not, and `placeName` resolves either.
+      current.region || current.venue,
     );
     log = null;
     setDestination(null);

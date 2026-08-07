@@ -22,9 +22,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { formatClock } from "@/sim/sky";
 import { WEATHER_KINDS, WEATHER_LABEL, type WeatherKind } from "@/sim/weather";
-import { withVenue, withoutVenue, type Settings } from "@/settings";
+import { withRegion, withVenue, withoutRegion, withoutVenue, type Settings } from "@/settings";
 import { VENUES, venueById } from "@/sim/venues";
-import { REGIONS, regionById } from "@/sim/regions";
+import { REGIONS, placeName, regionById } from "@/sim/regions";
 import { Logbook } from "./Logbook";
 import type { LogStore } from "@/logbook";
 import type { PassageRecord } from "@/sim/passage";
@@ -113,7 +113,7 @@ function LastPassage({ p }: { p: PassageRecord }) {
         <span className="text-muted-foreground">{formatWhen(p.startedAt)}</span>
       </div>
       <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
-        {venueById(p.venue)?.name ?? "Open ocean"} · {formatDistance(p.distance)}{" "}
+        {placeName(p.venue, (id) => venueById(id)?.name ?? null)} · {formatDistance(p.distance)}{" "}
         in {formatDuration(p.duration)}
       </div>
     </div>
@@ -369,23 +369,17 @@ export function MenuDialog({
                 value={settings.region ? `region:${settings.region}` : settings.venue || "open"}
                 onValueChange={(v) => {
                   if (v.startsWith("region:")) {
-                    // A region brings its own land, so the island slider and any
-                    // venue stand down together.
-                    onSettings({
-                      ...withoutVenue(settings),
-                      region: v.slice(7),
-                      islandCount: 0,
-                    });
+                    const region = regionById(v.slice(7));
+                    if (region) onSettings(withRegion(settings, region));
                     return;
                   }
                   const venue = venueById(v);
                   // Picking a place writes its conditions into the settings
                   // rather than overriding them, so every slider below keeps
                   // showing what is actually being sailed and stays live.
-                  onSettings({
-                    ...(venue ? withVenue(settings, venue) : withoutVenue(settings)),
-                    region: "",
-                  });
+                  onSettings(
+                    withoutRegion(venue ? withVenue(settings, venue) : withoutVenue(settings)),
+                  );
                 }}
               >
                 <SelectTrigger className="w-full">

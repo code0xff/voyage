@@ -170,6 +170,23 @@ question than the edge of the chart.
 
 ## What is still owed
 
+**Tests for the renderer.** Two Codex reviews running have said the same thing:
+there are none for the shader, the field texture or the mesh. Two of the three
+P1 defects in this work were renderer defects — a triangle winding that faced
+the land away from the sun, and a texture the shader read on a different
+convention from the writer. Both were caught by hand, one by a screenshot and
+one by working a cross product out on paper. A thin headless test over geometry
+normals and the texture encoding would have caught both.
+
+**Conditions are still a sketch, and say so.** `Region.conditions` carries the
+prevailing breeze and the stream, and they are the broad character of the place
+rather than a climatological mean or a tidal diamond. The land and the depths
+are surveyed; those are not, and the two are labelled apart in the menu for
+exactly that reason. A real tidal atlas is a piece of work in its own right.
+
+**Only US waters.** CUDEM reaches no further, so a region anywhere else is back
+to a real coastline over an invented shelf — see the table above.
+
 The region does not yet bring its own wind, tide or start time the way a venue
 does — pick San Francisco Bay and you sail it in whatever the sliders say.
 `Region` has no fields for it, deliberately: a venue's figures are admitted
@@ -181,7 +198,18 @@ would be the one place this project's labelling could mislead.
 ## What carries over from the venue work
 
 Kept: the tidal field, SOG and COG, the tide-aware readouts and chart arrows,
-anchoring and the logbook, and the venue record itself (wind, stream, sea).
+anchoring and the logbook, and the venue record itself (wind, stream, sea) —
+which now lives on `Region.conditions`, labelled as the sketch it is.
 
-Replaced: the venue's land, which is circles today. The landmass grouping that
-lets circles form a coast is only needed while circles remain.
+Replaced: the venue's land, which was circles. **Done.** San Francisco was the
+only venue and it is gone; two entries for one place, one of them a drawing of
+the other, was a menu asking the player to choose between a chart and a sketch
+of the same water. The `Venue` type survives with no entries, because it is
+still the right answer for a coast with no open survey behind it.
+
+The landmass grouping that lets circles form a coast is only needed while
+circles remain, and they no longer do. It is still in `Terrain` for the
+procedural ocean, which is built from circles and always will be.
+
+Passages logged under the old `sf` id resolve forward to the region, so the
+logbook does not forget where anyone has been.
