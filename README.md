@@ -141,6 +141,14 @@ anywhere else, adding a gradient would simply mean every sail on the boat saw
 less wind, the boat would be slower everywhere, and `CRUISER` would be retuned
 until the polar came back to where it started.
 
+That reference height is an authoring choice, not a claim about instruments. A
+boat has one wind sensor and it is at the masthead, 14 m up, so **AWA and AWS on
+the display are read there**, along with the vane drawn on the mast — one
+sample, one instrument. TWS stays the quoted reference wind, which is the number
+the conditions are set in and the polar is indexed by. Reading the sail's wind
+into the AWA gauge put a figure on screen that disagreed with the vane beside it
+by up to twenty degrees off the wind.
+
 The boat's own velocity is the same at every height, so a stronger true wind up
 top means the apparent wind up there comes **from further aft**. The gap between
 the apparent wind angle at the head and at the foot is exactly the twist the

@@ -292,8 +292,20 @@ export function Instruments() {
         <Gauge label="TWS" unit="kn" read={(s) => msToKnots(s.env.tws).toFixed(1)} />
         <Gauge label="TWA" read={(s) => (s.diag ? deg(s.diag.twa * RAD) : '--')} />
         <Gauge label="TWD" read={(s) => deg(wrap2Pi(s.env.twd) * RAD)} />
-        <Gauge label="AWA" read={(s) => (s.diag ? deg(s.diag.awa * RAD) : '--')} />
-        <Gauge label="AWS" unit="kn" read={(s) => (s.diag ? msToKnots(s.diag.aws).toFixed(1) : '--')} />
+        {/*
+          From the masthead, not from the sail's centre of effort, because that
+          is where a boat's wind sensor is -- and because the vane drawn on the
+          masthead is fed `awaMast`. Reading `awa` here put a number on screen
+          that disagreed with the instrument beside it by up to twenty degrees
+          on a broad reach, which is the sort of thing a player eventually
+          notices and cannot explain.
+        */}
+        <Gauge label="AWA" read={(s) => (s.diag ? deg(s.diag.awaMast * RAD) : '--')} />
+        <Gauge
+          label="AWS"
+          unit="kn"
+          read={(s) => (s.diag ? msToKnots(s.diag.awsMast).toFixed(1) : '--')}
+        />
         <Gauge label="Heel" read={(s) => `${(s.state.heel * RAD).toFixed(1)}°`} />
         <Gauge label="Leeway" read={(s) => (s.diag ? `${(s.diag.leeway * RAD).toFixed(1)}°` : '--')} />
         <Gauge label="Sheet" read={(s) => deg(s.state.sheet * RAD)} />

@@ -115,6 +115,15 @@ export interface Diagnostics {
    * along, and drawing one with `awa` would have it lying about its own height.
    */
   awaMast: number;
+  /**
+   * m/s, apparent wind speed at the masthead. Stronger than `aws` by the same
+   * gradient that turns the angle: about 12% on this rig.
+   *
+   * These two are what the instruments read, because a boat has one wind sensor
+   * and it is at the masthead. `aws`/`awa` stay the reference-height pair the
+   * physics is written in.
+   */
+  awsMast: number;
   twist: number; // rad, the twist actually set
   /**
    * rad, the twist that would make the most drive with the sheet as it is set.
@@ -311,7 +320,9 @@ export function step(
   const awaHead = awaAtHeight(windVelW, velW, s.heading, shearFactor(plan.headHeight + zCg, zRef));
   // The masthead is higher than any part of the sail and does not come down
   // with a reef, so it gets its own sample rather than reusing the head's.
-  const awaMast = awaAtHeight(windVelW, velW, s.heading, shearFactor(cfg.mastHeight + zCg, zRef));
+  const appMast = apparentAtHeight(windVelW, velW, shearFactor(cfg.mastHeight + zCg, zRef));
+  const awaMast = awaOf(appMast, s.heading);
+  const awsMast = len(appMast);
 
   // Sheet first, twist second, because the twist that makes most power depends
   // on where the boom has ended up -- and in particular on whether it has run
@@ -589,6 +600,7 @@ export function step(
     sailAoA,
     luffing,
     awaMast,
+    awsMast,
     twist: s.twist,
     twistWanted,
     drive,

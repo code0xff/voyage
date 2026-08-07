@@ -168,6 +168,38 @@ describe('sail twist', () => {
     }
   });
 
+  /**
+   * The instruments read `awaMast`/`awsMast`, so the speed has to come off the
+   * same sample as the angle. Pairing a masthead angle with a centre-of-effort
+   * speed would put a wind on the display that exists nowhere on the boat.
+   *
+   * The interesting part is that the apparent wind does *not* simply inherit the
+   * true wind's ratio between the two heights. Boat velocity is one fixed vector
+   * subtracted from both samples: upwind it adds to each, which dilutes the
+   * gradient's share, and off the wind it cancels most of each, which
+   * concentrates it. So the masthead reads a smaller gain than the air really
+   * has on a beat, and a larger one on a reach. This was worth pinning because
+   * the first version of this test asserted the true-wind ratio as an upper
+   * bound everywhere and was wrong the moment the boat bore away.
+   */
+  it('reads the masthead wind stronger than the sail feels, on the same sample', () => {
+    // 1.119 for this rig: 14 m of masthead over a 6.3 m reference height.
+    const trueGain = shearFactor(CRUISER.mastHeight + cgHeight(CRUISER), windRefHeight(CRUISER));
+    const beat = settle(315, knotsToMs(12), 60).d; // TWA 45,  measured 1.088
+    const broad = settle(225, knotsToMs(12), 60).d; // TWA 135, measured 1.145
+    const run = settle(180, knotsToMs(12), 60).d; //  TWA 180, measured 1.204
+
+    for (const d of [beat, broad, run]) expect(d.awsMast).toBeGreaterThan(d.aws);
+    expect(beat.awsMast / beat.aws).toBeLessThan(trueGain);
+    expect(broad.awsMast / broad.aws).toBeGreaterThan(trueGain);
+    // Deepest downwind is the extreme of the effect, because that is where boat
+    // speed cancels the most of the true wind and leaves the gradient the
+    // largest share of what remains.
+    expect(run.awsMast / run.aws).toBeGreaterThan(broad.awsMast / broad.aws);
+    // Still the same wind at both heights, not a different one.
+    expect(run.awsMast / run.aws).toBeLessThan(1.3);
+  });
+
   it('twists the head open when the boat is overpowered', () => {
     // Full sail in 28 knots is far too much. A crew reaches for the vang before
     // the reef pennant, so the auto-trim must be well beyond what the gradient
