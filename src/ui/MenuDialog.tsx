@@ -67,6 +67,20 @@ function Slider({
   );
 }
 
+/**
+ * A tab in the settings strip.
+ *
+ * The icon sizing is the whole reason this is not just `flex-1`. `Button`
+ * carries `[&_svg]:size-3.5`, but `TabsTrigger` carries no svg rule at all, so
+ * a lucide icon dropped into one arrived at its own default 24px -- taller than
+ * the 26.25px of usable height inside the h-8 track. The active pill therefore
+ * stood proud of the track top and bottom, and at the two ends of the strip
+ * that left the track's rounded corner showing past the pill's as a grey wedge:
+ * "the end is a slightly different colour". Matching Button's sizing here
+ * rather than in `tabs.tsx`, which is generated and not ours to edit.
+ */
+const TAB_TRIGGER = "flex-1 gap-1.5 [&_svg]:size-3.5 [&_svg]:shrink-0";
+
 export function MenuDialog({
   open,
   onOpenChange,
@@ -247,16 +261,16 @@ export function MenuDialog({
           className={view === "settings" ? "" : "hidden"}
         >
           <TabsList className="w-full">
-            <TabsTrigger value="world" className="flex-1">
+            <TabsTrigger value="world" className={TAB_TRIGGER}>
               <Compass /> World
             </TabsTrigger>
-            <TabsTrigger value="conditions" className="flex-1">
+            <TabsTrigger value="conditions" className={TAB_TRIGGER}>
               <Wind /> Conditions
             </TabsTrigger>
-            <TabsTrigger value="log" className="flex-1">
+            <TabsTrigger value="log" className={TAB_TRIGGER}>
               <BookOpen /> Log
             </TabsTrigger>
-            <TabsTrigger value="keys" className="flex-1">
+            <TabsTrigger value="keys" className={TAB_TRIGGER}>
               <Waves /> Controls
             </TabsTrigger>
           </TabsList>
