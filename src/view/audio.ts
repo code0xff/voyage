@@ -55,6 +55,36 @@ function makeRainNoise(ctx: AudioContext): AudioBuffer {
   return buf;
 }
 
+/**
+ * The rigging sings, and it sings a note.
+ *
+ * Air past a cylinder sheds vortices alternately off each side, and the rate is
+ * a fixed fraction of the speed over the diameter -- the Strouhal relation,
+ * `f = St.V/d`, with St about 0.2 for wire in this range. That is why a gale
+ * through the rigging is a *pitch* and not just a louder hiss, and why the
+ * pitch rises with the wind rather than the volume alone.
+ *
+ * Three diameters, because a boat is strung with several and they sing a chord
+ * rather than a note: cap shrouds, lowers and backstay, and the small stuff.
+ * Sizes are typical for a boat this size rather than taken from the config,
+ * which does not model standing rigging -- the ratios between them are what is
+ * audible, not the absolute millimetres.
+ *
+ * Resonated noise and not oscillators. A pure tone at a computed frequency is a
+ * theremin: real aeolian song wanders, because the shedding is only quasi-
+ * periodic and the wind it rides on is turbulent. A high-Q band-pass fed with
+ * noise does that for free, and it is the same trick the rest of this file
+ * already runs on.
+ */
+const HOWL = [
+  { d: 0.008, q: 13 },
+  { d: 0.005, q: 16 },
+  { d: 0.003, q: 19 },
+] as const;
+
+/** Strouhal number for a circular cylinder, near enough across this range. */
+const STROUHAL = 0.2;
+
 interface Layer {
   gain: GainNode;
   filter: BiquadFilterNode;
@@ -68,6 +98,7 @@ export class SoundEngine {
   private rig: Layer | null = null;
   private luff: Layer | null = null;
   private rain: Layer | null = null;
+  private howl: Layer[] = [];
   private luffAm: GainNode | null = null;
   private lfo: OscillatorNode | null = null;
 
@@ -104,6 +135,7 @@ export class SoundEngine {
       freq: number,
       q: number,
       buffer: AudioBuffer | null = this.noise,
+      offset = 0,
     ): Layer => {
       const src = ctx.createBufferSource();
       src.buffer = buffer;
@@ -115,7 +147,12 @@ export class SoundEngine {
       const gain = ctx.createGain();
       gain.gain.value = 0;
       src.connect(filter).connect(gain);
-      src.start();
+      // Offset decorrelates a layer from the others on the same buffer. Every
+      // source here plays the same samples, so without it they are phase-locked
+      // copies -- which merged two sounds into one once already, and which
+      // between the howl voices would have them surging in lockstep instead of
+      // wandering against each other.
+      src.start(0, offset);
       return { filter, gain };
     };
 
@@ -147,6 +184,15 @@ export class SoundEngine {
     // Rain: a broad hiss, high-passed, opening downward as it gets heavier.
     this.rain = layer('highpass', 1900, 0.7, rainNoise);
     this.rain.gain.connect(master);
+
+    // The rigging's song. White noise rather than the water's brown, so that a
+    // voice's loudness does not fall away as its pitch climbs: brown noise
+    // sheds about 6 dB an octave, which would make the high voice quieten as
+    // the wind got up -- exactly backwards.
+    this.howl = HOWL.map((h, i) =>
+      layer('bandpass', 400, h.q, rainNoise, i * 0.7 + 0.3),
+    );
+    for (const h of this.howl) h.gain.connect(master);
   }
 
   setEnabled(on: boolean): void {
@@ -237,6 +283,7 @@ export class SoundEngine {
   ): void {
     const ctx = this.ctx;
     if (!ctx || !this.hull || !this.rig || !this.luff || !this.luffAm || !this.rain) return;
+    if (this.howl.length !== HOWL.length) return;
     if (ctx.state !== 'running') return;
 
     const t = ctx.currentTime;
@@ -332,6 +379,29 @@ export class SoundEngine {
      * in this mix is allowed to be this lazy, because everything else is the
      * boat answering you; this is the sky, which does not.
      */
+    /*
+     * The rigging's song, which is what "it is really blowing" sounds like.
+     *
+     * Pitch is the Strouhal relation and nothing else: it rises with the wind
+     * because the shedding rate does. Loudness is a different matter and is not
+     * linear -- the radiated power of vortex shedding climbs very steeply with
+     * velocity, which is why the song is simply absent in a sailing breeze and
+     * then arrives. Squared here rather than the sixth power the dipole
+     * suggests: the honest exponent puts everything below a gale at zero, and
+     * the point of this is the difference between a fresh breeze and a hard
+     * one, not between a gale and a storm.
+     *
+     * Deliberately quieter than the broadband band it sits in. A tone cuts
+     * through noise far better than its level suggests, and this file has just
+     * had one lesson about a layer measured right and heard too loud.
+     */
+    const song = clamp((aws - 7) / 14, 0, 1) ** 2;
+    for (let i = 0; i < HOWL.length; i++) {
+      const voice = this.howl[i];
+      voice.filter.frequency.setTargetAtTime((STROUHAL * aws) / HOWL[i].d, t, 0.12);
+      voice.gain.gain.setTargetAtTime(song * 0.075, t, 0.25);
+    }
+
     const wet = clamp(weather.rain, 0, 1);
     // Under the wind, not over it. The first attempt at this coefficient was
     // 0.34, which put a squall's rain at 0.31 against the rigging's own ceiling
