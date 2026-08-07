@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { heightFieldFromBytes } from './heightfield';
+import { HeightField, heightFieldFromBytes } from './heightfield';
 import { EDGE_FADE, RegionTerrain } from './region-terrain';
 import { regionById } from './regions';
 import { worldFromLatLon } from './geo';
@@ -160,5 +160,94 @@ describe('sailing off the chart', () => {
   it('is still finite a very long way out', () => {
     expect(Number.isFinite(terrain.depthAt(1e6, -1e6))).toBe(true);
     expect(Number.isFinite(terrain.windExposure(1e6, -1e6, WESTERLY))).toBe(true);
+  });
+});
+
+/**
+ * Regions with no waterline.
+ *
+ * Neither can be sailed and neither ships, but `distanceToShore` has one job
+ * off the chart -- say Infinity, as `Terrain` with no islands does, so the
+ * callers written for it fall quiet. The first attempt tested only that some
+ * distance came out negative, which catches all-water and is *fooled* by
+ * all-land: every distance is the negative sentinel, so it reported a shore
+ * twenty-five thousand kilometres inland. A shore needs both halves.
+ */
+describe('a region with nothing to be near', () => {
+  const flat = (elevation: number) => {
+    const spec = { ...region, grid: { ...region.grid, width: 32, height: 32, unit: 1 } };
+    const samples = new Int16Array(32 * 32).fill(elevation);
+    return new RegionTerrain(spec, new HeightField(samples, spec));
+  };
+
+  it('says Infinity when it is all water', () => {
+    const t = flat(-20);
+    expect(t.distanceToShore(0, 0)).toBe(Infinity);
+    expect(t.bearingToShore(0, 0)).toBeNull();
+  });
+
+  it('says Infinity when it is all land', () => {
+    const t = flat(40);
+    expect(t.distanceToShore(0, 0)).toBe(Infinity);
+    expect(t.bearingToShore(0, 0)).toBeNull();
+  });
+
+  it('still finds one when there is both', () => {
+    const spec = { ...region, grid: { ...region.grid, width: 32, height: 32, unit: 1 } };
+    const samples = new Int16Array(32 * 32).fill(-20);
+    for (let i = 0; i < 32 * 16; i++) samples[i] = 40; // the northern half is land
+    const t = new RegionTerrain(spec, new HeightField(samples, spec));
+    expect(Number.isFinite(t.distanceToShore(0, -200))).toBe(true);
+    expect(t.bearingToShore(0, -200)).not.toBeNull();
+  });
+});
+
+/**
+ * What the eight-bit texture costs.
+ *
+ * Inside the survey the physics and the shader read the same field, and since
+ * the texture carries capped *fetch* rather than shelter they now interpolate
+ * the same linear quantity and each take the root themselves. The arithmetic
+ * is exact. The wire is not: the red channel is a byte.
+ *
+ * This pins the size of what is left, because a comment saying "0.0126" is
+ * only true until someone changes REFERENCE_FETCH, the floor, or the encoding
+ * -- and all three are one edit away from widening it silently. The worst case
+ * is at the waterline, where the root is steepest and the floor cuts in.
+ */
+describe('the shelter texture, as the shader will read it', () => {
+  const REF = 8000;
+  /** Exactly what water.ts writes into the red channel. */
+  const byte = (i: number) => Math.round((Math.min(terrain.shelter.fetch[i], REF) / REF) * 255) / 255;
+
+  it('agrees with the physics to within the quantisation bound', () => {
+    terrain.waveShelter(0, 0, WESTERLY);
+    const { width, height, cell } = region.grid;
+    const hw = terrain.height.halfWidth;
+    const hh = terrain.height.halfHeight;
+    let worst = 0;
+    // Every eleventh midpoint: enough of the bay to catch a shoreline without
+    // making this the slowest test in the suite.
+    for (let row = 1; row < height - 1; row += 11) {
+      for (let col = 1; col < width - 2; col += 11) {
+        const i = row * width + col;
+        const x = -hw + (col + 1) * cell;
+        const y = hh - (row + 0.5) * cell;
+        const cpu = terrain.waveShelter(x, y, WESTERLY);
+        // The hardware mixes the two bytes, then the shader takes the root.
+        const gpu = Math.max(0.05, Math.sqrt((byte(i) + byte(i + 1)) / 2));
+        worst = Math.max(worst, Math.abs(cpu - gpu));
+      }
+    }
+    // sqrt(1/255) - 0.05 is the bound at the floor; a little over it for the
+    // interpolated case, and nowhere near enough to see in a wave height.
+    expect(worst).toBeLessThan(0.02);
+  });
+
+  it('agrees exactly where the byte is exact', () => {
+    terrain.waveShelter(0, 0, WESTERLY);
+    // Zero fetch is the floor on both sides, and fully capped fetch is 1.
+    expect(Math.max(0.05, Math.sqrt(0))).toBeCloseTo(0.05, 10);
+    expect(Math.max(0.05, Math.sqrt(255 / 255))).toBeCloseTo(1, 10);
   });
 });

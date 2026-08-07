@@ -58,7 +58,15 @@ export class RegionTerrain {
 
   /** Metres to the waterline: positive afloat, negative inland. */
   private readonly shoreDistance: Float32Array;
-  /** Whether there is any shore at all to measure to. */
+  /**
+   * Whether there is a waterline at all -- which needs land *and* sea.
+   *
+   * Both halves matter, and the first attempt at this only had one. Asking
+   * whether any distance came out negative catches a region of nothing but
+   * water, whose distances are all the positive sentinel; it is fooled by a
+   * region of nothing but land, whose distances are all the *negative* one, and
+   * happily reports a shore twenty-five thousand kilometres inland.
+   */
   private readonly hasShore: boolean;
 
   private readonly w: number;
@@ -77,14 +85,15 @@ export class RegionTerrain {
     this.halfWidth = height.halfWidth;
     this.halfHeight = height.halfHeight;
     this.shelter = new ShelterField(height, width, rows, cell);
-    this.shoreDistance = this.buildShoreDistance();
-    // A region of nothing but water leaves the chamfer transform at its
-    // sentinel everywhere, which would report a shore some ten thousand
-    // kilometres away rather than none. `Terrain` with no islands says Infinity
-    // and the callers are written for it -- the gulls fall silent -- so an
-    // all-sea region has to say the same thing rather than a large number that
-    // happens to behave like it most of the time.
-    this.hasShore = this.shoreDistance.some((d) => d <= 0);
+    // A region with no waterline leaves the chamfer transform at its sentinel
+    // everywhere, which would report a shore tens of thousands of kilometres
+    // off rather than none at all. `Terrain` with no islands says Infinity and
+    // the callers are written for it -- the gulls fall silent -- so a region
+    // with nothing to be near has to say the same thing, rather than a huge
+    // number that merely behaves like it most of the time.
+    const shore = { land: false, sea: false };
+    this.shoreDistance = this.buildShoreDistance(shore);
+    this.hasShore = shore.land && shore.sea;
   }
 
   /**
@@ -95,14 +104,17 @@ export class RegionTerrain {
    * beach. A one-sided transform would report zero everywhere inland and give
    * the gradient nothing to point at.
    */
-  private buildShoreDistance(): Float32Array {
+  private buildShoreDistance(found: { land: boolean; sea: boolean }): Float32Array {
     const { w, h, cell } = this;
     const land = new Uint8Array(w * h);
     for (let row = 0; row < h; row++) {
       const y = this.halfHeight - (row + 0.5) * cell;
       for (let col = 0; col < w; col++) {
         const x = -this.halfWidth + (col + 0.5) * cell;
-        land[row * w + col] = this.height.elevationAt(x, y) > 0 ? 1 : 0;
+        const dry = this.height.elevationAt(x, y) > 0;
+        land[row * w + col] = dry ? 1 : 0;
+        if (dry) found.land = true;
+        else found.sea = true;
       }
     }
 
