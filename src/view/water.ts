@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { MAX_WAVES, type WaveField } from '../sim/waves';
 import { MAX_ACTIVE_ISLANDS, WAKE_FADE, WAKE_MAX, type Terrain } from '../sim/terrain';
+import type { RegionTerrain } from '../sim/region-terrain';
 import type { SkyState } from '../sim/sky';
 import { compassVec } from '../sim/math';
 
@@ -32,6 +33,17 @@ const SEG = 300; // subdivisions -> 3 m per cell
  * would be in different places.
  */
 const MAX_ISLANDS = MAX_ACTIVE_ISLANDS;
+
+/**
+ * Depth, in metres, that the field texture's green channel stores as 1.0.
+ *
+ * Eight bits over 40 m is a 16 cm quantum, which is finer than the shoal shade
+ * can show and far finer than a 25 m cell means. Anything deeper than this is
+ * simply "deep", which is true of everything the colour is trying to say.
+ */
+const FIELD_DEPTH = 40;
+/** Water shallower than this is shaded pale, m. */
+const SHOAL_DEPTH = 12;
 
 /**
  * Fine surface texture, shared by the wave grid and the flat sea beyond it.
@@ -81,6 +93,8 @@ const vertexShader = /* glsl */ `
   uniform vec4 uIslands[${MAX_ISLANDS}]; // x, y, radius, active
   uniform vec2 uDownwind;                // unit vector, the way the wind travels
   uniform float uSteep;
+  uniform sampler2D uField;              // r = wave shelter, g = depth
+  uniform vec3 uRegion;                  // halfWidth, halfHeight, 1 if a region is loaded
 
   varying vec3 vNormal;
   varying vec3 vWorld;
@@ -100,7 +114,33 @@ const vertexShader = /* glsl */ `
   // pieces of a landmass to be adjacent, which Terrain's constructor guarantees
   // and terrain.test.ts holds it to; the obvious alternative, an array indexed
   // by group id, is not available in GLSL ES 1.00.
+  /**
+   * Where the field says a point is, in texture space, or outside 0..1 when
+   * there is no region or the point is beyond it.
+   *
+   * Row 0 of the raster is the *north* edge and v runs the other way, which is
+   * the one thing this conversion can get wrong and the reason the land and the
+   * flat water would otherwise appear mirrored about the middle of the bay.
+   */
+  vec2 fieldUv(vec2 p) {
+    return vec2(
+      (p.x + uRegion.x) / (2.0 * uRegion.x),
+      1.0 - (p.y + uRegion.y) / (2.0 * uRegion.y)
+    );
+  }
+
+  bool inRegion(vec2 uv) {
+    return uRegion.z > 0.5 && uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0;
+  }
+
   float waveShelter(vec2 p) {
+    // A region carries its shelter as data, computed by the same sweep the
+    // physics reads -- so this is not a copy of the model, it *is* the model's
+    // output. The duplication below survives only for the procedural ocean,
+    // where there is no field to sample and the islands are the whole world.
+    vec2 uv = fieldUv(p);
+    if (inRegion(uv)) return max(0.05, texture2D(uField, uv).r);
+
     float shelter = 1.0;
     float groupMax = 0.0;
     float group = -1.0;
@@ -197,6 +237,8 @@ const fragmentShader = /* glsl */ `
   uniform vec4 uLamp;
   uniform vec3 uLampColor;
   uniform vec4 uIslands[${MAX_ISLANDS}];
+  uniform sampler2D uField;
+  uniform vec3 uRegion;
 
   varying vec3 vNormal;
   varying vec3 vWorld;
@@ -232,10 +274,21 @@ const fragmentShader = /* glsl */ `
     // as the only warning the player gets.
     vec2 simP = vec2(vWorld.x, -vWorld.z);
     float shoal = 0.0;
-    for (int i = 0; i < ${MAX_ISLANDS}; i++) {
-      if (uIslands[i].w < 0.5) continue;
-      float d = distance(simP, uIslands[i].xy) - uIslands[i].z;
-      shoal = max(shoal, 1.0 - smoothstep(0.0, 110.0, max(d, 0.0)));
+    vec2 fuv = vec2(
+      (simP.x + uRegion.x) / (2.0 * uRegion.x),
+      1.0 - (simP.y + uRegion.y) / (2.0 * uRegion.y)
+    );
+    if (uRegion.z > 0.5 && fuv.x >= 0.0 && fuv.x <= 1.0 && fuv.y >= 0.0 && fuv.y <= 1.0) {
+      // Straight off the surveyed depth, so the pale water is where the water
+      // really is shallow rather than where a circle's radius happened to fall.
+      float depth = texture2D(uField, fuv).g * ${FIELD_DEPTH.toFixed(1)};
+      shoal = 1.0 - smoothstep(0.0, ${SHOAL_DEPTH.toFixed(1)}, depth);
+    } else {
+      for (int i = 0; i < ${MAX_ISLANDS}; i++) {
+        if (uIslands[i].w < 0.5) continue;
+        float d = distance(simP, uIslands[i].xy) - uIslands[i].z;
+        shoal = max(shoal, 1.0 - smoothstep(0.0, 110.0, max(d, 0.0)));
+      }
     }
     col = mix(col, mix(uShallow, vec3(0.55, 0.62, 0.55), 0.55), shoal * 0.75);
 
@@ -389,6 +442,17 @@ export interface Water {
   ): void;
   setTerrain(terrain: Terrain): void;
   /**
+   * Install a surveyed region, or null for the procedural ocean.
+   *
+   * While one is installed the shader reads its shelter and its depth out of a
+   * texture instead of recomputing the circle model, which is what finally ends
+   * the hand-copied GLSL that AGENTS.md names as this project's most-watched
+   * hazard -- for a region, at least.
+   */
+  setRegion(terrain: RegionTerrain | null): void;
+  /** Re-upload the shelter channel if the wind has moved the field. */
+  updateRegion(twd: number): void;
+  /**
    * Where the spreader flood hangs and how lit it is, for the pool it throws.
    * @param height metres above the water; it sets the size of the pool
    */
@@ -432,7 +496,15 @@ export function createWater(): Water {
     // xy: the lamp in sim coordinates, z: how lit it is, w: its height.
     uLamp: { value: new THREE.Vector4(0, 0, 0, 1) },
     uLampColor: { value: new THREE.Color(0.42, 0.29, 0.14) },
+    uField: { value: null as THREE.DataTexture | null },
+    // halfWidth, halfHeight, and whether a region is loaded at all.
+    uRegion: { value: new THREE.Vector3(1, 1, 0) },
   };
+
+  let region: RegionTerrain | null = null;
+  let field: THREE.DataTexture | null = null;
+  /** The direction the shelter channel was written for, so it is not rewritten. */
+  let fieldTwd: number | null = null;
 
   const mat = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader });
   const mesh = new THREE.Mesh(geo, mat);
@@ -471,6 +543,80 @@ export function createWater(): Water {
         else islands[i].set(0, 0, 1, 0);
       }
     },
+
+    setRegion(next) {
+      region = next;
+      if (field) {
+        field.dispose();
+        field = null;
+        uniforms.uField.value = null;
+      }
+      if (!next) {
+        uniforms.uRegion.value.set(1, 1, 0);
+        return;
+      }
+
+      const { width, height } = next.region.grid;
+      // One RGBA texture rather than two: the depth never changes and the
+      // shelter changes with the wind, but they are the same grid and sampled
+      // at the same instant, and a single fetch in the fragment shader is
+      // cheaper than two.
+      const data = new Uint8Array(width * height * 4);
+      const halfW = next.height.halfWidth;
+      const halfH = next.height.halfHeight;
+      const cell = next.region.grid.cell;
+      for (let row = 0; row < height; row++) {
+        const y = halfH - (row + 0.5) * cell;
+        for (let col = 0; col < width; col++) {
+          const x = -halfW + (col + 0.5) * cell;
+          // Depth is baked once here. Read through the terrain rather than the
+          // raster so that it is the depth the keel will find, edge fade and
+          // all, and not the raw survey.
+          const depth = Math.max(0, next.depthAt(x, y));
+          data[(row * width + col) * 4 + 1] = Math.round(
+            Math.min(1, depth / FIELD_DEPTH) * 255,
+          );
+        }
+      }
+      field = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+      // Linear, because the shelter it carries is a smooth field and nearest
+      // sampling would show the 25 m grid as facets in the flat water.
+      field.magFilter = THREE.LinearFilter;
+      field.minFilter = THREE.LinearFilter;
+      field.wrapS = THREE.ClampToEdgeWrapping;
+      field.wrapT = THREE.ClampToEdgeWrapping;
+      field.needsUpdate = true;
+      uniforms.uField.value = field;
+      uniforms.uRegion.value.set(halfW, halfH, 1);
+      fieldTwd = null;
+    },
+
+    updateRegion(twd) {
+      if (!region || !field) return;
+      // The physics rebuilds the sweep lazily when it is asked; asking here is
+      // what keeps the texture in step with it. Both go through the same
+      // ShelterField, so there is no second implementation to diverge -- which
+      // was the entire point of the exercise.
+      region.shelter.update(twd);
+      if (fieldTwd === twd) return;
+      fieldTwd = twd;
+
+      const { width, height, cell } = region.region.grid;
+      const data = field.image.data as Uint8Array;
+      const halfW = region.height.halfWidth;
+      const halfH = region.height.halfHeight;
+      for (let row = 0; row < height; row++) {
+        const y = halfH - (row + 0.5) * cell;
+        for (let col = 0; col < width; col++) {
+          const x = -halfW + (col + 0.5) * cell;
+          data[(row * width + col) * 4] = Math.round(
+            region.shelter.waveShelterAt(x, y) * 255,
+          );
+        }
+      }
+      field.needsUpdate = true;
+    },
+
     update(waves, simX, simY, tws, twd, sky, visibility) {
       // Snap to whole cells, otherwise the vertices slide and the water swims.
       const ox = Math.round(simX / quad) * quad;
@@ -520,6 +666,7 @@ export function createWater(): Water {
       mat.dispose();
       farGeo.dispose();
       farMat.dispose();
+      field?.dispose();
     },
   };
 }

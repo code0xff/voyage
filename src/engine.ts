@@ -11,6 +11,9 @@ import { solvePolar, type Polar } from './sim/polar';
 import { WindField } from './sim/wind';
 import { CurrentField, DEFAULT_FULL_DEPTH } from './sim/current';
 import { venueById } from './sim/venues';
+import { regionById } from './sim/regions';
+import type { RegionTerrain } from './sim/region-terrain';
+import { loadRegion } from './terrain-load';
 import { passageInfo, type PassageInfo, type PassageRecord } from './sim/passage';
 import { anchorage, type Anchorage } from './sim/anchorage';
 import { PassageLog } from './sim/passage';
@@ -38,6 +41,7 @@ import {
   IslandField,
   MAX_DENSITY,
   Terrain,
+  type TerrainQuery,
   sameIslands,
   type Island,
 } from './sim/terrain';
@@ -75,6 +79,15 @@ export interface Snapshot {
   currents: CurrentField;
   waves: WaveField;
   terrain: Terrain;
+  /**
+   * The surveyed region being sailed, or null in the procedural ocean.
+   *
+   * Alongside `terrain` rather than replacing it, because the two are read by
+   * different things: the physics asks whichever of them is installed through
+   * `TerrainQuery`, while the chart and the island meshes want the circle list
+   * that only `Terrain` has. When a region is loaded, `terrain` is empty.
+   */
+  region: RegionTerrain | null;
   sky: SkyState;
   weather: Weather;
   polar: Polar | null;
@@ -245,6 +258,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     currents,
     waves,
     terrain: EMPTY_TERRAIN,
+    region: null,
     sky: skyState(hour),
     weather,
     polar: null,
@@ -300,6 +314,22 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let visibleIslands: readonly Island[] = [];
   /** The venue's land, or EMPTY_TERRAIN in the open ocean. Fixed for a session. */
   let venueTerrain: Terrain = EMPTY_TERRAIN;
+  /**
+   * The region installed, and the one asked for.
+   *
+   * Two variables because loading is asynchronous: the raster is a megabyte
+   * fetched over the network, and a player who changes their mind while it is
+   * in flight must not have the old choice arrive and install itself. Whatever
+   * comes back is dropped unless it is still the one wanted.
+   */
+  let regionTerrain: RegionTerrain | null = null;
+  let wantedRegion = '';
+  /**
+   * What the physics actually asks. Whichever of the region and the island
+   * terrain is in force, so that no query site has to know which world it is
+   * in.
+   */
+  let query: TerrainQuery = EMPTY_TERRAIN;
   let streamedFrom = { x: Infinity, y: Infinity };
   let streamedTwd = Infinity;
   /**
@@ -333,6 +363,33 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     const venue = venueById(current.venue);
     venueTerrain = venue ? new Terrain(venue.islands) : EMPTY_TERRAIN;
     currents.fullDepth = venue ? venue.fullDepth : DEFAULT_FULL_DEPTH;
+
+    // A surveyed region is the third kind of world, and the only one that has
+    // to be fetched. It is installed when it arrives; until then the session
+    // runs on whatever the other two paths set, which is open water.
+    const region = regionById(current.region);
+    wantedRegion = region ? region.id : '';
+    if (!region) {
+      regionTerrain = null;
+    } else if (regionTerrain?.region.id !== region.id) {
+      regionTerrain = null;
+      void loadRegion(region).then(
+        (loaded) => {
+          // Dropped unless it is still the region wanted: a megabyte in flight
+          // is long enough for the player to have changed their mind, and the
+          // late arrival would otherwise overwrite the choice they made second.
+          if (wantedRegion !== loaded.region.id) return;
+          regionTerrain = loaded;
+          published = false;
+        },
+        (err) => {
+          // A region that will not load leaves open water rather than a broken
+          // world, and says so where a developer will see it. There is nothing
+          // the player can do about it and nothing worth stopping the sail for.
+          console.error('could not load the region', err);
+        },
+      );
+    }
 
     const up = compassVec(wind.baseTwd);
     field =
@@ -370,18 +427,25 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    */
   function streamWorld(x: number, y: number): void {
     if (!field) {
-      // Either open water or a venue, and both are the same job: one fixed
-      // terrain, installed once and never slid along.
-      if (!published || snapshot.terrain !== venueTerrain) {
+      // Either open water, a venue or a region, and all three are the same job:
+      // one fixed terrain, installed once and never slid along. The whole place
+      // is known, which is what makes a bounded region easier than the endless
+      // ocean rather than harder.
+      if (!published || snapshot.terrain !== venueTerrain || snapshot.region !== regionTerrain) {
         activeIslands = [];
         visibleIslands = [];
         published = true;
-        wind.terrain = venueTerrain;
+        query = regionTerrain ?? venueTerrain;
+        wind.terrain = query;
         // The stream needs the same land the wind does: it is the depth that
         // decides where it runs, and it must never be reading last world's.
-        currents.terrain = venueTerrain;
+        currents.terrain = query;
         snapshot.terrain = venueTerrain;
-        view.setTerrain(venueTerrain, venueTerrain);
+        snapshot.region = regionTerrain;
+        // The circle meshes and the region tiles are mutually exclusive, so the
+        // one not in use is handed nothing and draws nothing.
+        view.setTerrain(regionTerrain ? EMPTY_TERRAIN : venueTerrain, regionTerrain ? EMPTY_TERRAIN : venueTerrain);
+        view.setRegion(regionTerrain);
       }
       return;
     }
@@ -410,9 +474,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     published = true;
 
     const terrain = new Terrain(active);
+    query = terrain;
     wind.terrain = terrain;
     currents.terrain = terrain;
     snapshot.terrain = terrain;
+    snapshot.region = null;
+    view.setRegion(null);
     view.setTerrain(terrain, new Terrain(visible));
   }
 
@@ -428,6 +495,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     const worldChanged =
       s.islandCount !== current.islandCount ||
       venueChanged ||
+      s.region !== current.region ||
       s.seed !== current.seed;
     current = s;
 
@@ -674,7 +742,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // Land shelters the sea in its lee, so waves are scaled by the same shelter
     // term the water shader uses.
     waves.update(PHYS_DT);
-    const shelter = snapshot.terrain.waveShelter(state.pos.x, state.pos.y, wind.baseTwd);
+    const shelter = query.waveShelter(state.pos.x, state.pos.y, wind.baseTwd);
     sampleHull(
       waves,
       state.pos.x,
@@ -690,7 +758,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     sea.pitchSlope = hullWave.pitchSlope;
     sea.rollSlope = hullWave.rollSlope;
     sea.dir = wind.baseTwd + Math.PI;
-    sea.depth = snapshot.terrain.depthAt(state.pos.x, state.pos.y);
+    sea.depth = query.depthAt(state.pos.x, state.pos.y);
     snapshot.depth = sea.depth;
     snapshot.clearance = sea.depth - cfg.draft;
 
@@ -698,7 +766,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     const wasY = state.pos.y;
     // Gulls run on the physics clock, so a boat that is standing in towards a
     // shore hears them come up at the rate she is closing it.
-    wildlife.update(PHYS_DT, state.pos, snapshot.terrain);
+    wildlife.update(PHYS_DT, state.pos, query);
     for (const ev of wildlife.events) {
       const d = Math.hypot(ev.pos.x - state.pos.x, ev.pos.y - state.pos.y);
       sound.gullCall(d, ev.strength);
@@ -709,7 +777,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
     // Judged where she is, every step, because the answer is what the player is
     // reading while deciding whether to round up here or carry on a bit further.
-    snapshot.anchorage = anchorage(snapshot.terrain, cfg, state.pos, diag.sog, wind.baseTwd);
+    snapshot.anchorage = anchorage(query, cfg, state.pos, diag.sog, wind.baseTwd);
     // Real seconds, not world ones: a passage took as long as it took to sail,
     // and the time scale is a convenience for watching the sun rather than a
     // claim about how long the boat was at sea.

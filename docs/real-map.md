@@ -3,8 +3,8 @@
 The goal: a bounded region of a real coast, sailed freely, where the shape of
 the land is genuinely that place rather than a suggestion of it.
 
-Partly built. Piece 1 below is done and San Francisco Bay is baked; pieces 2 and
-3 are not. What follows is the design and the evidence behind it, updated as
+Built, for San Francisco Bay. All three pieces below are done and the region is
+sailable from the menu. What follows is the design and the evidence behind it, updated as
 each piece lands rather than left as it was first written.
 
 ---
@@ -51,7 +51,7 @@ and `distanceOutside` are what the edge decision below will be built on.
 
 Not yet wired into the engine — see piece 3.
 
-### 2. A shelter model that is data rather than two formulas — **computed, not yet shared**
+### 2. A shelter model that is data rather than two formulas — **done**
 
 This is the interesting one, and it comes out *better* than what exists.
 
@@ -72,8 +72,11 @@ four hundred steps; ordering the cells so the upwind neighbour is always already
 computed makes it one pass, and it costs **16 ms** — cheap enough to rebuild on
 every 2° of wind shift.
 
-The texture upload is piece 3's work. Until the shader reads it, the duplication
-is still there; what has changed is that there is now one field to share.
+The water shader now reads that field as a texture rather than recomputing the
+circle model, so for a region the hand-copied GLSL is gone: the shader is not a
+copy of the model, it samples the model's own output. The duplication survives
+only for the procedural ocean, where there is no field and the islands are the
+whole world.
 
 Three things the sketch did not anticipate, all found by looking at the field
 rather than at the code:
@@ -96,10 +99,28 @@ rather than at the code:
 Still not modelled: wake spreading beyond that diffusion, and refraction around
 a headland. AGENTS.md section 9 already records the latter as deliberate.
 
-### 3. A chunked terrain mesh — not started
+### 3. A chunked terrain mesh — **done**
 
 Land meshes are built per island today. A raster wants a tiled grid with the
 sampling code that already exists behind it.
+
+Built as `src/view/region-mesh.ts`, on the same terms as `islands.ts`: every
+vertex comes from the `elevationAt` the physics grounds the boat on, and tiles
+are built a couple per frame so a coastline arriving does not drop one. Two
+filters keep it affordable — tiles with no land in them are measured once at
+load and never considered again (about two thirds of San Francisco), and of
+what remains only what is within drawing range is held.
+
+The chart could not be tiled the same way. It traced a shoreline outward from
+each island's centre at 36 bearings, which needs a centre and one radius per
+bearing; Raccoon Strait would come out as a bite. It now samples the ground and
+colours by what is under you, which is how a chart is actually made.
+
+Two chart changes came with it, both forced by the scale. The ranges gained
+2.5 km and 5 km, because a 20 km bay cannot be planned on a 1200 m chart where
+the Gate is off the edge from the city front. And the chart can be dragged
+around and enlarged, because a passage is planned by looking at water you have
+not reached yet.
 
 ---
 
@@ -136,14 +157,24 @@ is in `src/sim/regions.ts`.
 
 ---
 
-## Two decisions to make
+## The two decisions, as made
 
-**What happens at the edge of the circle.** An invisible wall, or a fade into
-the existing procedural ocean. The second is recommended: the machinery exists,
-and sailing out of the surveyed area into open sea is what actually happens.
+**The edge.** A fade, not a wall. `RegionTerrain` opens into deep water over
+800 m past the survey; a test walks the boundary and holds the depth continuous
+across it, because a step there is a cliff at a line drawn on nothing. It fades
+to plain open sea rather than into the procedural islands — those are a
+different world with its own seed, and stitching one to the other is a larger
+question than the edge of the chart.
 
-**Scale.** A 10 km radius crossed at 6 knots is about 1.8 hours of real time, or
-two minutes at the default time scale. That is a passage rather than a pond.
+**Scale.** As sketched: 20 km square, about 1.8 hours across at 6 knots.
+
+## What is still owed
+
+The region does not yet bring its own wind, tide or start time the way a venue
+does — pick San Francisco Bay and you sail it in whatever the sliders say.
+`Region` has no fields for it, deliberately: a venue's figures are admitted
+guesses, and a surveyed region inviting the same guesses beside real soundings
+would be the one place this project's labelling could mislead.
 
 ---
 

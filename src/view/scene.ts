@@ -6,6 +6,8 @@ import { REEF_AREA_FACTOR } from '../sim/sailplan';
 import { ADVECTION, type WindField } from '../sim/wind';
 import type { WaveField } from '../sim/waves';
 import type { Terrain } from '../sim/terrain';
+import type { RegionTerrain } from '../sim/region-terrain';
+import { createRegionView } from './region-mesh';
 import type { SkyState } from '../sim/sky';
 import type { WeatherState } from '../sim/weather';
 import { createWater } from './water';
@@ -65,6 +67,8 @@ export interface SceneView {
    * @param visible the wider window that is merely drawn, out to the fog
    */
   setTerrain(physics: Terrain, visible: Terrain): void;
+  /** Install a surveyed region, or null for the procedural ocean. */
+  setRegion(terrain: RegionTerrain | null): void;
   toggleCamera(): void;
   resize(): void;
   dispose(): void;
@@ -294,6 +298,11 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
 
   const islandView = createIslandView();
   scene.add(islandView.group);
+  // A region and the procedural islands are mutually exclusive -- one is a
+  // surveyed place and the other is an endless sea -- so whichever is not in
+  // use simply holds no meshes and costs nothing.
+  const regionView = createRegionView();
+  scene.add(regionView.group);
 
   const rain = createRain();
   scene.add(rain.object);
@@ -509,6 +518,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     // The mean wind, not the gust: a cloud deck does not shift with a puff.
     skyDome.update(sky, f.weather.cloud, f.elapsedHours, wind.baseTwd);
     islandView.update(sky);
+    regionView.update(state.pos.x, state.pos.y, sky);
 
 
     const bx = state.pos.x;
@@ -517,6 +527,10 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     // The lamps and the pool they throw on the water come off one number, so
     // the sea cannot be lit by a boat that is showing no lights.
     const lamp = lampLevel(f.lightsOn, sky.daylight);
+    // Keep the shelter texture in step with the sweep the physics is reading.
+    // Both go through the same ShelterField, which is what stops the flat water
+    // and the felt lee from ever disagreeing.
+    water.updateRegion(wind.baseTwd);
     water.update(
       waves,
       state.pos.x,
@@ -736,6 +750,10 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     toggleCamera() {
       camMode = (camMode + 1) % 2;
     },
+    setRegion(terrain) {
+      regionView.setRegion(terrain);
+      water.setRegion(terrain);
+    },
     setTerrain(physics, visible) {
       islandView.setTerrain(visible);
       water.setTerrain(physics);
@@ -745,6 +763,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       orbit.dispose();
       water.dispose();
       islandView.dispose();
+      regionView.dispose();
       rain.dispose();
       skyDome.dispose();
       renderer.dispose();

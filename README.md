@@ -575,6 +575,7 @@ writes itself into the logbook.
 | `A` | let go the anchor, or weigh it |
 | `N` | chart range |
 | wheel over the chart | chart range |
+| drag the chart | look around it; double-click recentres on the boat |
 | click the chart | set where you are bound; right-click clears it |
 | drag | orbit the camera around the boat |
 | wheel anywhere else | zoom the camera |

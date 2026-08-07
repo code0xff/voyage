@@ -24,6 +24,7 @@ import { formatClock } from "@/sim/sky";
 import { WEATHER_KINDS, WEATHER_LABEL, type WeatherKind } from "@/sim/weather";
 import { withVenue, withoutVenue, type Settings } from "@/settings";
 import { VENUES, venueById } from "@/sim/venues";
+import { REGIONS, regionById } from "@/sim/regions";
 import { Logbook } from "./Logbook";
 import type { LogStore } from "@/logbook";
 import type { PassageRecord } from "@/sim/passage";
@@ -293,11 +294,13 @@ export function MenuDialog({
                   {/* A venue sets the island count to zero because it brings its
                       own land, so reading "open sea" off that field alone
                       announced San Francisco as an empty ocean. */}
-                  {settings.venue
-                    ? (venueById(settings.venue)?.name ?? "open sea")
-                    : settings.islandCount === 0
-                      ? "open sea"
-                      : `${settings.islandCount} islands`}
+                  {settings.region
+                    ? (regionById(settings.region)?.name ?? "open sea")
+                    : settings.venue
+                      ? (venueById(settings.venue)?.name ?? "open sea")
+                      : settings.islandCount === 0
+                        ? "open sea"
+                        : `${settings.islandCount} islands`}
                 </div>
               </div>
               <Button variant="outline" size="sm" onClick={() => setView("settings")}>
@@ -352,16 +355,37 @@ export function MenuDialog({
           </TabsList>
 
           <TabsContent value="world" className="mt-4 space-y-2.5">
+            {/*
+              One list, three kinds of world, because "where am I sailing" is
+              one question and splitting it across two controls would invite
+              picking a region and a venue at once. The groups are labelled by
+              how true the land is, which is the only difference that matters:
+              a region is surveyed, a venue is a sketch that reproduces the
+              decisions rather than the geography.
+            */}
             <div className="grid grid-cols-[104px_1fr] items-center gap-3">
-              <span className="text-[11px] text-muted-foreground">Venue</span>
+              <span className="text-[11px] text-muted-foreground">Where</span>
               <Select
-                value={settings.venue || "open"}
+                value={settings.region ? `region:${settings.region}` : settings.venue || "open"}
                 onValueChange={(v) => {
+                  if (v.startsWith("region:")) {
+                    // A region brings its own land, so the island slider and any
+                    // venue stand down together.
+                    onSettings({
+                      ...withoutVenue(settings),
+                      region: v.slice(7),
+                      islandCount: 0,
+                    });
+                    return;
+                  }
                   const venue = venueById(v);
                   // Picking a place writes its conditions into the settings
                   // rather than overriding them, so every slider below keeps
                   // showing what is actually being sailed and stays live.
-                  onSettings(venue ? withVenue(settings, venue) : withoutVenue(settings));
+                  onSettings({
+                    ...(venue ? withVenue(settings, venue) : withoutVenue(settings)),
+                    region: "",
+                  });
                 }}
               >
                 <SelectTrigger className="w-full">
@@ -369,15 +393,29 @@ export function MenuDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="open">Open ocean (procedural)</SelectItem>
+                  {REGIONS.map((r) => (
+                    <SelectItem key={r.id} value={`region:${r.id}`}>
+                      {r.name} — surveyed
+                    </SelectItem>
+                  ))}
                   {VENUES.map((v) => (
                     <SelectItem key={v.id} value={v.id}>
-                      {v.name}
+                      {v.name} — sketch
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            {settings.venue ? (
+            {settings.region ? (
+              <p className="text-[10px] leading-relaxed text-muted-foreground">
+                {regionById(settings.region)?.brief}
+                <br />
+                <span className="text-success">Surveyed.</span> The coastline and
+                the depths are{" "}
+                {regionById(settings.region)?.source}. Still a simulator and not
+                a chart: 25 m between soundings, and no tide height.
+              </p>
+            ) : settings.venue ? (
               <p className="text-[10px] leading-relaxed text-muted-foreground">
                 {venueById(settings.venue)?.brief}
                 <br />
@@ -546,6 +584,7 @@ export function MenuDialog({
                 ["0", "hand all sail / set again"],
                 ["A", "let go / weigh anchor"],
                 ["N / wheel on chart", "chart range"],
+                ["drag chart", "look around it"],
                 ["click chart", "set where you are bound"],
                 ["drag", "orbit around the boat"],
                 ["wheel elsewhere", "zoom the camera"],

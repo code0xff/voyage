@@ -1,5 +1,6 @@
 import type { BoatState } from '../sim/boat';
 import { sameIslands, type Island, type Terrain } from '../sim/terrain';
+import type { RegionTerrain } from '../sim/region-terrain';
 import type { WindField } from '../sim/wind';
 import { clamp, compassVec, type Vec2 } from '../sim/math';
 import type { CurrentField } from '../sim/current';
@@ -29,7 +30,16 @@ import { token } from '../ui/tokens';
  */
 
 /** Ranges the chart cycles through, m from the centre to the edge. */
-export const RANGES = [300, 700, 1200] as const;
+/**
+ * Chart ranges, m.
+ *
+ * The first three are pilotage scales -- what is close enough to hit. The last
+ * two arrived with the surveyed regions and are passage scales: a 20 km bay
+ * cannot be planned on a 1200 m chart, where the Golden Gate is off the edge
+ * from the city front and the only thing visible is the water already under
+ * the keel.
+ */
+export const RANGES = [300, 700, 1200, 2500, 5000] as const;
 
 /** Grid spacing at each range, m. Something to count, so distance is readable. */
 const GRID = [100, 200, 500] as const;
@@ -77,6 +87,8 @@ export interface MinimapInput {
   state: BoatState;
   wind: WindField;
   terrain: Terrain;
+  /** The surveyed region, or null in the procedural ocean. */
+  region: RegionTerrain | null;
   /** Depth the hull needs, m. The shoal contour is drawn at exactly this. */
   draft: number;
   /** Index into RANGES. */
@@ -87,6 +99,79 @@ export interface MinimapInput {
   destination: Vec2 | null;
   /** The tidal streams, so the chart can show where they run. */
   currents: CurrentField;
+  /**
+   * Where to centre the chart, or null to follow the boat.
+   *
+   * Set while the player is dragging the chart about to look ahead. Following
+   * is the right default -- the thing you most want to see is where you are --
+   * but a passage is planned by looking at water you have not reached yet, and
+   * on a surveyed coast there is a great deal of it.
+   */
+  pan: Vec2 | null;
+}
+
+/**
+ * The region's land and shoals, painted cell by cell into an offscreen canvas.
+ *
+ * Kept between frames and redrawn only when the view actually moved. The
+ * resolution is deliberately coarser than the screen -- a chart cell is a few
+ * pixels -- because the underlying grid is 25 m and drawing it finer would
+ * claim a precision the survey does not have.
+ */
+const CHART_CELL = 2;
+
+let chartCanvas: HTMLCanvasElement | null = null;
+let chartKey = '';
+
+function drawRegion(
+  ctx: CanvasRenderingContext2D,
+  region: RegionTerrain,
+  size: number,
+  centreX: number,
+  centreY: number,
+  range: number,
+  draft: number,
+): void {
+  // Rendered at device resolution and drawn back down, not at CSS pixels.
+  // The chart context is already scaled by the device ratio, so an offscreen
+  // canvas sized in CSS pixels gets magnified on the way in and the coast comes
+  // out in visible blocks -- the data is 25 m, and it should not look like 50.
+  const dpr = Math.min(devicePixelRatio, 2);
+  const px = Math.round(size * dpr);
+  const key = `${Math.round(centreX / 8)},${Math.round(centreY / 8)},${range},${draft},${px}`;
+  if (!chartCanvas) {
+    chartCanvas = document.createElement('canvas');
+  }
+  if (chartCanvas.width !== px || chartCanvas.height !== px) {
+    chartCanvas.width = px;
+    chartCanvas.height = px;
+    chartKey = '';
+  }
+  if (chartKey !== key) {
+    chartKey = key;
+    const c = chartCanvas.getContext('2d');
+    if (c) {
+      c.clearRect(0, 0, px, px);
+      const land = token('--muted-foreground', 0.85);
+      const shoal = token('--warning', 0.22);
+      const metresPerPixel = (range * 2) / px;
+      for (let dy = 0; dy < px; dy += CHART_CELL) {
+        for (let dx = 0; dx < px; dx += CHART_CELL) {
+          const wx = centreX + (dx + CHART_CELL / 2 - px / 2) * metresPerPixel;
+          // Screen y grows downward and north is up, hence the negation.
+          const wy = centreY - (dy + CHART_CELL / 2 - px / 2) * metresPerPixel;
+          const depth = region.depthAt(wx, wy);
+          if (depth > draft) continue;
+          // Two bands and no more: what will float you, and what will not.
+          // A chart that shaded every metre would be prettier and would take
+          // longer to read, and the only question here is the one question.
+          c.fillStyle = depth > 0 ? shoal : land;
+          c.fillRect(dx, dy, CHART_CELL, CHART_CELL);
+        }
+      }
+    }
+  }
+  ctx.drawImage(chartCanvas, 0, 0, size, size);
 }
 
 /** Shore and safe-water radius at each bearing, both measured from the centre. */
@@ -110,6 +195,8 @@ export interface Minimap {
    * and it is the last drawn centre a click is being read against.
    */
   worldAt(px: number, py: number, size: number, rangeIndex: number): Vec2;
+  /** Where the chart is centred now, so a drag can begin from it. */
+  centre(): Vec2;
 }
 
 /**
@@ -272,6 +359,9 @@ export function createMinimap(): Minimap {
 
   return {
     /** Where on the chart a canvas pixel is, in world coordinates. */
+    centre() {
+      return { x: centreX, y: centreY };
+    },
     worldAt(px, py, size, rangeIndex) {
       const range = RANGES[clamp(rangeIndex, 0, RANGES.length - 1)];
       const { k, cx, cy } = view(size, range);
@@ -286,21 +376,29 @@ export function createMinimap(): Minimap {
       const bx = input.state.pos.x;
       const by = input.state.pos.y;
 
-      // Hold the view still and let the boat move across it, panning only once
-      // she reaches the limit -- and then by exactly the distance she is over
-      // it, so the pan matches her speed rather than chasing or overshooting.
-      if (!Number.isFinite(centreX) || Math.hypot(bx - centreX, by - centreY) > range * 2) {
+      if (input.pan) {
+        // Dragged: the chart stays exactly where it was put, and the boat is
+        // free to sail off the edge of it. Nothing is recentred until the
+        // player lets go of it, which is the whole point of having taken hold.
+        centreX = input.pan.x;
+        centreY = input.pan.y;
+      } else if (!Number.isFinite(centreX) || Math.hypot(bx - centreX, by - centreY) > range * 2) {
         // First frame, or the boat has been teleported by a restart.
         centreX = bx;
         centreY = by;
       }
-      const offX = bx - centreX;
-      const offY = by - centreY;
-      const off = Math.hypot(offX, offY);
-      const limit = range * PAN_AT;
-      if (off > limit) {
-        centreX += (offX / off) * (off - limit);
-        centreY += (offY / off) * (off - limit);
+      if (!input.pan) {
+        // Hold the view still and let the boat move across it, panning only
+        // once she reaches the limit -- and then by exactly the distance she is
+        // over it, so the pan matches her speed rather than chasing it.
+        const offX = bx - centreX;
+        const offY = by - centreY;
+        const off = Math.hypot(offX, offY);
+        const limit = range * PAN_AT;
+        if (off > limit) {
+          centreX += (offX / off) * (off - limit);
+          centreY += (offY / off) * (off - limit);
+        }
       }
 
       const sx = (x: number) => cx + (x - centreX) * k;
@@ -368,6 +466,22 @@ export function createMinimap(): Minimap {
       ctx.stroke();
 
       // --- Land -------------------------------------------------------------
+      // A region is drawn by sampling, not by tracing.
+      //
+      // The circle chart traces a shoreline outward from each island's centre
+      // at 36 bearings, which is only possible because a circle has a centre
+      // and one radius per bearing. A real coast has neither -- Raccoon Strait
+      // would come out as a bite, and anywhere the shore doubles back the ray
+      // would find the wrong side of it. So the region is read the way a chart
+      // is actually made: sample the ground, and colour by what is under you.
+      //
+      // Cached, and redrawn only when the boat has moved a pixel's worth or the
+      // range changed. Filling a 176 px chart is 31,000 samples, which is
+      // nothing once but real work at 60 Hz for a picture that is identical
+      // between frames.
+      if (input.region) {
+        drawRegion(ctx, input.region, size, centreX, centreY, range, input.draft);
+      }
       for (const isl of input.terrain.islands) {
         let outline = outlines.get(isl);
         if (!outline || !sameIslands(outline.deps, input.terrain.islandsAffecting(isl))) {

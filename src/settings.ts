@@ -4,6 +4,7 @@ import { knotsToMs, msToKnots } from './sim/units';
 import type { Vec2 } from './sim/math';
 import { setDriftVec } from './sim/current';
 import { venueById, type Venue } from './sim/venues';
+import { regionById } from './sim/regions';
 
 /**
  * Player settings, persisted to localStorage.
@@ -52,6 +53,15 @@ export interface Settings {
    * the venue by the engine.
    */
   venue: string;
+  /**
+   * A surveyed region to sail, or '' for none.
+   *
+   * Kept apart from `venue` rather than folded into it. A venue is a sketch in
+   * circles that reproduces the decisions a place asks of you; a region is the
+   * place, surveyed. They are different claims about how true the land is, and
+   * collapsing them into one field would make the honest label impossible.
+   */
+  region: string;
   /** Seed for islands and weather, so a session can be reproduced. */
   seed: number;
   /** Roll a new seed every time you put to sea. Off pins the world to `seed`. */
@@ -70,6 +80,7 @@ export const DEFAULT_SETTINGS: Settings = {
   weatherMode: 'auto',
   islandCount: 4,
   venue: '',
+  region: '',
   seed: 20260806,
   randomWorld: true,
 };
@@ -104,6 +115,13 @@ export function loadSettings(): Settings {
       // renamed between versions must fall back to open water, not strand the
       // player in a world the engine cannot build.
       venue: typeof o.venue === 'string' && venueById(o.venue) ? o.venue : DEFAULT_SETTINGS.venue,
+      // Checked against the list for the same reason as the venue: a stored id
+      // for a region that no longer ships must not strand the player in a world
+      // with no land the engine can load.
+      region:
+        typeof o.region === 'string' && regionById(o.region)
+          ? o.region
+          : DEFAULT_SETTINGS.region,
       seed: Math.round(num(o.seed, DEFAULT_SETTINGS.seed, 1, 2 ** 31)),
       randomWorld:
         typeof o.randomWorld === 'boolean' ? o.randomWorld : DEFAULT_SETTINGS.randomWorld,
