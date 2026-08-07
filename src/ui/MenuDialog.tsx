@@ -153,9 +153,9 @@ export function MenuDialog({
       {/* Every dialog needs one, and this one had none: it closed on Escape or
           a click outside, both of which have to be guessed. It is not a
           substitute for Resume. This says "put this window away"; Resume says
-          "your race is still out there, go back to it", and when there is a
-          race running that is the likeliest thing anyone wants and belongs on
-          a full-width button rather than in a corner. */}
+          "your boat is still out there, go back to her", and when there is a
+          session running that is the likeliest thing anyone wants and belongs
+          on a full-width button rather than in a corner. */}
       <button
         type="button"
         aria-label="Close"
@@ -324,7 +324,7 @@ export function MenuDialog({
             <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
               {settings.venue
                 ? "A venue brings its own land, breeze and tide, so the island slider stands down. The stream runs hardest in deep water and gives up in the shallows — which is where the wind gives up too."
-                : "The ocean has no edge: islands keep coming over the horizon for as long as you sail. Their lee is flat water but almost no wind, and the shoals around them will stop you dead. Pin the seed to race the same water twice."}
+                : "The ocean has no edge: islands keep coming over the horizon for as long as you sail. Their lee is flat water but almost no wind, and the shoals around them will stop you dead. Pin the seed to sail the same water twice."}
             </p>
           </TabsContent>
 
@@ -476,10 +476,11 @@ export function MenuDialog({
             >
               <p className="text-[11px] leading-relaxed">
                 <span className="font-medium text-warning">
-                  You cannot sail at the windward mark.
+                  You cannot sail straight at anywhere upwind.
                 </span>{" "}
-                Zig-zag up to it at roughly 45° to the wind. The polar panel
-                shows the best angle.
+                Zig-zag towards it at roughly 45° to the wind. The polar panel
+                shows the best angle, and the chart says when you are pointed at
+                something you cannot lay.
               </p>
             </div>
           </TabsContent>

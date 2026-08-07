@@ -112,9 +112,9 @@ export function App() {
             <div className="flex h-full flex-col">
               <div className="flex items-start justify-between gap-3">
                 <Instruments />
-                {/* The race clock and the passage share this slot: they are the
-                    same question -- where am I going and how is it going -- and
-                    you are never asking both. */}
+                {/* The passage sits here, in the middle at the top, because
+                    where you are bound is the question the whole screen is
+                    arranged around once there is somewhere to be. */}
                 <div className="flex-1 space-y-2">
                   <PassageBar />
                 </div>

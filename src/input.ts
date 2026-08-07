@@ -105,7 +105,7 @@ export class Input {
    * Clearing `pressed` is the important half. A hidden tab stops receiving
    * requestAnimationFrame callbacks, so endFrame() never runs and one-shot keys
    * pile up. Switching back would then fire all of them at once: the menu
-   * opens, the reef changes, the race resets.
+   * opens, the reef changes, the world resets.
    */
   private onBlur = () => {
     this.held.clear();

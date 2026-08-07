@@ -311,7 +311,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * equal to the cleared lists -- two empty arrays always match -- and the
    * early-out below leaves the *previous* world's terrain installed in the
    * snapshot, the wind and the scene. Sailing a new low-density seed then meant
-   * feeling and seeing islands from the race before.
+   * feeling and seeing islands from the session before.
    */
   let published = false;
 
@@ -469,7 +469,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     setDestination(null);
     // And the anchor comes up with her. It is engine state rather than boat
     // state, so a fresh `initialState()` does not clear it -- leaving her held
-    // fast on the start line of a race she had just been put on, with the hint
+    // fast wherever she had just been put to sea, with the hint
     // bar cheerfully reporting that she was at anchor.
     anchored = false;
     snapshot.anchored = false;
@@ -484,7 +484,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     reefState.reef = 0;
     reefState.jibFurl = 0;
     reefState.timer = 0;
-    // The helm persists now, so a race must not start with the last one's
+    // The helm persists now, so a session must not start with the last one's
     // correction still wound on -- nor with the pilot steering to a course
     // from a world that no longer exists.
     ctl.rudder = 0;
@@ -499,11 +499,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   /**
-   * A new sea for a new race, unless the player has pinned one.
+   * A new sea every time she puts to sea, unless the player has pinned one.
    *
    * Sailing the identical archipelago every time was the single thing that made
    * an endless ocean feel small: whatever the boat did, the same island was
-   * always off the same layline. The rolled seed is written back to the
+   * always the same water. The rolled seed is written back to the
    * settings, so a world worth keeping can be pinned and sailed again.
    *
    * The weather restarts from the seed whether it was rolled or pinned. It is
@@ -519,7 +519,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     }
     // The clock belongs to the session too. `hour` was read once when the
     // engine was built, so the Start hour setting did nothing after the first
-    // load and every race began wherever the last one's clock had wandered to.
+    // load and every session began wherever the last one's clock had wandered to.
     hour = current.startHour;
     // So does the wind's direction at a venue. It has no slider -- the land is
     // laid out around it, and a beat that started on a random bearing would put
@@ -531,7 +531,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     snapshot.session = session;
     weather.reseed(current.seed);
     // A new session starts with the sea its weather implies, not the one the
-    // last race left behind.
+    // last session left behind.
     seaTws = windMs(current) * weather.state.windScale;
     weather.evolve = current.weatherMode === 'auto';
     if (current.weatherMode !== 'auto') weather.set(current.weatherMode);

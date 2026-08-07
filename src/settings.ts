@@ -54,7 +54,7 @@ export interface Settings {
   venue: string;
   /** Seed for islands and weather, so a session can be reproduced. */
   seed: number;
-  /** Roll a new seed at the start of every race. Off pins the world to `seed`. */
+  /** Roll a new seed every time you put to sea. Off pins the world to `seed`. */
   randomWorld: boolean;
 }
 
