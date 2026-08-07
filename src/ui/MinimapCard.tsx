@@ -6,6 +6,11 @@ import { CRUISER } from '@/sim/config';
 import { useEngine, useEngineFrame, useReadout } from './engine-context';
 
 const SIZE = 176;
+/**
+ * Wheel travel per range step, px. One mouse notch is 100 or so, so a notch is
+ * a step; a trackpad takes a deliberate flick rather than a brush.
+ */
+const WHEEL_STEP = 50;
 
 /**
  * The chart. Drawn straight to a canvas every frame, like the polar and the
@@ -34,6 +39,44 @@ export function MinimapCard() {
   }, [engine]);
 
   const cycle = useCallback(() => setRange((r) => (r + 1) % RANGES.length), []);
+
+  /**
+   * Accumulated wheel travel since the last step, px.
+   *
+   * One flick of a trackpad is dozens of events of a few pixels each. Stepping
+   * on every one of them would run the whole range in a frame and leave the
+   * chart wherever the flick happened to stop.
+   */
+  const wheelAcc = useRef(0);
+  /**
+   * The wheel zooms the chart.
+   *
+   * Zoom used to be on the click, and the click became "where I am bound",
+   * which is worth more -- but it left `N` as the only way to change scale, and
+   * a chart you are already pointing at is the one place a hand is when it
+   * wants a different scale.
+   *
+   * Clamped rather than cycled, unlike `N`. A key press has no direction, so
+   * wrapping round from the closest range to the widest is the only thing it
+   * can do; a wheel has one, and wrapping would mean overshooting the end of a
+   * flick throws the chart to the opposite scale.
+   *
+   * Wheel down widens, matching the orbit camera: both read a positive deltaY
+   * as pulling back. No preventDefault -- React's wheel listener is passive,
+   * and the app shell does not scroll anyway.
+   */
+  const onWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
+    // deltaMode 1 is lines and 2 is pages, both far smaller numbers than
+    // pixels. Scaled as orbit.ts does, so one notch means the same in both.
+    const px = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
+    // A reversal is a new gesture, not a continuation of the last one.
+    if (px * wheelAcc.current < 0) wheelAcc.current = 0;
+    wheelAcc.current += px;
+    if (Math.abs(wheelAcc.current) < WHEEL_STEP) return;
+    const dir = Math.sign(wheelAcc.current);
+    wheelAcc.current = 0;
+    setRange((r) => Math.min(Math.max(r + dir, 0), RANGES.length - 1));
+  }, []);
 
   // The rest of the controls are keys, so this one is too. The engine owns the
   // keyboard, so it reports the press rather than the card listening itself.
@@ -75,12 +118,13 @@ export function MinimapCard() {
         </Badge>
       </div>
       {/*
-        Click sets where she is bound; N changes the range. The click used to
-        cycle the range, and that was the right binding for a chart you glance
-        at during a race. Pointing at somewhere to go is the more valuable thing
-        to do to a chart now, and N already existed as the documented way to
-        change scale. Right-click clears it -- a destination you cannot put down
-        is an obligation, which is the one thing this is not for.
+        Click sets where she is bound; the wheel or N changes the range. The
+        click used to cycle the range, and that was the right binding for a
+        chart you glance at during a race. Pointing at somewhere to go is the
+        more valuable thing to do to a chart now -- but handing the click over
+        left no mouse-reachable zoom at all, which the wheel gives back.
+        Right-click clears the destination -- one you cannot put down is an
+        obligation, which is the one thing this is not for.
       */}
       <canvas
         ref={ref}
@@ -94,7 +138,8 @@ export function MinimapCard() {
           e.preventDefault();
           engine.setDestination(null);
         }}
-        title="Click to set where you are bound · right-click to clear · N for range"
+        onWheel={onWheel}
+        title="Click to set where you are bound · right-click to clear · wheel or N for range"
         className="block cursor-crosshair"
         style={{ width: SIZE, height: SIZE }}
       />

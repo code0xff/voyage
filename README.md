@@ -573,10 +573,10 @@ writes itself into the logbook.
 | `C` | camera (chase / top-down) |
 | `0` | hand all sail, or set it again |
 | `A` | let go the anchor, or weigh it |
-| `N` | chart range |
+| `N` | chart range (or the wheel, over the chart) |
 | click the chart | set where you are bound; right-click clears it |
 | drag | orbit the camera around the boat |
-| wheel | zoom |
+| wheel | zoom the camera |
 | double-click | recentre the view astern |
 | `P` | recompute polar |
 | `R` | restart |
