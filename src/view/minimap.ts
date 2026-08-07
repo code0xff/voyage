@@ -2,6 +2,7 @@ import type { BoatState } from '../sim/boat';
 import { sameIslands, type Island, type Terrain } from '../sim/terrain';
 import type { WindField } from '../sim/wind';
 import { clamp, compassVec, type Vec2 } from '../sim/math';
+import type { CurrentField } from '../sim/current';
 import { token } from '../ui/tokens';
 
 /**
@@ -55,6 +56,14 @@ const PAN_AT = 0.55;
 
 /** How many wind samples across the chart. Coarse: this is pressure, not detail. */
 const WIND_CELLS = 28;
+/**
+ * How many tide arrows across the chart.
+ *
+ * Far coarser than the wind, and it has to be: the wind layer is a wash of
+ * colour that reads as pressure, while these are arrows a player counts and
+ * follows. A grid this size is a tidal atlas page; twice it is a texture.
+ */
+const TIDE_CELLS = 7;
 /** Bearings used to trace a coastline. */
 const BEARINGS = 36;
 /** Redraw interval for the wind layer, ms. It advects far too slowly to need 60 Hz. */
@@ -76,6 +85,8 @@ export interface MinimapInput {
   session: number;
   /** Where the boat is bound, or null when she is just out sailing. */
   destination: Vec2 | null;
+  /** The tidal streams, so the chart can show where they run. */
+  currents: CurrentField;
 }
 
 /** Shore and safe-water radius at each bearing, both measured from the centre. */
@@ -388,6 +399,46 @@ export function createMinimap(): Minimap {
       if (outlines.size > input.terrain.islands.length + 24) {
         const live = new Set(input.terrain.islands);
         for (const isl of [...outlines.keys()]) if (!live.has(isl)) outlines.delete(isl);
+      }
+
+      // --- Tide ---------------------------------------------------------------
+      // The stream, as arrows on a grid, in the manner of a tidal atlas. Until
+      // now the only way to know a tide was running was to read SOG against BSP
+      // and work it out -- and in a place where the tide is the whole game, a
+      // number you have to derive is a thing most players will never see.
+      //
+      // Length carries the rate, so the slack water inshore is visibly slack:
+      // that inshore lane is the decision the venue exists for, and it has to be
+      // legible on the chart before it can be chosen.
+      if (input.currents.running) {
+        const step = size / TIDE_CELLS;
+        ctx.strokeStyle = token('--info', 0.5);
+        ctx.lineWidth = 1;
+        for (let gy = 0; gy < TIDE_CELLS; gy++) {
+          for (let gx = 0; gx < TIDE_CELLS; gx++) {
+            const px = (gx + 0.5) * step;
+            const py = (gy + 0.5) * step;
+            const w = { x: centreX + (px - cx) / k, y: centreY - (py - cy) / k };
+            const rate = input.currents.rateAt(w.x, w.y);
+            if (rate < 0.08) continue;
+            const v = input.currents.peak;
+            const m = Math.hypot(v.x, v.y);
+            if (m < 1e-6) continue;
+            // Screen y runs the other way from north, hence the minus.
+            const ux = (v.x / m) * rate;
+            const uy = -(v.y / m) * rate;
+            const half = step * 0.42;
+            ctx.globalAlpha = 0.25 + 0.75 * rate;
+            ctx.beginPath();
+            ctx.moveTo(px - ux * half, py - uy * half);
+            ctx.lineTo(px + ux * half, py + uy * half);
+            // A barb on the leading end, so the arrow says which way it sets --
+            // a plain tick would leave the one thing a tide has to tell you out.
+            ctx.lineTo(px + ux * half - (ux + uy) * half * 0.45, py + uy * half - (uy - ux) * half * 0.45);
+            ctx.stroke();
+          }
+        }
+        ctx.globalAlpha = 1;
       }
 
       // --- Track ------------------------------------------------------------

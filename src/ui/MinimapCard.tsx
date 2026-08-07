@@ -57,6 +57,7 @@ export function MinimapCard() {
       range,
       session: s.session,
       destination: s.destination,
+      currents: s.currents,
     });
   });
 
