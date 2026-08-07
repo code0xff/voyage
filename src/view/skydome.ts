@@ -40,8 +40,37 @@ const fragmentShader = /* glsl */ `
   uniform float uCloud;
   uniform float uDaylight;
   uniform float uStarAngle;
+  uniform vec2 uCloudDrift;
 
   varying vec3 vDir;
+
+  float hash12(vec2 p) {
+    vec3 q = fract(vec3(p.xyx) * 0.1031);
+    q += dot(q, q.yzx + 33.33);
+    return fract((q.x + q.y) * q.z);
+  }
+
+  float vnoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float a = hash12(i);
+    float b = hash12(i + vec2(1.0, 0.0));
+    float c = hash12(i + vec2(0.0, 1.0));
+    float e = hash12(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, f.x), mix(c, e, f.x), f.y);
+  }
+
+  float fbm(vec2 p) {
+    float v = 0.0;
+    float a = 0.5;
+    for (int i = 0; i < 4; i++) {
+      v += a * vnoise(p);
+      p *= 2.03;
+      a *= 0.5;
+    }
+    return v;
+  }
 
   float hash13(vec3 p) {
     p = fract(p * 0.1031);
@@ -88,6 +117,47 @@ const fragmentShader = /* glsl */ `
     return present * mag * smoothstep(0.21, 0.0, dist);
   }
 
+  /**
+   * Cloud cover, as a flat deck seen in perspective.
+   *
+   * Dividing the direction by its own height is what makes it a deck rather
+   * than a pattern painted on the dome: features stretch and crowd together
+   * towards the horizon exactly as a real cloud layer does, and that
+   * foreshortening is most of what sells it. The cost is that the projection
+   * runs away as the height goes to zero, so the last few degrees are faded out
+   * -- which is also where real cloud is lost in haze.
+   */
+  vec2 cloudCover(vec3 d) {
+    float up = d.y;
+    if (up < 0.02) return vec2(0.0, 0.5);
+    vec2 uv = d.xz / up * 1.1 + uCloudDrift;
+    float n = fbm(uv);
+
+    // Coverage is a threshold on the noise, and the threshold is what the
+    // weather actually sets: a clear sky is the same field of cloud with almost
+    // none of it reaching the bar, and an overcast is the same field again with
+    // nearly all of it over.
+    //
+    // The band has to be narrow. A wide one puts most of the sky at partial
+    // cover, and partial cover everywhere is not cloud, it is milk -- which is
+    // exactly the failure the flat grey lid was written to avoid.
+    float lo = mix(0.74, 0.16, uCloud);
+    float cover = smoothstep(lo, lo + 0.11, n);
+
+    // The gaps have to be closed off well before the cover reaches one. The
+    // weather calls 0.85 an overcast and an overcast has no blue in it; left to
+    // the threshold alone the last gaps survive as flat blue puddles punched
+    // through grey, which reads far worse than the featureless lid it replaced.
+    cover = mix(cover, 1.0, smoothstep(0.62, 0.92, uCloud));
+
+    // Tone within the deck, at a finer scale than the cover itself. Without it
+    // a closed sky is one flat grey -- which is true of the *colour* of an
+    // overcast and quite untrue of the look, because the last thing a real one
+    // is is featureless.
+    float tone = fbm(uv * 2.7 + 11.3);
+    return vec2(cover * smoothstep(0.02, 0.10, up), tone);
+  }
+
   void main() {
     vec3 d = normalize(vDir);
     // Height above the horizon, 0..1, biased so the gradient stacks near it.
@@ -100,18 +170,38 @@ const fragmentShader = /* glsl */ `
     float halo = pow(cosA, 5.0);
     col += uSunColor * (tight * 1.4 + halo * 0.28 * (0.35 + uDaylight));
 
-    // Overcast flattens everything towards a single grey lid.
+    // Overcast still flattens the gradient towards a lid, but only about half
+    // as hard as it used to: the drawn deck below now does most of that work,
+    // and doing it twice left a solid sky with no shape in it at all.
     vec3 lid = mix(uHorizon, uTop, 0.45) * (0.72 + 0.28 * uDaylight);
-    col = mix(col, lid, uCloud * 0.8);
+    col = mix(col, lid, uCloud * 0.42);
 
-    // Stars go on after the lid, not before it: the lid keeps a fifth of what
-    // is under it, and a solid overcast that let a fifth of the stars through
-    // would be a hole in the one thing cloud is certain to do.
+    // Cloud. Sunlit on the side the sun is on, and its own shadow away from it,
+    // which is the whole of why a sky at sunset is worth looking at.
+    vec2 deck = cloudCover(d);
+    float cover = deck.x;
+    vec3 bright = mix(vec3(1.0), uSunColor, 0.4) * (0.3 + 0.7 * uDaylight);
+    vec3 shade = mix(uHorizon, uTop, 0.3) * (0.5 + 0.5 * uDaylight);
+    // Thicker weather is darker underneath: a fair-weather cumulus is white,
+    // a rain cloud is not.
+    shade *= 1.0 - 0.4 * uCloud;
+    // Two things decide how lit a piece of deck is: which way the sun is, and
+    // its own thickness. The second is what keeps a closed sky from being one
+    // flat tone.
+    float lit = clamp(pow(cosA, 2.0) * 0.55 + deck.y * 0.7 - 0.05, 0.0, 1.0);
+    vec3 cloudCol = mix(shade, bright, lit);
+    col = mix(col, cloudCol, cover);
+
+    // Stars go on last, behind whatever cloud is actually in front of them --
+    // the cover at this pixel rather than the sky's average cover, so a broken
+    // night shows stars through the gaps and closes them again as the deck
+    // passes over. That is the one thing that makes the two features worth
+    // having in the same shader.
     float night = smoothstep(0.32, 0.02, uDaylight);
     // The last few degrees above the horizon are all haze, and stars go out in
     // it long before they set. This is also what keeps them off the sea.
     float clear = smoothstep(0.0, 0.14, d.y);
-    col += vec3(0.86, 0.89, 1.0) * starField(d) * night * clear * (1.0 - uCloud);
+    col += vec3(0.86, 0.89, 1.0) * starField(d) * night * clear * (1.0 - cover);
 
     gl_FragColor = vec4(col, 1.0);
   }
@@ -124,12 +214,24 @@ export interface SkyDome {
    *        own `hour` wraps at midnight, and turning the stars with that would
    *        spin the whole field back through a day every night.
    */
-  update(sky: SkyState, cloud: number, elapsedHours: number): void;
+  update(sky: SkyState, cloud: number, elapsedHours: number, windTwd: number): void;
   dispose(): void;
 }
 
 /** rad per hour. The sky turns once a day; this part of it really is exact. */
 const SIDEREAL_RATE = (2 * Math.PI) / 24;
+
+/**
+ * Noise-domain units the cloud deck travels per world hour, at the wind's rate.
+ *
+ * Not metres, and not the wind speed. Clouds ride a wind that is neither the
+ * surface wind nor at the surface wind's speed, and even if it were, an hour of
+ * world time passes in a minute at the default time scale -- a deck crossing
+ * the sky at its honest rate would strobe. What has to be true is that the sky
+ * moves the way the weather is moving, downwind and at a rate you can watch.
+ * This number is what makes that read, and it was chosen by watching it.
+ */
+const CLOUD_DRIFT_PER_HOUR = 0.55;
 
 export function createSkyDome(): SkyDome {
   const geo = new THREE.SphereGeometry(1800, 32, 20);
@@ -141,6 +243,7 @@ export function createSkyDome(): SkyDome {
     uCloud: { value: 0 },
     uDaylight: { value: 1 },
     uStarAngle: { value: 0 },
+    uCloudDrift: { value: new THREE.Vector2() },
   };
   const mat = new THREE.ShaderMaterial({
     uniforms,
@@ -157,7 +260,7 @@ export function createSkyDome(): SkyDome {
 
   return {
     mesh,
-    update(sky, cloud, elapsedHours) {
+    update(sky, cloud, elapsedHours, windTwd) {
       uniforms.uTop.value.setRGB(sky.skyTop[0], sky.skyTop[1], sky.skyTop[2]);
       uniforms.uHorizon.value.setRGB(sky.skyHorizon[0], sky.skyHorizon[1], sky.skyHorizon[2]);
       uniforms.uSunColor.value.setRGB(sky.sunColor[0], sky.sunColor[1], sky.sunColor[2]);
@@ -165,6 +268,12 @@ export function createSkyDome(): SkyDome {
       uniforms.uCloud.value = cloud;
       uniforms.uDaylight.value = sky.daylight;
       uniforms.uStarAngle.value = elapsedHours * SIDEREAL_RATE;
+      // Downwind: `twd` is where the wind comes *from*, and the cloud goes the
+      // other way. Render coordinates put x east and z south, so a compass
+      // bearing b is (sin b, -cos b) -- and the deck's own uv is that plane.
+      const to = windTwd + Math.PI;
+      const run = elapsedHours * CLOUD_DRIFT_PER_HOUR;
+      uniforms.uCloudDrift.value.set(-Math.sin(to) * run, Math.cos(to) * run);
     },
     dispose() {
       geo.dispose();

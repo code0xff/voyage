@@ -358,6 +358,23 @@ the hour, so the renderer, the shader and the HUD can ask independently and neve
 disagree. Night is never pitch black, because a moonlit night at sea is genuinely
 sailable and an unplayable one would just be a black screen.
 
+The sky itself carries two things beyond the gradient, both drawn in the dome's
+fragment shader and neither touching the physics. **Cloud** is the cover the
+weather already publishes, drawn as a flat deck seen in perspective: dividing
+the view direction by its own height is what makes it a deck rather than a
+pattern on a dome, so it foreshortens towards the horizon the way a real layer
+does. It drifts downwind, at a rate chosen to read rather than at the wind's own
+speed — cloud rides a wind that is neither the surface wind nor at its speed,
+and at 60× an honest rate would strobe. Past about eight eighths the gaps close
+completely, because the alternative is blue puddles punched through grey, which
+looks worse than the featureless lid this replaced.
+
+**Stars** are procedural and make no claim to be a catalogue; a sky with a faked
+sun has no business asserting real constellations. What is real is that the field
+turns about a celestial pole at fifteen degrees an hour. They are occluded by the
+cloud cover *at that pixel*, so a broken night shows stars through the gaps and
+closes them again as the deck goes over.
+
 Weather is a slow random walk between named conditions (clear, fair, overcast,
 rain, squall, fog), with every continuous quantity easing towards its target
 rather than snapping. It drives mean wind, gustiness, visibility, cloud cover and

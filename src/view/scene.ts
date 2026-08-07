@@ -514,7 +514,8 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     (scene.fog as THREE.Fog).color.copy(fogColor);
     (scene.fog as THREE.Fog).near = f.visibility * 0.35;
     (scene.fog as THREE.Fog).far = f.visibility;
-    skyDome.update(sky, f.weather.cloud, f.elapsedHours);
+    // The mean wind, not the gust: a cloud deck does not shift with a puff.
+    skyDome.update(sky, f.weather.cloud, f.elapsedHours, wind.baseTwd);
     islandView.update(sky);
 
     courseView.update(f.course, f.race, waves);
