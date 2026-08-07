@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Anchor,
   ArrowLeft,
@@ -26,6 +26,8 @@ import { withVenue, withoutVenue, type Settings } from "@/settings";
 import { VENUES, venueById } from "@/sim/venues";
 import { Logbook } from "./Logbook";
 import type { LogStore } from "@/logbook";
+import type { PassageRecord } from "@/sim/passage";
+import { formatDistance, formatTime } from "@/sim/units";
 import { cn } from "@/lib/utils";
 
 /** A labelled range control. Sliders read better than numeric inputs for conditions. */
@@ -81,6 +83,49 @@ function Slider({
  */
 const TAB_TRIGGER = "flex-1 gap-1.5 [&_svg]:size-3.5 [&_svg]:shrink-0";
 
+/**
+ * The last passage, on the way in.
+ *
+ * The opening screen is deliberately not the settings panel (see below), but
+ * what was left on it once racing went was a button and a summary of the
+ * weather -- a door rather than a place. This is the thing the game now
+ * actually accumulates, so it is what the door is worth opening onto: not
+ * "here is a game", but "here is where you last got to".
+ *
+ * A record and not a score, on the same terms as the logbook itself. The last
+ * passage rather than the longest or the fastest, no comparison against the
+ * ones before it, and nothing here ranks: sorting these by speed is how a calm
+ * game quietly turns back into a race.
+ *
+ * Shown only when there is one. A first-time player is told what a passage is
+ * by the Log tab, which has room to say it; the front page saying "nothing yet"
+ * would be an empty shelf where the point was to have something on it.
+ */
+function LastPassage({ p }: { p: PassageRecord }) {
+  return (
+    <div className="mt-2 rounded-md border border-border bg-secondary/30 px-3 py-2">
+      <div className="flex items-baseline justify-between gap-3 text-[11px] leading-relaxed">
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <BookOpen className="size-3.5 shrink-0" />
+          Last passage
+        </span>
+        <span className="text-muted-foreground">
+          {new Date(p.startedAt).toLocaleString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </span>
+      </div>
+      <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
+        {venueById(p.venue)?.name ?? "Open ocean"} · {formatDistance(p.distance)}{" "}
+        in {formatTime(p.duration)}
+      </div>
+    </div>
+  );
+}
+
 export function MenuDialog({
   open,
   onOpenChange,
@@ -114,6 +159,36 @@ export function MenuDialog({
   const [view, setView] = useState<"play" | "settings">("play");
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) =>
     onSettings({ ...settings, [k]: v });
+
+  /**
+   * The newest passage, or null while the store has not answered and whenever
+   * it cannot.
+   *
+   * `list()` comes back newest first, so this is its head. Reloaded on
+   * `logVersion` -- bumped by whoever knows a passage was written -- rather than
+   * polled, so it sleeps for the whole time the menu is shut.
+   *
+   * A failure shows nothing rather than an error. The Log tab is where a broken
+   * logbook is worth reporting, because that is where someone went to read it;
+   * on the way in it would be an alarm about a thing nobody asked for yet.
+   */
+  const [last, setLast] = useState<PassageRecord | null>(null);
+  useEffect(() => {
+    // The store is async and `logVersion` can bump twice in quick succession,
+    // so a slower earlier read must not land on top of a newer answer.
+    let live = true;
+    logbook.list().then(
+      (rows) => {
+        if (live) setLast(rows[0] ?? null);
+      },
+      () => {
+        if (live) setLast(null);
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [logbook, logVersion]);
 
   return (
     <Dialog
@@ -233,6 +308,11 @@ export function MenuDialog({
                 <SlidersHorizontal /> Adjust
               </Button>
             </div>
+
+            {/* Under the conditions rather than over them: what you are about
+                to sail in is the more useful of the two with a hand already on
+                the door, and where you last got to is the reason to open it. */}
+            {last && <LastPassage p={last} />}
 
             <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground">
               <kbd className="rounded border border-border bg-secondary px-1 py-px font-mono">
