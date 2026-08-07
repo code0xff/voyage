@@ -51,7 +51,7 @@ and `distanceOutside` are what the edge decision below will be built on.
 
 Not yet wired into the engine — see piece 3.
 
-### 2. A shelter model that is data rather than two formulas — next
+### 2. A shelter model that is data rather than two formulas — **computed, not yet shared**
 
 This is the interesting one, and it comes out *better* than what exists.
 
@@ -66,6 +66,35 @@ the CPU once per change of wind direction, upload it as a texture, and have the
 physics and the shader **read the same data**. The duplication disappears
 entirely, and fetch — how far upwind the open water reaches — is both the honest
 physical quantity and cheap to compute by marching a grid.
+
+Built as `src/sim/shelter.ts`. Marching per cell would be 640,000 marches of
+four hundred steps; ordering the cells so the upwind neighbour is always already
+computed makes it one pass, and it costs **16 ms** — cheap enough to rebuild on
+every 2° of wind shift.
+
+The texture upload is piece 3's work. Until the shader reads it, the duplication
+is still there; what has changed is that there is now one field to share.
+
+Three things the sketch did not anticipate, all found by looking at the field
+rather than at the code:
+
+- **A ray must be shaded by the summit it crossed, not by the cell it left
+  over.** Ground is lowest at the water's edge, so a ray over Alcatraz crosses
+  39 m and exits over a 2.9 m beach — which turned a 500 m lee into a 100 m one,
+  everywhere, while leaving it in the right *place*. This is the failure a
+  coastline provokes that a circle never could.
+- **The sweep needs lateral diffusion or it draws scan lines.** One tap per ray
+  makes each ray independent and a 25 m pier throws a hard shadow three
+  kilometres downwind. Averaging the cross-wind neighbours at every step *is*
+  diffusion, and compounds into a wake widening as √distance — the right shape,
+  for three reads instead of one.
+- **Only amounts may diffuse.** Fetch and deficit are amounts. Reach is the
+  decay length of whatever cast the shadow — a parameter — and averaging it
+  sideways lends it between wakes, which let a 10 m islet borrow a 100 m ridge's
+  lee from the water beside it.
+
+Still not modelled: wake spreading beyond that diffusion, and refraction around
+a headland. AGENTS.md section 9 already records the latter as deliberate.
 
 ### 3. A chunked terrain mesh — not started
 
