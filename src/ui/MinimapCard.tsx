@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Crosshair } from 'lucide-react';
+import { Crosshair, Maximize2, X } from 'lucide-react';
 import { RANGES, createMinimap } from '@/view/minimap';
 import { CRUISER } from '@/sim/config';
 import { formatDistance } from '@/sim/units';
@@ -24,6 +24,19 @@ import { useEngine, useEngineFrame, useReadout } from './engine-context';
  * mistake rather than as a choice.
  */
 const SIZE = 208;
+
+/**
+ * Margin left round the full-screen chart, px.
+ *
+ * The chart is square because everything that draws it is -- the circular clip,
+ * the wind lattice, the tide arrows all work off one `size`. So the full view
+ * is the largest square the window will take, which on any normal window is
+ * bounded by its height.
+ */
+const FULL_MARGIN = 72;
+
+const fullSize = () =>
+  Math.max(320, Math.min(window.innerWidth, window.innerHeight) - FULL_MARGIN * 2);
 
 /**
  * Wheel travel per range step, px. One mouse notch is 100 or so, so a notch is
@@ -51,12 +64,33 @@ const DRAG_SLOP = 4;
  * ordinary React state. The pan is a ref: it changes on every pointer move
  * while a drag is running, and the canvas is redrawn every frame anyway, so
  * putting it through the reconciler would buy nothing.
+ *
+ * `full` moves the same component into a full-screen overlay rather than
+ * mounting a second one. That is what keeps the range and the pan across the
+ * transition: zoom out on the big chart, close it, and the card is where you
+ * left it, because it is the same chart. Two components would have been two
+ * charts that happened to look alike, and two `createMinimap()` instances --
+ * two raster caches, two traced outlines, and a track that only one of them
+ * had been recording.
  */
-export function MinimapCard() {
+export function MinimapCard({ full, onFull }: { full: boolean; onFull: (v: boolean) => void }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const engine = useEngine();
   const [range, setRange] = useState(1);
   const minimap = useRef(createMinimap());
+
+  // Only ever read while `full`; kept in state so a resized window re-lays the
+  // chart out rather than leaving it at the size the screen used to be.
+  const [big, setBig] = useState(fullSize);
+  useEffect(() => {
+    if (!full) return;
+    const onResize = () => setBig(fullSize());
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [full]);
+
+  const size = full ? big : SIZE;
 
   /**
    * Where the chart is held, or null while it follows the boat.
@@ -76,13 +110,13 @@ export function MinimapCard() {
     const c = ref.current;
     if (!c) return;
     const dpr = Math.min(devicePixelRatio, 2);
-    c.width = SIZE * dpr;
-    c.height = SIZE * dpr;
+    c.width = size * dpr;
+    c.height = size * dpr;
     // setTransform rather than scale, so this does not depend on the transform
     // it inherits: assigning `width` above resets it today, and a rewrite that
     // stopped doing so would make scale() compound instead of fail.
     c.getContext('2d')?.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }, [engine]);
+  }, [engine, size]);
 
   const cycle = useCallback(() => setRange((r) => (r + 1) % RANGES.length), []);
 
@@ -148,14 +182,14 @@ export function MinimapCard() {
       if (!d.moved && Math.hypot(dx, dy) < DRAG_SLOP) return;
       d.moved = true;
       // Metres per pixel at this range, and the chart is twice the range across.
-      const perPixel = (RANGES[range] * 2) / SIZE;
+      const perPixel = (RANGES[range] * 2) / size;
       // Dragging right moves the *chart* right, which means looking at water to
       // the west -- so the centre goes the other way. Screen y grows downward
       // and north is up, so that axis flips again.
       pan.current = { x: d.from.x - dx * perPixel, y: d.from.y + dy * perPixel };
       setPanned(true);
     },
-    [range],
+    [range, size],
   );
 
   const onPointerUp = useCallback(
@@ -166,10 +200,10 @@ export function MinimapCard() {
       // It never became a drag, so it was a click: say where she is bound.
       const r = e.currentTarget.getBoundingClientRect();
       engine.setDestination(
-        minimap.current.worldAt(e.clientX - r.left, e.clientY - r.top, SIZE, range),
+        minimap.current.worldAt(e.clientX - r.left, e.clientY - r.top, size, range),
       );
     },
-    [engine, range],
+    [engine, range, size],
   );
 
   // The rest of the controls are keys, so this one is too. The engine owns the
@@ -184,7 +218,7 @@ export function MinimapCard() {
   useEngineFrame((s) => {
     const ctx = ref.current?.getContext('2d');
     if (!ctx) return;
-    minimap.current.draw(ctx, SIZE, {
+    minimap.current.draw(ctx, size, {
       state: s.state,
       wind: s.wind,
       terrain: s.terrain,
@@ -198,8 +232,15 @@ export function MinimapCard() {
     });
   });
 
-  return (
-    <Card className="pointer-events-auto w-[232px] gap-0 p-3 backdrop-blur-md bg-card/85">
+  const chrome = (
+    <Card
+      className={
+        full
+          ? 'pointer-events-auto gap-0 p-3 backdrop-blur-md bg-card/95 shadow-lg'
+          : 'pointer-events-auto w-[232px] gap-0 p-3 backdrop-blur-md bg-card/85'
+      }
+      style={full ? { width: size + 24 } : undefined}
+    >
       <div className="flex items-center justify-between gap-2 pb-1.5">
         <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
           Chart
@@ -211,6 +252,12 @@ export function MinimapCard() {
             {RANGES[range]} m · run
             <span ref={runLabel} className="ml-1" />
           </Badge>
+          {/* Only in the full view, where there is room for it and where the
+              hint is worth having: this is the one panel that takes the whole
+              screen, so how to get out of it should be on it. */}
+          {full && (
+            <span className="text-[9px] text-muted-foreground">Esc to close</span>
+          )}
           {/* Only while it is off the boat: a button that does nothing is worse
               than no button, and this one is also the only sign that the chart
               is being held rather than following. */}
@@ -226,6 +273,16 @@ export function MinimapCard() {
               <Crosshair />
             </Button>
           )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-5 w-5 p-0 [&_svg]:size-3"
+            aria-label={full ? 'Close the full chart' : 'Open the full chart'}
+            title={full ? 'Close the full chart' : 'Open the full chart'}
+            onClick={() => onFull(!full)}
+          >
+            {full ? <X /> : <Maximize2 />}
+          </Button>
         </div>
       </div>
       {/*
@@ -253,8 +310,33 @@ export function MinimapCard() {
         onWheel={onWheel}
         title="Click to set where you are bound · drag to look around · double-click to recentre · right-click to clear · wheel or N for range"
         className="block cursor-crosshair touch-none"
-        style={{ width: SIZE, height: SIZE }}
+        style={{ width: size, height: size }}
       />
     </Card>
+  );
+
+  if (!full) return chrome;
+
+  /*
+   * The full view is a backdrop with the same card centred on it.
+   *
+   * `fixed` and not a sibling of the HUD, because the HUD lives inside a
+   * `pointer-events-none` layer with padding, and the chart wants the whole
+   * window. The backdrop takes the click so that dropping the pointer anywhere
+   * off the chart closes it, which is what every other full-screen thing does.
+   *
+   * The world keeps running behind it. A chart is for watching where you are
+   * getting to, and one that froze the boat while you read it would be a
+   * different and much less useful object.
+   */
+  return (
+    <div
+      className="pointer-events-auto fixed inset-0 z-40 flex items-center justify-center bg-background/70 backdrop-blur-sm"
+      onPointerDown={(e) => {
+        if (e.target === e.currentTarget) onFull(false);
+      }}
+    >
+      {chrome}
+    </div>
   );
 }

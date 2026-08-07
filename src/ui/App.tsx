@@ -22,6 +22,22 @@ export function App() {
   const [engine, setEngine] = useState<Engine | null>(null);
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [menuOpen, setMenuOpen] = useState(true);
+  /**
+   * Whether the chart has the whole screen.
+   *
+   * Held here rather than in the card because Escape has to be settled in one
+   * place. The engine owns the key and emits `toggleMenu`; if the chart is up,
+   * that closes the chart instead of opening the menu -- so Escape always means
+   * "back out of the thing that is in front of me", and never opens the menu
+   * behind an open chart.
+   */
+  const [chartFull, setChartFull] = useState(false);
+  // Read by the engine's event handler, which is created once. A ref and not
+  // the state value, because that closure would otherwise capture `false`
+  // forever -- and not a setState updater with another setState inside it,
+  // which StrictMode is entitled to run twice and would toggle the menu twice.
+  const chartFullRef = useRef(chartFull);
+  chartFullRef.current = chartFull;
   const [started, setStarted] = useState(false);
   /**
    * Bumped when a passage is written, so the logbook reloads on it.
@@ -44,7 +60,13 @@ export function App() {
     setEngine(e);
 
     const offEvent = e.onEvent((ev) => {
-      if (ev.type === 'toggleMenu') setMenuOpen((v) => !v);
+      // Escape backs out of whatever is in front: the chart first, the world
+      // second. Never the menu while the chart is up, which would leave a
+      // dialog open behind a chart the player thought they were closing.
+      if (ev.type === 'toggleMenu') {
+        if (chartFullRef.current) setChartFull(false);
+        else setMenuOpen((v) => !v);
+      }
       if (ev.type === 'arrived') setLogVersion((v) => v + 1);
       // The engine rolls the world, so the seed shown in the menu has to follow
       // it -- otherwise the field would name a sea the player is not sailing in.
@@ -147,7 +169,7 @@ export function App() {
                 */}
                 <div className="flex flex-col items-end gap-3">
                   <PolarCard />
-                  <MinimapCard />
+                  <MinimapCard full={chartFull} onFull={setChartFull} />
                 </div>
               </div>
               <div className="mt-auto flex items-end">

@@ -120,10 +120,22 @@ export interface MinimapInput {
  */
 const CHART_CELL = 2;
 
-let chartCanvas: HTMLCanvasElement | null = null;
-let chartKey = '';
+/**
+ * One chart's cached raster.
+ *
+ * Per `Minimap` and not per module, because there is more than one chart now:
+ * the card and the full-screen view are two instances, and a single shared
+ * canvas would be resized by whichever drew last. That resize clears the key,
+ * so two charts of different sizes drawing in the same frame would each force a
+ * full re-render of the other's -- a per-frame terrain sweep, for a cache.
+ */
+interface ChartCache {
+  canvas: HTMLCanvasElement | null;
+  key: string;
+}
 
 function drawRegion(
+  cache: ChartCache,
   ctx: CanvasRenderingContext2D,
   region: RegionTerrain,
   size: number,
@@ -138,17 +150,24 @@ function drawRegion(
   // out in visible blocks -- the data is 25 m, and it should not look like 50.
   const dpr = Math.min(devicePixelRatio, 2);
   const px = Math.round(size * dpr);
-  const key = `${Math.round(centreX / 8)},${Math.round(centreY / 8)},${range},${draft},${px}`;
-  if (!chartCanvas) {
-    chartCanvas = document.createElement('canvas');
+  // Quantised to about one device pixel of travel, not to a fixed 8 m. Eight
+  // metres is a pixel on a 208 px card at 700 m range and nine pixels on a
+  // full-screen chart at 300 m, where the coastline would visibly step as she
+  // moved. Redrawing costs a few milliseconds and is cached; stepping is a
+  // chart that looks broken.
+  const step = Math.max(1, (range * 2) / px);
+  const key = `${Math.round(centreX / step)},${Math.round(centreY / step)},${range},${draft},${px}`;
+  if (!cache.canvas) {
+    cache.canvas = document.createElement('canvas');
   }
+  const chartCanvas = cache.canvas;
   if (chartCanvas.width !== px || chartCanvas.height !== px) {
     chartCanvas.width = px;
     chartCanvas.height = px;
-    chartKey = '';
+    cache.key = '';
   }
-  if (chartKey !== key) {
-    chartKey = key;
+  if (cache.key !== key) {
+    cache.key = key;
     const c = chartCanvas.getContext('2d');
     if (c) {
       c.clearRect(0, 0, px, px);
@@ -247,6 +266,9 @@ export function createMinimap(): Minimap {
   // unchanged for as long as a piece of sea stays loaded. Tracing costs a few
   // hundred elevation samples and must not happen per frame.
   const outlines = new Map<Island, Outline>();
+
+  // This chart's own raster cache. See ChartCache.
+  const chart: ChartCache = { canvas: null, key: '' };
 
   // The chart keeps its own track of where she has been.
   const track = new Float32Array(TRACK_MAX * 2);
@@ -480,7 +502,7 @@ export function createMinimap(): Minimap {
       // nothing once but real work at 60 Hz for a picture that is identical
       // between frames.
       if (input.region) {
-        drawRegion(ctx, input.region, size, centreX, centreY, range, input.draft);
+        drawRegion(chart, ctx, input.region, size, centreX, centreY, range, input.draft);
       }
       for (const isl of input.terrain.islands) {
         let outline = outlines.get(isl);
