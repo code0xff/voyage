@@ -188,9 +188,9 @@ and is pinned by a separate test asserting that close-hauled, with the boom on
 its inhaul, the head still follows the foot.
 
 What under-twisting costs depends entirely on where the boom is. On and around
-the wind it is nearly free — 0.2% to 1% — because the spread is small and the
-sail's lift curve is flat near its peak, so a head a few degrees off ideal
-hardly notices. On a broad reach it is not free at all: sailing TWA 150 with
+the wind it is nearly free — about 1% at worst — because the spread is small
+and the sail's lift curve is flat near its peak, so a head a few degrees off
+ideal hardly notices. On a broad reach it is not free at all: sailing TWA 150 with
 the sail untwisted costs 3.2% in 6 knots and 2.0% in 10, because the boom is
 against the shrouds and twist is the only trim left that can reach the top of
 the sail.
