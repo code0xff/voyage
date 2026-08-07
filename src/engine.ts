@@ -35,7 +35,7 @@ import {
   saveGhost,
   type GhostSample,
 } from './sim/replay';
-import { windMs, type Settings } from './settings';
+import { currentVec, windMs, type Settings } from './settings';
 import { Input } from './input';
 import { createScene, type SceneView } from './view/scene';
 import { SoundEngine } from './view/audio';
@@ -392,6 +392,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     current = s;
 
     wind.baseTws = windMs(s) * weather.state.windScale;
+    // The tide is not weather: it runs at the rate it runs whatever the front
+    // overhead is doing, so it is set straight from the player's number and
+    // never scaled by `weather.state`.
+    env.current = currentVec(s);
     wind.gustiness = s.gustiness * weather.state.gustScale;
     wind.shiftAmplitude = 0.19 * s.gustiness * 2.2;
     waves.setFromWind(wind.baseTws * s.seaScale, wind.baseTwd);

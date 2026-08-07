@@ -419,6 +419,31 @@ export function MenuDialog({
               onChange={(v) => set("seaScale", v)}
             />
             <Slider
+              label="Tidal drift"
+              min={0}
+              max={4}
+              step={0.1}
+              value={settings.driftKnots}
+              format={(v) => (v === 0 ? "slack" : `${v.toFixed(1)} kn`)}
+              onChange={(v) => set("driftKnots", v)}
+            />
+            {/*
+              Pointless to set a direction for water that is not moving, and
+              leaving it live would invite the player to work out why turning it
+              does nothing.
+            */}
+            {settings.driftKnots > 0 && (
+              <Slider
+                label="Set (towards)"
+                min={0}
+                max={355}
+                step={5}
+                value={settings.setDeg}
+                format={(v) => `${v.toString().padStart(3, "0")}°`}
+                onChange={(v) => set("setDeg", v)}
+              />
+            )}
+            <Slider
               label="Start time"
               min={0}
               max={23.5}

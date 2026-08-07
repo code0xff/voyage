@@ -1,6 +1,7 @@
 import type { WeatherKind } from './sim/weather';
 import { WEATHER_KINDS } from './sim/weather';
 import { knotsToMs, msToKnots } from './sim/units';
+import { DEG, compassVec, scale, type Vec2 } from './sim/math';
 
 /**
  * Player settings, persisted to localStorage.
@@ -17,6 +18,18 @@ export interface Settings {
   gustiness: number;
   /** Wave height multiplier. Zero is flat water. */
   seaScale: number;
+  /**
+   * Tidal drift, knots: how fast the water itself is moving. Zero is slack.
+   */
+  driftKnots: number;
+  /**
+   * The set, degrees: the compass direction the water is going *to*.
+   *
+   * Deliberately the opposite convention to the wind, which is quoted by where
+   * it comes from. Both are how they are given at sea, and picking one for
+   * consistency would only mean the player had to translate.
+   */
+  setDeg: number;
   /** Distance to the windward mark, m. */
   legLength: number;
   laps: number;
@@ -41,6 +54,8 @@ export const DEFAULT_SETTINGS: Settings = {
   windKnots: 12,
   gustiness: 0.45,
   seaScale: 1,
+  driftKnots: 0,
+  setDeg: 90,
   legLength: 380,
   laps: 2,
   countdown: 45,
@@ -72,6 +87,8 @@ export function loadSettings(): Settings {
       windKnots: num(o.windKnots, DEFAULT_SETTINGS.windKnots, 3, 40),
       gustiness: num(o.gustiness, DEFAULT_SETTINGS.gustiness, 0, 1),
       seaScale: num(o.seaScale, DEFAULT_SETTINGS.seaScale, 0, 2),
+      driftKnots: num(o.driftKnots, DEFAULT_SETTINGS.driftKnots, 0, 4),
+      setDeg: num(o.setDeg, DEFAULT_SETTINGS.setDeg, 0, 359),
       legLength: num(o.legLength, DEFAULT_SETTINGS.legLength, 150, 1200),
       laps: Math.round(num(o.laps, DEFAULT_SETTINGS.laps, 1, 5)),
       countdown: Math.round(num(o.countdown, DEFAULT_SETTINGS.countdown, 5, 300)),
@@ -99,3 +116,15 @@ export function saveSettings(s: Settings): void {
 
 export const windMs = (s: Settings): number => knotsToMs(s.windKnots);
 export const windKn = (ms: number): number => msToKnots(ms);
+
+/**
+ * The set and drift as the velocity vector the physics wants, world frame.
+ *
+ * The conversion lives here rather than in `src/sim/` because it is the point
+ * where a player-facing pair of numbers becomes a physical quantity, and the
+ * compass-to-vector part of it is the one thing about a set that is easy to get
+ * backwards: the set is where the water goes, so it is `compassVec(set)` and
+ * not its negation.
+ */
+export const currentVec = (s: Settings): Vec2 =>
+  scale(compassVec(s.setDeg * DEG), knotsToMs(s.driftKnots));
