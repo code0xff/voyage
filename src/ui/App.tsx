@@ -223,9 +223,33 @@ export function App() {
                       <HintBar />
                     </div>
                   )}
-                  {touch && <TouchControls onMenu={() => setMenuOpen(true)} />}
                 </div>
               </div>
+              {/*
+                Anchored to the bottom of the screen, and deliberately outside
+                the column above it.
+
+                In the column it was the last item, so its position was
+                whatever was left after everything else had taken what it
+                wanted -- and `mt-auto` pushes down only when there is spare
+                room. A phone in landscape has none: measured at 844x300 the
+                chart column alone is 215 px and the tiller block 114, so the
+                stack asked for 351 px of a 300 px window and the helm went
+                over the bottom edge. Fifteen pixels at 300, forty-five at 270,
+                and no way to steer in either.
+
+                The helm is the one control that cannot be done without -- the
+                boat trims and reefs herself, and nothing steers for you unless
+                the autopilot is on. So it is pinned to the bottom and the
+                things above it are free to be short of room instead. That is
+                also the truer model of this HUD: it is clusters in the corners
+                of a canvas, not a document that stacks.
+              */}
+              {touch && (
+                <div className="absolute inset-x-0 bottom-0">
+                  <TouchControls onMenu={() => setMenuOpen(true)} />
+                </div>
+              )}
             </div>
           </EngineProvider>
         )}
