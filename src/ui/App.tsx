@@ -140,11 +140,22 @@ export function App() {
 
   return (
     <LangProvider lang={settings.lang}>
-      {/* Measured, not `h-screen`. See useViewport: on a phone `100vh` is the
-          height with the address bar hidden, so a page sized to it hides its own
-          bottom until you scroll -- and this app does not scroll. */}
+      {/*
+        Measured, not `h-screen`. See useViewport: on a phone `100vh` is the
+        height with the address bar hidden, so a page sized to it hides its own
+        bottom until you scroll -- and this app does not scroll.
+
+        `max-height: 100dvh` is the belt to that brace, and it is there for
+        rotation. Turning a phone fires `orientationchange` before the window
+        has its new size, and whether anything fires again once it settles is
+        not something to rely on: a stale read of 844 applied to a 390 px
+        window puts the tiller off the bottom of the screen, with no way to
+        ask for it back. `dvh` is the browser's own live figure and needs no
+        event at all, so however wrong the measurement is for a moment, the
+        page cannot be taller than the window it is in.
+      */}
       <div
-        style={{ height: height || undefined }}
+        style={{ height: height || undefined, maxHeight: '100dvh' }}
         className="relative h-screen w-screen overflow-hidden bg-background"
       >
         <canvas ref={canvasRef} className="block h-full w-full" />
