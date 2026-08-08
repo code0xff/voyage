@@ -479,7 +479,7 @@ cloud cover *at that pixel*, so a broken night shows stars through the gaps and
 closes them again as the deck goes over.
 
 Weather is a slow random walk between named conditions (clear, fair, overcast,
-rain, squall, fog), with every continuous quantity easing towards its target
+rain, squall, shower, fog), with every continuous quantity easing towards its target
 rather than snapping. It drives mean wind, gustiness, visibility, cloud cover and
 rain. This is what makes two passages over the same water different: a squall
 arriving halfway forces a reef and changes which side of the bay pays. It is seeded, so a
@@ -493,6 +493,15 @@ squall that arrived in a third of a second would read as a bug rather than as
 weather. Counting the dwell in wall-clock seconds, as it once did, meant the sun
 crossed the entire sky while the weather sat on `fair` — the one system meant to
 make two sessions differ never did anything inside one.
+
+`shower` — rain with the sky broken behind it — was added late, after a
+measurement. Every other wet condition sits at 0.95 cover or above, and `rain`
+eases out faster than `cloud` does, so drops in the air with the sun on them was
+a combination the model simply could not produce: over thirty simulated days it
+happened for one minute out of 720 hours, both times as an accident on the
+leading edge of a front. A passing shower — bright, brief, a hard gust under it
+and then gone — is one of the most common things that happens on the water, and
+it was missing.
 
 ### 9. The wind field
 

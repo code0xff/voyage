@@ -135,6 +135,7 @@ export const WEATHER: Record<WeatherKind, Phrase> = {
   overcast: { en: 'Overcast', ko: '흐림' },
   rain: { en: 'Rain', ko: '비' },
   squall: { en: 'Squall', ko: '스콜' },
+  shower: { en: 'Shower', ko: '소나기' },
   fog: { en: 'Fog', ko: '안개' },
 };
 

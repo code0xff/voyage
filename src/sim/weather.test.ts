@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Weather, WEATHER_KINDS } from './weather';
+import { skyState } from './sky';
 /** The default time scale: a second of play is a minute of world time. */
 const SCALE = 60;
 
@@ -111,3 +112,47 @@ describe('weather', () => {
   });
 });
 
+/**
+ * The bug this locks down: for most of this project's life the weather could
+ * not produce rain with the sun out. Every wet condition sat at 0.95 cover or
+ * above, and `rain` eased away faster than `cloud`, so the drops were always
+ * gone before the sky opened. Measured over thirty simulated days it happened
+ * for a total of one minute out of 720 hours, and both times as an accident on
+ * the leading edge of a front rather than as anything you could sail into.
+ *
+ * `shower` is what makes it a condition the model can actually produce, and
+ * this asserts it stayed one.
+ */
+describe('sunlit showers', () => {
+  it('puts drops in the air with the sun out often enough to matter', () => {
+    let daylight = 0;
+    let wet = 0;
+    // Thirty simulated days, sampled every ten seconds of world time.
+    for (let seed = 1; seed <= 6; seed++) {
+      const w = new Weather(seed);
+      let hour = 8;
+      for (let i = 0; i < 43200; i++) {
+        w.update(10 / SCALE, 10);
+        hour += 10 / 3600;
+        const sun = skyState(hour).sunElevation;
+        if (sun <= 0) continue;
+        daylight++;
+        if (w.state.rain > 0.15 && w.state.cloud < 0.72) wet++;
+      }
+    }
+    // Rare, and not so rare that it never happens: a sunlit shower is an
+    // occasion, and if this ever reads zero again it has stopped being one.
+    expect(wet / daylight).toBeGreaterThan(0.01);
+    expect(wet / daylight).toBeLessThan(0.2);
+  });
+
+  it('does not leave the sun out in a downpour', () => {
+    // The other half of the same property: heavy rain must stay overcast, or
+    // the sky would be bright through a squall.
+    const w = new Weather(3, 'squall');
+    w.evolve = false;
+    for (let i = 0; i < 2000; i++) w.update(1);
+    expect(w.state.cloud).toBeGreaterThan(0.9);
+    expect(w.state.rain).toBeGreaterThan(0.8);
+  });
+});

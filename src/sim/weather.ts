@@ -17,7 +17,7 @@ import { clamp } from './math';
  * testable and makes a shared race fair.
  */
 
-export type WeatherKind = 'clear' | 'fair' | 'overcast' | 'rain' | 'squall' | 'fog';
+export type WeatherKind = 'clear' | 'fair' | 'overcast' | 'rain' | 'squall' | 'shower' | 'fog';
 
 export interface WeatherProfile {
   cloud: number; // 0..1 sky cover
@@ -55,6 +55,23 @@ const PROFILES: Record<WeatherKind, WeatherProfile> = {
   rain: { cloud: 0.95, rain: 0.65, fog: 0.3, windScale: 1.15, gustScale: 1.3, dwell: 1.3 * HOUR },
   // A squall is short, violent and the most interesting thing that can happen.
   squall: { cloud: 1.0, rain: 0.9, fog: 0.35, windScale: 1.75, gustScale: 1.9, dwell: 0.5 * HOUR },
+  /**
+   * Rain with the sky broken behind it.
+   *
+   * Every other wet condition here is overcast rain -- `rain` and `squall` both
+   * put the cover at 0.95 or above -- so until this existed, drops in the air
+   * and the sun out was a combination the model could not produce. Measured
+   * over thirty simulated days it happened for a total of one minute, and both
+   * times on the leading edge of a front rather than as anything you could sail
+   * into: `rain` eases out with tau 30 and `cloud` with tau 45, so on the back
+   * of a shower the drops are gone before the sun returns.
+   *
+   * That is a gap in the weather and not only in the optics. A passing shower
+   * -- bright, brief, a hard gust under it and then gone -- is one of the most
+   * common things that happens on the water, and it is the condition that makes
+   * a rainbow.
+   */
+  shower: { cloud: 0.5, rain: 0.4, fog: 0.06, windScale: 1.3, gustScale: 1.6, dwell: 0.45 * HOUR },
   fog: { cloud: 0.7, rain: 0, fog: 1.0, windScale: 0.55, gustScale: 0.5, dwell: 1.6 * HOUR },
 };
 
@@ -70,22 +87,35 @@ const TRANSITIONS: Record<WeatherKind, [WeatherKind, number][]> = {
     ['clear', 3],
     ['overcast', 3],
     ['rain', 1],
+    ['shower', 1],
   ],
   overcast: [
     ['overcast', 2],
     ['fair', 3],
     ['rain', 3],
     ['squall', 1],
+    ['shower', 2],
     ['fog', 1],
   ],
   rain: [
     ['rain', 2],
     ['overcast', 4],
     ['squall', 2],
+    ['shower', 2],
   ],
   squall: [
     ['rain', 3],
     ['overcast', 3],
+    ['shower', 2],
+  ],
+  // A shower breaks up rather than settling in: mostly it clears behind, and
+  // what it clears to is bright. Coming out of one into `rain` is the front
+  // that was going to arrive anyway.
+  shower: [
+    ['shower', 2],
+    ['fair', 4],
+    ['overcast', 3],
+    ['rain', 2],
   ],
   fog: [
     ['fog', 3],
@@ -234,6 +264,7 @@ export const WEATHER_LABEL: Record<WeatherKind, string> = {
   overcast: 'Overcast',
   rain: 'Rain',
   squall: 'Squall',
+  shower: 'Shower',
   fog: 'Fog',
 };
 
