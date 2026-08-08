@@ -249,16 +249,23 @@ function Helm() {
 
 /** Auto-mode chips. These change rarely, so plain React state via a re-render is fine. */
 /**
- * Five numbers and the clock.
+ * Five numbers, on a grid that cannot move.
  *
  * Chosen for what you cannot see by looking: speed, where the wind is, how hard
  * she is pressed, and what is under the keel. Heading is there because a
  * compass is the one thing the view genuinely cannot show you.
+ *
+ * **A fixed grid and a fixed width, not `flex-wrap`.** Wrapping reflowed on the
+ * data: `-96°` is wider than `-9°` and `100°` than `9°`, so the strip jumped
+ * between two rows and four as the boat sailed. A panel that changes shape
+ * while you are reading it is worse than one that is slightly too big, and this
+ * one was doing it several times a minute. Two columns and three rows, always,
+ * whatever the numbers say.
  */
 function CompactInstruments() {
   return (
-    <Card className="pointer-events-auto gap-0 px-2.5 py-1.5 backdrop-blur-md bg-card/85">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+    <Card className="pointer-events-auto w-[168px] gap-0 px-2.5 py-1.5 backdrop-blur-md bg-card/85">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
         <Gauge label="BSP" unit="kn" emphasis read={(s) => (s.diag ? msToKnots(s.diag.speed).toFixed(1) : '--')} />
         <Gauge label="TWA" read={(s) => (s.diag ? deg(s.diag.twa * RAD) : '--')} />
         <Gauge label="HDG" read={(s) => deg(wrap2Pi(s.state.heading) * RAD)} />
