@@ -52,6 +52,13 @@ export class Wildlife {
     this.rand = rng(seed ^ 0x5eed);
   }
 
+  /** Restart the sound event stream when a new seeded world begins. */
+  reseed(seed: number): void {
+    this.rand = rng(seed ^ 0x5eed);
+    this.timer = 3;
+    this.events.length = 0;
+  }
+
   /**
    * The rate rises as the shore closes, so standing in towards an island fills
    * with noise and open water stays quiet.

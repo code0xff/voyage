@@ -622,6 +622,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     snapshot.session = session;
     weather.reseed(current.seed);
     wind.reseed(current.seed);
+    wildlife.reseed(current.seed);
     // A new session starts with the sea its weather implies, not the one the
     // last session left behind.
     // Seeded from the same relative wind the step uses, not from the breeze

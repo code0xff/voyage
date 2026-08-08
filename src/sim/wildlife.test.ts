@@ -52,6 +52,43 @@ describe('gulls', () => {
     expect(near).toBeGreaterThan(far);
   });
 
+  /**
+   * Regression: starting a new session reseeded the wind, the weather and the
+   * islands but not the birds, so the gulls carried on from wherever the last
+   * passage had left their stream. A world is meant to be reproducible from its
+   * seed all the way through, and one carried-over generator was enough to make
+   * the same seed sound different depending on what you had sailed before it.
+   */
+  it('restarts its stream on reseed, so a seed sounds the same however it is reached', () => {
+    const land = new Terrain([island(0, 0)]);
+    const at = { x: 420, y: 0 };
+
+    const reused = new Wildlife(9812);
+    for (let t = 0; t < 400; t += 0.25) reused.update(0.25, { x: 4000, y: 0 }, land);
+    reused.reseed(11);
+
+    const heard: { x: number; y: number }[] = [];
+    for (let t = 0; t < 600; t += 0.25) {
+      reused.update(0.25, { ...at }, land);
+      for (const e of reused.events) heard.push({ ...e.pos });
+    }
+
+    expect(heard.length).toBeGreaterThan(0);
+    expect(heard).toEqual(calls(11, land, at));
+  });
+
+  /** A pending call must not be heard in the world that replaced it. */
+  it('drops any event still in hand when it is reseeded', () => {
+    const land = new Terrain([island(0, 0)]);
+    const w = new Wildlife(12);
+    for (let t = 0; t < 900 && w.events.length === 0; t += 0.25) {
+      w.update(0.25, { x: 350, y: 0 }, land);
+    }
+    expect(w.events.length).toBeGreaterThan(0);
+    w.reseed(12);
+    expect(w.events.length).toBe(0);
+  });
+
   /** A call has to come from somewhere a bird could be, not from the masthead. */
   it('places calls off the boat, between it and the land', () => {
     const boat = { x: 350, y: 0 };
