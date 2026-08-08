@@ -50,7 +50,7 @@ export function App() {
    * one question the moment an import or a delete touched only one of them.
    */
   const [logVersion, setLogVersion] = useState(0);
-  const { compact, touch } = useViewport();
+  const { compact, touch, height } = useViewport();
 
   // Keep the latest settings reachable from the engine callbacks without
   // re-creating the engine on every keystroke.
@@ -140,7 +140,13 @@ export function App() {
 
   return (
     <LangProvider lang={settings.lang}>
-      <div className="relative h-screen w-screen overflow-hidden bg-background">
+      {/* Measured, not `h-screen`. See useViewport: on a phone `100vh` is the
+          height with the address bar hidden, so a page sized to it hides its own
+          bottom until you scroll -- and this app does not scroll. */}
+      <div
+        style={{ height: height || undefined }}
+        className="relative h-screen w-screen overflow-hidden bg-background"
+      >
         <canvas ref={canvasRef} className="block h-full w-full" />
 
         {engine && (

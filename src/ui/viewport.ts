@@ -14,29 +14,53 @@ import { useEffect, useState } from 'react';
  * that is `pointer: coarse` rather than a width or a user agent. A small window
  * on a laptop should get the compact layout and keep its keyboard; a tablet in
  * a big window should get the roomy layout and still get a tiller.
+ *
+ * **How tall the page may be** is the one that has to be measured rather than
+ * asked for in CSS. `100vh` on a phone is the height with the browser's own
+ * chrome hidden -- the *largest* the viewport can become -- so a page sized to
+ * it runs under the address bar, and everything at the bottom is off the screen
+ * until you scroll, which this app does not do. Padding cannot fix that: the
+ * space is added inside a box that is already taller than the window.
+ *
+ * `visualViewport.height` is what is actually visible now, address bar and all,
+ * and it is also what shrinks when a keyboard opens. `innerHeight` is the
+ * fallback and is right everywhere else.
  */
 
 /** Below either of these the roomy layout does not fit. Both are measured. */
 const NARROW = 760;
 const SHORT = 560;
 
-function read(): { compact: boolean; touch: boolean } {
-  if (typeof window === 'undefined') return { compact: false, touch: false };
+export interface Viewport {
+  compact: boolean;
+  touch: boolean;
+  /** Pixels actually visible, for the page to be exactly that tall. */
+  height: number;
+}
+
+function read(): Viewport {
+  if (typeof window === 'undefined') return { compact: false, touch: false, height: 0 };
+  const height = window.visualViewport?.height ?? window.innerHeight;
   return {
-    compact: window.innerWidth < NARROW || window.innerHeight < SHORT,
+    compact: window.innerWidth < NARROW || height < SHORT,
     touch: window.matchMedia?.('(pointer: coarse)').matches ?? false,
+    height,
   };
 }
 
-export function useViewport(): { compact: boolean; touch: boolean } {
+export function useViewport(): Viewport {
   const [v, setV] = useState(read);
   useEffect(() => {
     const on = () => setV(read());
     window.addEventListener('resize', on);
     window.addEventListener('orientationchange', on);
+    // The address bar sliding away does not always fire a window resize on
+    // iOS, and it is exactly the event this is here for.
+    window.visualViewport?.addEventListener('resize', on);
     return () => {
       window.removeEventListener('resize', on);
       window.removeEventListener('orientationchange', on);
+      window.visualViewport?.removeEventListener('resize', on);
     };
   }, []);
   return v;

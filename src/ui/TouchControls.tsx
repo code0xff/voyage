@@ -131,7 +131,22 @@ export function TouchControls({ onMenu }: { onMenu: () => void }) {
   const engine = useEngine();
   const t = useT();
   return (
-    <div className="pointer-events-none flex w-full flex-col items-center gap-2">
+    <div
+      /*
+       * Lifted off the bottom edge, and by more than it looks like it needs.
+       *
+       * Two reasons, one of which is invisible on a desktop. A phone's home
+       * indicator or gesture bar owns the bottom of the screen, and a control
+       * sitting in it is one a swipe-up will take instead: `env()` yields that
+       * height where the browser reports it and zero where it does not, so the
+       * margin is added to it rather than maxed against it. The other is the
+       * thumb -- the very bottom edge of a phone held one-handed is the
+       * hardest place on it to land accurately, and the tiller is the control
+       * that is dragged rather than tapped.
+       */
+      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.75rem)' }}
+      className="pointer-events-none flex w-full flex-col items-center gap-2.5"
+    >
       {/* Four, and no more. Reefing and trimming are not here because she does
           both herself by default, and a row of buttons for things nobody has to
           press is how a sea turns into a control panel. */}
