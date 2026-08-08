@@ -5,10 +5,11 @@ import { drawPolar } from '@/view/polarplot';
 import { RAD } from '@/sim/math';
 import { msToKnots } from '@/sim/units';
 import { useEngine, useEngineFrame, useReadout } from './engine-context';
+import { PANEL_COLUMN, PANEL_PAD } from './viewport';
 import { useT } from './i18n';
 import { PANEL } from './strings';
 
-const SIZE = 208;
+const SIZE = PANEL_COLUMN - PANEL_PAD;
 
 /**
  * The polar diagram. It is the single most useful thing on screen once you can
@@ -49,7 +50,10 @@ export function PolarCard() {
   );
 
   return (
-    <Card className="pointer-events-auto w-[232px] gap-0 p-3 backdrop-blur-md bg-card/85">
+    <Card
+      style={{ width: PANEL_COLUMN }}
+      className="pointer-events-auto gap-0 p-3 backdrop-blur-md bg-card/85"
+    >
       <div className="flex items-center justify-between pb-1.5">
         <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
           {t(PANEL.polar)}

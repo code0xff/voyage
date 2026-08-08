@@ -8,7 +8,7 @@ import { CRUISER } from '@/sim/config';
 import { formatDistance } from '@/sim/units';
 import type { Vec2 } from '@/sim/math';
 import { useEngine, useEngineFrame, useReadout } from './engine-context';
-import { COMPACT_COLUMN } from './viewport';
+import { COMPACT_COLUMN, PANEL_COLUMN, PANEL_PAD } from './viewport';
 import { useT } from './i18n';
 import { PANEL } from './strings';
 
@@ -26,7 +26,7 @@ import { PANEL } from './strings';
  * two reference panels of different widths down the right-hand side read as a
  * mistake rather than as a choice.
  */
-const SIZE = 208;
+const SIZE = PANEL_COLUMN - PANEL_PAD;
 
 /**
  * Margin left round the full-screen chart, px.
@@ -265,9 +265,9 @@ export function MinimapCard({
           ? 'pointer-events-auto gap-0 p-3 backdrop-blur-md bg-card/95 shadow-lg'
           : compact
             ? 'pointer-events-auto gap-0 p-2.5 backdrop-blur-md bg-card/85'
-            : 'pointer-events-auto w-[232px] gap-0 p-3 backdrop-blur-md bg-card/85'
+            : 'pointer-events-auto gap-0 p-3 backdrop-blur-md bg-card/85'
       }
-      style={full ? { width: size + 24 } : compact ? { width: COMPACT_COLUMN } : undefined}
+      style={{ width: full ? size + PANEL_PAD : compact ? COMPACT_COLUMN : PANEL_COLUMN }}
     >
       <div className="flex items-center justify-between gap-2 pb-1.5">
         <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">

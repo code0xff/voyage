@@ -46,6 +46,19 @@ const SHORT = 560;
  */
 export const COMPACT_COLUMN = 190;
 
+/**
+ * And how wide it is when there is room, px.
+ *
+ * The polar, the chart and the passage line are one column and had this number
+ * written three times over, which is a disagreement waiting for whichever is
+ * edited first. Each card is this wide and each canvas is this less its own
+ * padding, so they cannot drift apart.
+ */
+export const PANEL_COLUMN = 232;
+
+/** A card's padding, both sides, at either width. */
+export const PANEL_PAD = 24;
+
 export interface Viewport {
   compact: boolean;
   touch: boolean;

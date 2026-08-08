@@ -4,7 +4,7 @@ import { DEG, RAD, wrapPi } from '@/sim/math';
 import { mustTack } from '@/sim/passage';
 import { formatDistance, formatDuration } from '@/sim/units';
 import { useReadout } from './engine-context';
-import { COMPACT_COLUMN } from './viewport';
+import { COMPACT_COLUMN, PANEL_COLUMN, useViewport } from './viewport';
 
 /**
  * Where she is bound.
@@ -25,6 +25,7 @@ import { COMPACT_COLUMN } from './viewport';
  */
 export function PassageBar() {
   const root = useRef<HTMLDivElement>(null);
+  const { compact } = useViewport();
 
   const line = useReadout<HTMLDivElement>((s) => {
     const p = s.passage;
@@ -67,11 +68,19 @@ export function PassageBar() {
 
   return (
     <div ref={root} className="pointer-events-none flex justify-end" style={{ display: 'none' }}>
-      {/* The minimum is the column's width, so this and the chart above it are
-          the same card edge on a phone rather than two that nearly line up. */}
+      {/*
+        The column's width, fixed, not a minimum.
+
+        Left to its content this card was as wide as whatever it happened to be
+        saying -- `1°` against `352°`, an arrival time against a dash, the
+        advice line present or absent -- so it breathed in and out beside a
+        chart that does not, several times a minute. That is the same fault the
+        instrument strip had: a layout that is a function of the data. It is
+        the column's width now at both sizes, and the text wraps inside it.
+      */}
       <Card
-        style={{ minWidth: COMPACT_COLUMN }}
-        className="pointer-events-auto max-w-[min(88vw,300px)] gap-0 px-3 py-1.5 text-center backdrop-blur-md bg-card/85"
+        style={{ width: compact ? COMPACT_COLUMN : PANEL_COLUMN }}
+        className="pointer-events-auto gap-0 px-3 py-1.5 text-center backdrop-blur-md bg-card/85"
       >
         <div ref={line} className="font-mono text-[15px] leading-none tabular-nums text-info" />
         <div ref={advice} className="mt-1 text-[10px] text-muted-foreground empty:hidden" />
