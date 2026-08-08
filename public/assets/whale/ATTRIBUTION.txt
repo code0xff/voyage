@@ -1,0 +1,21 @@
+Humpback whale
+
+Creator: eelislay
+Creator profile: https://sketchfab.com/eelislay
+Original model: https://sketchfab.com/3d-models/humpback-whale-d3f5039a8c624e099724dd7bcd51a680
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+License text: https://creativecommons.org/licenses/by/4.0/
+
+Changes made, as CC BY 4.0 requires them to be stated:
+
+  * The mesh is compressed with EXT_meshopt_compression and its vertex
+    attributes are quantized (KHR_mesh_quantization). This is a change of
+    storage, not of shape: the same 1,554 vertices and 2,756 triangles, to
+    within the quantization step.
+  * The embedded textures are re-encoded from PNG to WebP at quality 88
+    (EXT_texture_webp). Same pixel dimensions; the encoding is lossy.
+  * Together these take the file from 821 kB to 119 kB.
+
+The model is also scaled, positioned and animated at runtime by voyage. Its
+geometry, its skinning and its animation are otherwise as downloaded, and
+nothing has been added to or removed from it.

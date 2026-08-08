@@ -1,9 +1,15 @@
 import * as THREE from 'three';
 import { MAX_WAVES, type WaveField } from '../sim/waves';
-import { MAX_ACTIVE_ISLANDS, WAKE_FADE, WAKE_MAX, type Terrain } from '../sim/terrain';
+import {
+  EMPTY_TERRAIN,
+  MAX_ACTIVE_ISLANDS,
+  WAKE_FADE,
+  WAKE_MAX,
+  type Terrain,
+} from '../sim/terrain';
 import { EDGE_FADE, type RegionTerrain } from '../sim/region-terrain';
 import type { SkyState } from '../sim/sky';
-import { compassVec } from '../sim/math';
+import { compassVec, smoothstep } from '../sim/math';
 
 /**
  * The wave surface.
@@ -484,6 +490,8 @@ export interface Water {
   setRegion(terrain: RegionTerrain | null): void;
   /** Re-upload the shelter channel if the wind has moved the field. */
   updateRegion(twd: number): void;
+  /** Height of the rendered water surface at a world point. */
+  surfaceHeight(x: number, y: number, waves: WaveField): number;
   /**
    * Where the spreader flood hangs and how lit it is, for the pool it throws.
    * @param height metres above the water; it sets the size of the pool
@@ -537,6 +545,10 @@ export function createWater(): Water {
   let field: THREE.DataTexture | null = null;
   /** The direction the shelter channel was written for, so it is not rewritten. */
   let fieldTwd: number | null = null;
+  let originX = 0;
+  let originY = 0;
+  let currentTwd = 0;
+  let physicsTerrain: Terrain = EMPTY_TERRAIN;
 
   const mat = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader });
   const mesh = new THREE.Mesh(geo, mat);
@@ -565,6 +577,7 @@ export function createWater(): Water {
       uniforms.uLamp.value.set(simX, simY, level, height);
     },
     setTerrain(terrain) {
+      physicsTerrain = terrain;
       for (let i = 0; i < MAX_ISLANDS; i++) {
         const isl = terrain.islands[i];
         // w is the landmass id plus one, so that zero can still mean "no island
@@ -653,6 +666,9 @@ export function createWater(): Water {
       // Snap to whole cells, otherwise the vertices slide and the water swims.
       const ox = Math.round(simX / quad) * quad;
       const oy = Math.round(simY / quad) * quad;
+      originX = ox;
+      originY = oy;
+      currentTwd = twd;
       uniforms.uOrigin.value.set(ox, oy);
       mesh.position.set(ox, 0, -oy);
       far.position.set(ox, FAR_Y, -oy);
@@ -692,6 +708,31 @@ export function createWater(): Water {
       uniforms.uSpecular.value = 0.25 + sky.daylight * 0.55 + sky.goldenness * 0.5;
       uniforms.uFogNear.value = visibility * 0.35;
       uniforms.uFogFar.value = visibility;
+    },
+    surfaceHeight(x, y, waves) {
+      // Exactly the vertex shader's edge and fade, on the same local
+      // coordinates: `position` there is the offset from uOrigin, which is what
+      // this subtraction gives. Anything drawn on the water reads its height
+      // from here for the same reason the boat reads it from waves.heightAt --
+      // a whale sitting on water that is not the water it is drawn on is the
+      // kind of divergence this shader's comments exist to prevent.
+      const dx = Math.abs(x - originX);
+      const dy = Math.abs(y - originY);
+      const edge = Math.max(dx, dy) / SIZE;
+      const shelter = region
+        ? region.waveShelter(x, y, currentTwd)
+        : physicsTerrain.waveShelter(x, y, currentTwd);
+      const fade = (1 - smoothstep(0.28, 0.49, edge)) * shelter;
+
+      // Beyond the grid the far plane is deliberately 0.35 m below it, so what
+      // floats out there must join that plane rather than stay at y = 0.
+      //
+      // Tested against the grid's own half-extent and not against the fade,
+      // which is the near-miss this replaces: the fade reaches zero at edge
+      // 0.4897 while the grid is drawn out to 0.5, so a 9 m band existed where
+      // the water was still drawn at h = 0 and this function was already
+      // answering -0.35. Whales spawn 220-560 m out and cross it.
+      return edge < 0.5 ? waves.heightAt(x, y) * fade : FAR_Y;
     },
     dispose() {
       geo.dispose();

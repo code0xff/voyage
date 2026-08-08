@@ -39,6 +39,8 @@ src/sim/     pure physics core -- no Three.js, no React, no browser APIs
   terrain    islands: depth field, wind shadow, wave shelter, grounding
   sky        time of day -- sun position, light and colour palettes
   weather    conditions that evolve on their own
+  wildlife   gulls: a bearing to land you can hear before you can see it
+  whales     seeded whale encounters, kept outside boat physics
   noise      deterministic value noise
   rng        the seeded stream, stirred so nearby seeds start apart
   polar      steady-state polar solver -- the physics validation tool
@@ -55,6 +57,8 @@ src/view/    3D rendering
              flat sea that carries it on to the horizon
   skydome    sky gradient and sun glow
   islands    island meshes, sampled from the same elevation field
+  creature   shared by the animal views: scaling, waterline, disposal
+  whale      humpback: dive cycle, blow and the ring it leaves
   rain       wind-slanted rain around the camera
   telemetry  rolling time-series graph
   polarplot  polar diagram, drawn with the UI design tokens
@@ -719,3 +723,30 @@ meaning anything.
 - No boat-to-boat collision.
 - The sun is not astronomical, and islands shadow the wind without bending it
   around headlands. Both are deliberate: see AGENTS.md.
+
+---
+
+## Credits
+
+Everything in this repository is written for it, with one exception. The whale
+you meet at sea is an authored model, used under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/):
+
+- **Humpback whale** — [eelislay](https://sketchfab.com/eelislay),
+  [model](https://sketchfab.com/3d-models/humpback-whale-d3f5039a8c624e099724dd7bcd51a680)
+
+It is redistributed in its converted GLB form under `public/assets/whale/`,
+beside an `ATTRIBUTION.txt` carrying the same notice. It is scaled, positioned
+and animated at runtime; its geometry and embedded textures are otherwise
+unmodified. It is not fetched when the page opens — only when the simulation
+first places a whale, which no passage is obliged to do.
+
+Using an authored asset at all is a reversal, and worth recording as one.
+Hand-modelled whales, dolphins and gulls were built early and all cut: a
+low-poly animal reads as geometry rather than as life, and a bad animal is worse
+than none, because it tells you the sea is a set. That argument was about
+*modelling* them and it still stands — which is exactly why this one is not
+modelled here. The gulls in `sim/wildlife.ts` never had the problem and never
+changed: they are sound, and there is nothing to draw.
+
+The sound is still entirely procedural. There are no audio assets.
