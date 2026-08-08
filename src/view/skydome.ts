@@ -40,9 +40,26 @@ const fragmentShader = /* glsl */ `
   uniform float uCloud;
   uniform float uDaylight;
   uniform float uStarAngle;
+  uniform float uRainbow;
   uniform vec2 uCloudDrift;
 
   varying vec3 vDir;
+
+  /** Inner edge to outer, violet through to red. */
+  vec3 spectrum(float t) {
+    vec3 c = mix(vec3(0.42, 0.12, 0.78), vec3(0.16, 0.36, 0.96), smoothstep(0.0, 0.28, t));
+    c = mix(c, vec3(0.20, 0.86, 0.38), smoothstep(0.26, 0.52, t));
+    c = mix(c, vec3(0.98, 0.92, 0.22), smoothstep(0.50, 0.72, t));
+    c = mix(c, vec3(1.00, 0.36, 0.10), smoothstep(0.70, 1.0, t));
+    return c;
+  }
+
+  /** Brightest in the middle of the band, gone at either edge. */
+  float band(float ang, float inner, float outer) {
+    float t = (ang - inner) / (outer - inner);
+    if (t <= 0.0 || t >= 1.0) return 0.0;
+    return sin(t * 3.14159265);
+  }
 
   float hash12(vec2 p) {
     vec3 q = fract(vec3(p.xyx) * 0.1031);
@@ -192,6 +209,44 @@ const fragmentShader = /* glsl */ `
     vec3 cloudCol = mix(shade, bright, lit);
     col = mix(col, cloudCol, cover);
 
+    /**
+     * The bow.
+     *
+     * Every angle here is measured from the antisolar point -- straight away
+     * from the sun -- because that is what a rainbow is centred on, and it is
+     * why you have to have the sun behind you to see one. Nothing about the
+     * geometry is a choice: 42 degrees for the primary, 51 for the secondary
+     * with its colours the other way round, and the sky between the two
+     * genuinely darker than the sky outside either, because no light comes back
+     * at those angles at all. That last one is Alexander's band, it has been
+     * known since about 200 AD, and it is the detail that makes a drawn bow
+     * stop looking like a decal.
+     *
+     * Drawn additively and over the cloud, which is where it belongs: the rain
+     * carrying it is a few hundred metres away and the deck is not.
+     */
+    if (uRainbow > 0.001) {
+      float ang = acos(clamp(dot(d, -normalize(uSunDir)), -1.0, 1.0));
+      float primary = band(ang, 0.7068, 0.7453);   // 40.5 .. 42.7 deg
+      float secondary = band(ang, 0.8814, 0.9483); // 50.5 .. 54.3 deg
+      // The arc runs into the sea at the horizon; the water shader knows
+      // nothing about it, so it has to end where the sky does.
+      float above = smoothstep(0.0, 0.035, d.y);
+      float k = uRainbow * above;
+
+      // Alexander's band, between the two arcs.
+      // Written as one-minus-smoothstep, not as a descending smoothstep:
+      // GLSL leaves the result undefined when edge0 >= edge1, and it is the
+      // kind of thing that works on the driver it was written against.
+      float inside = smoothstep(0.745, 0.79, ang) * (1.0 - smoothstep(0.86, 0.90, ang));
+      col *= 1.0 - 0.075 * k * inside;
+
+      col += spectrum((ang - 0.7068) / 0.0385) * primary * k * 0.42;
+      // Fainter, and washed towards white: the second reflection loses most of
+      // the light and what is left is spread over nearly twice the width.
+      col += mix(spectrum(1.0 - (ang - 0.8814) / 0.0669), vec3(0.8), 0.35) * secondary * k * 0.12;
+    }
+
     // Stars go on last, behind whatever cloud is actually in front of them --
     // the cover at this pixel rather than the sky's average cover, so a broken
     // night shows stars through the gaps and closes them again as the deck
@@ -214,7 +269,13 @@ export interface SkyDome {
    *        own `hour` wraps at midnight, and turning the stars with that would
    *        spin the whole field back through a day every night.
    */
-  update(sky: SkyState, cloud: number, elapsedHours: number, windTwd: number): void;
+  update(
+    sky: SkyState,
+    cloud: number,
+    elapsedHours: number,
+    windTwd: number,
+    rainbow: number,
+  ): void;
   dispose(): void;
 }
 
@@ -243,6 +304,7 @@ export function createSkyDome(): SkyDome {
     uCloud: { value: 0 },
     uDaylight: { value: 1 },
     uStarAngle: { value: 0 },
+    uRainbow: { value: 0 },
     uCloudDrift: { value: new THREE.Vector2() },
   };
   const mat = new THREE.ShaderMaterial({
@@ -260,7 +322,7 @@ export function createSkyDome(): SkyDome {
 
   return {
     mesh,
-    update(sky, cloud, elapsedHours, windTwd) {
+    update(sky, cloud, elapsedHours, windTwd, rainbow) {
       uniforms.uTop.value.setRGB(sky.skyTop[0], sky.skyTop[1], sky.skyTop[2]);
       uniforms.uHorizon.value.setRGB(sky.skyHorizon[0], sky.skyHorizon[1], sky.skyHorizon[2]);
       uniforms.uSunColor.value.setRGB(sky.sunColor[0], sky.sunColor[1], sky.sunColor[2]);
@@ -268,6 +330,7 @@ export function createSkyDome(): SkyDome {
       uniforms.uCloud.value = cloud;
       uniforms.uDaylight.value = sky.daylight;
       uniforms.uStarAngle.value = elapsedHours * SIDEREAL_RATE;
+      uniforms.uRainbow.value = rainbow;
       // Downwind: `twd` is where the wind comes *from*, and the cloud goes the
       // other way. Render coordinates put x east and z south, so a compass
       // bearing b is (sin b, -cos b) -- and the deck's own uv is that plane.

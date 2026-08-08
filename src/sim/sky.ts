@@ -218,6 +218,48 @@ export function phaseName(sky: SkyState): DayPhase {
   return 'midday';
 }
 
+/**
+ * Angular radius of the primary bow, from the antisolar point.
+ *
+ * This is not a tuned number and must not be treated as one: 42 degrees is
+ * where water refracts sunlight back at its minimum deviation, and it is the
+ * same 42 degrees over every ocean on earth. The renderer draws the arc there
+ * and nowhere else.
+ */
+export const RAINBOW_RADIUS = 42 * DEG;
+
+/**
+ * How strongly a rainbow shows, 0..1. Zero means there is none to draw.
+ *
+ * A rainbow is not a random event, which is exactly why it is worth having: it
+ * is what you get when the sun is behind you, rain is falling in front of you,
+ * and the sun is low enough that the arc clears the horizon. The randomness is
+ * in the weather, not here.
+ *
+ * The last of those three is the one people do not know and immediately
+ * recognise as right once they see it. The bow is centred on the antisolar
+ * point, which is as far below the horizon as the sun is above it -- so with
+ * the sun higher than 42 degrees the whole circle is underground and there is
+ * nothing to see. In this sky the sun peaks at 62, so midday is genuinely
+ * bowless and the arc belongs to morning and evening, standing highest when the
+ * sun is barely up.
+ */
+export function rainbowStrength(rain: number, cloud: number, sunElevation: number): number {
+  // Drops have to be in the air, and enough of them. Below this a shower is
+  // trailing off and there is nothing left for the light to work on.
+  const drops = clamp((rain - 0.1) / 0.22, 0, 1);
+  // ...and the sun has to be reaching them. `rain` and `squall` sit at 0.95
+  // cover and up, so this is what confines the bow to a broken sky.
+  const sun = clamp((0.72 - cloud) / 0.28, 0, 1);
+  const e = sunElevation;
+  // Just risen is not yet lighting anything; the sun has to be clear of the
+  // horizon haze before the arc has any colour in it.
+  const risen = clamp(e / (3 * DEG), 0, 1);
+  // And the arc sinks as the sun climbs, going altogether at 42.
+  const clears = clamp((RAINBOW_RADIUS - e) / (6 * DEG), 0, 1);
+  return drops * sun * risen * clears;
+}
+
 export function formatClock(hour: number): string {
   const h = wrapHour(hour);
   const hh = Math.floor(h);

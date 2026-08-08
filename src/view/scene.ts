@@ -8,7 +8,7 @@ import type { WaveField } from '../sim/waves';
 import type { Terrain } from '../sim/terrain';
 import type { RegionTerrain } from '../sim/region-terrain';
 import { createRegionView } from './region-mesh';
-import type { SkyState } from '../sim/sky';
+import { rainbowStrength, type SkyState } from '../sim/sky';
 import type { WeatherState } from '../sim/weather';
 import { createWater } from './water';
 import { createIslandView } from './islands';
@@ -570,7 +570,13 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     (scene.fog as THREE.Fog).near = f.visibility * 0.35;
     (scene.fog as THREE.Fog).far = f.visibility;
     // The mean wind, not the gust: a cloud deck does not shift with a puff.
-    skyDome.update(sky, f.weather.cloud, f.elapsedHours, wind.baseTwd);
+    skyDome.update(
+      sky,
+      f.weather.cloud,
+      f.elapsedHours,
+      wind.baseTwd,
+      rainbowStrength(f.weather.rain, f.weather.cloud, sky.sunElevation),
+    );
     islandView.update(sky);
     regionView.update(state.pos.x, state.pos.y, sky);
 

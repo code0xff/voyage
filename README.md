@@ -503,6 +503,21 @@ leading edge of a front. A passing shower — bright, brief, a hard gust under i
 and then gone — is one of the most common things that happens on the water, and
 it was missing.
 
+What it makes possible is a rainbow, and the bow is worth having precisely
+because it is not random. It is drawn on the sky dome at 42° from the antisolar
+point, with the secondary at 51° and its colours the other way round, and the
+sky between the two darker than the sky outside either — Alexander's band, known
+since about 200 AD, and the detail that stops a drawn bow looking like a decal.
+None of those numbers is tuned: they are where water refracts sunlight back at
+its minimum deviation, and they are the same over every ocean on earth.
+
+The consequence people notice is that there is no such thing as a midday
+rainbow. The arc is centred as far below the horizon as the sun is above it, so
+with this sky peaking at 62° the bow belongs to morning and evening and stands
+highest when the sun is barely up. Over thirty simulated days it shows eight
+times, for a median of 38 minutes of world time each — about half a minute of
+play at the default time scale.
+
 ### 9. The wind field
 
 A constant wind leaves the game with no tactics: find the optimum angle once and
