@@ -113,7 +113,7 @@ export const KEYS: [string, Phrase][] = [
   ['F / G', { en: 'furl / unfurl jib', ko: '집세일 말기 / 펴기' }],
   ['Y', { en: 'auto-reef', ko: '자동 리프' }],
   ['Q E', { en: 'mean wind direction', ko: '평균 풍향' }],
-  ['C', { en: 'camera', ko: '카메라' }],
+  ['C', { en: 'camera: astern / on deck / overhead', ko: '카메라: 뒤 / 갑판 / 위' }],
   ['0', { en: 'hand all sail / set again', ko: '돛 전부 거두기 / 다시 펴기' }],
   ['A', { en: 'let go / weigh anchor', ko: '닻 내리기 / 올리기' }],
   ['N / wheel on chart', { en: 'chart range', ko: '차트 축척' }],

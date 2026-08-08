@@ -20,6 +20,16 @@ export interface OrbitControl {
   readonly zoom: number;
   /** True while the eye is being dragged, so the scene can stop smoothing it. */
   readonly dragging: boolean;
+  /**
+   * Change what `pitch` is allowed to be, and pull the current value into it.
+   *
+   * What pitch *means* is the camera mode's business, and the modes disagree.
+   * Orbiting the boat it is the elevation of the eye above her, which is only
+   * ever positive -- looking up from underneath is not a view of anything.
+   * Standing on deck it is where the head is looking, which has to reach the
+   * masthead as well as the water alongside, so it runs either side of zero.
+   */
+  setPitchLimits(min: number, max: number, rest: number): void;
   reset(): void;
   dispose(): void;
 }
@@ -46,6 +56,10 @@ function clamp(v: number, lo: number, hi: number): number {
 export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
   let yaw = 0;
   let pitch = DEFAULT_PITCH;
+  let minPitch = MIN_PITCH;
+  let maxPitch = MAX_PITCH;
+  /** Where a reset puts the pitch. Level on deck, over the boat from astern. */
+  let restPitch = DEFAULT_PITCH;
   let zoom = 1;
 
   let dragging = -1; // pointerId, or -1
@@ -73,7 +87,7 @@ export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
     // Drag right and the boat turns right on screen, i.e. the eye goes the
     // other way -- the scene follows the hand, as in any orbit control.
     yaw -= dx * YAW_PER_PX;
-    pitch = clamp(pitch + dy * PITCH_PER_PX, MIN_PITCH, MAX_PITCH);
+    pitch = clamp(pitch + dy * PITCH_PER_PX, minPitch, maxPitch);
   };
 
   const endDrag = (e: PointerEvent) => {
@@ -93,7 +107,10 @@ export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
 
   const onDouble = () => {
     yaw = 0;
-    pitch = DEFAULT_PITCH;
+    // The mode's resting pitch, not the orbit's: on deck that is zero, which is
+    // level with the horizon, and the orbit default would open the view
+    // staring into the sky.
+    pitch = clamp(restPitch, minPitch, maxPitch);
     zoom = 1;
   };
 
@@ -121,6 +138,12 @@ export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
     },
     get dragging() {
       return dragging !== -1;
+    },
+    setPitchLimits(min, max, rest) {
+      minPitch = min;
+      maxPitch = max;
+      restPitch = rest;
+      pitch = clamp(pitch, min, max);
     },
     reset: onDouble,
     dispose() {

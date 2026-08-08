@@ -479,8 +479,62 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   rudderPivot.add(rudder);
   heelGroup.add(rudderPivot);
 
+  /**
+   * Where you stand, as an object on the boat.
+   *
+   * On `heelGroup` rather than computed, so heel, pitch, heave, yaw and the
+   * lever arm between them all arrive through the scene graph for free. Getting
+   * there by hand would mean writing the same rotation out twice and waiting to
+   * find out which copy was wrong.
+   *
+   * At the stemhead, 0.7 m abaft the bow, and there for one reason: it is the
+   * only place aboard with a clear view. This started at the helm, which is
+   * where you would actually sail her from, and the boom runs from the mast at
+   * -1.2 back to +3.0 -- so the cockpit sits directly under the mainsail and
+   * half the screen is cloth. Forward of the mast is no better: the jib is cut
+   * to a clew 6.6 m abaft its tack, so it reaches to +1.6 and walls off the
+   * leeward side from anywhere on the foredeck. Tried at +2.6, -2.4 and -3.5,
+   * and a sail filled half the frame at every one of them.
+   *
+   * Which is what a sailing boat is like, and why the view has to be from the
+   * very bow: both sails are then behind you and there is nothing but sea. Turn
+   * the head and the whole rig is there.
+   */
+  const eye = new THREE.Object3D();
+  eye.position.set(0, DECK_Y + 1.45, -4.3);
+  heelGroup.add(eye);
+
   // --- Camera -------------------------------------------------------------
-  let camMode = 0; // 0 = chase, 1 = top-down
+  const CHASE = 0;
+  const BOW = 1;
+  const TOPDOWN = 2;
+  let camMode = CHASE;
+
+  /**
+   * How much of the boat's rotation the head takes, standing on deck.
+   *
+   * Not all of it, and this is the one number in the mode that is a judgement
+   * rather than a measurement. A camera bolted rigidly to a hull heeled at 27
+   * degrees puts the horizon 27 degrees off level and holds it there, which is
+   * both sickening and *wrong*: a helmsman braces and their head stays nearer
+   * upright than the boat does. Taking none of it is worse -- the heel is the
+   * thing you are there to feel.
+   *
+   * Pitch is taken more fully than roll because it is transient. She pitches
+   * through a wave in a second or two and the eye rides it; she heels for the
+   * whole beat and the neck argues with it the entire time.
+   *
+   * The fraction is measured rather than picked. What makes a view sickening is
+   * angular *rate*, not angle, so the boat was sailed headless in a seaway and
+   * the roll rate at the eye read off. Beating in 22 knots -- her worst case,
+   * because by 32 she is pinned over at 39 degrees and barely oscillates at all
+   * -- the view swings at 15 deg/s at the 95th percentile and peaks at 18.5.
+   * Taking 0.6 of it brings that to 9.0 and 11.1, which is inside what a camera
+   * nobody is steering can do without making people ill. Pitch never exceeds
+   * 7 deg/s even untouched, which is why it can afford 0.8.
+   */
+  const HEAD_ROLL = 0.6;
+  const HEAD_PITCH = 0.8;
   const camPos = new THREE.Vector3(0, 14, 30);
   const camTarget = new THREE.Vector3();
   // Scratch for the spreader lamp's world position, read every frame.
@@ -686,7 +740,35 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     // across the ocean for several seconds showing nothing. Snap instead.
     const jumped = camTarget.distanceTo(new THREE.Vector3(bx, 3, bz)) > 150;
 
-    if (camMode === 0) {
+    if (camMode === BOW) {
+      /*
+       * From the bow.
+       *
+       * Position is exact -- the eye's world position off the scene graph, so
+       * she lifts you over a crest and drops you into the trough with her, and
+       * the roll swings you out to windward because the eye is 2.5 m above the
+       * axis she rolls about. Translation is not what makes a view sickening.
+       *
+       * Orientation is built rather than taken, because that is where the
+       * stabilisation lives. Heading is hers entirely; heel and pitch are hers
+       * in part; the look-around is added on top of all of it, so a head turned
+       * to leeward stays turned to leeward as she comes up.
+       */
+      boat.updateMatrixWorld(true);
+      eye.getWorldPosition(camPos);
+
+      const q = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(
+          state.pitch * HEAD_PITCH + orbit.pitch,
+          -state.heading + orbit.yaw,
+          -state.heel * HEAD_ROLL,
+          'YXZ',
+        ),
+      );
+      camera.position.copy(camPos);
+      camera.quaternion.copy(q);
+      camTarget.copy(camPos).add(new THREE.Vector3(0, 0, -1).applyQuaternion(q));
+    } else if (camMode === CHASE) {
       // Spherical about the boat, so the mouse can swing the eye anywhere
       // around her. Azimuth is measured from dead astern and added to the
       // heading, which is what keeps a chosen view fixed relative to the boat
@@ -715,21 +797,30 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       // instead. Sim y is north, three z is south, hence the negation.
       const minY = waves.heightAt(camPos.x, -camPos.z) + 2;
       if (camPos.y < minY) camPos.y = minY;
-    } else {
+    } else if (camMode === TOPDOWN) {
       camPos.lerp(
         new THREE.Vector3(bx, 120 * orbit.zoom, bz + 0.01),
         jumped ? 1 : 1 - Math.exp(-dt / 0.3),
       );
       camTarget.lerp(new THREE.Vector3(bx, 0, bz), jumped ? 1 : 1 - Math.exp(-dt / 0.3));
     }
-    camera.position.copy(camPos);
-    camera.lookAt(camTarget);
+    if (camMode !== BOW) {
+      camera.position.copy(camPos);
+      camera.lookAt(camTarget);
+    }
     skyDome.mesh.position.copy(camPos);
     rain.update(f.weather.rain, wind.baseTws, wind.baseTwd, camera, dt);
 
     // Which lamps the camera can see depends on where it is round the boat,
     // because the sidelights are sectored the way the real ones are.
-    const camBearing = Math.atan2(camPos.x - bx, -(camPos.z - bz)) - state.heading;
+    // Standing on her the eye is a few feet abaft her own sidelights, so the
+    // sectors are read from dead astern of them. Left to the formula below it
+    // would be an atan2 of two numbers that are both nearly zero, and the
+    // lights would flicker between sectors as she moved under you.
+    const camBearing =
+      camMode === BOW
+        ? Math.PI
+        : Math.atan2(camPos.x - bx, -(camPos.z - bz)) - state.heading;
     boatLights.update(lamp, camBearing);
 
     // Where the spreader flood actually hangs, taken off the scene graph rather
@@ -748,7 +839,12 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     render,
     resize,
     toggleCamera() {
-      camMode = (camMode + 1) % 2;
+      camMode = (camMode + 1) % 3;
+      // Pitch means something different on deck -- see setPitchLimits.
+      // Level on deck, and reaching from the masthead to the water alongside.
+      if (camMode === BOW) orbit.setPitchLimits(-0.9, 1.1, 0);
+      else orbit.setPitchLimits(0.02, 1.45, 0.3);
+      orbit.reset();
     },
     setRegion(terrain) {
       regionView.setRegion(terrain);
