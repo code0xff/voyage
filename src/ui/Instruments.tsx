@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -257,21 +258,35 @@ function Helm() {
  *
  * **A fixed grid and a fixed width, not `flex-wrap`.** Wrapping reflowed on the
  * data: `-96°` is wider than `-9°` and `100°` than `9°`, so the strip jumped
- * between two rows and four as the boat sailed. A panel that changes shape
- * while you are reading it is worse than one that is slightly too big, and this
- * one was doing it several times a minute. Two columns and three rows, always,
- * whatever the numbers say.
+ * between two rows and four as the boat sailed, and a panel that changes shape
+ * while you read it is worse than one that is slightly too big. Two columns and
+ * three rows, always, whatever the numbers say.
+ *
+ * Foldable, because it still covers the top of a phone. Tapping it puts it away
+ * -- the card itself, since it has nothing else a tap could mean -- and leaves
+ * the one number worth having at a glance.
  */
 function CompactInstruments() {
+  const [open, setOpen] = useState(true);
+  const t = useT();
+  const speed = (s: Snapshot) => (s.diag ? msToKnots(s.diag.speed).toFixed(1) : '--');
   return (
-    <Card className="pointer-events-auto w-[168px] gap-0 px-2.5 py-1.5 backdrop-blur-md bg-card/85">
-      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-        <Gauge label="BSP" unit="kn" emphasis read={(s) => (s.diag ? msToKnots(s.diag.speed).toFixed(1) : '--')} />
-        <Gauge label="TWA" read={(s) => (s.diag ? deg(s.diag.twa * RAD) : '--')} />
-        <Gauge label="HDG" read={(s) => deg(wrap2Pi(s.state.heading) * RAD)} />
-        <Gauge label="Heel" read={(s) => `${(s.state.heel * RAD).toFixed(0)}°`} />
-        <Gauge label="Depth" unit="m" read={(s) => (s.clearance > 90 ? '--' : s.depth.toFixed(0))} />
-      </div>
+    <Card
+      onClick={() => setOpen((v) => !v)}
+      className="pointer-events-auto w-[168px] cursor-pointer gap-0 px-2.5 py-1.5 backdrop-blur-md bg-card/85"
+      title={t(open ? PANEL.fold : PANEL.unfold)}
+    >
+      {open ? (
+        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+          <Gauge label="BSP" unit="kn" emphasis read={speed} />
+          <Gauge label="TWA" read={(s) => (s.diag ? deg(s.diag.twa * RAD) : '--')} />
+          <Gauge label="HDG" read={(s) => deg(wrap2Pi(s.state.heading) * RAD)} />
+          <Gauge label="Heel" read={(s) => `${(s.state.heel * RAD).toFixed(0)}°`} />
+          <Gauge label="Depth" unit="m" read={(s) => (s.clearance > 90 ? '--' : s.depth.toFixed(0))} />
+        </div>
+      ) : (
+        <Gauge label="BSP" unit="kn" emphasis read={speed} />
+      )}
     </Card>
   );
 }

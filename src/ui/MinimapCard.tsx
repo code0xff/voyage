@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Crosshair, Maximize2, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Crosshair, Maximize2, X } from 'lucide-react';
 import { RANGES, createMinimap } from '@/view/minimap';
 import { CRUISER } from '@/sim/config';
 import { formatDistance } from '@/sim/units';
@@ -116,6 +116,16 @@ export function MinimapCard({
    */
   const pan = useRef<Vec2 | null>(null);
   const [panned, setPanned] = useState(false);
+  /**
+   * Folded, on a small screen.
+   *
+   * The chart is the one panel worth keeping on a phone and it still covers a
+   * corner of it. Folding leaves the header -- the range, and the button to
+   * bring it back -- which is a strip rather than a card, and the full-screen
+   * view is still one tap from there.
+   */
+  const [folded, setFolded] = useState(false);
+  const shut = compact && folded && !full;
 
   const recentre = useCallback(() => {
     pan.current = null;
@@ -310,6 +320,18 @@ export function MinimapCard({
           >
             {full ? <X /> : <Maximize2 />}
           </Button>
+          {compact && !full && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 w-5 p-0 [&_svg]:size-3"
+              aria-label={t(shut ? PANEL.unfoldChart : PANEL.foldChart)}
+              title={t(shut ? PANEL.unfoldChart : PANEL.foldChart)}
+              onClick={() => setFolded((v) => !v)}
+            >
+              {shut ? <ChevronDown /> : <ChevronUp />}
+            </Button>
+          )}
         </div>
       </div>
       {/*
@@ -337,7 +359,16 @@ export function MinimapCard({
         onWheel={onWheel}
         title="Click to set where you are bound · drag to look around · double-click to recentre · right-click to clear · wheel or N for range"
         className="block cursor-crosshair touch-none"
-        style={{ width: size, height: size }}
+        /*
+         * `display` inline rather than a `hidden` attribute or class. The
+         * canvas carries `block`, and a class beats the UA stylesheet's
+         * `[hidden]` -- the chart folded in the markup and stayed on screen.
+         * It also stays mounted while folded: the effect that sizes it and
+         * sets the device-ratio transform is keyed on the engine and the size,
+         * so a canvas that unmounted and came back would never be given
+         * either, and would come back blank.
+         */
+        style={{ width: size, height: size, display: shut ? 'none' : 'block' }}
       />
     </Card>
   );
