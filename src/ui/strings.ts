@@ -315,11 +315,21 @@ export const WORLD: Record<string, Phrase> = {
     ko: '근사값이며, 실제 항해에 쓸 수 없습니다.',
   },
   seed: { en: 'World seed', ko: '월드 시드' },
+  /**
+   * A region's land is surveyed and cannot vary, so nothing the seed does is
+   * about the world. Calling it the world seed there promises a different
+   * coast and delivers a different Tuesday.
+   */
+  seedRegion: { en: 'Conditions seed', ko: '조건 시드' },
   seedNew: { en: 'New each time', ko: '매번 새로' },
   seedPinned: { en: 'Pinned', ko: '고정' },
   venueNote: {
     en: 'A venue brings its own land, breeze and tide, so the island slider stands down. The stream runs hardest in deep water and gives up in the shallows — which is where the wind gives up too.',
     ko: '베뉴는 자체 육지와 바람, 조류를 가져오므로 섬 슬라이더는 물러납니다. 조류는 깊은 물에서 가장 세고 얕은 곳에서 사그라드는데, 바람도 바로 그곳에서 사그라듭니다.',
+  },
+  regionNote: {
+    en: 'The coast and the depths here are surveyed and never change — the seed does not move them. What it does set is the sea you sail over them: where the puffs and the shifts fall, and how the weather turns. Pin it to sail the same day twice.',
+    ko: '이곳의 해안과 수심은 실측이라 절대 바뀌지 않습니다 — 시드가 그걸 옮기지는 못합니다. 시드가 정하는 것은 그 위를 지나는 바다입니다: 돌풍과 풍향 변화가 어디에 떨어지는지, 날씨가 어떻게 변해가는지. 같은 하루를 다시 항해하려면 고정하세요.',
   },
   oceanNote: {
     en: 'The ocean has no edge: islands keep coming over the horizon for as long as you sail. Their lee is flat water but almost no wind, and the shoals around them will stop you dead. Pin the seed to sail the same water twice.',

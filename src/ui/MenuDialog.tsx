@@ -560,7 +560,7 @@ export function MenuDialog({
             )}
             <div className="grid grid-cols-[104px_1fr] items-center gap-3">
               <span className="text-[11px] text-muted-foreground">
-                {t(WORLD.seed)}
+                {t(settings.region ? WORLD.seedRegion : WORLD.seed)}
               </span>
               <div className="flex gap-2">
                 <input
@@ -582,7 +582,16 @@ export function MenuDialog({
               </div>
             </div>
             <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
-              {settings.venue ? t(WORLD.venueNote) : t(WORLD.oceanNote)}
+              {/* Three worlds, three notes. This read `venue ? … : …`, and a
+                  region sets `venue` to '' -- so picking a surveyed coast
+                  produced the procedural ocean's copy, promising that islands
+                  would keep coming over the horizon at a place whose coastline
+                  is fixed and measured. */}
+              {settings.region
+                ? t(WORLD.regionNote)
+                : settings.venue
+                  ? t(WORLD.venueNote)
+                  : t(WORLD.oceanNote)}
             </p>
           </TabsContent>
 
