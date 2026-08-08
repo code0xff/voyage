@@ -48,6 +48,7 @@ import {
 import { hoursUntilSunset, skyState, type SkyState } from './sim/sky';
 import { Wildlife } from './sim/wildlife';
 import { WhaleField } from './sim/whales';
+import { SharkField } from './sim/sharks';
 import { Weather } from './sim/weather';
 import { currentVec, windMs, type Settings } from './settings';
 import { Input } from './input';
@@ -222,6 +223,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   const weather = new Weather(settings.seed, 'fair');
   const wildlife = new Wildlife(settings.seed);
   const whales = new WhaleField(settings.seed);
+  const sharks = new SharkField(settings.seed);
 
   // Reused every physics step; allocating per step would keep the GC busy at 120 Hz.
   const hullWave: HullWaveSample = { heave: 0, pitchSlope: 0, rollSlope: 0 };
@@ -626,6 +628,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     wind.reseed(current.seed);
     wildlife.reseed(current.seed);
     whales.reseed(current.seed);
+    sharks.reseed(current.seed);
     // A new session starts with the sea its weather implies, not the one the
     // last session left behind.
     // Seeded from the same relative wind the step uses, not from the breeze
@@ -801,6 +804,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       sound.gullCall(d, ev.strength, weather.state.fog);
     }
     whales.update(PHYS_DT, state.pos, query, state.heading);
+    sharks.update(PHYS_DT, state.pos, query, state.heading);
 
     diag = step(state, cfg, env, ctl, PHYS_DT, { sea, anchored });
     snapshot.diag = diag;
@@ -994,6 +998,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       lightsOn: snapshot.lightsOn,
       session,
       whales: whales.events,
+      sharks: sharks.events,
       dt,
     });
   }

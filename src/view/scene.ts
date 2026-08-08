@@ -17,7 +17,9 @@ import { createSkyDome } from './skydome';
 import { createBoatLights, lampLevel } from './lights';
 import { createOrbit } from './orbit';
 import type { WhaleSighting } from '../sim/whales';
+import type { SharkSighting } from '../sim/sharks';
 import { createWhaleView } from './whale';
+import { createSharkView } from './shark';
 
 /**
  * Scene assembly.
@@ -61,6 +63,7 @@ export interface FrameInput {
   session: number;
   /** Rare environmental encounters, kept outside the boat physics. */
   whales: readonly WhaleSighting[];
+  sharks: readonly SharkSighting[];
   dt: number;
 }
 
@@ -310,6 +313,8 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
 
   const whaleView = createWhaleView();
   scene.add(whaleView.group);
+  const sharkView = createSharkView();
+  scene.add(sharkView.group);
 
   const rain = createRain();
   scene.add(rain.object);
@@ -611,6 +616,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     // only read it, and a fresh object literal per frame is garbage the render
     // loop does not need to be making.
     whaleView.update(f.whales, state.pos, water, waves, f.session, sky, f.visibility, dt);
+    sharkView.update(f.sharks, state.pos, water, waves, f.session, f.visibility, dt);
 
     // The boat floats on the waves; heave, pitch and heel all come from the
     // integrated physics state.
@@ -878,6 +884,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       islandView.dispose();
       regionView.dispose();
       whaleView.dispose();
+      sharkView.dispose();
       rain.dispose();
       skyDome.dispose();
       renderer.dispose();

@@ -41,6 +41,7 @@ src/sim/     pure physics core -- no Three.js, no React, no browser APIs
   weather    conditions that evolve on their own
   wildlife   gulls: a bearing to land you can hear before you can see it
   whales     seeded whale encounters, kept outside boat physics
+  sharks     seeded shark encounters, kept outside boat physics
   noise      deterministic value noise
   rng        the seeded stream, stirred so nearby seeds start apart
   polar      steady-state polar solver -- the physics validation tool
@@ -57,8 +58,9 @@ src/view/    3D rendering
              flat sea that carries it on to the horizon
   skydome    sky gradient and sun glow
   islands    island meshes, sampled from the same elevation field
-  creature   shared by the animal views: scaling, waterline, disposal
+  creature   what the two animal views share: scaling, waterline, disposal
   whale      humpback: dive cycle, blow and the ring it leaves
+  shark      a fin holding its course across yours
   rain       wind-slanted rain around the camera
   telemetry  rolling time-series graph
   polarplot  polar diagram, drawn with the UI design tokens
@@ -728,24 +730,30 @@ meaning anything.
 
 ## Credits
 
-Everything in this repository is written for it, with one exception. The whale
-you meet at sea is an authored model, used under
+Everything in this repository is written for it, with two exceptions. The
+animals you meet at sea are authored models, used under
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/):
 
 - **Humpback whale** — [eelislay](https://sketchfab.com/eelislay),
   [model](https://sketchfab.com/3d-models/humpback-whale-d3f5039a8c624e099724dd7bcd51a680)
+- **Shark** — [eelislay](https://sketchfab.com/eelislay),
+  [model](https://sketchfab.com/3d-models/shark-1b45eb40145a4cf981c601f5d9f168d3)
 
-It is redistributed in its converted GLB form under `public/assets/whale/`,
-beside an `ATTRIBUTION.txt` carrying the same notice. It is scaled, positioned
-and animated at runtime; its geometry and embedded textures are otherwise
-unmodified. It is not fetched when the page opens — only when the simulation
-first places a whale, which no passage is obliged to do.
+Both are redistributed in their converted GLB form under
+`public/assets/`, each beside an `ATTRIBUTION.txt` carrying the same notice.
+They are scaled, positioned and animated at runtime; their geometry and embedded
+textures are otherwise unmodified.
+
+Buying them out of the load is deliberate: neither is fetched when the page
+opens. The whale is requested when the simulation first places one, and the
+shark — 3.8 MB, the largest file here by some way, and an encounter many
+passages never produce — only when a shark is actually there to draw.
 
 Using an authored asset at all is a reversal, and worth recording as one.
 Hand-modelled whales, dolphins and gulls were built early and all cut: a
 low-poly animal reads as geometry rather than as life, and a bad animal is worse
 than none, because it tells you the sea is a set. That argument was about
-*modelling* them and it still stands — which is exactly why this one is not
+*modelling* them and it still stands — which is exactly why these two are not
 modelled here. The gulls in `sim/wildlife.ts` never had the problem and never
 changed: they are sound, and there is nothing to draw.
 

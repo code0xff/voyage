@@ -1,0 +1,19 @@
+Shark
+
+Creator: eelislay
+Creator profile: https://sketchfab.com/eelislay
+Original model: https://sketchfab.com/3d-models/shark-1b45eb40145a4cf981c601f5d9f168d3
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+License text: https://creativecommons.org/licenses/by/4.0/
+
+Changes made, as CC BY 4.0 requires them to be stated:
+
+  * The mesh is compressed with EXT_meshopt_compression and its vertex
+    attributes are quantized (KHR_mesh_quantization). This is a change of
+    storage, not of shape: the same 73,986 vertices and 30,020 triangles, to
+    within the quantization step. It takes the file from 3.9 MB to 509 kB.
+
+There are no textures to re-encode; this model is materials only. It is also
+scaled, positioned and animated at runtime by voyage. Its geometry, its
+skinning and its animation are otherwise as downloaded, and nothing has been
+added to or removed from it.

@@ -3,19 +3,25 @@ import { rng } from './rng';
 import type { TerrainQuery } from './terrain';
 
 /**
- * Gulls, and nothing else.
+ * Gulls: the wildlife you hear rather than see.
  *
- * There is no animal here with a body, and that is a decision rather than an
- * omission. Whales, dolphins and gulls were all built, and all three were cut
- * after being looked at: low-poly animals read as geometry, not as life, and a
- * bad animal is worse than none, because it tells you the sea is a set. The
- * whale went through three shapes -- flukes and a sounding arch, a long
- * capsule, a smooth low dome -- and not one of them was a whale.
+ * Nothing here has a body, and that is still a decision. Whales, dolphins and
+ * gulls were all *modelled by hand* early on, and all three were cut after
+ * being looked at: a low-poly animal reads as geometry, not as life, and a bad
+ * animal is worse than none, because it tells you the sea is a set. The whale
+ * went through three shapes -- flukes and a sounding arch, a long capsule, a
+ * smooth low dome -- and not one of them was a whale.
  *
- * What survives is the part that never had that problem. Near a shore you hear
- * gulls. Nothing to draw, nothing to get wrong, and it does real work: it is a
- * bearing to land you can hear before the haze gives it up, which is exactly
- * how you find a coast from a small boat. Open water stays silent.
+ * That argument was about modelling, and it has not been overturned; it has
+ * been sidestepped. `sim/whales.ts` and `sim/sharks.ts` now place encounters
+ * the player can see, drawn from authored, licensed assets that were never ours
+ * to get wrong. Nothing in this file changed, because the case for the gull was
+ * never that animals are unaffordable.
+ *
+ * What survives here is the part that never had the problem at all. Near a
+ * shore you hear gulls. Nothing to draw, nothing to get wrong, and it does real
+ * work: it is a bearing to land you can hear before the haze gives it up, which
+ * is exactly how you find a coast from a small boat. Open water stays silent.
  *
  * Seeded, so the same world sounds the same way -- the same rule the wind, the
  * weather and the islands already follow.
