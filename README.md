@@ -40,6 +40,7 @@ src/sim/     pure physics core -- no Three.js, no React, no browser APIs
   sky        time of day -- sun position, light and colour palettes
   weather    conditions that evolve on their own
   noise      deterministic value noise
+  rng        the seeded stream, stirred so nearby seeds start apart
   polar      steady-state polar solver -- the physics validation tool
   passage    where you are bound: bearing, VMC, ETA and the course to steer
   anchorage  whether a spot will hold her

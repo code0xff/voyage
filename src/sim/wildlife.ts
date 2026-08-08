@@ -1,4 +1,5 @@
 import { TAU, clamp, compassVec, type Vec2 } from './math';
+import { rng } from './rng';
 import type { TerrainQuery } from './terrain';
 
 /**
@@ -29,17 +30,6 @@ export interface WildlifeEvent {
 
 /** Gulls are audible within about this far of a shore, m. */
 const GULL_RANGE = 800;
-
-function rng(seed: number): () => number {
-  let s = (seed >>> 0) || 1;
-  return () => {
-    s ^= s << 13;
-    s ^= s >>> 17;
-    s ^= s << 5;
-    s >>>= 0;
-    return s / 4294967296;
-  };
-}
 
 export class Wildlife {
   /** Filled during update(), drained by whoever plays the sounds. */
