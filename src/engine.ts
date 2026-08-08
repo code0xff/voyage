@@ -210,7 +210,12 @@ const MAX_CATCHUP = 0.25;
 export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Engine {
   const cfg = CRUISER;
   const env: Environment = { ...DEFAULT_ENV };
-  const wind = new WindField(windMs(settings), 0, settings.gustiness);
+  // Seeded, which it was not. The fifth argument has a default and nobody was
+  // passing it, so the gusts and the shifts were laid out identically in every
+  // session anyone has ever sailed -- the same puff in the same place off the
+  // same headland, for ever. In a surveyed region, where the land cannot vary,
+  // that left the seed with nothing to change but the weather's rolls.
+  const wind = new WindField(windMs(settings), 0, settings.gustiness, undefined, settings.seed);
   const currents = new CurrentField({ peak: currentVec(settings) });
   const waves = new WaveField(windMs(settings), 0);
   const weather = new Weather(settings.seed, 'fair');
@@ -616,6 +621,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     session++;
     snapshot.session = session;
     weather.reseed(current.seed);
+    wind.reseed(current.seed);
     // A new session starts with the sea its weather implies, not the one the
     // last session left behind.
     // Seeded from the same relative wind the step uses, not from the breeze

@@ -104,3 +104,40 @@ describe('sail plan', () => {
   });
 });
 
+describe('the seed places the pattern', () => {
+  /**
+   * The regression this locks down: `WindField`'s seed argument has a default
+   * and the engine was not passing it, so every session ever sailed had the
+   * same puff in the same place. In a surveyed region, where the land cannot
+   * vary, that left the seed with nothing to change but the weather's rolls.
+   */
+  const patch = (seed: number) => {
+    const w = new WindField(knotsToMs(14), 0, 0.5, undefined, seed);
+    w.update(30);
+    const out: number[] = [];
+    for (let y = -500; y <= 500; y += 100)
+      for (let x = -500; x <= 500; x += 100) out.push(w.sample({ x, y }).gust);
+    return out;
+  };
+  const rms = (a: number[], b: number[]) =>
+    Math.sqrt(a.reduce((s, v, i) => s + (v - b[i]) ** 2, 0) / a.length);
+
+  it('gives the same sea for the same seed', () => {
+    expect(rms(patch(20260806), patch(20260806))).toBe(0);
+  });
+
+  it('gives a different sea for a different seed', () => {
+    // A tenth of the mean wind, against gusts that span about 0.88 to 1.17:
+    // this is a different pattern, not the same one nudged.
+    expect(rms(patch(20260806), patch(777))).toBeGreaterThan(0.02);
+  });
+
+  it('reseeds in place, so a new session is a new sea', () => {
+    const w = new WindField(knotsToMs(14), 0, 0.5, undefined, 20260806);
+    w.update(30);
+    const before = w.sample({ x: 100, y: 100 }).gust;
+    w.reseed(777);
+    w.update(30);
+    expect(w.sample({ x: 100, y: 100 }).gust).not.toBe(before);
+  });
+});

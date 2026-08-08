@@ -76,6 +76,22 @@ export class WindField {
     this.seed = seed;
   }
 
+  /**
+   * Sail a different sea.
+   *
+   * The seed places the puffs and the shifts, so it is what "the same water
+   * twice" actually means once the land is fixed -- in a surveyed region it is
+   * the only thing about the sailing that can vary at all. The drift is reset
+   * with it because it is an accumulated history of a pattern that no longer
+   * exists.
+   */
+  reseed(seed: number): void {
+    this.seed = seed;
+    this.driftX = 0;
+    this.driftY = 0;
+    this.t = 0;
+  }
+
   update(dt: number): void {
     this.t += dt;
     // Direction as well as speed: turn the mean wind and the pattern starts
