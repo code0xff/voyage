@@ -272,6 +272,16 @@ export const shift = (right: boolean, deg: string): Phrase => ({
   ko: `${right ? '우' : '좌'}로 풍향 변화 ${deg}°`,
 });
 
+/** The touch controls. Short, because they sit under a finger on a phone. */
+export const TOUCH: Record<string, Phrase> = {
+  helm: { en: 'Helm', ko: '조타' },
+  centre: { en: 'Centre the helm', ko: '타 중앙으로' },
+  autopilot: { en: 'Autopilot', ko: '오토파일럿' },
+  camera: { en: 'Camera', ko: '카메라' },
+  anchor: { en: 'Anchor', ko: '닻' },
+  menu: { en: 'Menu', ko: '메뉴' },
+};
+
 export const LOG: Record<string, Phrase> = {
   empty: {
     en: 'Nothing logged yet. Click the chart to say where you are bound, sail there, and let her arrive.',

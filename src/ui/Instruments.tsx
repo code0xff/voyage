@@ -248,6 +248,27 @@ function Helm() {
 }
 
 /** Auto-mode chips. These change rarely, so plain React state via a re-render is fine. */
+/**
+ * Five numbers and the clock.
+ *
+ * Chosen for what you cannot see by looking: speed, where the wind is, how hard
+ * she is pressed, and what is under the keel. Heading is there because a
+ * compass is the one thing the view genuinely cannot show you.
+ */
+function CompactInstruments() {
+  return (
+    <Card className="pointer-events-auto gap-0 px-2.5 py-1.5 backdrop-blur-md bg-card/85">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <Gauge label="BSP" unit="kn" emphasis read={(s) => (s.diag ? msToKnots(s.diag.speed).toFixed(1) : '--')} />
+        <Gauge label="TWA" read={(s) => (s.diag ? deg(s.diag.twa * RAD) : '--')} />
+        <Gauge label="HDG" read={(s) => deg(wrap2Pi(s.state.heading) * RAD)} />
+        <Gauge label="Heel" read={(s) => `${(s.state.heel * RAD).toFixed(0)}°`} />
+        <Gauge label="Depth" unit="m" read={(s) => (s.clearance > 90 ? '--' : s.depth.toFixed(0))} />
+      </div>
+    </Card>
+  );
+}
+
 function Modes() {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
@@ -279,8 +300,18 @@ function Modes() {
   return <div ref={ref} className="flex flex-wrap gap-1" />;
 }
 
-export function Instruments() {
+/**
+ * The panel, and a strip of it for a small screen.
+ *
+ * Compact is not the same panel scaled down -- at 390 px wide the full one
+ * squeezed to 156 and ran its values into its labels. It is a different
+ * selection: the five readings you steer by, and nothing you can look out of
+ * the window for. Everything cut is still on the full panel the moment there
+ * is room, and all of it is explained in the guide either way.
+ */
+export function Instruments({ compact = false }: { compact?: boolean }) {
   const t = useT();
+  if (compact) return <CompactInstruments />;
   const conditions = useReadout<HTMLSpanElement>(
     (s) =>
       `${formatClock(s.sky.hour)} · ${t(DAY_PHASE[phaseName(s.sky)])} · ${t(

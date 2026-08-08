@@ -154,6 +154,17 @@ export interface Engine {
   setPaused(paused: boolean): void;
   applySettings(s: Settings): void;
   toggleCamera(): void;
+  /**
+   * Put the helm somewhere, -1 to 1.
+   *
+   * For a tiller you drag rather than a key you hold. The keys move the helm at
+   * a rate and it stays where they leave it; a slider *is* where it was left,
+   * so it sets the angle instead of nudging it. Taking the pilot off is the
+   * same rule the keys follow -- a hand on the helm is a hand on the helm.
+   */
+  setHelm(v: number): void;
+  /** Press a binding from something that is not a keyboard. See `Input.inject`. */
+  press(key: string): void;
   recomputePolar(): void;
   resize(): void;
   dispose(): void;
@@ -1020,6 +1031,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     },
     applySettings,
     toggleCamera: () => view.toggleCamera(),
+    setHelm(v) {
+      // A hand on the helm takes her off the pilot, exactly as the keys do.
+      if (pilot.mode !== 'off') pilot.mode = 'off';
+      ctl.rudder = clamp(v, -1, 1);
+    },
+    press: (key) => input.inject(key),
     recomputePolar: () => schedulePolar(0),
     resize: () => view.resize(),
     dispose() {

@@ -181,6 +181,20 @@ export class Input {
     return this.axis(['[', '-'], [']', '=']);
   }
 
+  /**
+   * Press a key that nobody pressed.
+   *
+   * For the touch controls, which have no keyboard to press. Everything the
+   * game can be told to do is already a binding read out of `pressed` once a
+   * frame, so injecting there means a touch button reaches reefing, the
+   * autopilot, the camera and the anchor without the engine loop growing a
+   * second way to hear about any of them. Cleared by `endFrame` like a real
+   * press, so it fires once.
+   */
+  inject(key: string): void {
+    this.pressed.add(key);
+  }
+
   wasPressed(key: string): boolean {
     return this.pressed.has(key);
   }

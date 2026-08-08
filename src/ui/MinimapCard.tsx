@@ -75,7 +75,15 @@ const DRAG_SLOP = 4;
  * two raster caches, two traced outlines, and a track that only one of them
  * had been recording.
  */
-export function MinimapCard({ full, onFull }: { full: boolean; onFull: (v: boolean) => void }) {
+export function MinimapCard({
+  full,
+  onFull,
+  compact = false,
+}: {
+  full: boolean;
+  onFull: (v: boolean) => void;
+  compact?: boolean;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
   const t = useT();
   const engine = useEngine();
@@ -93,7 +101,9 @@ export function MinimapCard({ full, onFull }: { full: boolean; onFull: (v: boole
     return () => window.removeEventListener('resize', onResize);
   }, [full]);
 
-  const size = full ? big : SIZE;
+  // Smaller on a phone, where the roomy card and the polar together covered
+  // 62% of the display. The full view is a tap away and loses nothing.
+  const size = full ? big : compact ? 116 : SIZE;
 
   /**
    * Where the chart is held, or null while it follows the boat.
@@ -240,9 +250,11 @@ export function MinimapCard({ full, onFull }: { full: boolean; onFull: (v: boole
       className={
         full
           ? 'pointer-events-auto gap-0 p-3 backdrop-blur-md bg-card/95 shadow-lg'
-          : 'pointer-events-auto w-[232px] gap-0 p-3 backdrop-blur-md bg-card/85'
+          : compact
+            ? 'pointer-events-auto gap-0 p-2.5 backdrop-blur-md bg-card/85'
+            : 'pointer-events-auto w-[232px] gap-0 p-3 backdrop-blur-md bg-card/85'
       }
-      style={full ? { width: size + 24 } : undefined}
+      style={full ? { width: size + 24 } : compact ? { width: size + 20 } : undefined}
     >
       <div className="flex items-center justify-between gap-2 pb-1.5">
         <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -252,8 +264,17 @@ export function MinimapCard({ full, onFull }: { full: boolean; onFull: (v: boole
           <Badge variant="outline" className="px-1.5 py-0 text-[9px] font-normal tabular-nums">
             {/* The gap is a class, not a space: prettier wraps this line and JSX
                 eats whitespace that ends up next to a newline. */}
-            {RANGES[range]} m · {t(PANEL.run)}
-            <span ref={runLabel} className="ml-1" />
+            {/* The distance run goes on a phone: the badge is 116 px wide
+                there and wrapped the range onto three lines. The range is what
+                the chart cannot be read without. */}
+            {RANGES[range]} m
+            {!compact && (
+              <>
+                {' · '}
+                {t(PANEL.run)}
+                <span ref={runLabel} className="ml-1" />
+              </>
+            )}
           </Badge>
           {/* Only in the full view, where there is room for it and where the
               hint is worth having: this is the one panel that takes the whole

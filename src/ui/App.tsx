@@ -10,6 +10,8 @@ import { logbook } from "@/logbook";
 import { HintBar } from "./HintBar";
 import { MinimapCard } from "./MinimapCard";
 import { PassageBar } from "./PassageBar";
+import { TouchControls } from "./TouchControls";
+import { useViewport } from "./viewport";
 
 /**
  * The app shell.
@@ -48,6 +50,7 @@ export function App() {
    * one question the moment an import or a delete touched only one of them.
    */
   const [logVersion, setLogVersion] = useState(0);
+  const { compact, touch } = useViewport();
 
   // Keep the latest settings reachable from the engine callbacks without
   // re-creating the engine on every keystroke.
@@ -142,10 +145,10 @@ export function App() {
 
         {engine && (
           <EngineProvider value={engine}>
-            <div className="pointer-events-none absolute inset-0 p-3">
+            <div className="pointer-events-none absolute inset-0 p-2 sm:p-3">
               <div className="flex h-full flex-col">
-                <div className="flex items-start justify-between gap-3">
-                  <Instruments />
+                <div className="flex items-start justify-between gap-2 sm:gap-3">
+                  <Instruments compact={compact} />
                   {/* The passage sits here, in the middle at the top, because
                     where you are bound is the question the whole screen is
                     arranged around once there is somewhere to be. */}
@@ -168,14 +171,29 @@ export function App() {
                   Here the two reference panels sit together and the two live
                   ones -- instruments and hint bar -- sit opposite, and the
                   chart grows downward into space the layout knows is free.
+
+                  On a small screen only the chart survives. Measured at
+                  390x844 the pair hung 32 px off the right and covered 62% of
+                  the display between them, and of the two it is the chart that
+                  answers a question you cannot answer by looking outside. The
+                  polar is reference, and reference is what a phone gives up
+                  first -- it is still there the moment the window is bigger.
                 */}
                   <div className="flex flex-col items-end gap-3">
-                    <PolarCard />
-                    <MinimapCard full={chartFull} onFull={setChartFull} />
+                    {!compact && <PolarCard />}
+                    <MinimapCard full={chartFull} onFull={setChartFull} compact={compact} />
                   </div>
                 </div>
-                <div className="mt-auto flex items-end">
-                  <HintBar />
+                <div className="mt-auto flex flex-col items-stretch gap-2">
+                  {/* The hint bar goes when the tiller comes: one line of prose
+                      and a control that wants a thumb are competing for the
+                      same strip of screen, and the control wins. */}
+                  {!(compact && touch) && (
+                    <div className="flex items-end">
+                      <HintBar />
+                    </div>
+                  )}
+                  {touch && <TouchControls onMenu={() => setMenuOpen(true)} />}
                 </div>
               </div>
             </div>
