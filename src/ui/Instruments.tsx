@@ -8,7 +8,7 @@ import { CRUISER } from '@/sim/config';
 import { msToKnots } from '@/sim/units';
 import { phaseName, formatClock } from '@/sim/sky';
 import { useT } from './i18n';
-import { DAY_PHASE, PANEL, WEATHER } from './strings';
+import { ALERT, DAY_PHASE, PANEL, WEATHER, lull, puff, shift, shoal } from './strings';
 import type { Snapshot } from '@/engine';
 import { useEngineFrame, useReadout } from './engine-context';
 import { TelemetryCard } from './TelemetryCard';
@@ -55,25 +55,27 @@ function Alerts() {
     const msgs: { text: string; tone: 'warn' | 'bad' | 'info' }[] = [];
     const w = s.wind.sample(s.state.pos);
 
-    if (s.clearance < 0) msgs.push({ text: 'AGROUND', tone: 'bad' });
-    else if (s.clearance < 3) msgs.push({ text: `SHOAL — ${s.clearance.toFixed(1)} m under keel`, tone: 'bad' });
+    if (s.clearance < 0) msgs.push({ text: t(ALERT.aground), tone: 'bad' });
+    else if (s.clearance < 3)
+      msgs.push({ text: t(shoal(s.clearance.toFixed(1))), tone: 'bad' });
 
-    if (w.exposure < 0.75) msgs.push({ text: 'WIND SHADOW — sailing into a lee', tone: 'warn' });
-    if (w.gust > 1.12) msgs.push({ text: `PUFF +${Math.round((w.gust - 1) * 100)}%`, tone: 'info' });
-    else if (w.gust < 0.9) msgs.push({ text: `LULL ${Math.round((w.gust - 1) * 100)}%`, tone: 'info' });
+    if (w.exposure < 0.75) msgs.push({ text: t(ALERT.windShadow), tone: 'warn' });
+    if (w.gust > 1.12) msgs.push({ text: t(puff(Math.round((w.gust - 1) * 100))), tone: 'info' });
+    else if (w.gust < 0.9)
+      msgs.push({ text: t(lull(Math.round((w.gust - 1) * 100))), tone: 'info' });
     if (Math.abs(w.shift) * RAD > 5) {
       msgs.push({
-        text: `${w.shift > 0 ? 'RIGHT' : 'LEFT'} SHIFT ${Math.abs(w.shift * RAD).toFixed(0)}°`,
+        text: t(shift(w.shift > 0, Math.abs(w.shift * RAD).toFixed(0))),
         tone: 'info',
       });
     }
-    if (s.diag.luffing < 0.6) msgs.push({ text: 'LUFFING — sheet in or bear away', tone: 'warn' });
-    if (Math.abs(s.diag.twa) * RAD < 35) msgs.push({ text: 'NO-GO ZONE', tone: 'warn' });
+    if (s.diag.luffing < 0.6) msgs.push({ text: t(ALERT.luffing), tone: 'warn' });
+    if (Math.abs(s.diag.twa) * RAD < 35) msgs.push({ text: t(ALERT.noGo), tone: 'warn' });
     // Twist first: it is the cheapest way to give power back, and it is the one
     // the player is least likely to reach for on their own.
     if (Math.abs(s.state.heel) * RAD > 32)
       msgs.push({ text: t(PANEL.overpowered), tone: 'warn' });
-    if (s.diag.froude > 0.95) msgs.push({ text: 'HULL SPEED', tone: 'info' });
+    if (s.diag.froude > 0.95) msgs.push({ text: t(ALERT.hullSpeed), tone: 'info' });
 
     const html = msgs
       .slice(0, 4)

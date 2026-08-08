@@ -238,6 +238,40 @@ export const SETTINGS_UI: Record<string, Phrase> = {
   },
 };
 
+/**
+ * The alerts, which only appear in the states that produce them.
+ *
+ * They were the last English left in the interface and the hardest to find:
+ * the check that swept the rendered page for text with no Hangul in it cannot
+ * see a warning that needs the boat to be aground before it exists. Found by
+ * reading the code that pushes them instead.
+ */
+export const ALERT: Record<string, Phrase> = {
+  aground: { en: 'AGROUND', ko: '좌초' },
+  windShadow: { en: 'WIND SHADOW — sailing into a lee', ko: '바람그늘 — 그늘로 들어가는 중' },
+  luffing: { en: 'LUFFING — sheet in or bear away', ko: '돛 펄럭임 — 시트를 당기거나 바람에서 벗어나세요' },
+  noGo: { en: 'NO-GO ZONE', ko: '무항주 구간' },
+  hullSpeed: { en: 'HULL SPEED', ko: '선체 속도 한계' },
+};
+
+/** Alerts that carry a number, so the wording has to wrap around it. */
+export const shoal = (under: string): Phrase => ({
+  en: `SHOAL — ${under} m under keel`,
+  ko: `여울 — 용골 아래 ${under} m`,
+});
+export const puff = (pct: number): Phrase => ({
+  en: `PUFF +${pct}%`,
+  ko: `돌풍 +${pct}%`,
+});
+export const lull = (pct: number): Phrase => ({
+  en: `LULL ${pct}%`,
+  ko: `약풍 ${pct}%`,
+});
+export const shift = (right: boolean, deg: string): Phrase => ({
+  en: `${right ? 'RIGHT' : 'LEFT'} SHIFT ${deg}°`,
+  ko: `${right ? '우' : '좌'}로 풍향 변화 ${deg}°`,
+});
+
 export const LOG: Record<string, Phrase> = {
   empty: {
     en: 'Nothing logged yet. Click the chart to say where you are bound, sail there, and let her arrive.',
