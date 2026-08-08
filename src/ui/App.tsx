@@ -155,12 +155,25 @@ export function App() {
               <div className="flex h-full flex-col">
                 <div className="flex items-start justify-between gap-2 sm:gap-3">
                   <Instruments compact={compact} />
-                  {/* The passage sits here, in the middle at the top, because
+                  {/*
+                    The passage sits here, in the middle at the top, because
                     where you are bound is the question the whole screen is
-                    arranged around once there is somewhere to be. */}
-                  <div className="flex-1 space-y-2">
-                    <PassageBar />
-                  </div>
+                    arranged around once there is somewhere to be.
+
+                    `min-w-0` is load-bearing. A flex item will not shrink below
+                    its own content, so the moment a destination existed this
+                    grew to fit its text and shoved the chart 94 px off the
+                    right of a phone -- taking the button that would have closed
+                    it with it, which is a trap and not a layout bug. Below it
+                    goes on its own row: 223 px of instruments and a 136 px
+                    chart already leave 23 px on a 390 px screen, and nothing
+                    useful fits in that.
+                  */}
+                  {!compact && (
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <PassageBar />
+                    </div>
+                  )}
                   {/*
                   The polar and the chart share the right column, matched in
                   width, and hang off the top rather than standing on the
@@ -190,7 +203,12 @@ export function App() {
                     <MinimapCard full={chartFull} onFull={setChartFull} compact={compact} />
                   </div>
                 </div>
-                <div className="mt-auto flex flex-col items-stretch gap-2">
+                {compact && (
+                  <div className="mt-2 min-w-0">
+                    <PassageBar />
+                  </div>
+                )}
+                <div className="mt-auto flex min-w-0 flex-col items-stretch gap-2">
                   {/* The hint bar goes when the tiller comes: one line of prose
                       and a control that wants a thumb are competing for the
                       same strip of screen, and the control wins. */}
