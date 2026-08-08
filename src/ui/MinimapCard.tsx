@@ -8,6 +8,7 @@ import { CRUISER } from '@/sim/config';
 import { formatDistance } from '@/sim/units';
 import type { Vec2 } from '@/sim/math';
 import { useEngine, useEngineFrame, useReadout } from './engine-context';
+import { COMPACT_COLUMN } from './viewport';
 import { useT } from './i18n';
 import { PANEL } from './strings';
 
@@ -102,8 +103,10 @@ export function MinimapCard({
   }, [full]);
 
   // Smaller on a phone, where the roomy card and the polar together covered
-  // 62% of the display. The full view is a tap away and loses nothing.
-  const size = full ? big : compact ? 116 : SIZE;
+  // 62% of the display. The full view is a tap away and loses nothing. The
+  // compact size is the column's width less this card's padding, so the chart
+  // and the passage line under it come out flush -- see COMPACT_COLUMN.
+  const size = full ? big : compact ? COMPACT_COLUMN - 20 : SIZE;
 
   /**
    * Where the chart is held, or null while it follows the boat.
@@ -254,7 +257,7 @@ export function MinimapCard({
             ? 'pointer-events-auto gap-0 p-2.5 backdrop-blur-md bg-card/85'
             : 'pointer-events-auto w-[232px] gap-0 p-3 backdrop-blur-md bg-card/85'
       }
-      style={full ? { width: size + 24 } : compact ? { width: size + 20 } : undefined}
+      style={full ? { width: size + 24 } : compact ? { width: COMPACT_COLUMN } : undefined}
     >
       <div className="flex items-center justify-between gap-2 pb-1.5">
         <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">

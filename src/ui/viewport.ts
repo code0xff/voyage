@@ -31,6 +31,21 @@ import { useEffect, useState } from 'react';
 const NARROW = 760;
 const SHORT = 560;
 
+/**
+ * How wide the right-hand column is on a compact screen, px.
+ *
+ * One number because two cards have to agree on it. The column is as wide as
+ * its widest child, so the passage line -- which needs about this much to say
+ * "1° · 9.10 km · 47m" on one line -- sets it, and a chart narrower than that
+ * simply leaves the rest of the column empty. Matching it costs no screen at
+ * all and stops the two reading as a mistake, which is the same reason the
+ * chart and the polar were matched on a desktop.
+ *
+ * Chosen at 190 rather than wider: at 220 the column squeezed the phone's
+ * instrument strip from two rows to four, 60 px tall to 216.
+ */
+export const COMPACT_COLUMN = 190;
+
 export interface Viewport {
   compact: boolean;
   touch: boolean;

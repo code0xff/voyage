@@ -4,6 +4,7 @@ import { DEG, RAD, wrapPi } from '@/sim/math';
 import { mustTack } from '@/sim/passage';
 import { formatDistance, formatDuration } from '@/sim/units';
 import { useReadout } from './engine-context';
+import { COMPACT_COLUMN } from './viewport';
 
 /**
  * Where she is bound.
@@ -66,7 +67,12 @@ export function PassageBar() {
 
   return (
     <div ref={root} className="pointer-events-none flex justify-end" style={{ display: 'none' }}>
-      <Card className="pointer-events-auto min-w-[190px] max-w-[min(88vw,300px)] gap-0 px-3 py-1.5 text-center backdrop-blur-md bg-card/85">
+      {/* The minimum is the column's width, so this and the chart above it are
+          the same card edge on a phone rather than two that nearly line up. */}
+      <Card
+        style={{ minWidth: COMPACT_COLUMN }}
+        className="pointer-events-auto max-w-[min(88vw,300px)] gap-0 px-3 py-1.5 text-center backdrop-blur-md bg-card/85"
+      >
         <div ref={line} className="font-mono text-[15px] leading-none tabular-nums text-info" />
         <div ref={advice} className="mt-1 text-[10px] text-muted-foreground empty:hidden" />
       </Card>
