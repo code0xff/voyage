@@ -73,9 +73,14 @@ export function formatDistance(metres: number): string {
  * different facts. `toLocaleString` is ECMA-402 and not a browser API, so this
  * does not breach the rule about what `src/sim` may touch -- it resolves the
  * same way under `tsx` as it does in the browser.
+ *
+ * The locale is passed in rather than left to the browser, because the two can
+ * disagree: someone reading the interface in Korean on an English machine was
+ * getting an English month in an otherwise Korean panel. This still does not
+ * know what languages exist -- it forwards a tag it is handed.
  */
-export function formatWhen(msSinceEpoch: number): string {
-  return new Date(msSinceEpoch).toLocaleString(undefined, {
+export function formatWhen(msSinceEpoch: number, locale?: string): string {
+  return new Date(msSinceEpoch).toLocaleString(locale, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',

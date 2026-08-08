@@ -29,6 +29,7 @@ import {
   CONTROLS_NOTE,
   KEYS,
   MENU,
+  PANEL,
   REGION_BRIEF,
   SETTINGS_UI,
   TABS,
@@ -103,6 +104,15 @@ function Slider({
  */
 const TAB_TRIGGER = "flex-1 gap-1.5 [&_svg]:size-3.5 [&_svg]:shrink-0";
 
+/** The tab values, which are not all the same word as the labels. */
+const TAB_TITLE: Record<string, (typeof TABS)[keyof typeof TABS]> = {
+  world: TABS.world,
+  conditions: TABS.conditions,
+  log: TABS.log,
+  sailing: TABS.sailing,
+  keys: TABS.controls,
+};
+
 /**
  * The last passage, on the way in.
  *
@@ -121,21 +131,35 @@ const TAB_TRIGGER = "flex-1 gap-1.5 [&_svg]:size-3.5 [&_svg]:shrink-0";
  * by the Log tab, which has room to say it; the front page saying "nothing yet"
  * would be an empty shelf where the point was to have something on it.
  */
-function LastPassage({ p }: { p: PassageRecord }) {
+/**
+ * The last passage, and the way to the rest of them.
+ *
+ * A button for the same reason the key line is one: it is the only thing on the
+ * front page that is about the logbook, so it is where someone would ask for
+ * the logbook. Reaching it through "Adjust" meant the record of where you have
+ * been was filed under changing the weather.
+ */
+function LastPassage({ p, onOpen }: { p: PassageRecord; onOpen: () => void }) {
+  const t = useT();
+  const lang = useLang();
   return (
-    <div className="mt-2 rounded-md border border-border bg-secondary/30 px-3 py-2">
+    <button
+      type="button"
+      onClick={onOpen}
+      className="mt-2 block w-full rounded-md border border-border bg-secondary/30 px-3 py-2 text-left transition-colors hover:border-foreground/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    >
       <div className="flex items-baseline justify-between gap-3 text-[11px] leading-relaxed">
         <span className="flex items-center gap-1.5 text-muted-foreground">
           <BookOpen className="size-3.5 shrink-0" />
-          Last passage
+          {t(PANEL.lastPassage)}
         </span>
-        <span className="text-muted-foreground">{formatWhen(p.startedAt)}</span>
+        <span className="text-muted-foreground">{formatWhen(p.startedAt, lang)}</span>
       </div>
       <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
         {placeName(p.venue, (id) => venueById(id)?.name ?? null)} ·{" "}
-        {formatDistance(p.distance)} in {formatDuration(p.duration)}
+        {formatDistance(p.distance)} · {formatDuration(p.duration)}
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -229,7 +253,12 @@ export function MenuDialog({
             >
               <ArrowLeft />
             </Button>
-            <span className="text-base font-medium">{t(MENU.settings)}</span>
+            {/* Named for the tab that is open, not "Settings".
+                Two of these five are settings; the others are the logbook and
+                two pieces of help, and a screen titled Settings that opens on
+                the sailing guide is telling the reader they took a wrong turn
+                when they did not. */}
+            <span className="text-base font-medium">{t(TAB_TITLE[tab] ?? TABS.world)}</span>
           </span>
         )
       }
@@ -327,10 +356,16 @@ export function MenuDialog({
                         : `${settings.islandCount} islands`}
                 </div>
               </div>
+              {/* Explicitly to World, not to whichever tab was open last.
+                  Left to remember, "Adjust" could land on the sailing guide,
+                  which is the same wrong turn this screen used to take. */}
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setView("settings")}
+                onClick={() => {
+                  setTab("world");
+                  setView("settings");
+                }}
               >
                 <SlidersHorizontal /> {t(MENU.adjust)}
               </Button>
@@ -358,11 +393,32 @@ export function MenuDialog({
             {/* Under the conditions rather than over them: what you are about
                 to sail in is the more useful of the two with a hand already on
                 the door, and where you last got to is the reason to open it. */}
-            {last && <LastPassage p={last} />}
+            {last && (
+              <LastPassage
+                p={last}
+                onOpen={() => {
+                  setTab("log");
+                  setView("settings");
+                }}
+              />
+            )}
 
-            <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground">
-              <Rich text={t(MENU.quickKeys)} />
-            </p>
+            {/* The four keys worth knowing, and a way to the rest of them.
+                They used to live only behind "Adjust", which is a button about
+                the weather -- nobody looking for the controls would open it,
+                and the line that shows four of them is the obvious place to
+                ask for all of them. */}
+            <button
+              type="button"
+              onClick={() => {
+                setTab("keys");
+                setView("settings");
+              }}
+              className="mt-3 block w-full rounded-md px-1 py-1 text-left text-[10px] leading-relaxed text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <Rich text={t(MENU.quickKeys)} />{" "}
+              <span className="text-foreground">{t(MENU.allKeys)}</span>
+            </button>
           </>
         )}
 

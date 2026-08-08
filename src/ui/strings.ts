@@ -70,7 +70,6 @@ export const MENU: Record<string, Phrase> = {
   putToSea: { en: 'Put to sea', ko: '출항' },
   putToSeaHint: { en: 'a new world, and time to sail it', ko: '새로운 바다, 그리고 항해할 시간' },
   adjust: { en: 'Adjust', ko: '설정' },
-  settings: { en: 'Settings', ko: '설정' },
   done: { en: 'Done', ko: '완료' },
   close: { en: 'Close', ko: '닫기' },
   changingWeather: { en: 'changing weather', ko: '변하는 날씨' },
@@ -81,6 +80,7 @@ export const MENU: Record<string, Phrase> = {
     ko: '배는 바람을 향해 곧장 갈 수 없고, 그 사실이 나머지 전부를 바꿉니다. 가이드 보기 →',
   },
   language: { en: 'Language', ko: '언어' },
+  allKeys: { en: 'all the keys →', ko: '전체 조작 보기 →' },
   /** The four keys worth knowing before you have read anything. */
   quickKeys: {
     en: '[[← →]] helm · [[H]] autopilot · [[T]] auto-trim · [[Esc]] this menu',
@@ -207,6 +207,7 @@ export const PANEL: Record<string, Phrase> = {
     en: 'OVERPOWERED — twist off, ease or reef',
     ko: '과도한 압력 — 트위스트를 주거나, 내보내거나, 리프하세요',
   },
+  lastPassage: { en: 'Last passage', ko: '최근 항해' },
   polar: { en: 'Polar', ko: '폴라' },
   chart: { en: 'Chart', ko: '차트' },
   run: { en: 'run', ko: '항주' },
