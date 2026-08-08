@@ -169,11 +169,7 @@ export function App() {
                     chart already leave 23 px on a 390 px screen, and nothing
                     useful fits in that.
                   */}
-                  {!compact && (
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <PassageBar />
-                    </div>
-                  )}
+                  <div className="min-w-0 flex-1" />
                   {/*
                   The polar and the chart share the right column, matched in
                   width, and hang off the top rather than standing on the
@@ -198,16 +194,15 @@ export function App() {
                   polar is reference, and reference is what a phone gives up
                   first -- it is still there the moment the window is bigger.
                 */}
-                  <div className="flex flex-col items-end gap-3">
+                  <div className="flex flex-col items-end gap-2 sm:gap-3">
                     {!compact && <PolarCard />}
                     <MinimapCard full={chartFull} onFull={setChartFull} compact={compact} />
-                  </div>
-                </div>
-                {compact && (
-                  <div className="mt-2 min-w-0">
+                    {/* Under the chart, because that is where a destination is
+                        set, drawn and cleared -- the passage line is the
+                        chart's caption, not a separate announcement. */}
                     <PassageBar />
                   </div>
-                )}
+                </div>
                 <div className="mt-auto flex min-w-0 flex-col items-stretch gap-2">
                   {/* The hint bar goes when the tiller comes: one line of prose
                       and a control that wants a thumb are competing for the

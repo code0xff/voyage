@@ -8,11 +8,17 @@ import { useReadout } from './engine-context';
 /**
  * Where she is bound.
  *
- * Sits in the same slot as the race clock, which is empty whenever there is no
- * race — and having somewhere to be is what free sailing looks like once it is
- * a passage rather than a wander. It lives here rather than under the chart
- * because the chart card had no room: two more rows pushed the bottom of the
- * screen off a 760 px window.
+ * Under the chart, because that is where a destination is set, where it is
+ * drawn, and where it is cleared. The line is the chart's caption rather than
+ * an announcement of its own.
+ *
+ * It used to sit in the middle of the top bar, in the slot the race clock left
+ * empty, and this comment used to say that under the chart was impossible: two
+ * more rows pushed the bottom of the screen off a 760 px window. That was true
+ * while the chart was anchored to the bottom of the screen, where anything
+ * added below it had nowhere to go. The chart now hangs from the top of the
+ * right-hand column, so rows below it grow into space the layout already knows
+ * is free -- measured, the column ends at 530 px of 760.
  *
  * The numbers change every frame, so they are written straight into the DOM.
  */
@@ -59,8 +65,8 @@ export function PassageBar() {
   });
 
   return (
-    <div ref={root} className="pointer-events-none flex justify-center" style={{ display: 'none' }}>
-      <Card className="pointer-events-auto min-w-[240px] gap-0 px-4 py-2 text-center backdrop-blur-md bg-card/85">
+    <div ref={root} className="pointer-events-none flex justify-end" style={{ display: 'none' }}>
+      <Card className="pointer-events-auto min-w-[190px] max-w-[min(88vw,300px)] gap-0 px-3 py-1.5 text-center backdrop-blur-md bg-card/85">
         <div ref={line} className="font-mono text-[15px] leading-none tabular-nums text-info" />
         <div ref={advice} className="mt-1 text-[10px] text-muted-foreground empty:hidden" />
       </Card>
