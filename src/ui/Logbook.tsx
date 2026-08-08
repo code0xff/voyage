@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, Trash2, Upload } from 'lucide-react';
 import { fromExport, toExport, type LogStore } from '@/logbook';
+import { useT } from './i18n';
+import { LOG } from './strings';
 import { formatDistance, formatDuration, formatWhen, msToKnots } from '@/sim/units';
 import { venueById } from '@/sim/venues';
 import { placeName } from '@/sim/regions';
@@ -75,6 +77,7 @@ export function Logbook({
    */
   onChanged: () => void;
 }) {
+  const t = useT();
   const [passages, setPassages] = useState<PassageRecord[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   /**
@@ -173,8 +176,7 @@ export function Logbook({
     <div>
       {passages.length === 0 ? (
         <p className="py-3 text-[11px] leading-relaxed text-muted-foreground">
-          Nothing logged yet. Click the chart to say where you are bound, sail there, and let
-          go the anchor when you arrive — the passage writes itself down.
+          {t(LOG.empty)}
         </p>
       ) : (
         <div className="max-h-[260px] overflow-y-auto pr-1">
@@ -190,11 +192,11 @@ export function Logbook({
 
       <div className="mt-3 flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={download} disabled={passages.length === 0}>
-          <Download /> Export
+          <Download /> {t(LOG.export)}
         </Button>
         <Button variant="outline" size="sm" asChild>
           <label className="cursor-pointer">
-            <Upload /> Import
+            <Upload /> {t(LOG.import)}
             <input
               type="file"
               accept="application/json,.json"
@@ -217,7 +219,7 @@ export function Logbook({
       */}
       {problem && <p className="pt-2 text-[10px] text-destructive">{problem}</p>}
       <p className="pt-2 text-[10px] leading-relaxed text-muted-foreground">
-        Kept in this browser only. Export it to keep it — clearing site data will take it.
+        {t(LOG.kept)}
       </p>
     </div>
   );

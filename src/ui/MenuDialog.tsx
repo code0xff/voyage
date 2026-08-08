@@ -22,8 +22,26 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { formatClock } from "@/sim/sky";
-import { WEATHER_KINDS, WEATHER_LABEL, type WeatherKind } from "@/sim/weather";
-import { withRegion, withVenue, withoutRegion, withoutVenue, type Settings } from "@/settings";
+import { WEATHER_KINDS, type WeatherKind } from "@/sim/weather";
+import { LANGS, type Lang } from "@/i18n";
+import { Rich, useLang, useT } from "./i18n";
+import {
+  CONTROLS_NOTE,
+  KEYS,
+  MENU,
+  REGION_BRIEF,
+  SETTINGS_UI,
+  TABS,
+  WEATHER,
+  WORLD,
+} from "./strings";
+import {
+  withRegion,
+  withVenue,
+  withoutRegion,
+  withoutVenue,
+  type Settings,
+} from "@/settings";
 import { VENUES, venueById } from "@/sim/venues";
 import { REGIONS, placeName, regionById } from "@/sim/regions";
 import { Logbook } from "./Logbook";
@@ -114,8 +132,8 @@ function LastPassage({ p }: { p: PassageRecord }) {
         <span className="text-muted-foreground">{formatWhen(p.startedAt)}</span>
       </div>
       <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
-        {placeName(p.venue, (id) => venueById(id)?.name ?? null)} · {formatDistance(p.distance)}{" "}
-        in {formatDuration(p.duration)}
+        {placeName(p.venue, (id) => venueById(id)?.name ?? null)} ·{" "}
+        {formatDistance(p.distance)} in {formatDuration(p.duration)}
       </div>
     </div>
   );
@@ -155,6 +173,8 @@ export function MenuDialog({
    * Settings are a place you go, and going there is one click.
    */
   const [view, setView] = useState<"play" | "settings">("play");
+  const t = useT();
+  const lang = useLang();
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) =>
     onSettings({ ...settings, [k]: v });
 
@@ -209,16 +229,14 @@ export function MenuDialog({
             >
               <ArrowLeft />
             </Button>
-            <span className="text-base font-medium">Settings</span>
+            <span className="text-base font-medium">{t(MENU.settings)}</span>
           </span>
         )
       }
       description={
         view === "play" ? (
           <span className="block text-[11px] leading-relaxed">
-            A sailing simulator that computes apparent wind, sail lift, keel side
-            force and wave-making resistance. Wind differs from place to place,
-            weather turns, and land steals your breeze.
+            {t(MENU.tagline)}
           </span>
         ) : undefined
       }
@@ -228,10 +246,10 @@ export function MenuDialog({
           // looking at settings -- not in front of a player trying to start.
           <div className="flex w-full items-center justify-between">
             <Badge variant="outline" className="text-[10px] font-normal">
-              physics core runs headless · npm run polar
+              {t(SETTINGS_UI.headless)}
             </Badge>
             <Button size="sm" onClick={() => setView("play")}>
-              Done
+              {t(MENU.done)}
             </Button>
           </div>
         )
@@ -245,7 +263,7 @@ export function MenuDialog({
           on a full-width button rather than in a corner. */}
       <button
         type="button"
-        aria-label="Close"
+        aria-label={t(MENU.close)}
         onClick={() => onOpenChange(false)}
         className="absolute right-3 top-3 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
@@ -260,9 +278,12 @@ export function MenuDialog({
                 below throws that session away, which is why it is not sitting
                 in the same row as it. */}
             {canResume && (
-              <Button className="mb-2 w-full justify-between" onClick={() => onOpenChange(false)}>
+              <Button
+                className="mb-2 w-full justify-between"
+                onClick={() => onOpenChange(false)}
+              >
                 <span className="flex items-center gap-2">
-                  <Anchor /> Resume
+                  <Anchor /> {t(MENU.resume)}
                 </span>
                 <span className="opacity-60">Esc</span>
               </Button>
@@ -274,9 +295,11 @@ export function MenuDialog({
                 onClick={onPutToSea}
               >
                 <span className="flex items-center gap-2">
-                  <Compass /> Put to sea
+                  <Compass /> {t(MENU.putToSea)}
                 </span>
-                <span className="font-normal opacity-60">a new world, and time to sail it</span>
+                <span className="font-normal opacity-60">
+                  {t(MENU.putToSeaHint)}
+                </span>
               </Button>
             </div>
 
@@ -287,8 +310,8 @@ export function MenuDialog({
                 <div>
                   {settings.windKnots} kn ·{" "}
                   {settings.weatherMode === "auto"
-                    ? "changing weather"
-                    : WEATHER_LABEL[settings.weatherMode]}{" "}
+                    ? t(MENU.changingWeather)
+                    : t(WEATHER[settings.weatherMode])}{" "}
                   · {formatClock(settings.startHour)}
                 </div>
                 <div>
@@ -304,8 +327,12 @@ export function MenuDialog({
                         : `${settings.islandCount} islands`}
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={() => setView("settings")}>
-                <SlidersHorizontal /> Adjust
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setView("settings")}
+              >
+                <SlidersHorizontal /> {t(MENU.adjust)}
               </Button>
             </div>
 
@@ -323,10 +350,9 @@ export function MenuDialog({
               className="mt-2 w-full rounded-md border border-border/60 px-3 py-2 text-left text-[11px] leading-relaxed text-muted-foreground transition-colors hover:border-border hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <span className="font-medium text-foreground">
-                Never sailed before?
+                {t(MENU.guideLead)}
               </span>{" "}
-              A boat cannot sail straight at the wind, and that changes
-              everything else. Read the guide →
+              {t(MENU.guideBody)}
             </button>
 
             {/* Under the conditions rather than over them: what you are about
@@ -335,22 +361,7 @@ export function MenuDialog({
             {last && <LastPassage p={last} />}
 
             <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground">
-              <kbd className="rounded border border-border bg-secondary px-1 py-px font-mono">
-                ← →
-              </kbd>{" "}
-              helm ·{" "}
-              <kbd className="rounded border border-border bg-secondary px-1 py-px font-mono">
-                H
-              </kbd>{" "}
-              autopilot ·{" "}
-              <kbd className="rounded border border-border bg-secondary px-1 py-px font-mono">
-                T
-              </kbd>{" "}
-              auto-trim ·{" "}
-              <kbd className="rounded border border-border bg-secondary px-1 py-px font-mono">
-                Esc
-              </kbd>{" "}
-              this menu
+              <Rich text={t(MENU.quickKeys)} />
             </p>
           </>
         )}
@@ -362,23 +373,46 @@ export function MenuDialog({
         >
           <TabsList className="w-full">
             <TabsTrigger value="world" className={TAB_TRIGGER}>
-              <Compass /> World
+              <Compass /> {t(TABS.world)}
             </TabsTrigger>
             <TabsTrigger value="conditions" className={TAB_TRIGGER}>
-              <Wind /> Conditions
+              <Wind /> {t(TABS.conditions)}
             </TabsTrigger>
             <TabsTrigger value="log" className={TAB_TRIGGER}>
-              <BookOpen /> Log
+              <BookOpen /> {t(TABS.log)}
             </TabsTrigger>
             <TabsTrigger value="sailing" className={TAB_TRIGGER}>
-              <LifeBuoy /> Sailing
+              <LifeBuoy /> {t(TABS.sailing)}
             </TabsTrigger>
             <TabsTrigger value="keys" className={TAB_TRIGGER}>
-              <Waves /> Controls
+              <Waves /> {t(TABS.controls)}
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="world" className="mt-4 space-y-2.5">
+            {/* First row of the first tab. Someone who opened the settings
+                because the game is in the wrong language should not have to
+                read three more rows of it to find this. */}
+            <div className="grid grid-cols-[104px_1fr] items-center gap-3">
+              <span className="text-[11px] text-muted-foreground">
+                {t(MENU.language)}
+              </span>
+              {/* A select rather than a row of buttons: two languages fit as
+                  buttons and five would not, and the control should not have to
+                  be rebuilt the first time one is added. */}
+              <Select value={lang} onValueChange={(v) => set("lang", v as Lang)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LANGS.map((l) => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             {/*
               One list, three kinds of world, because "where am I sailing" is
               one question and splitting it across two controls would invite
@@ -388,9 +422,15 @@ export function MenuDialog({
               decisions rather than the geography.
             */}
             <div className="grid grid-cols-[104px_1fr] items-center gap-3">
-              <span className="text-[11px] text-muted-foreground">Where</span>
+              <span className="text-[11px] text-muted-foreground">
+                {t(WORLD.where)}
+              </span>
               <Select
-                value={settings.region ? `region:${settings.region}` : settings.venue || "open"}
+                value={
+                  settings.region
+                    ? `region:${settings.region}`
+                    : settings.venue || "open"
+                }
                 onValueChange={(v) => {
                   if (v.startsWith("region:")) {
                     const region = regionById(v.slice(7));
@@ -402,7 +442,11 @@ export function MenuDialog({
                   // rather than overriding them, so every slider below keeps
                   // showing what is actually being sailed and stays live.
                   onSettings(
-                    withoutRegion(venue ? withVenue(settings, venue) : withoutVenue(settings)),
+                    withoutRegion(
+                      venue
+                        ? withVenue(settings, venue)
+                        : withoutVenue(settings),
+                    ),
                   );
                 }}
               >
@@ -413,12 +457,12 @@ export function MenuDialog({
                   <SelectItem value="open">Open ocean (procedural)</SelectItem>
                   {REGIONS.map((r) => (
                     <SelectItem key={r.id} value={`region:${r.id}`}>
-                      {r.name} — surveyed
+                      {r.name} — {t(WORLD.surveyedTag)}
                     </SelectItem>
                   ))}
                   {VENUES.map((v) => (
                     <SelectItem key={v.id} value={v.id}>
-                      {v.name} — sketch
+                      {v.name} — {t(WORLD.sketchTag)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -426,19 +470,23 @@ export function MenuDialog({
             </div>
             {settings.region ? (
               <p className="text-[10px] leading-relaxed text-muted-foreground">
-                {regionById(settings.region)?.brief}
+                {REGION_BRIEF[settings.region]
+                  ? t(REGION_BRIEF[settings.region])
+                  : regionById(settings.region)?.brief}
                 <br />
-                <span className="text-success">Surveyed.</span> The coastline and
-                the depths are{" "}
-                {regionById(settings.region)?.source}. Still a simulator and not
-                a chart: 25 m between soundings, and no tide height.
+                <span className="text-success">
+                  {t(WORLD.surveyedLead)}
+                </span>{" "}
+                {t(WORLD.surveyedBody)}{" "}
+                {regionById(settings.region)?.source}
+                {t(WORLD.surveyedCaveat)}
               </p>
             ) : settings.venue ? (
               <p className="text-[10px] leading-relaxed text-muted-foreground">
                 {venueById(settings.venue)?.brief}
                 <br />
                 <span className="text-warning">
-                  Approximate, and not for navigation.
+                  {t(WORLD.sketchWarning)}
                 </span>{" "}
                 The land, depths and stream are a sketch meant to reproduce the
                 decisions the place asks of you, not its geography.
@@ -456,7 +504,7 @@ export function MenuDialog({
             )}
             <div className="grid grid-cols-[104px_1fr] items-center gap-3">
               <span className="text-[11px] text-muted-foreground">
-                World seed
+                {t(WORLD.seed)}
               </span>
               <div className="flex gap-2">
                 <input
@@ -471,20 +519,20 @@ export function MenuDialog({
                   className="shrink-0"
                   onClick={() => set("randomWorld", !settings.randomWorld)}
                 >
-                  {settings.randomWorld ? "New each time" : "Pinned"}
+                  {settings.randomWorld
+                    ? t(WORLD.seedNew)
+                    : t(WORLD.seedPinned)}
                 </Button>
               </div>
             </div>
             <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
-              {settings.venue
-                ? "A venue brings its own land, breeze and tide, so the island slider stands down. The stream runs hardest in deep water and gives up in the shallows — which is where the wind gives up too."
-                : "The ocean has no edge: islands keep coming over the horizon for as long as you sail. Their lee is flat water but almost no wind, and the shoals around them will stop you dead. Pin the seed to sail the same water twice."}
+              {settings.venue ? t(WORLD.venueNote) : t(WORLD.oceanNote)}
             </p>
           </TabsContent>
 
           <TabsContent value="conditions" className="mt-4 space-y-2.5">
             <Slider
-              label="Mean wind"
+              label={t(SETTINGS_UI.meanWind)}
               min={3}
               max={40}
               step={1}
@@ -493,7 +541,7 @@ export function MenuDialog({
               onChange={(v) => set("windKnots", v)}
             />
             <Slider
-              label="Gusts / shifts"
+              label={t(SETTINGS_UI.gusts)}
               min={0}
               max={1}
               step={0.05}
@@ -502,7 +550,7 @@ export function MenuDialog({
               onChange={(v) => set("gustiness", v)}
             />
             <Slider
-              label="Sea state"
+              label={t(SETTINGS_UI.seaState)}
               min={0}
               max={2}
               step={0.1}
@@ -511,12 +559,14 @@ export function MenuDialog({
               onChange={(v) => set("seaScale", v)}
             />
             <Slider
-              label="Tidal drift"
+              label={t(SETTINGS_UI.tidalDrift)}
               min={0}
               max={4}
               step={0.1}
               value={settings.driftKnots}
-              format={(v) => (v === 0 ? "slack" : `${v.toFixed(1)} kn`)}
+              format={(v) =>
+                v === 0 ? t(SETTINGS_UI.slack) : `${v.toFixed(1)} kn`
+              }
               onChange={(v) => set("driftKnots", v)}
             />
             {/*
@@ -536,7 +586,7 @@ export function MenuDialog({
               />
             )}
             <Slider
-              label="Start time"
+              label={t(SETTINGS_UI.startTime)}
               min={0}
               max={23.5}
               step={0.5}
@@ -545,16 +595,18 @@ export function MenuDialog({
               onChange={(v) => set("startHour", v)}
             />
             <Slider
-              label="Time speed"
+              label={t(SETTINGS_UI.timeSpeed)}
               min={0}
               max={360}
               step={10}
               value={settings.timeScale}
-              format={(v) => (v === 0 ? "frozen" : `${v}x`)}
+              format={(v) => (v === 0 ? t(SETTINGS_UI.frozen) : `${v}x`)}
               onChange={(v) => set("timeScale", v)}
             />
             <div className="grid grid-cols-[104px_1fr] items-center gap-3">
-              <span className="text-[11px] text-muted-foreground">Weather</span>
+              <span className="text-[11px] text-muted-foreground">
+                {t(SETTINGS_UI.weather)}
+              </span>
               <Select
                 value={settings.weatherMode}
                 onValueChange={(v) =>
@@ -565,24 +617,28 @@ export function MenuDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="auto">Evolving (random)</SelectItem>
+                  <SelectItem value="auto">
+                    {t(SETTINGS_UI.evolving)}
+                  </SelectItem>
                   {WEATHER_KINDS.map((k) => (
                     <SelectItem key={k} value={k}>
-                      {WEATHER_LABEL[k]}
+                      {t(WEATHER[k])}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
-              Evolving weather is what makes two passages over the same water
-              different. A squall halfway forces a reef and changes which side
-              of the bay pays.
+              {t(WORLD.weatherNote2)}
             </p>
           </TabsContent>
 
           <TabsContent value="log" className="mt-4">
-            <Logbook store={logbook} version={logVersion} onChanged={onLogChanged} />
+            <Logbook
+              store={logbook}
+              version={logVersion}
+              onChanged={onLogChanged}
+            />
           </TabsContent>
 
           <TabsContent value="sailing" className="mt-4">
@@ -591,32 +647,7 @@ export function MenuDialog({
 
           <TabsContent value="keys" className="mt-4">
             <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-[11px]">
-              {[
-                ["← →  /  A D", "helm (holds its angle)"],
-                ["Space", "centre the helm"],
-                ["↑ ↓  /  W S", "trim in / ease"],
-                ["Z X", "vang: close the leech / twist off"],
-                ["T", "auto-trim"],
-                ["H", "autopilot: off / compass / wind"],
-                ["1 2 3 4", "reef 0–3"],
-                ["F / G", "furl / unfurl jib"],
-                ["Y", "auto-reef"],
-                ["Q E", "mean wind direction"],
-                ["C", "camera"],
-                ["0", "hand all sail / set again"],
-                ["A", "let go / weigh anchor"],
-                ["N / wheel on chart", "chart range"],
-                ["drag chart", "look around it"],
-                ["click chart", "set where you are bound"],
-                ["drag", "orbit around the boat"],
-                ["wheel elsewhere", "zoom the camera"],
-                ["double-click", "recentre astern"],
-                ["P", "re-solve polar"],
-                ["R", "restart"],
-                ["M", "sound"],
-                ["L", "navigation lights"],
-                ["Esc", "this menu"],
-              ].map(([k, v]) => (
+              {KEYS.map(([k, v]) => (
                 <div
                   key={k}
                   className="flex items-baseline justify-between gap-3"
@@ -624,13 +655,12 @@ export function MenuDialog({
                   <kbd className="rounded border border-border bg-secondary px-1.5 py-px font-mono text-[10px]">
                     {k}
                   </kbd>
-                  <span className="text-muted-foreground">{v}</span>
+                  <span className="text-muted-foreground">{t(v)}</span>
                 </div>
               ))}
             </div>
             <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
-              New to this? The <span className="text-foreground">Sailing</span>{" "}
-              tab explains what the boat is doing and what every reading means.
+              {t(CONTROLS_NOTE)}
             </p>
           </TabsContent>
         </Tabs>

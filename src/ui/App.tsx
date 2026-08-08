@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { createEngine, type Engine } from '@/engine';
-import { loadSettings, saveSettings, type Settings } from '@/settings';
-import { EngineProvider } from './engine-context';
-import { Instruments } from './Instruments';
-import { PolarCard } from './PolarCard';
-import { MenuDialog } from './MenuDialog';
-import { logbook } from '@/logbook';
-import { HintBar } from './HintBar';
-import { MinimapCard } from './MinimapCard';
-import { PassageBar } from './PassageBar';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createEngine, type Engine } from "@/engine";
+import { loadSettings, saveSettings, type Settings } from "@/settings";
+import { EngineProvider } from "./engine-context";
+import { LangProvider } from "./i18n";
+import { Instruments } from "./Instruments";
+import { PolarCard } from "./PolarCard";
+import { MenuDialog } from "./MenuDialog";
+import { logbook } from "@/logbook";
+import { HintBar } from "./HintBar";
+import { MinimapCard } from "./MinimapCard";
+import { PassageBar } from "./PassageBar";
 
 /**
  * The app shell.
@@ -63,21 +64,21 @@ export function App() {
       // Escape backs out of whatever is in front: the chart first, the world
       // second. Never the menu while the chart is up, which would leave a
       // dialog open behind a chart the player thought they were closing.
-      if (ev.type === 'toggleMenu') {
+      if (ev.type === "toggleMenu") {
         if (chartFullRef.current) setChartFull(false);
         else setMenuOpen((v) => !v);
       }
-      if (ev.type === 'arrived') setLogVersion((v) => v + 1);
+      if (ev.type === "arrived") setLogVersion((v) => v + 1);
       // The engine rolls the world, so the seed shown in the menu has to follow
       // it -- otherwise the field would name a sea the player is not sailing in.
-      if (ev.type === 'world') {
+      if (ev.type === "world") {
         setSettings((s) => {
           const next = { ...s, seed: ev.seed };
           saveSettings(next);
           return next;
         });
       }
-      if (ev.type === 'sound') {
+      if (ev.type === "sound") {
         setSettings((s) => {
           const next = { ...s, sound: ev.on };
           saveSettings(next);
@@ -87,7 +88,7 @@ export function App() {
     });
 
     const onResize = () => e.resize();
-    window.addEventListener('resize', onResize);
+    window.addEventListener("resize", onResize);
 
     // Development hook. A backgrounded tab freezes requestAnimationFrame, so
     // advance() is how a specific moment gets set up for a screenshot.
@@ -95,7 +96,7 @@ export function App() {
 
     return () => {
       offEvent();
-      window.removeEventListener('resize', onResize);
+      window.removeEventListener("resize", onResize);
       e.dispose();
     };
     // Intentionally runs once: the engine owns its own lifetime and is torn
@@ -135,22 +136,23 @@ export function App() {
   }, [engine]);
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-background">
-      <canvas ref={canvasRef} className="block h-full w-full" />
+    <LangProvider lang={settings.lang}>
+      <div className="relative h-screen w-screen overflow-hidden bg-background">
+        <canvas ref={canvasRef} className="block h-full w-full" />
 
-      {engine && (
-        <EngineProvider value={engine}>
-          <div className="pointer-events-none absolute inset-0 p-3">
-            <div className="flex h-full flex-col">
-              <div className="flex items-start justify-between gap-3">
-                <Instruments />
-                {/* The passage sits here, in the middle at the top, because
+        {engine && (
+          <EngineProvider value={engine}>
+            <div className="pointer-events-none absolute inset-0 p-3">
+              <div className="flex h-full flex-col">
+                <div className="flex items-start justify-between gap-3">
+                  <Instruments />
+                  {/* The passage sits here, in the middle at the top, because
                     where you are bound is the question the whole screen is
                     arranged around once there is somewhere to be. */}
-                <div className="flex-1 space-y-2">
-                  <PassageBar />
-                </div>
-                {/*
+                  <div className="flex-1 space-y-2">
+                    <PassageBar />
+                  </div>
+                  {/*
                   The polar and the chart share the right column, matched in
                   width, and hang off the top rather than standing on the
                   bottom.
@@ -167,30 +169,31 @@ export function App() {
                   ones -- instruments and hint bar -- sit opposite, and the
                   chart grows downward into space the layout knows is free.
                 */}
-                <div className="flex flex-col items-end gap-3">
-                  <PolarCard />
-                  <MinimapCard full={chartFull} onFull={setChartFull} />
+                  <div className="flex flex-col items-end gap-3">
+                    <PolarCard />
+                    <MinimapCard full={chartFull} onFull={setChartFull} />
+                  </div>
+                </div>
+                <div className="mt-auto flex items-end">
+                  <HintBar />
                 </div>
               </div>
-              <div className="mt-auto flex items-end">
-                <HintBar />
-              </div>
             </div>
-          </div>
-        </EngineProvider>
-      )}
+          </EngineProvider>
+        )}
 
-      <MenuDialog
-        open={menuOpen}
-        onOpenChange={setMenuOpen}
-        settings={settings}
-        onSettings={applySettings}
-        onPutToSea={putToSea}
-        canResume={started}
-        logbook={logbook}
-        logVersion={logVersion}
-        onLogChanged={bumpLog}
-      />
-    </div>
+        <MenuDialog
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          settings={settings}
+          onSettings={applySettings}
+          onPutToSea={putToSea}
+          canResume={started}
+          logbook={logbook}
+          logVersion={logVersion}
+          onLogChanged={bumpLog}
+        />
+      </div>
+    </LangProvider>
   );
 }

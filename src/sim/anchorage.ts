@@ -75,10 +75,20 @@ export function anchorage(
 }
 
 /** What is stopping her anchoring here, or null when nothing is. */
-export function anchorProblem(a: Anchorage): string | null {
+/**
+ * Why she cannot lie here, as a reason and not a sentence.
+ *
+ * It used to return the sentence. That put display copy in the physics core,
+ * which is the wrong place for it on the rule this project already has -- and
+ * it became untenable the moment the interface had to say it in two languages,
+ * because `src/sim` has no business knowing which one is being read.
+ */
+export type AnchorProblem = 'aground' | 'shoal' | 'deep' | 'way';
+
+export function anchorProblem(a: Anchorage): AnchorProblem | null {
   if (a.holding === 'aground') return 'aground';
-  if (a.holding === 'shoal') return 'too shallow — she would touch as she swings';
-  if (a.holding === 'deep') return 'too deep to lie to';
-  if (!a.slowEnough) return 'still carrying way — take the way off her first';
+  if (a.holding === 'shoal') return 'shoal';
+  if (a.holding === 'deep') return 'deep';
+  if (!a.slowEnough) return 'way';
   return null;
 }

@@ -1,0 +1,283 @@
+import type { Phrase } from '@/i18n';
+import type { AnchorProblem } from '@/sim/anchorage';
+import type { WeatherKind } from '@/sim/weather';
+import type { DayPhase } from '@/sim/sky';
+
+/**
+ * Interface copy, in both languages.
+ *
+ * Grouped by where it appears rather than by kind, because that is how it gets
+ * checked: open the panel, read down the group. The guide has its own file --
+ * it is prose and much longer, and mixing the two would bury the short strings
+ * that have to be right.
+ *
+ * Instrument abbreviations are not in here. See the note in `i18n.tsx`.
+ */
+
+export const HINT: Record<string, Phrase> = {
+  anchored: { en: 'At anchor — A to weigh', ko: '정박 중 — A로 닻 올리기' },
+  aground: {
+    en: 'Aground — sail her off before the tide leaves you',
+    ko: '좌초 — 조류가 빠지기 전에 빠져나오세요',
+  },
+  lee: {
+    en: 'In the lee of the land — get back into clear air',
+    ko: '육지 바람그늘 — 바람이 트인 곳으로 나가세요',
+  },
+  squall: { en: 'Squall — reef before it hits', ko: '스콜 — 닥치기 전에 돛을 줄이세요' },
+  fog: {
+    en: 'Thick fog — steer on the bearing readout',
+    ko: '짙은 안개 — 방위 값을 보고 조타하세요',
+  },
+  stowed: {
+    en: 'Sails handed — 0 to set sail again, 1-4 to reef',
+    ko: '돛 거둠 — 0으로 다시 펴기, 1-4로 리프',
+  },
+  pinching: { en: 'Too close to the wind — bear away', ko: '바람에 너무 붙음 — 바람에서 벗어나세요' },
+  menu: { en: 'Esc for menu and settings', ko: 'Esc로 메뉴와 설정' },
+};
+
+/** `Good holding in 8 m, sheltered — A to let go`, assembled per language. */
+export const holding = (depth: string, sheltered: boolean): Phrase => ({
+  en: `Good holding in ${depth} m${sheltered ? ', sheltered' : ''} — A to let go`,
+  ko: `${depth} m, 닻 잘 물림${sheltered ? ' · 바람도 막힘' : ''} — A로 닻 내리기`,
+});
+
+export const ANCHOR_PROBLEM: Record<AnchorProblem, Phrase> = {
+  aground: { en: 'aground', ko: '이미 얹혀 있음' },
+  shoal: {
+    en: 'too shallow — she would touch as she swings',
+    ko: '너무 얕음 — 배가 돌면서 바닥에 닿습니다',
+  },
+  deep: { en: 'too deep to lie to', ko: '너무 깊어 닻이 안 먹힘' },
+  way: {
+    en: 'still carrying way — take the way off her first',
+    ko: '아직 전진 중 — 먼저 배를 세우세요',
+  },
+};
+
+export const nowhereToAnchor = (why: Phrase): Phrase => ({
+  en: `Nowhere to anchor: ${why.en}`,
+  ko: `닻 내릴 곳이 아님: ${why.ko}`,
+});
+
+export const MENU: Record<string, Phrase> = {
+  tagline: {
+    en: 'A sailing simulator that computes apparent wind, sail lift, keel side force and wave-making resistance. Wind differs from place to place, weather turns, and land steals your breeze.',
+    ko: '겉보기 바람, 돛의 양력, 용골의 횡력, 조파저항을 실제로 계산하는 항해 시뮬레이터입니다. 바람은 장소마다 다르고, 날씨는 스스로 변하며, 육지는 당신의 바람을 빼앗습니다.',
+  },
+  resume: { en: 'Resume', ko: '돌아가기' },
+  putToSea: { en: 'Put to sea', ko: '출항' },
+  putToSeaHint: { en: 'a new world, and time to sail it', ko: '새로운 바다, 그리고 항해할 시간' },
+  adjust: { en: 'Adjust', ko: '설정' },
+  settings: { en: 'Settings', ko: '설정' },
+  done: { en: 'Done', ko: '완료' },
+  close: { en: 'Close', ko: '닫기' },
+  changingWeather: { en: 'changing weather', ko: '변하는 날씨' },
+  openSea: { en: 'open sea', ko: '먼바다' },
+  guideLead: { en: 'Never sailed before?', ko: '항해가 처음이신가요?' },
+  guideBody: {
+    en: 'A boat cannot sail straight at the wind, and that changes everything else. Read the guide →',
+    ko: '배는 바람을 향해 곧장 갈 수 없고, 그 사실이 나머지 전부를 바꿉니다. 가이드 보기 →',
+  },
+  language: { en: 'Language', ko: '언어' },
+  /** The four keys worth knowing before you have read anything. */
+  quickKeys: {
+    en: '[[← →]] helm · [[H]] autopilot · [[T]] auto-trim · [[Esc]] this menu',
+    ko: '[[← →]] 조타 · [[H]] 오토파일럿 · [[T]] 자동 트림 · [[Esc]] 이 메뉴',
+  },
+};
+
+export const TABS: Record<string, Phrase> = {
+  world: { en: 'World', ko: '월드' },
+  conditions: { en: 'Conditions', ko: '조건' },
+  log: { en: 'Log', ko: '항해일지' },
+  sailing: { en: 'Sailing', ko: '항해' },
+  controls: { en: 'Controls', ko: '조작' },
+};
+
+export const CONTROLS_NOTE: Phrase = {
+  en: 'New to this? The Sailing tab explains what the boat is doing and what every reading means.',
+  ko: '처음이신가요? 항해 탭에서 배가 무엇을 하고 있는지, 각 계기값이 무엇인지 설명합니다.',
+};
+
+/** Key bindings: the caps are universal, the descriptions are not. */
+export const KEYS: [string, Phrase][] = [
+  ['← →  /  A D', { en: 'helm (holds its angle)', ko: '조타 (각도를 유지합니다)' }],
+  ['Space', { en: 'centre the helm', ko: '타를 중앙으로' }],
+  ['↑ ↓  /  W S', { en: 'trim in / ease', ko: '돛 당기기 / 내보내기' }],
+  ['Z X', { en: 'vang: close the leech / twist off', ko: '뱅: 리치를 닫기 / 트위스트 주기' }],
+  ['T', { en: 'auto-trim', ko: '자동 트림' }],
+  ['H', { en: 'autopilot: off / compass / wind', ko: '오토파일럿: 끔 / 나침반 / 바람' }],
+  ['1 2 3 4', { en: 'reef 0–3', ko: '리프 0–3단' }],
+  ['F / G', { en: 'furl / unfurl jib', ko: '집세일 말기 / 펴기' }],
+  ['Y', { en: 'auto-reef', ko: '자동 리프' }],
+  ['Q E', { en: 'mean wind direction', ko: '평균 풍향' }],
+  ['C', { en: 'camera', ko: '카메라' }],
+  ['0', { en: 'hand all sail / set again', ko: '돛 전부 거두기 / 다시 펴기' }],
+  ['A', { en: 'let go / weigh anchor', ko: '닻 내리기 / 올리기' }],
+  ['N / wheel on chart', { en: 'chart range', ko: '차트 축척' }],
+  ['drag chart', { en: 'look around it', ko: '차트 둘러보기' }],
+  ['click chart', { en: 'set where you are bound', ko: '목적지 정하기' }],
+  ['drag', { en: 'orbit around the boat', ko: '배 주위로 시점 돌리기' }],
+  ['wheel elsewhere', { en: 'zoom the camera', ko: '카메라 확대·축소' }],
+  ['double-click', { en: 'recentre astern', ko: '선미 뒤로 시점 복귀' }],
+  ['P', { en: 're-solve polar', ko: '폴라 다시 계산' }],
+  ['R', { en: 'restart', ko: '다시 시작' }],
+  ['M', { en: 'sound', ko: '소리' }],
+  ['L', { en: 'navigation lights', ko: '항해등' }],
+  ['Esc', { en: 'this menu', ko: '이 메뉴' }],
+];
+
+export const WEATHER: Record<WeatherKind, Phrase> = {
+  clear: { en: 'Clear', ko: '맑음' },
+  fair: { en: 'Fair', ko: '갬' },
+  overcast: { en: 'Overcast', ko: '흐림' },
+  rain: { en: 'Rain', ko: '비' },
+  squall: { en: 'Squall', ko: '스콜' },
+  fog: { en: 'Fog', ko: '안개' },
+};
+
+/**
+ * What each region asks of you.
+ *
+ * The names and the survey citations stay in English -- they are what is
+ * written on the chart and what makes the depth claim checkable. Only this,
+ * which is description, is translated.
+ */
+export const REGION_BRIEF: Record<string, Phrase> = {
+  'sf-bay': {
+    en: 'The Gate, Alcatraz, Raccoon Strait and the Berkeley flats. A surveyed coast and surveyed depths — the shoal you can see is the one you will touch.',
+    ko: '금문, 알카트라즈, 라쿤 해협, 버클리 사주. 해안선도 수심도 실측이라, 화면에서 보이는 여울이 실제로 부딪히는 여울입니다.',
+  },
+  newport: {
+    en: 'The East Passage from Prudence to the sea, Conanicut and Aquidneck either side, and the open sound beyond Brenton. A sea breeze rather than a tide.',
+    ko: '프루던스에서 바다까지 이어지는 이스트 패시지, 양옆의 코나니컷과 아퀴드넥, 브렌턴 너머의 열린 만. 조류보다 시브리즈가 결정합니다.',
+  },
+  'merchant-row': {
+    en: 'Stonington, the islands south of it, and the north of Isle au Haut. Twice as much of the sailable water is close aboard a shore as anywhere else here.',
+    ko: '스토닝턴과 그 남쪽 섬들, 그리고 아일오호 북부. 항해 가능한 물의 두 배가 해안에 바짝 붙어 있습니다.',
+  },
+  'puget-sound': {
+    en: 'Elliott Bay, Bainbridge and the main basin. Deep enough that the bottom never enters into it — the decision is the breeze under the bluffs.',
+    ko: '엘리엇 만, 베인브리지, 그리고 본 수역. 바닥이 아예 문제가 되지 않을 만큼 깊고, 결정하는 것은 절벽 아래의 바람입니다.',
+  },
+  chesapeake: {
+    en: 'Annapolis, the Severn and the Bay Bridge. The shallowest and the lightest — more of it is too shoal to sail than anywhere else here.',
+    ko: '아나폴리스, 세번 강, 베이 브리지. 가장 얕고 바람도 가장 약하며, 항해 불가능할 만큼 얕은 물이 어디보다 많습니다.',
+  },
+  'buzzards-bay': {
+    en: 'Woods Hole, Vineyard Sound and the Elizabeth Islands. Hard breeze and hard stream over open water — the most sailable square here.',
+    ko: '우즈홀, 빈야드 해협, 엘리자베스 제도. 트인 물 위의 센 바람과 센 조류 — 항해 가능한 면적이 가장 넓습니다.',
+  },
+};
+
+export const DAY_PHASE: Record<DayPhase, Phrase> = {
+  night: { en: 'Night', ko: '밤' },
+  dawn: { en: 'Dawn', ko: '새벽' },
+  dusk: { en: 'Dusk', ko: '땅거미' },
+  sunrise: { en: 'Sunrise', ko: '일출' },
+  sunset: { en: 'Sunset', ko: '일몰' },
+  morning: { en: 'Morning', ko: '오전' },
+  afternoon: { en: 'Afternoon', ko: '오후' },
+  midday: { en: 'Midday', ko: '한낮' },
+};
+
+/**
+ * The instrument panel.
+ *
+ * The gauge labels are not in here and are not translated: BSP, VMG, TWA and
+ * the rest are what a boat's instruments read anywhere in the world, and Heel,
+ * Sheet, Depth and Sea sit in the same grid as them and would look wrong half
+ * in one language. The glossary in the guide explains all of them. What is here
+ * is everything on the panel that is a sentence rather than a dial.
+ */
+export const PANEL: Record<string, Phrase> = {
+  instruments: { en: 'Instruments', ko: '계기판' },
+  helm: { en: 'Helm', ko: '조타' },
+  pilot: { en: 'Pilot', ko: '오토파일럿' },
+  amidships: { en: 'amidships', ko: '중앙' },
+  twistBest: { en: 'Twist · best', ko: '트위스트 · 최적' },
+  fullMain: { en: 'Full main', ko: '메인 전개' },
+  reef: { en: 'Reef', ko: '리프' },
+  autoTrim: { en: 'AUTO TRIM', ko: '자동 트림' },
+  autoReef: { en: 'AUTO REEF', ko: '자동 리프' },
+  muted: { en: 'MUTED', ko: '음소거' },
+  overpowered: {
+    en: 'OVERPOWERED — twist off, ease or reef',
+    ko: '과도한 압력 — 트위스트를 주거나, 내보내거나, 리프하세요',
+  },
+  polar: { en: 'Polar', ko: '폴라' },
+  chart: { en: 'Chart', ko: '차트' },
+  run: { en: 'run', ko: '항주' },
+  notSolved: { en: 'not solved', ko: '미계산' },
+  tideNoMarker: { en: 'tide — no marker', ko: '조류 — 표식 없음' },
+  best: { en: 'best', ko: '최적' },
+};
+
+/** The conditions tab, and the two panels that are not the guide. */
+export const SETTINGS_UI: Record<string, Phrase> = {
+  meanWind: { en: 'Mean wind', ko: '평균 바람' },
+  gusts: { en: 'Gusts / shifts', ko: '돌풍 / 풍향 변화' },
+  seaState: { en: 'Sea state', ko: '파도' },
+  tidalDrift: { en: 'Tidal drift', ko: '조류' },
+  slack: { en: 'slack', ko: '정조' },
+  startTime: { en: 'Start time', ko: '시작 시각' },
+  timeSpeed: { en: 'Time speed', ko: '시간 배속' },
+  frozen: { en: 'frozen', ko: '정지' },
+  weather: { en: 'Weather', ko: '날씨' },
+  evolving: { en: 'Evolving (random)', ko: '스스로 변함 (무작위)' },
+  weatherNote: {
+    en: 'Evolving weather is what makes two passages over the same water different. Pin it to sail one set of conditions.',
+    ko: '스스로 변하는 날씨가 같은 물 위의 두 항해를 다르게 만듭니다. 한 가지 조건으로 항해하려면 고정하세요.',
+  },
+  headless: {
+    en: 'physics core runs headless · npm run polar',
+    ko: '물리 코어는 헤드리스로 동작 · npm run polar',
+  },
+};
+
+export const LOG: Record<string, Phrase> = {
+  empty: {
+    en: 'Nothing logged yet. Click the chart to say where you are bound, sail there, and let her arrive.',
+    ko: '아직 기록이 없습니다. 차트를 눌러 목적지를 정하고, 그곳까지 항해해 도착하세요.',
+  },
+  export: { en: 'Export', ko: '내보내기' },
+  import: { en: 'Import', ko: '가져오기' },
+  kept: {
+    en: 'Kept in this browser only. Export it to keep it — clearing site data will take it.',
+    ko: '이 브라우저에만 저장됩니다. 사이트 데이터를 지우면 사라지니, 보관하려면 내보내세요.',
+  },
+};
+
+/** The World tab, where a place is chosen. */
+export const WORLD: Record<string, Phrase> = {
+  where: { en: 'Where', ko: '어디서' },
+  surveyedTag: { en: 'surveyed', ko: '실측' },
+  sketchTag: { en: 'sketch', ko: '스케치' },
+  surveyedLead: { en: 'Surveyed.', ko: '실측 데이터.' },
+  surveyedBody: { en: 'The coastline and the depths are', ko: '해안선과 수심의 출처는' },
+  surveyedCaveat: {
+    en: '. Still a simulator and not a chart: 25 m between soundings, and no tide height.',
+    ko: '. 그래도 해도가 아니라 시뮬레이터입니다. 수심점 간격이 25 m이고, 조위는 반영되지 않습니다.',
+  },
+  sketchWarning: {
+    en: 'Approximate, and not for navigation.',
+    ko: '근사값이며, 실제 항해에 쓸 수 없습니다.',
+  },
+  seed: { en: 'World seed', ko: '월드 시드' },
+  seedNew: { en: 'New each time', ko: '매번 새로' },
+  seedPinned: { en: 'Pinned', ko: '고정' },
+  venueNote: {
+    en: 'A venue brings its own land, breeze and tide, so the island slider stands down. The stream runs hardest in deep water and gives up in the shallows — which is where the wind gives up too.',
+    ko: '베뉴는 자체 육지와 바람, 조류를 가져오므로 섬 슬라이더는 물러납니다. 조류는 깊은 물에서 가장 세고 얕은 곳에서 사그라드는데, 바람도 바로 그곳에서 사그라듭니다.',
+  },
+  oceanNote: {
+    en: 'The ocean has no edge: islands keep coming over the horizon for as long as you sail. Their lee is flat water but almost no wind, and the shoals around them will stop you dead. Pin the seed to sail the same water twice.',
+    ko: '바다에는 끝이 없습니다. 항해하는 한 섬이 계속 수평선 너머에서 나타납니다. 섬 그늘은 물결이 잔잔하지만 바람이 거의 없고, 주변 여울은 배를 그대로 세웁니다. 같은 바다를 다시 항해하려면 시드를 고정하세요.',
+  },
+  weatherNote2: {
+    en: 'Evolving weather is what makes two passages over the same water different. A squall halfway forces a reef and changes which side of the bay pays.',
+    ko: '스스로 변하는 날씨가 같은 물 위의 두 항해를 다르게 만듭니다. 도중의 스콜은 리프를 강요하고, 만의 어느 쪽이 유리한지를 바꿔 놓습니다.',
+  },
+};

@@ -4,6 +4,7 @@ import { knotsToMs, msToKnots } from './sim/units';
 import type { Vec2 } from './sim/math';
 import { setDriftVec } from './sim/current';
 import { venueById, type Venue } from './sim/venues';
+import { detectLang, type Lang } from './i18n';
 import { regionById, type Region } from './sim/regions';
 
 /**
@@ -66,6 +67,15 @@ export interface Settings {
   seed: number;
   /** Roll a new seed every time you put to sea. Off pins the world to `seed`. */
   randomWorld: boolean;
+  /**
+   * Which language the interface is in.
+   *
+   * A setting rather than a fixed read of the browser's language, because the
+   * two are different questions: what your machine is configured as, and what
+   * you want to read this in. The browser only supplies the first guess, and
+   * only when nothing has been stored yet.
+   */
+  lang: Lang;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -83,6 +93,8 @@ export const DEFAULT_SETTINGS: Settings = {
   region: '',
   seed: 20260806,
   randomWorld: true,
+  // Overwritten by `loadSettings` on a first run, which asks the browser.
+  lang: 'en',
 };
 
 const KEY = 'voyage.settings.v2';
@@ -90,7 +102,7 @@ const KEY = 'voyage.settings.v2';
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS };
+    if (!raw) return { ...DEFAULT_SETTINGS, lang: detectLang() };
     const o = JSON.parse(raw) as Partial<Settings>;
     // Stored values are not trusted. A version bump or a hand-edited entry must
     // never be able to break the game.
@@ -125,9 +137,12 @@ export function loadSettings(): Settings {
       seed: Math.round(num(o.seed, DEFAULT_SETTINGS.seed, 1, 2 ** 31)),
       randomWorld:
         typeof o.randomWorld === 'boolean' ? o.randomWorld : DEFAULT_SETTINGS.randomWorld,
+      // Falls back to the browser rather than to English: a stored file written
+      // before this setting existed should still open in the reader's language.
+      lang: o.lang === 'en' || o.lang === 'ko' ? o.lang : detectLang(),
     };
   } catch {
-    return { ...DEFAULT_SETTINGS };
+    return { ...DEFAULT_SETTINGS, lang: detectLang() };
   }
 }
 

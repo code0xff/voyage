@@ -5,6 +5,8 @@ import { drawPolar } from '@/view/polarplot';
 import { RAD } from '@/sim/math';
 import { msToKnots } from '@/sim/units';
 import { useEngine, useEngineFrame, useReadout } from './engine-context';
+import { useT } from './i18n';
+import { PANEL } from './strings';
 
 const SIZE = 208;
 
@@ -16,6 +18,7 @@ const SIZE = 208;
  */
 export function PolarCard() {
   const ref = useRef<HTMLCanvasElement>(null);
+  const t = useT();
   const engine = useEngine();
 
   useEffect(() => {
@@ -37,17 +40,19 @@ export function PolarCard() {
     s.polar
       ? `${msToKnots(s.polar.tws).toFixed(0)} kn · ${
           s.currents.running
-            ? 'tide — no marker'
-            : `best ${s.polar.bestUpwind ? (s.polar.bestUpwind.twa * RAD).toFixed(0) : '--'}°`
+            ? t(PANEL.tideNoMarker)
+            : `${t(PANEL.best)} ${
+                s.polar.bestUpwind ? (s.polar.bestUpwind.twa * RAD).toFixed(0) : '--'
+              }°`
         }`
-      : 'not solved',
+      : t(PANEL.notSolved),
   );
 
   return (
     <Card className="pointer-events-auto w-[232px] gap-0 p-3 backdrop-blur-md bg-card/85">
       <div className="flex items-center justify-between pb-1.5">
         <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-          Polar
+          {t(PANEL.polar)}
         </span>
         <Badge variant="outline" className="px-1.5 py-0 text-[9px] font-normal">
           <span ref={caption} />

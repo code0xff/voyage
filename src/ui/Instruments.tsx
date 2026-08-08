@@ -7,7 +7,8 @@ import { RAD, clamp, wrap2Pi } from '@/sim/math';
 import { CRUISER } from '@/sim/config';
 import { msToKnots } from '@/sim/units';
 import { phaseName, formatClock } from '@/sim/sky';
-import { WEATHER_LABEL } from '@/sim/weather';
+import { useT } from './i18n';
+import { DAY_PHASE, PANEL, WEATHER } from './strings';
 import type { Snapshot } from '@/engine';
 import { useEngineFrame, useReadout } from './engine-context';
 import { TelemetryCard } from './TelemetryCard';
@@ -46,6 +47,7 @@ const deg = (v: number) => `${v.toFixed(0)}°`;
 
 /** Warnings, gusts and shifts. Empty most of the time, loud when it matters. */
 function Alerts() {
+  const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   useEngineFrame((s) => {
     const el = ref.current;
@@ -69,7 +71,8 @@ function Alerts() {
     if (Math.abs(s.diag.twa) * RAD < 35) msgs.push({ text: 'NO-GO ZONE', tone: 'warn' });
     // Twist first: it is the cheapest way to give power back, and it is the one
     // the player is least likely to reach for on their own.
-    if (Math.abs(s.state.heel) * RAD > 32) msgs.push({ text: 'OVERPOWERED — twist off, ease or reef', tone: 'warn' });
+    if (Math.abs(s.state.heel) * RAD > 32)
+      msgs.push({ text: t(PANEL.overpowered), tone: 'warn' });
     if (s.diag.froude > 0.95) msgs.push({ text: 'HULL SPEED', tone: 'info' });
 
     const html = msgs
@@ -92,8 +95,9 @@ function Alerts() {
 
 /** Sail plan bar: reef state, furl and the resulting area. */
 function SailPlan() {
+  const t = useT();
   const label = useReadout<HTMLSpanElement>((s) => {
-    const reef = s.state.reef === 0 ? 'Full main' : `Reef ${s.state.reef}`;
+    const reef = s.state.reef === 0 ? t(PANEL.fullMain) : `${t(PANEL.reef)} ${s.state.reef}`;
     const furl = s.state.jibFurl > 0.01 ? ` · jib ${Math.round(s.state.jibFurl * 100)}% furled` : '';
     return `${reef}${furl}`;
   });
@@ -140,6 +144,7 @@ function SailPlan() {
  * power; the decision to give power away is the player's.
  */
 function Twist() {
+  const t = useT();
   const angle = useReadout<HTMLSpanElement>((s) =>
     s.diag ? `${(s.state.twist * RAD).toFixed(0)}° / ${(s.diag.twistWanted * RAD).toFixed(0)}°` : '--',
   );
@@ -166,7 +171,7 @@ function Twist() {
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[10.5px] text-muted-foreground">Twist · best</span>
+        <span className="text-[10.5px] text-muted-foreground">{t(PANEL.twistBest)}</span>
         <span ref={angle} className="font-mono text-[10.5px] tabular-nums" />
       </div>
       <div className="relative h-1.5 overflow-hidden rounded-sm bg-secondary">
@@ -192,12 +197,15 @@ function Twist() {
  * during a tack the lag is real and worth seeing.
  */
 function Helm() {
+  const t = useT();
   const angle = useReadout<HTMLSpanElement>((s) => {
     const d = s.state.rudder * RAD;
-    if (Math.abs(d) < 0.5) return 'amidships';
+    if (Math.abs(d) < 0.5) return t(PANEL.amidships);
     return `${Math.abs(d).toFixed(0)}° ${d > 0 ? 'stbd' : 'port'}`;
   });
-  const who = useReadout<HTMLSpanElement>((s) => (s.pilot.mode === 'off' ? 'Helm' : 'Pilot'));
+  const who = useReadout<HTMLSpanElement>((s) =>
+    s.pilot.mode === 'off' ? t(PANEL.helm) : t(PANEL.pilot),
+  );
   const fill = useRef<HTMLDivElement>(null);
 
   useEngineFrame((s) => {
@@ -239,6 +247,7 @@ function Helm() {
 
 /** Auto-mode chips. These change rarely, so plain React state via a re-render is fine. */
 function Modes() {
+  const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   useEngineFrame((s) => {
     const el = ref.current;
@@ -253,9 +262,9 @@ function Modes() {
           : null;
     const chips = [
       pilot,
-      s.autoTrim ? 'AUTO TRIM' : null,
-      s.autoReef ? 'AUTO REEF' : null,
-      s.soundOn ? null : 'MUTED',
+      s.autoTrim ? t(PANEL.autoTrim) : null,
+      s.autoReef ? t(PANEL.autoReef) : null,
+      s.soundOn ? null : t(PANEL.muted),
     ].filter(Boolean) as string[];
     const html = chips
       .map(
@@ -269,16 +278,19 @@ function Modes() {
 }
 
 export function Instruments() {
+  const t = useT();
   const conditions = useReadout<HTMLSpanElement>(
     (s) =>
-      `${formatClock(s.sky.hour)} · ${phaseName(s.sky)} · ${WEATHER_LABEL[s.weather.state.kind]}`,
+      `${formatClock(s.sky.hour)} · ${t(DAY_PHASE[phaseName(s.sky)])} · ${t(
+        WEATHER[s.weather.state.kind],
+      )}`,
   );
 
   return (
     <Card className="pointer-events-auto w-[268px] gap-0 p-3 backdrop-blur-md bg-card/85">
       <div className="flex items-center justify-between pb-2">
         <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-          Instruments
+          {t(PANEL.instruments)}
         </span>
         <Badge variant="outline" className="px-1.5 py-0 text-[9px] font-normal">
           <span ref={conditions} />

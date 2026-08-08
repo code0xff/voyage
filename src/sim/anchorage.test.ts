@@ -79,9 +79,9 @@ describe('anchorage', () => {
 
   it('says what is wrong, and says nothing when nothing is', () => {
     expect(anchorProblem(at(0, 0))).toBe('aground');
-    expect(anchorProblem(at(0, 2500))).toMatch(/deep/);
+    expect(anchorProblem(at(0, 2500))).toBe('deep');
     const r = firstGood()!;
-    expect(anchorProblem(at(0, r, MAX_WAY * 3))).toMatch(/way/);
+    expect(anchorProblem(at(0, r, MAX_WAY * 3))).toBe('way');
     expect(anchorProblem(at(0, r))).toBeNull();
   });
 

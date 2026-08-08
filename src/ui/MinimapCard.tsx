@@ -8,6 +8,8 @@ import { CRUISER } from '@/sim/config';
 import { formatDistance } from '@/sim/units';
 import type { Vec2 } from '@/sim/math';
 import { useEngine, useEngineFrame, useReadout } from './engine-context';
+import { useT } from './i18n';
+import { PANEL } from './strings';
 
 /**
  * The chart, px. One size, matching the polar exactly -- 208 in a 232 px card.
@@ -75,6 +77,7 @@ const DRAG_SLOP = 4;
  */
 export function MinimapCard({ full, onFull }: { full: boolean; onFull: (v: boolean) => void }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const t = useT();
   const engine = useEngine();
   const [range, setRange] = useState(1);
   const minimap = useRef(createMinimap());
@@ -243,13 +246,13 @@ export function MinimapCard({ full, onFull }: { full: boolean; onFull: (v: boole
     >
       <div className="flex items-center justify-between gap-2 pb-1.5">
         <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-          Chart
+          {t(PANEL.chart)}
         </span>
         <div className="flex items-center gap-1">
           <Badge variant="outline" className="px-1.5 py-0 text-[9px] font-normal tabular-nums">
             {/* The gap is a class, not a space: prettier wraps this line and JSX
                 eats whitespace that ends up next to a newline. */}
-            {RANGES[range]} m · run
+            {RANGES[range]} m · {t(PANEL.run)}
             <span ref={runLabel} className="ml-1" />
           </Badge>
           {/* Only in the full view, where there is room for it and where the

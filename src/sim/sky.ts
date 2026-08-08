@@ -191,14 +191,31 @@ export function hoursUntilSunset(hourRaw: number): number {
   return h < SUNSET ? SUNSET - h : 0;
 }
 
-/** Label for the HUD. */
-export function phaseName(sky: SkyState): string {
+/**
+ * Which part of the day it is, as a name and not a label.
+ *
+ * It used to return the English word straight to the HUD, which put display
+ * copy in the physics core and became untenable once the interface had to say
+ * it in two languages. `src/sim` decides *which* part of the day; `src/ui`
+ * decides what to call it.
+ */
+export type DayPhase =
+  | 'night'
+  | 'dawn'
+  | 'dusk'
+  | 'sunrise'
+  | 'sunset'
+  | 'morning'
+  | 'afternoon'
+  | 'midday';
+
+export function phaseName(sky: SkyState): DayPhase {
   const e = sky.sunElevation;
-  if (e < -6 * DEG) return 'Night';
-  if (e < 0) return sky.hour < 12 ? 'Dawn' : 'Dusk';
-  if (e < 12 * DEG) return sky.hour < 12 ? 'Sunrise' : 'Sunset';
-  if (e < 30 * DEG) return sky.hour < 12 ? 'Morning' : 'Afternoon';
-  return 'Midday';
+  if (e < -6 * DEG) return 'night';
+  if (e < 0) return sky.hour < 12 ? 'dawn' : 'dusk';
+  if (e < 12 * DEG) return sky.hour < 12 ? 'sunrise' : 'sunset';
+  if (e < 30 * DEG) return sky.hour < 12 ? 'morning' : 'afternoon';
+  return 'midday';
 }
 
 export function formatClock(hour: number): string {
