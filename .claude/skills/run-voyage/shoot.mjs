@@ -9,6 +9,10 @@
  *   label     file name stem for the two PNGs this writes
  *   settings  overrides merged into DEFAULT_SETTINGS (see src/settings.ts)
  *   pitch     pixels to drag the camera by. Negative looks up, at the sky.
+ *   yaw       pixels to drag it sideways, about 523 px to the half-turn. Needed
+ *             for anything that is only visible in one direction -- a rainbow
+ *             is centred opposite the sun and is simply not there if the
+ *             camera happens to be pointing at it.
  *   seconds   how long to let the world run before the shot. Default 2.5.
  *
  * Writes `<label>.png` (the whole window) and `<label>-sky.png` (a crop of the
@@ -121,7 +125,7 @@ const browser = await chromium.launch({
 
 let failed = 0;
 for (const c of cases) {
-  const { label, settings = {}, pitch = 0, seconds = 2.5, keys = [] } = c;
+  const { label, settings = {}, pitch = 0, yaw = 0, seconds = 2.5, keys = [] } = c;
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 760 } });
   await ctx.addInitScript((s) => {
     localStorage.setItem('voyage.settings.v2', JSON.stringify(s));
@@ -157,10 +161,13 @@ for (const c of cases) {
 
   // The chase camera looks along the boat's heading, which puts the horizon
   // low and the sky mostly out of frame. Orbit it up.
-  if (pitch) {
+  if (pitch || yaw) {
+    const steps = 20;
     await page.mouse.move(640, 400);
     await page.mouse.down();
-    for (let i = 1; i <= 10; i++) await page.mouse.move(640, 400 + (pitch * i) / 10);
+    for (let i = 1; i <= steps; i++) {
+      await page.mouse.move(640 + (yaw * i) / steps, 400 + (pitch * i) / steps);
+    }
     await page.mouse.up();
   }
   await page.waitForTimeout(seconds * 1000);
