@@ -786,15 +786,22 @@ animals you meet at sea are authored models, used under
 - **Shark** — [eelislay](https://sketchfab.com/eelislay),
   [model](https://sketchfab.com/3d-models/shark-1b45eb40145a4cf981c601f5d9f168d3)
 
-Both are redistributed in their converted GLB form under
-`public/assets/`, each beside an `ATTRIBUTION.txt` carrying the same notice.
-They are scaled, positioned and animated at runtime; their geometry and embedded
-textures are otherwise unmodified.
+Both live under `public/assets/`, each beside an `ATTRIBUTION.txt` giving the
+same notice and stating what was changed, which the licence asks for. Both are
+compressed (`EXT_meshopt_compression`, `KHR_mesh_quantization`, and the whale's
+textures re-encoded to WebP) and both are scaled, positioned and animated at
+runtime. Nothing has been added to or taken out of either.
 
-Buying them out of the load is deliberate: neither is fetched when the page
-opens. The whale is requested when the simulation first places one, and the
-shark — 3.8 MB, the largest file here by some way, and an encounter many
-passages never produce — only when a shark is actually there to draw.
+That compression is worth its own line: 4.6 MB became 620 kB, and the shark
+alone went from 3.9 MB to 509 kB. It is all geometry — sixty-five thousand
+vertices for an animal a few hundred pixels wide at the range it is seen from.
+Meshopt rather than Draco, which is five times smaller again but arrives with a
+300 kB wasm decoder that has to be served separately; the meshopt decoder is a
+25 kB module that bundles with the rest.
+
+Neither is fetched when the page opens. The whale is requested when the
+simulation first places one, and the shark — an encounter many passages never
+produce — only when there is one to draw.
 
 Using an authored asset at all is a reversal, and worth recording as one.
 Hand-modelled whales, dolphins and gulls were built early and all cut: a

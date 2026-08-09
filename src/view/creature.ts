@@ -41,6 +41,10 @@ export const CULL_MARGIN = 1.05;
  * `public/` and fetched at runtime, which gives most of the saving straight
  * back and adds a build step and a second thing that can 404. The meshopt
  * decoder is a 25 kB ES module that bundles with everything else.
+ *
+ * A loader per call, and one decoder for all of them. `MeshoptDecoder` is a
+ * module singleton with no per-file state, so there is nothing to keep apart;
+ * the loader itself is a few fields and is not worth caching.
  */
 export function creatureLoader(): GLTFLoader {
   return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
