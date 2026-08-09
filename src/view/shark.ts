@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
-import type { Vec2 } from '../sim/math';
+import { smoothstep, type Vec2 } from '../sim/math';
 import type { SharkSighting } from '../sim/sharks';
 import type { WaveField } from '../sim/waves';
 import {
@@ -37,11 +37,14 @@ const SINK = 0.025;
 /** How far the body descends while sounding, as a fraction of its length. */
 const DIVE_DEPTH = 0.18;
 
-/** Root height for a shark at the surface or sounding below it. */
+/**
+ * Root height for a shark at the surface or sounding below it.
+ *
+ * Exported for `shark.test.ts`, which is what lets the descent be asserted
+ * rather than looked at.
+ */
 export function sharkSurfaceY(surface: number, size: number, diveT: number): number {
-  const t = Math.max(0, Math.min(1, diveT));
-  const smooth = t * t * (3 - 2 * t);
-  return surface - size * SINK - size * DIVE_DEPTH * smooth;
+  return surface - size * SINK - size * DIVE_DEPTH * smoothstep(0, 1, diveT);
 }
 
 /** Body beam as a fraction of length, for the slope samples. Sharks are slim. */

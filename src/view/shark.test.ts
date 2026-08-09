@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { sharkSurfaceY } from './shark';
 
+/**
+ * A renderer test, for the reason AGENTS.md allows one: this is a direction,
+ * not a look. Whether a sounding shark goes down or up is a fact with an
+ * answer, and the answer had better not depend on anyone remembering which way
+ * the water is. How the dive *reads* is a separate question and is settled by
+ * watching it, which no assertion here claims to do.
+ */
+
 describe('shark view', () => {
   it('moves a sounding shark farther below the surface', () => {
     const surface = 2;
