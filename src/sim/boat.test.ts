@@ -34,6 +34,46 @@ describe('sign conventions', () => {
     expect(s.heel).toBeLessThan(-5 * DEG);
   });
 
+  /**
+   * Regression: a hull left to itself on a sloping wave leaned *into* the face
+   * of it, at twice the slope angle.
+   *
+   * `rollSlope` is positive starboard-up and `s.heel` is positive
+   * starboard-down -- the test above pins that second half -- and the righting
+   * moment took the difference of the two as though they ran the same way. The
+   * polar could never have caught it: `solvePolar` sets `rollSlope` to zero on
+   * purpose, because a rolling boat has no steady state to find.
+   *
+   * Sailed with no wind and no way on, so the only thing left to move her is
+   * the water under her.
+   *
+   * Asserted as a *stationary point* rather than as a settling time. Where she
+   * ends up after forty seconds is a fact about `rollDamp` and `rollInertia`
+   * as much as about the sign, and would turn a legitimate retune of either
+   * into a failure here. Put her at the attitude the water implies, and she
+   * should simply stay: no roll acceleration, from any tuning of a righting
+   * moment that is doing its job.
+   */
+  it('lies along a wave rather than leaning into it', () => {
+    const slope = 6 * DEG;
+    const sea = { h13: 0, dir: 0, heave: 0, pitchSlope: 0, rollSlope: slope, depth: Infinity };
+    const drift: Controls = { rudder: 0, sheet: 0, twist: 0, autoTrim: false };
+    const env = { ...DEFAULT_ENV, tws: 0 };
+
+    // Water higher to starboard, so her starboard side rides up with it and she
+    // lies over to port. Leaning to starboard would be into the wave face.
+    const settled = initialState({ heading: 0, u: 0 });
+    settled.heel = -slope;
+    step(settled, CRUISER, env, drift, DT, { sea });
+    expect(Math.abs(settled.heelRate) * RAD).toBeLessThan(0.05);
+
+    // And she is not merely stationary there but pulled back to it: started
+    // upright, the first thing she does is lean to port.
+    const upright = initialState({ heading: 0, u: 0 });
+    step(upright, CRUISER, env, drift, DT, { sea });
+    expect(upright.heelRate).toBeLessThan(0);
+  });
+
   it('slips to leeward, not to windward', () => {
     const s = initialState({ heading: 315 * DEG, u: 2.5 });
     const d = run(s, 30);

@@ -629,8 +629,25 @@ export function step(
   // free, and because this is a second-order system it also produces heel
   // overshoot in gusts and the settling wobble after a tack. A quasi-static
   // model gives none of the three.
+  //
+  // The slope is *added* where the pitch below subtracts its own, and that is
+  // not a slip. `pitchSlope` is positive bow-up and `s.pitch` is positive
+  // bow-up, so the difference between them is the trim relative to the water.
+  // Roll does not line up that way: `rollSlope` is positive starboard-*up*
+  // (see sampleHull in waves.ts) while `s.heel` is positive starboard-*down*
+  // (see "heels away from the wind" in boat.test.ts, where wind from starboard
+  // gives negative heel). Subtracting one from the other took the difference
+  // of two quantities measured in opposite directions, so a hull left to
+  // itself settled leaning *into* the face of the wave instead of lying along
+  // it, at twice the slope angle.
+  //
+  // Found from the renderer: the animals were given the same treatment by
+  // copying this line, and measured against the analytic normal of a plane
+  // they came out mirrored. The polar does not see it -- solvePolar sets
+  // rollSlope to zero deliberately, since a rolling boat has no steady state
+  // to find -- so nothing in the validation could ever have caught it.
   const rollAccel =
-    (heelMoment - cfg.rm90 * Math.sin(s.heel - sea.rollSlope) - cfg.rollDamp * s.heelRate) /
+    (heelMoment - cfg.rm90 * Math.sin(s.heel + sea.rollSlope) - cfg.rollDamp * s.heelRate) /
     cfg.rollInertia;
   s.heelRate += rollAccel * dt;
   s.heel = clamp(s.heel + s.heelRate * dt, -1.4, 1.4);

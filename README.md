@@ -390,8 +390,14 @@ Roll is integrated as a second-order system, and the righting moment is
 referenced to **the local water surface normal rather than to vertical**:
 
 ```
-I*phi'' = M_heel - rm90*sin(phi - surface slope) - c*phi'
+I*phi'' = M_heel - rm90*sin(phi + rollSlope) - c*phi'
 ```
+
+The slope is added rather than subtracted, and that is not a typo. Heel is
+positive starboard-*down* while `rollSlope` is positive starboard-*up*, so the
+two are measured in opposite directions and lining the hull up with the water
+means adding them. Subtracting, which this said and did until it was caught,
+settles the boat at twice the slope on the wrong side of it.
 
 That single detail gives wave-induced rolling for free, and because it is
 second order it also produces heel overshoot in gusts and the settling wobble
@@ -620,6 +626,29 @@ by the polar solver or the rule tests:
 Also fixed: sails not rendering at all because a `Shape` was closed with a
 duplicate vertex; the camera flying across the ocean on restart; auto-reef
 reacting to a single gust peak and reefing in 12 knots.
+
+### And one the polar could not catch
+
+Worth recording, because it is where the method above has an edge.
+
+**The righting moment took the wave slope with the wrong sign**, so a hull left
+to itself on a wave leaned *into* its face rather than lying along it, at twice
+the slope angle. `rollSlope` is positive starboard-up and `heel` is positive
+starboard-down, and the difference of the two was taken as though they ran the
+same way.
+
+The polar could not have found it, and no polar ever will: `solvePolar` sets
+`rollSlope` to zero deliberately -- a rolling boat has no steady state to solve
+for -- so the term is identically zero in every polar this project has ever run,
+and all four rows are unchanged by the fix. Nor was there a rule test that put
+the boat on a slope; there is now, and it catches it in a tenth of a second.
+
+So this is not a bug headless work *cannot* find. It is one that nothing which
+existed was pointed at, and the thing that eventually pointed at it was drawing
+a whale: the animals were laid on the water by copying this line, and checking
+their attitude against the analytic normal of a sloping plane showed it
+mirrored. The renderer is supposed to be the part that takes its answers from
+the physics. Here it was the only place anyone had looked.
 
 ---
 
