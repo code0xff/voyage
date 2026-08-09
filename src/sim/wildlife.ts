@@ -120,7 +120,7 @@ export class Wildlife {
       const flock = this.activeFlock;
       flock.age += dt;
       flock.opacity = Math.min(1, flock.age / 0.5, (flock.duration - flock.age) / 1.5);
-      if (flock.age < flock.duration && Math.hypot(flock.pos.x - boat.x, flock.pos.y - boat.y) < 900) {
+      if (flock.age < flock.duration) {
         this.flocks.push(flock);
         return;
       }
