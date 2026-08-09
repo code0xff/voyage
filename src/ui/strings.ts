@@ -144,7 +144,9 @@ export const KEYS: [string, Phrase][] = [
   ['drag chart', { en: 'look around it', ko: '차트 둘러보기' }],
   ['click chart', { en: 'set where you are bound', ko: '목적지 정하기' }],
   ['drag', { en: 'orbit around the boat', ko: '배 주위로 시점 돌리기' }],
-  ['wheel elsewhere', { en: 'zoom the camera', ko: '카메라 확대·축소' }],
+  // Not "zoom": it moves the eye nearer or further, and B is the thing that
+  // actually magnifies. Calling both zoom is why one gets mistaken for the other.
+  ['wheel elsewhere', { en: 'eye closer / further out', ko: '시점 거리 조절' }],
   ['double-click', { en: 'recentre astern', ko: '선미 뒤로 시점 복귀' }],
   ['P', { en: 're-solve polar', ko: '폴라 다시 계산' }],
   ['R', { en: 'restart', ko: '다시 시작' }],

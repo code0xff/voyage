@@ -92,10 +92,23 @@ export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
     lastX = e.clientX;
     lastY = e.clientY;
 
-    // Drag right and the boat turns right on screen, i.e. the eye goes the
-    // other way -- the scene follows the hand, as in any orbit control.
+    /*
+     * One rule, both axes: **the scene follows the hand.**
+     *
+     * Drag right and the sea slides right; drag down and it slides down, as
+     * though the view were being pulled about by a corner. That is what the
+     * `grab` cursor on this canvas promises, it is what every map and 3D
+     * viewer does, and it is what a first-person panorama does too -- Street
+     * View pans this way, and nobody reads it as inverted.
+     *
+     * Both signs are negative because both eyes are *cameras*: to slide the
+     * scene one way the camera has to go the other. Getting one of these two
+     * signs right and the other wrong is what this used to do, and it is why
+     * the two axes disagreed. The consumers in scene.ts have to hold up their
+     * end -- see the note there on the deck eye.
+     */
     yaw -= dx * YAW_PER_PX;
-    pitch = clamp(pitch + dy * PITCH_PER_PX, minPitch, maxPitch);
+    pitch = clamp(pitch - dy * PITCH_PER_PX, minPitch, maxPitch);
   };
 
   const endDrag = (e: PointerEvent) => {

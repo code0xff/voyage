@@ -834,8 +834,13 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
 
       const q = new THREE.Quaternion().setFromEuler(
         new THREE.Euler(
-          state.pitch * HEAD_PITCH + orbit.pitch,
-          -state.heading + orbit.yaw,
+          // Both look-around terms are subtracted, which is what puts the
+          // deck eye on the same rule as the chase camera: drag right and the
+          // sea goes right, drag down and it goes down. Added, as they were,
+          // this eye moved opposite the chase camera on *both* axes -- the two
+          // views disagreed with each other as well as with themselves.
+          state.pitch * HEAD_PITCH - orbit.pitch,
+          -state.heading - orbit.yaw,
           -state.heel * HEAD_ROLL,
           'YXZ',
         ),
@@ -926,7 +931,9 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   function framePitchFor(mode: number, keepBearing: boolean): void {
     // Level on deck, and reaching from the masthead to the water alongside.
     const rest = mode === BOW ? 0 : 0.3;
-    if (mode === BOW) orbit.setPitchLimits(-0.9, 1.1, rest);
+    // Negated along with the term above, so these still read as "0.9 rad down
+    // from level, 1.1 rad up" -- the deck eye's range, not a sign convention.
+    if (mode === BOW) orbit.setPitchLimits(-1.1, 0.9, rest);
     else orbit.setPitchLimits(0.02, 1.45, rest);
     if (keepBearing) orbit.levelPitch(rest);
     else orbit.reset();
