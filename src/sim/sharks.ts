@@ -39,9 +39,15 @@ export interface SharkSighting {
  */
 const MIN_DEPTH = 8;
 const SPEED = 1.6;
-const ENCOUNTER_DURATION = 42;
+/**
+ * How long a sighting lasts, and how much of its tail is spent going down.
+ *
+ * Exported because `sharks.test.ts` asserts when the descent begins, and a
+ * test that writes `36` has quietly decided these two may never be retuned.
+ */
+export const ENCOUNTER_DURATION = 42;
 /** Long enough to read as a deliberate sounding rather than a disappearing mesh. */
-const DIVE_DURATION = 6;
+export const DIVE_DURATION = 6;
 // Close enough to read as an animal, far enough not to look staged. Below about
 // 40 m the chase camera cannot hold both the boat and the fin in one frame.
 const ENCOUNTER_RADIUS_MIN = 45;

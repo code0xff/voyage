@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EMPTY_TERRAIN, Terrain, type TerrainQuery } from './terrain';
-import { SharkField } from './sharks';
+import { DIVE_DURATION, ENCOUNTER_DURATION, SharkField } from './sharks';
 
 const STEP = 0.25;
 
@@ -155,10 +155,21 @@ describe('sharks', () => {
 
     expect(encounter.length).toBeGreaterThan(0);
     expect(encounter[0].diveT).toBe(0);
+
+    // Derived rather than written out: `36` would have been these two constants
+    // added up by hand, and a test carrying that number has decided on its own
+    // that neither may ever be retuned.
+    const startsAt = ENCOUNTER_DURATION - DIVE_DURATION;
     const firstDive = encounter.findIndex((shark) => shark.diveT > 0);
     expect(firstDive).toBeGreaterThan(0);
-    expect(firstDive * STEP).toBeGreaterThan(36);
-    expect(firstDive * STEP).toBeLessThanOrEqual(36 + STEP);
+    expect(firstDive * STEP).toBeGreaterThan(startsAt);
+    expect(firstDive * STEP).toBeLessThanOrEqual(startsAt + STEP);
+
+    // Still up in the middle of it. This is the part the docblock promises --
+    // a fin holding a steady course, with the sounding as the end of it -- and
+    // it is what the two assertions above cannot catch on their own, because a
+    // dive that swallowed the whole encounter would still start on time.
+    expect(encounter[Math.floor(encounter.length / 2)].diveT).toBe(0);
     expect(encounter[firstDive].diveT).toBeLessThan(1);
     for (let i = 1; i < encounter.length; i++) {
       expect(encounter[i].diveT).toBeGreaterThanOrEqual(encounter[i - 1].diveT);
