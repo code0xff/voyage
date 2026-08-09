@@ -81,6 +81,17 @@ export const MENU: Record<string, Phrase> = {
   },
   language: { en: 'Language', ko: '언어' },
   allKeys: { en: 'all the keys →', ko: '전체 조작 보기 →' },
+  /**
+   * The way to the logbook before there is anything in it. The card above it
+   * replaces this once a passage has been made, so this line has to do the
+   * other half of the job: say what the logbook is for to someone who has
+   * never seen one.
+   */
+  logbookLead: {
+    en: 'Every passage you finish is written down.',
+    ko: '마친 항해는 모두 기록으로 남습니다.',
+  },
+  logbook: { en: 'the logbook →', ko: '항해일지 보기 →' },
   /** The four keys worth knowing before you have read anything. */
   quickKeys: {
     en: '[[← →]] helm · [[H]] autopilot · [[T]] auto-trim · [[Esc]] this menu',

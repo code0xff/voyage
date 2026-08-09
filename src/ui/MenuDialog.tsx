@@ -105,11 +105,13 @@ function Slider({
  */
 const TAB_TRIGGER = "flex-1 gap-1.5 [&_svg]:size-3.5 [&_svg]:shrink-0";
 
-/** The tab values, which are not all the same word as the labels. */
+/**
+ * The tab values, which are not all the same word as the labels. Only the two
+ * strips are here; the logbook has no tabs and names itself.
+ */
 const TAB_TITLE: Record<string, (typeof TABS)[keyof typeof TABS]> = {
   world: TABS.world,
   conditions: TABS.conditions,
-  log: TABS.log,
   sailing: TABS.sailing,
   keys: TABS.controls,
 };
@@ -128,12 +130,10 @@ const TAB_TITLE: Record<string, (typeof TABS)[keyof typeof TABS]> = {
  * ones before it, and nothing here ranks: sorting these by speed is how a calm
  * game quietly turns back into a race.
  *
- * Shown only when there is one. A first-time player is told what a passage is
- * by the Log tab, which has room to say it; the front page saying "nothing yet"
- * would be an empty shelf where the point was to have something on it.
- */
-/**
- * The last passage, and the way to the rest of them.
+ * Shown only when there is one. The logbook itself has room to say what a
+ * passage is and says it; the front page saying "nothing yet" would be an empty
+ * shelf where the point was to have something on it. The quiet line that stands
+ * in for this card until then is at the call site.
  *
  * A button for the same reason the key line is one: it is the only thing on the
  * front page that is about the logbook, so it is where someone would ask for
@@ -188,16 +188,29 @@ export function MenuDialog({
   onLogChanged: () => void;
 }) {
   const [tab, setTab] = useState("world");
+  const [helpTab, setHelpTab] = useState("sailing");
   /**
-   * The dialog is two screens, not one.
+   * The dialog is a menu and the places it leads to.
    *
    * Everything used to be on the opening screen at once: the way in, and every
    * knob. Sliders are the biggest thing on a page whether or not anyone wants
    * them, so what a first-time player met was a control panel rather than a
    * game, and the buttons that actually start it were just two more rows in it.
    * Settings are a place you go, and going there is one click.
+   *
+   * The places were then all one screen, which was the same mistake a level
+   * down. A five-tab strip behind a button marked "Adjust" held two settings,
+   * a logbook and two pieces of help, and the seams showed as workarounds
+   * rather than as complaints: the title had to be named for the open tab
+   * because a screen called Settings would otherwise open on the sailing
+   * guide, and "Adjust" had to force the tab back to World for the same
+   * reason. Both of those are gone now, because nothing is filed under a
+   * heading it does not belong to.
+   *
+   * The front page already led straight to all three -- it just arrived by way
+   * of a settings screen it had to correct on the way in.
    */
-  const [view, setView] = useState<"play" | "settings">("play");
+  const [view, setView] = useState<"play" | "settings" | "help" | "log">("play");
   const t = useT();
   const lang = useLang();
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) =>
@@ -211,10 +224,15 @@ export function MenuDialog({
    * `logVersion` -- bumped by whoever knows a passage was written -- rather than
    * polled, so it sleeps for the whole time the menu is shut.
    *
-   * A failure shows nothing rather than an error. The Log tab is where a broken
-   * logbook is worth reporting, because that is where someone went to read it;
+   * A failure shows nothing rather than an error. The logbook screen is where a
+   * broken logbook is worth reporting, because that is where someone went to
+   * read it;
    * on the way in it would be an alarm about a thing nobody asked for yet.
    */
+  /** What the header says, which is the open tab where a view has tabs. */
+  const heading =
+    view === "log" ? TABS.log : TAB_TITLE[view === "help" ? helpTab : tab] ?? TABS.world;
+
   const [last, setLast] = useState<PassageRecord | null>(null);
   useEffect(() => {
     // The store is async and `logVersion` can bump twice in quick succession,
@@ -254,12 +272,10 @@ export function MenuDialog({
             >
               <ArrowLeft />
             </Button>
-            {/* Named for the tab that is open, not "Settings".
-                Two of these five are settings; the others are the logbook and
-                two pieces of help, and a screen titled Settings that opens on
-                the sailing guide is telling the reader they took a wrong turn
-                when they did not. */}
-            <span className="text-base font-medium">{t(TAB_TITLE[tab] ?? TABS.world)}</span>
+            {/* Named for what is actually open. Every screen here is now one
+                kind of thing, so this can be read straight off the view and
+                its tab rather than having to avoid a heading that would lie. */}
+            <span className="text-base font-medium">{t(heading)}</span>
           </span>
         )
       }
@@ -275,9 +291,16 @@ export function MenuDialog({
           // Developer trivia, and the seed, belong where someone is already
           // looking at settings -- not in front of a player trying to start.
           <div className="flex w-full items-center justify-between">
-            <Badge variant="outline" className="text-[10px] font-normal">
-              {t(SETTINGS_UI.headless)}
-            </Badge>
+            {/* Developer trivia, so it stays with the knobs. On the guide or
+                the logbook it would be a fact about the build in front of
+                someone who came to read something else. */}
+            {view === "settings" ? (
+              <Badge variant="outline" className="text-[10px] font-normal">
+                {t(SETTINGS_UI.headless)}
+              </Badge>
+            ) : (
+              <span />
+            )}
             <Button size="sm" onClick={() => setView("play")}>
               {t(MENU.done)}
             </Button>
@@ -357,9 +380,11 @@ export function MenuDialog({
                         : `${settings.islandCount} islands`}
                 </div>
               </div>
-              {/* Explicitly to World, not to whichever tab was open last.
-                  Left to remember, "Adjust" could land on the sailing guide,
-                  which is the same wrong turn this screen used to take. */}
+              {/* Opens on World rather than on whichever tab was last left.
+                  This used to be a correction -- the strip held the guide and
+                  the logbook too, so remembering the tab meant "Adjust" could
+                  land on either. Now it only means a settings screen opens at
+                  its first tab, which is all it ever should have meant. */}
               <Button
                 variant="outline"
                 size="sm"
@@ -380,8 +405,8 @@ export function MenuDialog({
             <button
               type="button"
               onClick={() => {
-                setTab("sailing");
-                setView("settings");
+                setHelpTab("sailing");
+                setView("help");
               }}
               className="mt-2 w-full rounded-md border border-border/60 px-3 py-2 text-left text-[11px] leading-relaxed text-muted-foreground transition-colors hover:border-border hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
@@ -394,14 +419,23 @@ export function MenuDialog({
             {/* Under the conditions rather than over them: what you are about
                 to sail in is the more useful of the two with a hand already on
                 the door, and where you last got to is the reason to open it. */}
-            {last && (
-              <LastPassage
-                p={last}
-                onOpen={() => {
-                  setTab("log");
-                  setView("settings");
-                }}
-              />
+            {/* One of these always renders, because the logbook stopped being
+                a tab and this is now the only door to it. While it was in the
+                strip a first-time player found it by reading the tabs; the
+                card below is deliberately not shown empty, so without the line
+                beside it the one player who most needs telling what a passage
+                is would have had no way in at all. */}
+            {last ? (
+              <LastPassage p={last} onOpen={() => setView("log")} />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setView("log")}
+                className="mt-2 block w-full rounded-md px-1 py-1 text-left text-[10px] leading-relaxed text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                {t(MENU.logbookLead)}{" "}
+                <span className="text-foreground">{t(MENU.logbook)}</span>
+              </button>
             )}
 
             {/* The four keys worth knowing, and a way to the rest of them.
@@ -412,8 +446,8 @@ export function MenuDialog({
             <button
               type="button"
               onClick={() => {
-                setTab("keys");
-                setView("settings");
+                setHelpTab("keys");
+                setView("help");
               }}
               className="mt-3 block w-full rounded-md px-1 py-1 text-left text-[10px] leading-relaxed text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
@@ -423,6 +457,9 @@ export function MenuDialog({
           </>
         )}
 
+        {/* Three destinations, each one kind of thing. Kept mounted and
+            hidden rather than swapped, so that stepping out to the guide and
+            back does not reload the logbook or lose a half-set slider. */}
         <Tabs
           value={tab}
           onValueChange={setTab}
@@ -434,15 +471,6 @@ export function MenuDialog({
             </TabsTrigger>
             <TabsTrigger value="conditions" className={TAB_TRIGGER}>
               <Wind /> {t(TABS.conditions)}
-            </TabsTrigger>
-            <TabsTrigger value="log" className={TAB_TRIGGER}>
-              <BookOpen /> {t(TABS.log)}
-            </TabsTrigger>
-            <TabsTrigger value="sailing" className={TAB_TRIGGER}>
-              <LifeBuoy /> {t(TABS.sailing)}
-            </TabsTrigger>
-            <TabsTrigger value="keys" className={TAB_TRIGGER}>
-              <Waves /> {t(TABS.controls)}
             </TabsTrigger>
           </TabsList>
 
@@ -699,13 +727,29 @@ export function MenuDialog({
             </p>
           </TabsContent>
 
-          <TabsContent value="log" className="mt-4">
-            <Logbook
-              store={logbook}
-              version={logVersion}
-              onChanged={onLogChanged}
-            />
-          </TabsContent>
+          {/* Under the settings tabs and not inside either of them:
+              attribution is not a setting, but this is the screen someone
+              opens looking for what a game is made of. */}
+          <Credits />
+        </Tabs>
+
+        {/* How to sail her, and what the keys do. Two halves of one question
+            -- someone who cannot make the boat go wants both -- so they are
+            one screen with a tab between them rather than two doors off the
+            menu that cannot see each other. */}
+        <Tabs
+          value={helpTab}
+          onValueChange={setHelpTab}
+          className={view === "help" ? "" : "hidden"}
+        >
+          <TabsList className="w-full">
+            <TabsTrigger value="sailing" className={TAB_TRIGGER}>
+              <LifeBuoy /> {t(TABS.sailing)}
+            </TabsTrigger>
+            <TabsTrigger value="keys" className={TAB_TRIGGER}>
+              <Waves /> {t(TABS.controls)}
+            </TabsTrigger>
+          </TabsList>
 
           <TabsContent value="sailing" className="mt-4">
             <SailingGuide />
@@ -729,12 +773,17 @@ export function MenuDialog({
               {t(CONTROLS_NOTE)}
             </p>
           </TabsContent>
-
-          {/* Under the tabs rather than inside one of them: attribution is not
-              a setting, and burying it behind a tab someone has to guess at is
-              the thing CC BY's "reasonable manner" is asking us not to do. */}
-          <Credits />
         </Tabs>
+
+        {/* The logbook is one thing and gets no strip. A single tab above a
+            panel is a label pretending to be a control. */}
+        <div className={view === "log" ? "" : "hidden"}>
+            <Logbook
+              store={logbook}
+              version={logVersion}
+              onChanged={onLogChanged}
+            />
+        </div>
       </div>
     </Dialog>
   );
