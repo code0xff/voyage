@@ -39,6 +39,47 @@ const WATERLINE = 0.86;
  */
 const HEAD_TOWARDS_POSITIVE_Z = true;
 
+/**
+ * How a whale is actually spotted, and what these three numbers are for.
+ *
+ * Not by its back. At the ranges an encounter opens at, 80-200 m, an adult
+ * shows about 0.57 m of itself above water and the rest is under an opaque
+ * surface -- a few pixels of dark on dark. What a lookout sees first is the
+ * blow, and after that the footprint: the flat, pale patch a surfacing animal
+ * leaves on the water, which is horizontal and therefore presents its whole
+ * area to someone looking across at it.
+ *
+ * So the blow and the foam do the work of being seen, and the body is what
+ * rewards looking. That is the right way round for the thing being depicted as
+ * well as the one that reads.
+ */
+
+/**
+ * Extra height while blowing and rolling, as a fraction of body length.
+ *
+ * Deliberately small. A whale lying at the surface shows its back and dorsal
+ * and no more, and the alternative -- lowering WATERLINE so more of the model
+ * clears the water at all times -- puts the flanks permanently on show and
+ * turns the animal into a hull. This lifts roughly 0.45 m on a 15 m whale,
+ * taking the exposed back from about 0.57 m to 1.0 m, and only while it is up.
+ */
+const SURFACED_LIFT = 0.03;
+
+/** Droplets in the spout. Eighteen was a wisp; this is a column. */
+const BLOW_POINTS = 44;
+
+/**
+ * Height of the spout, m, and its droplet size.
+ *
+ * A humpback blows about three metres, near enough regardless of how big the
+ * individual is, so this is in metres rather than body lengths. At 200 m a
+ * 3.2 m column stands roughly 23 px tall, which is the single most visible
+ * thing about the encounter -- the old 1.5 m of 0.16 m droplets was under a
+ * pixel each and simply did not survive the distance.
+ */
+const BLOW_HEIGHT = 3.2;
+const BLOW_DROPLET = 0.55;
+
 interface WhaleAsset {
   model: THREE.Group;
   animations: readonly THREE.AnimationClip[];
@@ -78,7 +119,12 @@ function loadWhaleAsset(onLoad: (asset: WhaleAsset) => void, onError: () => void
 function seededBlowPoints(seed: number): readonly [number, number, number][] {
   const next = rng(seed);
   const points: [number, number, number][] = [];
-  for (let i = 0; i < 18; i++) points.push([(next() - 0.5) * 0.42, next(), (next() - 0.5) * 0.28]);
+  for (let i = 0; i < BLOW_POINTS; i++) {
+    // Narrow in plan and tall in elevation: a column, not a cloud. The taper
+    // comes from `next()` being cubed below, which crowds the droplets low and
+    // lets a few carry to the top the way a real spout thins out.
+    points.push([(next() - 0.5) * 0.42, next(), (next() - 0.5) * 0.28]);
+  }
   return points;
 }
 
@@ -113,10 +159,13 @@ function makeInstance(size: number, seed: number, asset: WhaleAsset): WhaleInsta
   root.add(foam);
 
   const blowGeometry = new THREE.BufferGeometry();
-  blowGeometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(18 * 3), 3));
+  blowGeometry.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute(new Float32Array(BLOW_POINTS * 3), 3),
+  );
   const blowMaterial = new THREE.PointsMaterial({
     color: 0xd4e3e2,
-    size: 0.16,
+    size: BLOW_DROPLET,
     transparent: true,
     opacity: 0,
     depthWrite: false,
@@ -277,30 +326,45 @@ export function createWhaleView(): WhaleView {
         const wave = Math.sin(clock * 1.7 + sighting.seed * 0.00001);
         const rise = phase === 'surfacing' ? whale.size * 0.08 * (smooth(t) - 1) : 0;
         const dive = phase === 'diving' ? smooth(t) : 0;
+        // Up while it is up. Fades in over the surfacing, holds through the
+        // blow and the roll, and is already gone by the time the dive starts
+        // taking the whole body down.
+        const lift =
+          whale.size *
+          SURFACED_LIFT *
+          (phase === 'surfacing' ? smooth(t) : phase === 'diving' ? 1 - smooth(t) : 1);
 
         whale.root.position.set(sighting.pos.x, surface, -sighting.pos.y);
         whale.root.rotation.set(0, -sighting.heading, 0);
-        whale.bodyGroup.position.y = rise - dive * whale.size * 0.18;
+        whale.bodyGroup.position.y = rise + lift - dive * whale.size * 0.18;
         whale.bodyGroup.rotation.set(-dive * 0.35, wave * 0.012, wave * 0.025);
 
         const blow = phaseAmount(phase, t);
-        whale.blowMaterial.opacity = blow * (0.45 + sky.daylight * 0.45);
+        whale.blowMaterial.opacity = blow * (0.6 + sky.daylight * 0.4);
         const points = whale.blowGeometry.attributes.position as THREE.BufferAttribute;
         for (let i = 0; i < whale.blowSeeds.length; i++) {
           const [x, h, z] = whale.blowSeeds[i];
-          const lift = h * (0.35 + blow * 1.15);
+          // Cubed, so the droplets bunch near the blowhole and thin towards the
+          // top. A uniform column reads as a bar of paint rather than as spray.
+          const height = BLOW_HEIGHT * h * h * h * (0.25 + blow * 0.75);
+          // Spread widens with height: a spout leaves narrow and opens out.
+          const spread = 0.35 + (height / BLOW_HEIGHT) * 1.6;
           points.setXYZ(
             i,
-            x * whale.size * 0.18 + Math.sin(clock * 2 + i) * 0.025 * blow,
-            lift,
-            z * whale.size * 0.12,
+            x * whale.size * 0.18 * spread + Math.sin(clock * 2 + i) * 0.05 * blow,
+            height,
+            z * whale.size * 0.12 * spread,
           );
         }
         points.needsUpdate = true;
 
-        const foam = phase === 'surfacing' ? smooth(t) : phase === 'diving' ? 1 - smooth(t) : 0.22;
-        whale.foamMaterial.opacity = foam * (0.18 + sky.daylight * 0.34);
-        const foamScale = 0.65 + foam * 0.75;
+        // The footprint: the flat pale patch a surfacing whale leaves. Held at
+        // a real strength through the blow and the roll rather than at the
+        // 0.22 it used to sit at, because at these ranges it is doing more of
+        // the work of being seen than the animal is.
+        const foam = phase === 'surfacing' ? smooth(t) : phase === 'diving' ? 1 - smooth(t) : 0.55;
+        whale.foamMaterial.opacity = foam * (0.3 + sky.daylight * 0.42);
+        const foamScale = 0.8 + foam * 0.9;
         whale.foam.scale.set(foamScale, foamScale, foamScale);
       }
     },
