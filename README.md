@@ -790,13 +790,12 @@ animals you meet at sea are authored models, used under
   [model](https://sketchfab.com/3d-models/seagulls-animated-73aed843190a4dfda55f2b65cc0f8d63)
 
 All three live under `public/assets/`, each beside an `ATTRIBUTION.txt` giving
-the same notice and stating what was changed, which the licence asks for. The
-whale and shark are compressed (`EXT_meshopt_compression`,
-`KHR_mesh_quantization`, and the whale's textures re-encoded to WebP); all three
-are scaled, positioned and animated at runtime. Nothing has been added to or
-taken out of them.
+the same notice and stating what was changed, which the licence asks for. All
+three are compressed (`EXT_meshopt_compression`, `KHR_mesh_quantization`, and
+WebP textures where there are any) and all three are scaled, positioned and
+animated at runtime. Nothing has been added to or taken out of them.
 
-That compression is worth its own line: 4.6 MB became 620 kB, and the shark
+That compression is worth its own line: 5.0 MB became 700 kB, and the shark
 alone went from 3.9 MB to 509 kB. It is all geometry — sixty-five thousand
 vertices for an animal a few hundred pixels wide at the range it is seen from.
 Meshopt rather than Draco, which is five times smaller again but arrives with a

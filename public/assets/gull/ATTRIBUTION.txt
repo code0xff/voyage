@@ -6,6 +6,17 @@ Original model: https://sketchfab.com/3d-models/seagulls-animated-73aed843190a4d
 License: Creative Commons Attribution 4.0 International (CC BY 4.0)
 License text: https://creativecommons.org/licenses/by/4.0/
 
-The downloaded Sketchfab GLB is redistributed in converted form. Voyage scales,
-positions, and varies animation playback at runtime; the geometry and embedded
-textures have not otherwise been modified.
+Changes made, as CC BY 4.0 requires them to be stated:
+
+  * The mesh is compressed with EXT_meshopt_compression and its vertex
+    attributes are quantized (KHR_mesh_quantization). This is a change of
+    storage, not of shape: the same 740 vertices and 796 triangles, to within
+    the quantization step.
+  * The embedded textures are re-encoded to WebP at quality 88
+    (EXT_texture_webp). Same pixel dimensions; the encoding is lossy.
+  * Together these take the file from 370 kB to 77 kB.
+
+Voyage also scales and positions the flock at runtime and stretches one
+authored circuit of the animation over each sighting. Its geometry, its
+skinning and its animation are otherwise as downloaded, and nothing has been
+added to or removed from it.
