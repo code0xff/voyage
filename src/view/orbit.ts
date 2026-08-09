@@ -30,6 +30,14 @@ export interface OrbitControl {
    * masthead as well as the water alongside, so it runs either side of zero.
    */
   setPitchLimits(min: number, max: number, rest: number): void;
+  /**
+   * Level the view to a mode's resting pitch, leaving the bearing alone.
+   *
+   * Distinct from reset() on purpose. Cycling the camera is starting a new
+   * view and should face forward; raising binoculars is not -- you looked at
+   * something first, and that is the whole reason the glasses came up.
+   */
+  levelPitch(rest: number): void;
   reset(): void;
   dispose(): void;
 }
@@ -144,6 +152,9 @@ export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
       maxPitch = max;
       restPitch = rest;
       pitch = clamp(pitch, min, max);
+    },
+    levelPitch(rest) {
+      pitch = clamp(rest, minPitch, maxPitch);
     },
     reset: onDouble,
     dispose() {

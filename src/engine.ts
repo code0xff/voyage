@@ -110,6 +110,8 @@ export interface Snapshot {
   pilot: PilotState;
   /** Whether the boat is showing her lights. */
   lightsOn: boolean;
+  /** Whether the helmsman has the glasses up. */
+  binoculars: boolean;
   /**
    * Real seconds until sunset, or Infinity with the clock stopped.
    *
@@ -294,6 +296,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     session: 0,
     pilot,
     lightsOn: true,
+    binoculars: false,
   };
 
   const frameSubs = new Set<(s: Snapshot) => void>();
@@ -920,6 +923,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (input.wasPressed('h')) cyclePilot(pilot, state.heading, wrapPi(env.twd - state.heading));
     if (input.wasPressed('c')) view.toggleCamera();
     if (input.wasPressed('l')) snapshot.lightsOn = !snapshot.lightsOn;
+    if (input.wasPressed('b')) snapshot.binoculars = !snapshot.binoculars;
     // Weighing is always allowed; letting go is not. A refusal that says why is
     // the whole of the anchoring decision, so it goes through the same judgement
     // the readout is showing rather than a second copy of the rules.
@@ -996,6 +1000,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       elapsedHours: hour,
       visibility: weather.visibility,
       lightsOn: snapshot.lightsOn,
+      binoculars: snapshot.binoculars,
       session,
       whales: whales.events,
       sharks: sharks.events,

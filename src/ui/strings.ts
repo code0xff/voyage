@@ -150,6 +150,7 @@ export const KEYS: [string, Phrase][] = [
   ['R', { en: 'restart', ko: '다시 시작' }],
   ['M', { en: 'sound', ko: '소리' }],
   ['L', { en: 'navigation lights', ko: '항해등' }],
+  ['B', { en: 'binoculars', ko: '쌍안경' }],
   ['Esc', { en: 'this menu', ko: '이 메뉴' }],
 ];
 

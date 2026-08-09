@@ -38,6 +38,24 @@ const SAIL = 0xe8ecf1;
 const ACCENT = 0x4fd1c5;
 
 /**
+ * The naked-eye field, degrees. Everything about the camera is set against it.
+ */
+const EYE_FOV = 55;
+
+/**
+ * Binocular magnification.
+ *
+ * Real cruising glasses are 7x50 and a whale at 400 m needs about that, but 7x
+ * over a 55-degree field leaves under 8 degrees to find anything in, from a
+ * deck that is pitching -- and the motion is magnified with everything else.
+ * Five is the compromise this arrived at by being looked through: an 11-degree
+ * field, which a hand can still hold on a target, and enough to turn the mark
+ * on the water that a blow makes into an animal.
+ */
+const BINOCULAR_POWER = 5;
+
+
+/**
  * Everything one frame needs. As positional arguments this would be eight
  * parameters, which is easy to get out of order at the call site.
  */
@@ -59,6 +77,8 @@ export interface FrameInput {
   visibility: number;
   /** Whether the boat is showing her lights. */
   lightsOn: boolean;
+  /** The glasses are up: the same view, magnified. */
+  binoculars: boolean;
   /** Bumped on every new session, so the view can drop what it was trailing. */
   session: number;
   /** Rare environmental encounters, kept outside the boat physics. */
@@ -283,7 +303,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   // Fog colour tracks the sky, so the horizon always dissolves into it.
   scene.fog = new THREE.Fog(0x1b2a3a, 260, 560);
 
-  const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 4000);
+  const camera = new THREE.PerspectiveCamera(EYE_FOV, 1, 0.5, 4000);
 
   // All three lights are driven by the time of day every frame.
   const hemi = new THREE.HemisphereLight(0xcfe2f5, 0x223141, 2.2);
@@ -521,6 +541,8 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   const BOW = 1;
   const TOPDOWN = 2;
   let camMode = CHASE;
+  /** Tracked so raising and lowering the glasses can reframe, once each. */
+  let glassesUp = false;
 
   /**
    * How much of the boat's rotation the head takes, standing on deck.
@@ -564,6 +586,17 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
 
   function render(f: FrameInput): void {
     const { state, diag, wind, waves, sky, dt } = f;
+
+    // Glasses up: the same view through a narrower field. Magnification, not a
+    // move -- the camera stays on the boat, which is what makes this an
+    // instrument the helmsman is holding rather than a flight to the subject.
+    // Everything the eye can see is magnified with it, the boat's motion
+    // included, which is exactly the trade a real pair makes.
+    const wantFov = f.binoculars ? EYE_FOV / BINOCULAR_POWER : EYE_FOV;
+    if (camera.fov !== wantFov) {
+      camera.fov = wantFov;
+      camera.updateProjectionMatrix();
+    }
 
     // --- Sky, light and visibility ---
     // Weather thins the sun and thickens the air; time of day sets the colour.
@@ -763,7 +796,26 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     // across the ocean for several seconds showing nothing. Snap instead.
     const jumped = camTarget.distanceTo(new THREE.Vector3(bx, 3, bz)) > 150;
 
-    if (camMode === BOW) {
+    /*
+     * Glasses up puts you on deck, whatever view you were in.
+     *
+     * Not a flourish. The chase camera sits forty metres astern, and narrowing
+     * the field from there magnifies the boat along with the sea -- the first
+     * version of this filled two thirds of the frame with her own topsides.
+     * Binoculars are held at the eye, so the eye is where the view has to come
+     * from, and the boat then has the decency to be behind it.
+     *
+     * Chosen per frame rather than by setting camMode, so lowering them puts
+     * you back in the view you were using instead of leaving you on the
+     * foredeck wondering what happened.
+     */
+    const eyeMode = f.binoculars ? BOW : camMode;
+    if (f.binoculars !== glassesUp) {
+      glassesUp = f.binoculars;
+      framePitchFor(eyeMode, true);
+    }
+
+    if (eyeMode === BOW) {
       /*
        * From the bow.
        *
@@ -791,7 +843,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       camera.position.copy(camPos);
       camera.quaternion.copy(q);
       camTarget.copy(camPos).add(new THREE.Vector3(0, 0, -1).applyQuaternion(q));
-    } else if (camMode === CHASE) {
+    } else if (eyeMode === CHASE) {
       // Spherical about the boat, so the mouse can swing the eye anywhere
       // around her. Azimuth is measured from dead astern and added to the
       // heading, which is what keeps a chosen view fixed relative to the boat
@@ -820,14 +872,14 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       // instead. Sim y is north, three z is south, hence the negation.
       const minY = waves.heightAt(camPos.x, -camPos.z) + 2;
       if (camPos.y < minY) camPos.y = minY;
-    } else if (camMode === TOPDOWN) {
+    } else if (eyeMode === TOPDOWN) {
       camPos.lerp(
         new THREE.Vector3(bx, 120 * orbit.zoom, bz + 0.01),
         jumped ? 1 : 1 - Math.exp(-dt / 0.3),
       );
       camTarget.lerp(new THREE.Vector3(bx, 0, bz), jumped ? 1 : 1 - Math.exp(-dt / 0.3));
     }
-    if (camMode !== BOW) {
+    if (eyeMode !== BOW) {
       camera.position.copy(camPos);
       camera.lookAt(camTarget);
     }
@@ -841,7 +893,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     // would be an atan2 of two numbers that are both nearly zero, and the
     // lights would flicker between sectors as she moved under you.
     const camBearing =
-      camMode === BOW
+      eyeMode === BOW
         ? Math.PI
         : Math.atan2(camPos.x - bx, -(camPos.z - bz)) - state.heading;
     boatLights.update(lamp, camBearing);
@@ -858,16 +910,34 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     renderer.render(scene, camera);
   }
 
+  /**
+   * Put the look-around back where it means the same thing.
+   *
+   * Pitch is measured differently on deck and behind her -- see
+   * `setPitchLimits` -- so any change of eye has to reframe, or the view opens
+   * staring into the sky.
+   *
+   * @param keepBearing true for the binoculars, false for the camera key.
+   *   Cycling the camera is starting a fresh view and faces forward. Raising
+   *   the glasses is not: you saw something off the bow and that is why they
+   *   came up, so throwing the bearing away would undo the only work the
+   *   player had already done.
+   */
+  function framePitchFor(mode: number, keepBearing: boolean): void {
+    // Level on deck, and reaching from the masthead to the water alongside.
+    const rest = mode === BOW ? 0 : 0.3;
+    if (mode === BOW) orbit.setPitchLimits(-0.9, 1.1, rest);
+    else orbit.setPitchLimits(0.02, 1.45, rest);
+    if (keepBearing) orbit.levelPitch(rest);
+    else orbit.reset();
+  }
+
   return {
     render,
     resize,
     toggleCamera() {
       camMode = (camMode + 1) % 3;
-      // Pitch means something different on deck -- see setPitchLimits.
-      // Level on deck, and reaching from the masthead to the water alongside.
-      if (camMode === BOW) orbit.setPitchLimits(-0.9, 1.1, 0);
-      else orbit.setPitchLimits(0.02, 1.45, 0.3);
-      orbit.reset();
+      framePitchFor(camMode, false);
     },
     setRegion(terrain) {
       regionView.setRegion(terrain);

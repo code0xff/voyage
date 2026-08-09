@@ -8,6 +8,7 @@ import { PolarCard } from "./PolarCard";
 import { MenuDialog } from "./MenuDialog";
 import { logbook } from "@/logbook";
 import { HintBar } from "./HintBar";
+import { BinocularMask } from "./BinocularMask";
 import { MinimapCard } from "./MinimapCard";
 import { PassageBar } from "./PassageBar";
 import { TouchControls } from "./TouchControls";
@@ -162,7 +163,10 @@ export function App() {
 
         {engine && (
           <EngineProvider value={engine}>
-            <div className="pointer-events-none absolute inset-0 p-2 sm:p-3">
+            {/* Over the canvas and under the instruments: the glasses narrow
+                the view of the sea, not the reading of it. */}
+            <BinocularMask />
+            <div className="pointer-events-none absolute inset-0 z-20 p-2 sm:p-3">
               <div className="flex h-full flex-col">
                 <div className="flex items-start justify-between gap-2 sm:gap-3">
                   <Instruments compact={compact} />
