@@ -128,6 +128,48 @@ describe('whales', () => {
   });
 
   /**
+   * The rule above is tested from a course laid on deliberately. This is the
+   * ordinary case it exists to protect, and it is the one that guards the
+   * spawn distances: a boat sailing straight, whales opening wherever the
+   * simulation puts them.
+   *
+   * It is what would catch someone bringing the encounter closer again without
+   * the rest of the change. At the current 80-200 m the worst approach over
+   * this set is 31 m; with the reaction range left at its first value of 70 m
+   * it was 13.3 m, which is a whale and a boat occupying the same water.
+   */
+  it('keeps its distance from a boat that simply sails on, at real spawn ranges', () => {
+    const BOAT_SPEED = 3.09;
+    let worst = Infinity;
+    let encounters = 0;
+
+    for (let seed = 1; seed <= 150; seed++) {
+      const whales = new WhaleField(seed);
+      const boat = { x: 0, y: 0 };
+      let open = false;
+
+      for (let step = 0; step < 120 * 100; step++) {
+        whales.update(1 / 120, boat, EMPTY_TERRAIN, 0);
+        boat.y += BOAT_SPEED * (1 / 120); // holds her course, due north
+
+        const whale = whales.events[0];
+        if (!whale) {
+          open = false;
+          continue;
+        }
+        if (!open) {
+          open = true;
+          encounters++;
+        }
+        worst = Math.min(worst, Math.hypot(whale.pos.x - boat.x, whale.pos.y - boat.y));
+      }
+    }
+
+    expect(encounters).toBeGreaterThan(100);
+    expect(worst).toBeGreaterThan(20);
+  });
+
+  /**
    * The other half of the same rule: a whale pinned between the boat and a bank
    * must turn along the bank rather than be turned onto the boat, into the
    * bank, and back again -- which is a whale shaking in place at 120 Hz.
