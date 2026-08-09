@@ -7,7 +7,9 @@ import {
   CULL_MARGIN,
   creatureLoader,
   disposeGltfScene,
+  layOnWater,
   normaliseToUnitLength,
+  waveTilt,
 } from './creature';
 import type { Water } from './water';
 
@@ -31,6 +33,9 @@ const WATERLINE = 0.62;
  * for. It is a visual choice and nothing in the simulation depends on it.
  */
 const SINK = 0.025;
+
+/** Body beam as a fraction of length, for the slope samples. Sharks are slim. */
+const BEAM = 0.18;
 
 /**
  * This one is authored the right way round, unlike the whale, so nothing has to
@@ -187,9 +192,14 @@ export function createSharkView(): SharkView {
           surface - sighting.size * SINK,
           -sighting.pos.y,
         );
-        // The bow of anything in this scene points along local -Z, and a
-        // compass heading runs clockwise where three's yaw runs the other way.
-        instance.root.rotation.y = -sighting.heading;
+        // Along the sea, not flat on it, and by the same rule the whale and the
+        // boat use. The fin is the whole of what shows, so a fin standing plumb
+        // upright out of a sloping wave is exactly the tell to avoid.
+        layOnWater(
+          instance.root,
+          sighting.heading,
+          waveTilt(water, waves, sighting.pos, sighting.heading, sighting.size, sighting.size * BEAM),
+        );
       }
     },
     dispose() {

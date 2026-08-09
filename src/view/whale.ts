@@ -9,7 +9,9 @@ import {
   CULL_MARGIN,
   creatureLoader,
   disposeGltfScene,
+  layOnWater,
   normaliseToUnitLength,
+  waveTilt,
 } from './creature';
 import type { Water } from './water';
 
@@ -65,6 +67,15 @@ const HEAD_TOWARDS_POSITIVE_Z = true;
  * taking the exposed back from about 0.57 m to 1.0 m, and only while it is up.
  */
 const SURFACED_LIFT = 0.03;
+
+/**
+ * Body beam as a fraction of length, for the slope samples only.
+ *
+ * Off the model's own proportions less the flippers, which reach far wider
+ * than the body and would have it reading the sea at arm's length. Nothing but
+ * the athwartships arctangent depends on it, and only weakly.
+ */
+const BEAM = 0.25;
 
 /**
  * The footprint's radius, as a fraction of body length, and how far its rings
@@ -426,7 +437,16 @@ export function createWhaleView(): WhaleView {
           (phase === 'surfacing' ? smooth(t) : phase === 'diving' ? 1 - smooth(t) : 1);
 
         whale.root.position.set(sighting.pos.x, surface, -sighting.pos.y);
-        whale.root.rotation.set(0, -sighting.heading, 0);
+        // Lying along the sea rather than flat on it. An eighteen-metre animal
+        // spans a fair part of a wave, and one held level while the water under
+        // it tilts is the sort of thing that reads as a prop rather than as
+        // something floating. The dive and the idle sway below compose on top,
+        // because those are movements of the body and this is the water.
+        layOnWater(
+          whale.root,
+          sighting.heading,
+          waveTilt(water, waves, sighting.pos, sighting.heading, whale.size, whale.size * BEAM),
+        );
         whale.bodyGroup.position.y = rise + lift - dive * whale.size * 0.18;
         whale.bodyGroup.rotation.set(-dive * 0.35, wave * 0.012, wave * 0.025);
 

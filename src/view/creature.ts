@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import type { Vec2 } from '../sim/math';
+import type { WaveField } from '../sim/waves';
+import type { Water } from './water';
 
 /**
  * What the two animal views share.
@@ -41,6 +44,84 @@ export const CULL_MARGIN = 1.05;
  */
 export function creatureLoader(): GLTFLoader {
   return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+}
+
+/**
+ * How the water lies under an animal: fore-and-aft slope and athwartships
+ * slope, in radians.
+ *
+ * Four samples of the surface, exactly as `sampleHull` in sim/waves.ts takes
+ * them for the boat -- bow, stern, starboard, port, at 0.42 of the length and
+ * half the beam -- and the same two arctangents. Deliberately a copy of that
+ * shape rather than a new idea, because this is a sign problem and the boat's
+ * version is the one that has been looked at on the water for a long time.
+ *
+ * The samples come from `water.surfaceHeight`, which is the height the animal
+ * is already sitting at, and not from `waves.heightAt` as the boat's do. That
+ * matters: `surfaceHeight` carries the grid fade and the land shelter, so out
+ * near the edge of the wave grid, or in the lee of an island, an animal lying
+ * on flat water would otherwise tilt to a swell that is not being drawn.
+ */
+export function waveTilt(
+  water: Water,
+  waves: WaveField,
+  pos: Vec2,
+  heading: number,
+  length: number,
+  beam: number,
+): { pitch: number; roll: number } {
+  const fx = Math.sin(heading);
+  const fy = Math.cos(heading);
+  // Starboard is the heading turned ninety degrees clockwise, as in sampleHull.
+  const sx = fy;
+  const sy = -fx;
+
+  const half = length * 0.42;
+  const hb = beam * 0.5;
+
+  const bow = water.surfaceHeight(pos.x + fx * half, pos.y + fy * half, waves);
+  const stern = water.surfaceHeight(pos.x - fx * half, pos.y - fy * half, waves);
+  const stb = water.surfaceHeight(pos.x + sx * hb, pos.y + sy * hb, waves);
+  const port = water.surfaceHeight(pos.x - sx * hb, pos.y - sy * hb, waves);
+
+  return {
+    pitch: Math.atan2(bow - stern, half * 2),
+    roll: Math.atan2(stb - port, hb * 2),
+  };
+}
+
+/**
+ * Lay a body along that slope, so that its deck plane is the water's.
+ *
+ * Euler order 'YXZ' is R = Ry * Rx * Rz, so roll is applied first, then pitch,
+ * then heading -- the same order `heelGroup` uses in scene.ts, where the note
+ * records that any other order twists the hull badly at large angles.
+ *
+ * The roll is *not* negated, and the asymmetry with pitch is the whole of what
+ * was hard here. The body faces local -Z and its up is +Y, which puts starboard
+ * on local +X; a positive rotation about Z raises +X. `roll` is positive when
+ * the starboard sample is the higher one, and a body lying on water that is
+ * higher to starboard has its starboard side raised. So the two agree, unlike
+ * pitch, which needs no sign of its own.
+ *
+ * This was first written by copying the boat -- `rotation.z = -heel` with a
+ * hull settling at `heel = rollSlope`, per the righting moment in sim/boat.ts
+ * -- on the reasoning that the boat has floated correctly for a long time and
+ * re-deriving conventions is how this project gets sign errors. That was the
+ * wrong instinct twice over. Measured against the analytic normal of a plane,
+ * it came out mirrored: exactly twice the slope angle, at every heading where
+ * the slope is athwartships and none where it is fore-and-aft. And the reason
+ * is that the boat is itself inconsistent here -- `heel > 0` is starboard-down,
+ * so a hull lying passively on that slope settles at `-rollSlope`, not
+ * `+rollSlope`. Copying a thing does not make it right; `creature.test.ts` now
+ * asks the water instead.
+ */
+export function layOnWater(
+  object: THREE.Object3D,
+  heading: number,
+  tilt: { pitch: number; roll: number },
+): void {
+  object.rotation.set(tilt.pitch, -heading, tilt.roll, 'YXZ');
 }
 
 /**
