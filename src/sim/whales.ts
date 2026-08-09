@@ -1,4 +1,4 @@
-import { compassVec, type Vec2 } from './math';
+import { clamp, compassAngle, compassVec, wrapPi, type Vec2 } from './math';
 import { rng } from './rng';
 import type { TerrainQuery } from './terrain';
 import { CRUISER } from './config';
@@ -28,6 +28,39 @@ const ENCOUNTER_RADIUS_MIN = 220;
 const ENCOUNTER_RADIUS_MAX = 560;
 const WHALE_SPEED = 1.8;
 const FIRST_ENCOUNTER_DELAY = 8;
+
+/**
+ * The range at which a whale starts giving way to the boat, m.
+ *
+ * There is no collision anywhere in this simulation, so without a rule of its
+ * own nothing stops the hull passing straight through the animal -- and the
+ * spawn geometry cannot prevent it, because the player can turn. Worse, the
+ * crossing track this feature generates contains an exact collision course: a
+ * whale is on a constant bearing when the boat's speed across the line of
+ * sight matches the whale's own, which is asin(1.8 / 3.09) = 0.62 rad off the
+ * bow at six knots -- well inside the arc a sighting may open in.
+ *
+ * Set far enough out that the whale is not seen to notice at the last moment.
+ * A whale hears a hull a long way before it can see one, so a boat that keeps
+ * coming meets an animal that quietly stops being where it was going to be,
+ * which is both what happens and what keeps the two apart.
+ */
+const AVOID_RANGE = 70;
+
+/**
+ * How fast it can come round, rad/s.
+ *
+ * At 1.8 m/s this is a turning circle of about 9 m -- half a body length, which
+ * is tight for something this size and is meant to be: the limit exists so the
+ * turn is a curve rather than the instant reversal the shoal rule used to be,
+ * not to make the animal ponderous. From AVOID_RANGE against the fastest
+ * closing this feature can produce there are ten seconds in hand, and this
+ * spends them on 115 degrees.
+ */
+const AVOID_TURN_RATE = 0.2;
+
+/** Quarter turns tried, in order, when the water ahead is too shallow. */
+const ESCAPE_TURNS = [Math.PI * 0.5, -Math.PI * 0.5, Math.PI];
 // Adult humpbacks are roughly one-and-a-half Voyager 33s long. Keeping this
 // relative to LOA makes the renderer, the boat and both animal species share
 // one metre scale instead of accumulating unrelated visual tuning numbers.
@@ -106,17 +139,8 @@ export class WhaleField {
         this.timer = 18 + this.rand() * 30;
         this.age = 0;
       } else {
-        const dir = compassVec(this.active.heading);
-        const nextX = this.active.pos.x + dir.x * WHALE_SPEED * dt;
-        const nextY = this.active.pos.y + dir.y * WHALE_SPEED * dt;
-        // A whale turns away from shoal water rather than being allowed to
-        // beach. The view never has to hide an event inside an island.
-        if (suitable(nextX, nextY, terrain)) {
-          this.active.pos.x = nextX;
-          this.active.pos.y = nextY;
-        } else {
-          this.active.heading += Math.PI;
-        }
+        this.giveWay(boat, dt);
+        this.swim(dt, terrain);
 
         const phase = phaseAt(this.age);
         this.active.phase = phase.name;
@@ -141,6 +165,65 @@ export class WhaleField {
     this.age = 0;
     this.firstEncounter = false;
     this.events.push(whale);
+  }
+
+  /**
+   * Bend the whale's course away from the boat, at a limited rate.
+   *
+   * Rate-limited rather than assigned, or the animal would snap round to face
+   * directly away the instant the boat crossed AVOID_RANGE, which reads as a
+   * thing reacting to a trigger rather than as a whale.
+   *
+   * Urgency scales the turn with how close the boat has come, so a distant
+   * pass barely deflects the track -- the encounter is still an animal going
+   * about its own business -- while a boat driven straight at it gets the full
+   * rate. Nothing here acts on the boat: the whale gives way, and the helmsman
+   * feels nothing, which is the whole reason this lives outside the physics.
+   */
+  private giveWay(boat: Vec2, dt: number): void {
+    const whale = this.active;
+    if (!whale) return;
+
+    const offX = whale.pos.x - boat.x;
+    const offY = whale.pos.y - boat.y;
+    const range = Math.hypot(offX, offY);
+    // Exactly on the boat there is no direction to flee in, and asking for one
+    // would be atan2(0, 0). Hold course; the next step will have an answer.
+    if (range >= AVOID_RANGE || range < 1e-6) return;
+
+    const away = compassAngle({ x: offX, y: offY });
+    const urgency = 1 - range / AVOID_RANGE;
+    const rate = AVOID_TURN_RATE * urgency * dt;
+    whale.heading += clamp(wrapPi(away - whale.heading), -rate, rate);
+  }
+
+  /**
+   * Move, or turn off water too shallow to move into.
+   *
+   * The obstructed case tries a quarter turn each way before it will reverse.
+   * Reversing first was the original rule and does not survive giveWay(): a
+   * whale pinned between the boat and a bank would be turned away from the
+   * boat, meet the bank, be turned back onto the boat, and shake in place at
+   * 120 Hz without ever moving. Turning along the bank is also simply what the
+   * animal would do, and it leaves the encounter running.
+   */
+  private swim(dt: number, terrain: TerrainQuery): void {
+    const whale = this.active;
+    if (!whale) return;
+
+    const step = WHALE_SPEED * dt;
+    for (const turn of [0, ...ESCAPE_TURNS]) {
+      const dir = compassVec(whale.heading + turn);
+      const nextX = whale.pos.x + dir.x * step;
+      const nextY = whale.pos.y + dir.y * step;
+      if (!suitable(nextX, nextY, terrain)) continue;
+      whale.heading += turn;
+      whale.pos.x = nextX;
+      whale.pos.y = nextY;
+      return;
+    }
+    // Boxed in on every side. Hold station rather than beach: the encounter is
+    // short and the boat is the thing that will move first.
   }
 
   private findSpawn(boat: Vec2, boatHeading: number, terrain: TerrainQuery): WhaleSighting | null {

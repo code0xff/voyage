@@ -60,6 +60,111 @@ describe('whales', () => {
     expect(phases).toEqual(new Set(['surfacing', 'blow', 'rolling', 'diving']));
   });
 
+  /**
+   * Nothing in this simulation collides, so without a rule of its own the hull
+   * passes straight through the animal. Spawn geometry cannot prevent that --
+   * the player can turn -- so this drives the boat at the whale as hard as it
+   * can and asks that they never touch.
+   *
+   * 20 m is half a whale, half a boat and a few metres: the distance below
+   * which the two would be visibly interpenetrating rather than merely close.
+   */
+  it('is not run down by a boat holding a course into it', () => {
+    const BOAT_SPEED = 3.09; // 6 kn, the polar's answer on a beam reach
+    /**
+     * Started from a dead-on collision course inside the range the whale
+     * reacts at, so this measures the rule and not the spawn radius. Left to
+     * sail from wherever a sighting opens, a boat covers about 100 m in the
+     * 32.5 s an encounter lasts and cannot reach one at all -- which is what
+     * currently keeps them apart, and is exactly the protection this rule has
+     * to replace when the distances come down.
+     *
+     * **The course is aimed once and then held.** A boat that re-aims every
+     * step is not defended against and cannot be: it makes 3.09 m/s against
+     * the whale's 1.8, and a pursuer that keeps pointing at something slower
+     * than itself catches it whatever the quarry steers. That is kinematics,
+     * not a gap in the rule -- measured worst approach under active pursuit is
+     * 0.00 m at every starting range. Keeping a whale from a helmsman who has
+     * decided to run one down needs it to be able to outrun him, which is a
+     * different change. What this rule owes is that sailing normally never
+     * puts the hull through an animal, and that is what is asserted.
+     */
+    const START = 60;
+    let worst = Infinity;
+    let closedWith = 0;
+
+    for (const seed of [1, 2, 3, 7, 11, 33, 99, 4711, 20260806]) {
+      const whales = new WhaleField(seed);
+      const boat = { x: 0, y: 0 };
+      let course: { x: number; y: number } | null = null;
+
+      for (let step = 0; step < 120 * 90; step++) {
+        whales.update(1 / 120, boat, EMPTY_TERRAIN, 0);
+        const whale = whales.events[0];
+        if (!whale) {
+          course = null;
+          continue;
+        }
+
+        if (!course) {
+          // Put the helm where it can do damage, once per encounter: right
+          // astern of the whale and pointed at it.
+          boat.x = whale.pos.x;
+          boat.y = whale.pos.y - START;
+          course = { x: 0, y: 1 };
+          closedWith++;
+          continue;
+        }
+
+        const range = Math.hypot(whale.pos.x - boat.x, whale.pos.y - boat.y);
+        worst = Math.min(worst, range);
+        boat.x += course.x * BOAT_SPEED * (1 / 120);
+        boat.y += course.y * BOAT_SPEED * (1 / 120);
+      }
+    }
+
+    expect(closedWith).toBeGreaterThan(8);
+    expect(worst).toBeGreaterThan(20);
+  });
+
+  /**
+   * The other half of the same rule: a whale pinned between the boat and a bank
+   * must turn along the bank rather than be turned onto the boat, into the
+   * bank, and back again -- which is a whale shaking in place at 120 Hz.
+   */
+  it('keeps moving when the boat pins it against shoal water', () => {
+    // Deep only to the north; everything south of the line is unswimmable.
+    const bank: TerrainQuery = {
+      elevationAt: (_x, y) => (y > 0 ? -30 : 2),
+      depthAt: (_x, y) => (y > 0 ? 30 : 1),
+      isAground: () => false,
+      windExposure: () => 1,
+      waveShelter: () => 1,
+      distanceToShore: (_x, y) => (y > 0 ? Infinity : 0),
+      bearingToShore: () => null,
+    };
+
+    const whales = new WhaleField(11);
+    const boat = { x: 0, y: 0 };
+    let travelled = 0;
+    let previous: { x: number; y: number } | null = null;
+
+    for (let step = 0; step < 120 * 90; step++) {
+      whales.update(1 / 120, boat, bank, 0);
+      const whale = whales.events[0];
+      if (!whale) continue;
+      // Sit the boat just north of it, so the only way clear is along the bank.
+      boat.x = whale.pos.x;
+      boat.y = whale.pos.y + 30;
+      if (previous) travelled += Math.hypot(whale.pos.x - previous.x, whale.pos.y - previous.y);
+      previous = { x: whale.pos.x, y: whale.pos.y };
+      expect(bank.depthAt(whale.pos.x, whale.pos.y)).toBeGreaterThanOrEqual(18);
+    }
+
+    // It has to have gone somewhere rather than vibrated on the spot.
+    expect(travelled).toBeGreaterThan(20);
+  });
+
   it('only spawns in water deep enough to remain offshore', () => {
     const land = new Terrain([
       { pos: { x: 0, y: 0 }, radius: 200, height: 70, seed: 3 },
