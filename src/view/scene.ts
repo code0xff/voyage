@@ -937,7 +937,13 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     resize,
     toggleCamera() {
       camMode = (camMode + 1) % 3;
-      framePitchFor(camMode, false);
+      // Not while the glasses are up. The eye is on deck whatever this says,
+      // so there is nothing on screen to reframe -- and reframing anyway would
+      // install the pitch limits of a view that is not being drawn, leaving the
+      // deck eye reading the chase camera's semantics and staring at the sky,
+      // and would throw away the bearing the player is holding a target on.
+      // Lowering them reframes for whatever this left behind.
+      if (!glassesUp) framePitchFor(camMode, false);
     },
     setRegion(terrain) {
       regionView.setRegion(terrain);
