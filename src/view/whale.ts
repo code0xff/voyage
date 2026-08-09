@@ -65,6 +65,18 @@ const HEAD_TOWARDS_POSITIVE_Z = true;
  */
 const SURFACED_LIFT = 0.03;
 
+/**
+ * The footprint's radius, as a fraction of body length, and how far its rings
+ * are subdivided. It has to be tessellated because it is laid on the wave
+ * surface vertex by vertex rather than floated flat above it -- see
+ * `layFootprint`.
+ */
+const FOAM_RADIUS = 0.42;
+const FOAM_RINGS = 3;
+const FOAM_SEGMENTS = 28;
+/** Clear of the water by enough not to z-fight the surface it is lying on. */
+const FOAM_LIFT = 0.06;
+
 /** Droplets in the spout. Eighteen was a wisp; this is a column. */
 const BLOW_POINTS = 44;
 
@@ -109,6 +121,42 @@ function loadWhaleAsset(onLoad: (asset: WhaleAsset) => void, onError: () => void
 }
 
 /**
+ * A soft radial falloff for the footprint.
+ *
+ * The patch used to be a RingGeometry -- an annulus with a hard inner and
+ * outer edge, in one flat colour. At any size worth seeing that reads as a
+ * translucent circle drawn on the sea, which is the exact failure `wildlife.ts`
+ * records for the hand-modelled animals: geometry, not life. A gradient has no
+ * edge to recognise.
+ *
+ * Built once and shared. It is 64 pixels because it is pure falloff and any
+ * more would be storing the same curve at greater expense.
+ */
+let footprintTexture: THREE.Texture | null = null;
+
+function getFootprintTexture(): THREE.Texture {
+  if (footprintTexture) return footprintTexture;
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    // Brightest a little off centre: the slick a whale leaves is a ring of
+    // smoothed water around the disturbance, not a spot of paint at the middle.
+    gradient.addColorStop(0, 'rgba(255,255,255,0.55)');
+    gradient.addColorStop(0.35, 'rgba(255,255,255,0.85)');
+    gradient.addColorStop(0.7, 'rgba(255,255,255,0.28)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+  }
+  footprintTexture = new THREE.CanvasTexture(canvas);
+  return footprintTexture;
+}
+
+/**
  * The scatter of the spout, fixed per whale.
  *
  * Off the simulation's seed rather than off Math.random, for the same reason
@@ -126,6 +174,28 @@ function seededBlowPoints(seed: number): readonly [number, number, number][] {
     points.push([(next() - 0.5) * 0.42, next(), (next() - 0.5) * 0.28]);
   }
   return points;
+}
+
+/**
+ * Put every vertex of the footprint on the water it is supposed to be lying on.
+ *
+ * The mesh is in the XY plane and turned flat, so after the rotation its local
+ * +Z is world up and its local +Y is world -Z, which is sim north. That makes
+ * the sim coordinate of a vertex (pos.x + lx, pos.y + ly) and its height the
+ * local z -- which is what gets written here, straight from the same
+ * `surfaceHeight` the whale and the water shader both use, so a mark on the
+ * water cannot be on water the shader is not drawing.
+ */
+function layFootprint(whale: WhaleInstance, pos: Vec2, water: Water, waves: WaveField): void {
+  whale.foam.position.set(pos.x, 0, -pos.y);
+  const attr = whale.foam.geometry.attributes.position as THREE.BufferAttribute;
+  const scale = whale.foam.scale.x;
+  for (let i = 0; i < attr.count; i++) {
+    const lx = attr.getX(i) * scale;
+    const ly = attr.getY(i) * scale;
+    attr.setZ(i, water.surfaceHeight(pos.x + lx, pos.y + ly, waves) + FOAM_LIFT);
+  }
+  attr.needsUpdate = true;
 }
 
 function makeInstance(size: number, seed: number, asset: WhaleAsset): WhaleInstance {
@@ -149,14 +219,24 @@ function makeInstance(size: number, seed: number, asset: WhaleAsset): WhaleInsta
 
   const foamMaterial = new THREE.MeshBasicMaterial({
     color: 0xc5d9dc,
+    map: getFootprintTexture(),
     transparent: true,
     opacity: 0,
     depthWrite: false,
   });
-  const foam = new THREE.Mesh(new THREE.RingGeometry(size * 0.16, size * 0.34, 32), foamMaterial);
+  // Tessellated, because every vertex is put on the wave surface each frame.
+  // A single flat quad -- which is what the old ring was -- cuts through the
+  // swell it is supposed to be lying on, and the crescent that stays above
+  // water slides round the patch as the waves pass under it. That is the
+  // "circle that keeps turning": not an animation, an intersection.
+  const foam = new THREE.Mesh(
+    new THREE.RingGeometry(size * 0.02, size * FOAM_RADIUS, FOAM_SEGMENTS, FOAM_RINGS),
+    foamMaterial,
+  );
+  // Laid in the world rather than on the whale: it is a mark left on the water,
+  // so it must not swing when the animal turns under it.
   foam.rotation.x = -Math.PI / 2;
-  foam.position.y = 0.04;
-  root.add(foam);
+  foam.frustumCulled = false;
 
   const blowGeometry = new THREE.BufferGeometry();
   blowGeometry.setAttribute(
@@ -203,6 +283,7 @@ function phaseAmount(phase: WhalePhase, t: number): number {
 
 function disposeInstance(group: THREE.Group, whale: WhaleInstance): void {
   group.remove(whale.root);
+  group.remove(whale.foam);
   whale.mixer?.stopAllAction();
   whale.mixer?.uncacheRoot(whale.model);
   // SkeletonUtils creates an independent skeleton (and, after rendering, an
@@ -310,6 +391,8 @@ export function createWhaleView(): WhaleView {
           whale = makeInstance(sighting.size, sighting.seed, asset);
           instances.set(sighting.id, whale);
           group.add(whale.root);
+          // In the world, not on the animal -- see makeInstance.
+          group.add(whale.foam);
         }
 
         // Keep authored swimming motion on simulation time even while culled;
@@ -318,7 +401,11 @@ export function createWhaleView(): WhaleView {
 
         const distance = Math.hypot(sighting.pos.x - boat.x, sighting.pos.y - boat.y);
         whale.root.visible = distance < visibility * CULL_MARGIN;
-        if (!whale.root.visible) continue;
+        // The footprint is a sibling now, so it has to be culled alongside.
+        if (!whale.root.visible) {
+          whale.foam.visible = false;
+          continue;
+        }
 
         const surface = water.surfaceHeight(sighting.pos.x, sighting.pos.y, waves);
         const phase = sighting.phase;
@@ -362,10 +449,16 @@ export function createWhaleView(): WhaleView {
         // a real strength through the blow and the roll rather than at the
         // 0.22 it used to sit at, because at these ranges it is doing more of
         // the work of being seen than the animal is.
+        // The footprint. Its strength is a slick, not a paint mark: the texture
+        // carries the falloff and this only says how much of it there is.
         const foam = phase === 'surfacing' ? smooth(t) : phase === 'diving' ? 1 - smooth(t) : 0.55;
-        whale.foamMaterial.opacity = foam * (0.3 + sky.daylight * 0.42);
-        const foamScale = 0.8 + foam * 0.9;
-        whale.foam.scale.set(foamScale, foamScale, foamScale);
+        whale.foamMaterial.opacity = foam * (0.18 + sky.daylight * 0.28);
+        const foamScale = 0.75 + foam * 0.5;
+        // Z is left alone: the heights written by layFootprint are already in
+        // world metres, and scaling them would lift the patch off the sea.
+        whale.foam.scale.set(foamScale, foamScale, 1);
+        whale.foam.visible = whale.foamMaterial.opacity > 0.004;
+        if (whale.foam.visible) layFootprint(whale, sighting.pos, water, waves);
       }
     },
     dispose() {
