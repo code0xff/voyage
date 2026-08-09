@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { approach } from '../sim/math';
 import type { SkyState } from '../sim/sky';
 
 /**
@@ -342,7 +343,7 @@ export function createSkyDome(): SkyDome {
       // droplets do not assemble into a decal. Let the bow gather over about
       // a second and dissolve more slowly when the shower or sunlight leaves.
       const fadeSeconds = rainbow > displayedRainbow ? 0.45 : 0.8;
-      displayedRainbow += (rainbow - displayedRainbow) * (1 - Math.exp(-dt / fadeSeconds));
+      displayedRainbow = approach(displayedRainbow, rainbow, fadeSeconds, dt);
       uniforms.uRainbow.value = displayedRainbow;
       // Downwind: `twd` is where the wind comes *from*, and the cloud goes the
       // other way. Render coordinates put x east and z south, so a compass
