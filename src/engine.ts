@@ -642,6 +642,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     whales.reseed(current.seed);
     // Ids restart with the world, so a stale one would silence the first blow.
     blownFor = 0;
+    // And a blow already scheduled belongs to an ocean that no longer exists.
+    sound.silencePending();
     sharks.reseed(current.seed);
     // A new session starts with the sea its weather implies, not the one the
     // last session left behind.
@@ -820,13 +822,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     whales.update(PHYS_DT, state.pos, query, state.heading);
     for (const whale of whales.events) {
       if (whale.phase !== 'blow' || whale.id === blownFor) continue;
-      blownFor = whale.id;
       // Heard, and heard late: whaleBlow schedules itself for when the sound
       // would actually arrive. At these ranges that is a second or more after
       // the spout is drawn, which is the right way round and is most of why
       // the blow is worth having -- it is how a whale is found.
       const d = Math.hypot(whale.pos.x - state.pos.x, whale.pos.y - state.pos.y);
-      sound.whaleBlow(d, whale.size, weather.state.fog);
+      // Marked only if something was really scheduled. Nothing is built while
+      // the audio context is suspended, and the phase runs for four seconds --
+      // long enough for the browser to hand the context back inside it.
+      if (sound.whaleBlow(d, whale.size, weather.state.fog)) blownFor = whale.id;
     }
     // After the whales, and given them: a shark is placed clear of whatever is
     // already in the water this step.

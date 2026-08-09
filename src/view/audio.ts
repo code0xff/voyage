@@ -106,6 +106,16 @@ export class SoundEngine {
   private started = false;
   /** Where we are between one wave and the next, rad. */
   private wavePhase = 0;
+  /**
+   * One-shots already scheduled but not yet heard.
+   *
+   * Only the blow registers here, because only the blow is scheduled far
+   * enough ahead to outlive the world it belongs to: it is placed at up to
+   * 1.6 s in the future so that the sound arrives when it would really arrive,
+   * and a restart inside that window would otherwise play the previous
+   * ocean's whale into the new one. A gull is 0.2 s away and gone.
+   */
+  private pending: AudioBufferSourceNode[] = [];
 
   get isRunning(): boolean {
     return this.started && this.ctx?.state === 'running';
@@ -506,15 +516,19 @@ export class SoundEngine {
    * @param distance metres from the boat, for the fall-off and the delay
    * @param size the whale's length in metres; a bigger animal blows deeper
    * @param fog carries sound further, for the reason set out in gullCall
+   * @returns whether anything was actually scheduled. The caller uses this to
+   *   decide the encounter has been dealt with -- there is no point marking a
+   *   blow heard when the context was suspended and nothing was built, because
+   *   the phase is four seconds long and audio may well come back inside it.
    */
-  whaleBlow(distance: number, size: number, fog = 0): void {
+  whaleBlow(distance: number, size: number, fog = 0): boolean {
     const ctx = this.ctx;
     const master = this.master;
     const noise = this.noise;
-    if (!ctx || !master || !noise || ctx.state !== 'running') return;
+    if (!ctx || !master || !noise || ctx.state !== 'running') return false;
 
     const gain = this.carry(distance, 520 * (1 + clamp(fog, 0, 1) * 1.5)) * 0.5;
-    if (gain < 0.01) return;
+    if (gain < 0.01) return false;
 
     /*
      * Heard late, by however long the sound takes to arrive.
@@ -554,6 +568,11 @@ export class SoundEngine {
       src.connect(f).connect(g).connect(master);
       src.start(t0, Math.random() * 2);
       src.stop(t0 + attack + decay + 0.05);
+      this.pending.push(src);
+      src.onended = () => {
+        const i = this.pending.indexOf(src);
+        if (i >= 0) this.pending.splice(i, 1);
+      };
     };
 
     // The lungful. A 25 ms edge, which is as sharp as anything in this file --
@@ -562,6 +581,26 @@ export class SoundEngine {
     // Spray, and the breath still going after the crack of it has gone. Late,
     // slow and bright: this is the half that says water rather than air.
     layer('highpass', 1900 * scale, 0.4, 0.05, 0.16, 1.1, 0.42);
+    return true;
+  }
+
+  /**
+   * Drop anything scheduled but not yet heard.
+   *
+   * For a new world, where the sound in flight belongs to an ocean that no
+   * longer exists. Not called on pause: a blow already on its way is a second
+   * of air travel rather than a state of the simulation, and silencing it there
+   * would mean pausing at the wrong instant quietly ate the whale.
+   */
+  silencePending(): void {
+    for (const src of this.pending) {
+      try {
+        src.stop();
+      } catch {
+        // Already finished between the check and here; nothing to stop.
+      }
+    }
+    this.pending.length = 0;
   }
 
   dispose(): void {
