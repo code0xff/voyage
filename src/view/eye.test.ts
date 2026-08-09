@@ -21,9 +21,12 @@ import { dragTo } from './orbit';
  *
  * The test drives the real chain -- `dragTo` for the gesture, then the same
  * pose functions the render loop calls -- and asks the only question that
- * matters: **when the hand goes one way, does the sea go the same way?** It is
- * deliberately not a restatement of the rule against itself; flip either sign
- * in `dragTo`, or either sign in `deckOrientation`, and it fails.
+ * matters: **when the hand goes one way, does the eye go the same way?** The
+ * mark on the water therefore moves the other way, because turning your head
+ * is what moves it. See `dragTo` for why that convention and not the map one.
+ *
+ * It is deliberately not a restatement of the rule against itself; flip either
+ * sign in `dragTo`, or either sign in `deckOrientation`, and it fails.
  */
 
 /** Roughly the field the scene uses; only the sign of the answer depends on it. */
@@ -66,36 +69,36 @@ const EYES = [
 ] as const;
 
 describe('the eye follows the hand', () => {
-  it.each(EYES)('$name: dragging right slides the sea right', ({ view, rest }) => {
-    const before = view(rest.yaw, rest.pitch);
-    const dragged = dragTo(rest.yaw, rest.pitch, 60, 0);
-    const after = view(dragged.yaw, dragged.pitch);
-
-    expect(after.x).toBeGreaterThan(before.x);
-  });
-
-  it.each(EYES)('$name: dragging left slides the sea left', ({ view, rest }) => {
-    const before = view(rest.yaw, rest.pitch);
-    const dragged = dragTo(rest.yaw, rest.pitch, -60, 0);
-    const after = view(dragged.yaw, dragged.pitch);
+  it.each(EYES)('$name: dragging right looks right, so the mark goes left', (eye) => {
+    const before = eye.view(eye.rest.yaw, eye.rest.pitch);
+    const dragged = dragTo(eye.rest.yaw, eye.rest.pitch, 60, 0);
+    const after = eye.view(dragged.yaw, dragged.pitch);
 
     expect(after.x).toBeLessThan(before.x);
   });
 
-  it.each(EYES)('$name: dragging down slides the sea down', ({ view, rest }) => {
-    const before = view(rest.yaw, rest.pitch);
-    const dragged = dragTo(rest.yaw, rest.pitch, 0, 50);
-    const after = view(dragged.yaw, dragged.pitch);
+  it.each(EYES)('$name: dragging left looks left, so the mark goes right', (eye) => {
+    const before = eye.view(eye.rest.yaw, eye.rest.pitch);
+    const dragged = dragTo(eye.rest.yaw, eye.rest.pitch, -60, 0);
+    const after = eye.view(dragged.yaw, dragged.pitch);
 
-    expect(after.y).toBeLessThan(before.y);
+    expect(after.x).toBeGreaterThan(before.x);
   });
 
-  it.each(EYES)('$name: dragging up slides the sea up', ({ view, rest }) => {
-    const before = view(rest.yaw, rest.pitch);
-    const dragged = dragTo(rest.yaw, rest.pitch, 0, -50);
-    const after = view(dragged.yaw, dragged.pitch);
+  it.each(EYES)('$name: dragging down looks down, so the mark goes up', (eye) => {
+    const before = eye.view(eye.rest.yaw, eye.rest.pitch);
+    const dragged = dragTo(eye.rest.yaw, eye.rest.pitch, 0, 50);
+    const after = eye.view(dragged.yaw, dragged.pitch);
 
     expect(after.y).toBeGreaterThan(before.y);
+  });
+
+  it.each(EYES)('$name: dragging up looks up, so the mark goes down', (eye) => {
+    const before = eye.view(eye.rest.yaw, eye.rest.pitch);
+    const dragged = dragTo(eye.rest.yaw, eye.rest.pitch, 0, -50);
+    const after = eye.view(dragged.yaw, dragged.pitch);
+
+    expect(after.y).toBeLessThan(before.y);
   });
 
   /**

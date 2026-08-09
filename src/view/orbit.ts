@@ -70,18 +70,24 @@ function clamp(v: number, lo: number, hi: number): number {
  * test. See `eye.test.ts`, which drives this and then the camera poses it
  * feeds, and fails on either sign.
  *
- * One rule, both axes: **the scene follows the hand.**
+ * One rule, both axes: **the eye follows the hand.**
  *
- * Drag right and the sea slides right; drag down and it slides down, as though
- * the view were being pulled about by a corner. That is what the `grab` cursor
- * on this canvas promises, it is what every map and 3D viewer does, and it is
- * what a first-person panorama does too -- Street View pans this way, and
- * nobody reads it as inverted.
+ * Drag right and you look right; drag down and you look down. The sea goes the
+ * other way, because turning your head is what moves it.
  *
- * Both signs are negative because both eyes are *cameras*: to slide the scene
- * one way the camera has to go the other. Getting one of these two signs right
- * and the other wrong is what this used to do, and it is why the two axes
- * disagreed. The consumers in eye.ts have to hold up their end.
+ * Both conventions are in wide use and the choice was not obvious. A drag with
+ * a `grab` cursor usually means the other one -- push the world about like a
+ * map, which is what the chart in MinimapCard does and should keep doing,
+ * because a chart *is* a map. This is not a map. It is where a helmsman is
+ * looking, and the thing being dragged is a head: you turn it towards what you
+ * want to see, which is the same gesture as pointing binoculars at a blow.
+ *
+ * Written down because it was got wrong once in each direction. The four
+ * combinations of two eyes and two axes had drifted into four different
+ * conventions; unifying them picked map-style, which fixed the disagreement
+ * and left the horizontal opposite to what the one person using it had already
+ * said felt right. Both signs are positive here, and both consumers in eye.ts
+ * subtract -- that pairing is what makes the two eyes agree.
  */
 export function dragTo(
   yaw: number,
@@ -89,7 +95,7 @@ export function dragTo(
   dx: number,
   dy: number,
 ): { yaw: number; pitch: number } {
-  return { yaw: yaw - dx * YAW_PER_PX, pitch: pitch - dy * PITCH_PER_PX };
+  return { yaw: yaw + dx * YAW_PER_PX, pitch: pitch + dy * PITCH_PER_PX };
 }
 
 export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {

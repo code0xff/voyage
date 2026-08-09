@@ -32,8 +32,8 @@ export const HEAD_ROLL = 0.6;
  * to leeward stays turned to leeward as she comes up.
  *
  * **Both look-around terms are subtracted.** That is what puts this eye on the
- * same rule as the chase camera -- drag right and the sea goes right, drag down
- * and it goes down. Added, as they once were, this eye moved opposite the chase
+ * same rule as the chase camera -- drag right and you look right, drag down and
+ * you look down. Added, as they once were, this eye moved opposite the chase
  * camera on both axes, so the two views disagreed with each other as well as
  * with themselves.
  */
@@ -62,8 +62,8 @@ export function deckOrientation(
  * keeps a chosen view fixed relative to the boat rather than to the compass.
  * Height rises with pitch, and the camera looks back at her from wherever this
  * puts it -- so a larger pitch is a higher eye looking further down, which is
- * the opposite of what pitch means on deck. The two agree anyway, because the
- * drag hands them opposite signs; that is the thing the test pins down.
+ * the same way the deck eye ends up looking once its own sign is applied. That
+ * the two agree is the thing the test pins down.
  *
  * @param heave the boat's heave, which the eye follows only partly: tracking it
  *   fully is nauseating
