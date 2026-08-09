@@ -27,20 +27,20 @@ const MIN_SHORE_DISTANCE = 120;
 /**
  * How far off a sighting opens, m.
  *
- * Set by what can actually be seen. A whale floats with 86% of its height
- * below the surface -- see WATERLINE in view/whale.ts, and it is set high on
- * purpose so the flanks stay hidden rather than the animal riding like a hull
- * -- which leaves about 0.57 m of back showing on a 15 m adult. At the 220 m
- * this used to start at, that is roughly a hundred pixels wide by four tall:
- * a smear, not an animal. At 80 m it reads, and at 200 m it is still a mark on
- * the water worth turning the camera for.
+ * Far, and deliberately so: a whale is an animal already out in its own water,
+ * not one staged alongside. It was brought in to 80-200 m for a while because
+ * at this range there is very little to see -- an adult shows about 0.57 m of
+ * back above an opaque surface, four pixels at 220 m -- and that turned out to
+ * be the wrong repair. It changed the world to suit the camera.
  *
- * The far end is deliberately left too small to make out in detail. An
- * encounter that always arrives legible is a staged one, and the thing this
- * feature is for is noticing something that was already there.
+ * What it needed instead was something to see it *with*, and a reason to look.
+ * The blow reaches 3.2 m and stands about 19 px at 220 m, which is a mark on
+ * the water you notice; the glasses in view/scene.ts then magnify five times,
+ * which is a whale. Spotting and then looking is what actually happens, and it
+ * leaves the sighting where it belongs.
  */
-const ENCOUNTER_RADIUS_MIN = 80;
-const ENCOUNTER_RADIUS_MAX = 200;
+const ENCOUNTER_RADIUS_MIN = 220;
+const ENCOUNTER_RADIUS_MAX = 560;
 const WHALE_SPEED = 1.8;
 const FIRST_ENCOUNTER_DELAY = 8;
 
@@ -60,15 +60,13 @@ const FIRST_ENCOUNTER_DELAY = 8;
  * coming meets an animal that quietly stops being where it was going to be,
  * which is both what happens and what keeps the two apart.
  *
- * Larger than the 80 m a sighting can open at, and that is the point: at 70 m
- * a whale spawning at the near edge had ten metres of closing in which to
- * react, and the worst approach over 768 encounters was 13.3 m -- an overlap.
- * Measured across the same set, 90 m gives 25.5 m, 110 m gives 31.1 m, and
- * beyond that it flattens off around 34 m. This is the knee.
- *
- * It does not turn the encounter into a flight. Urgency scales with how close
- * the boat is, so a whale opening at 80 m against this range starts at 0.27 of
- * the rate below -- about three degrees a second, a bend rather than a bolt.
+ * At the distances above the clock keeps the two apart on its own -- a boat
+ * covers about 100 m in the 32.5 s an encounter lasts, and a converging one
+ * closes to roughly 62 m at worst -- so this is no longer the only thing
+ * standing between them. It still fires, because 62 m is inside it, and it
+ * should: a whale that holds its course into an approaching hull is the wrong
+ * animal. Kept at the value tuned when the encounter was brought close, which
+ * cost nothing to leave and is the margin that survives if it ever is again.
  */
 const AVOID_RANGE = 110;
 
