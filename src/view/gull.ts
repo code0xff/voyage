@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import type { Vec2 } from '../sim/math';
 import type { GullFlockSighting } from '../sim/wildlife';
-import { creatureLoader, disposeGltfScene } from './creature';
+import { CULL_MARGIN, creatureLoader, disposeGltfScene } from './creature';
 
 interface GullAsset { model: THREE.Group; animations: readonly THREE.AnimationClip[] }
 interface GullInstance {
@@ -53,7 +53,13 @@ export function createGullView(): GullView {
         else asset = { model: prepare(gltf.scene), animations: gltf.animations };
       },
       undefined,
-      () => { requested = false; },
+      () => {
+        // Not retried. `requested` stays set, because a flock is on screen for
+        // six to eight seconds and clearing the guard here would ask for a
+        // missing file on every frame of it -- some hundreds of requests for an
+        // answer that is not going to change. The calls carry on without it,
+        // which is what they were doing before there was anything to draw.
+      },
     );
   };
 
@@ -113,7 +119,7 @@ export function createGullView(): GullView {
         }
         instance.mixer?.update(dt);
         const distance = Math.hypot(flock.pos.x - boat.x, flock.pos.y - boat.y);
-        instance.root.visible = distance < visibility * 1.05;
+        instance.root.visible = distance < visibility * CULL_MARGIN;
         if (!instance.root.visible) continue;
         for (const material of instance.materials) material.opacity = flock.opacity;
         instance.root.position.set(flock.pos.x, flock.altitude, -flock.pos.y);
