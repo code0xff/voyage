@@ -42,12 +42,13 @@ const HEAD_TOWARDS_POSITIVE_Z = true;
 /**
  * How a whale is actually spotted, and what these three numbers are for.
  *
- * Not by its back. At the ranges an encounter opens at, 80-200 m, an adult
- * shows about 0.57 m of itself above water and the rest is under an opaque
- * surface -- a few pixels of dark on dark. What a lookout sees first is the
- * blow, and after that the footprint: the flat, pale patch a surfacing animal
- * leaves on the water, which is horizontal and therefore presents its whole
- * area to someone looking across at it.
+ * Not by its back. An encounter opens at 220-560 m and an adult shows about
+ * 0.57 m of itself above an opaque surface, which is three and a half pixels
+ * at the near end of that and under two at the far: dark on dark, at any
+ * distance it is ever seen from. What a lookout sees first is the blow, and
+ * after that the footprint -- the flat pale patch a surfacing animal leaves,
+ * which lies flat on the water and therefore shows its whole area to someone
+ * looking across at it.
  *
  * So the blow and the foam do the work of being seen, and the body is what
  * rewards looking. That is the right way round for the thing being depicted as
@@ -84,10 +85,13 @@ const BLOW_POINTS = 44;
  * Height of the spout, m, and its droplet size.
  *
  * A humpback blows about three metres, near enough regardless of how big the
- * individual is, so this is in metres rather than body lengths. At 200 m a
- * 3.2 m column stands roughly 23 px tall, which is the single most visible
- * thing about the encounter -- the old 1.5 m of 0.16 m droplets was under a
- * pixel each and simply did not survive the distance.
+ * individual is, so this is in metres rather than body lengths. A 3.2 m
+ * column stands about 19 px at 220 m and still 8 px at 560 m, which makes it
+ * the one part of the encounter that survives the range -- the old 1.5 m of
+ * 0.16 m droplets was under a pixel per droplet and did not.
+ *
+ * Being noticed is all it has to do. Turning what was noticed into an animal
+ * is the binoculars' job; see BINOCULAR_POWER in scene.ts.
  */
 const BLOW_HEIGHT = 3.2;
 const BLOW_DROPLET = 0.55;
@@ -469,6 +473,11 @@ export function createWhaleView(): WhaleView {
         disposeGltfScene(asset.model);
         asset = null;
       }
+      // Module-level and shared by every instance, so no instance can own it.
+      // Each material only references it; disposing a material leaves it
+      // resident, and a scene rebuilt after this would make a second one.
+      footprintTexture?.dispose();
+      footprintTexture = null;
     },
   };
 }
