@@ -275,6 +275,8 @@ export interface SkyDome {
     elapsedHours: number,
     windTwd: number,
     rainbow: number,
+    dt: number,
+    session: number,
   ): void;
   dispose(): void;
 }
@@ -319,10 +321,16 @@ export function createSkyDome(): SkyDome {
   mesh.frustumCulled = false;
   // Draw first so everything else composites on top of it.
   mesh.renderOrder = -2;
+  let displayedRainbow = 0;
+  let lastSession = -1;
 
   return {
     mesh,
-    update(sky, cloud, elapsedHours, windTwd, rainbow) {
+    update(sky, cloud, elapsedHours, windTwd, rainbow, dt, session) {
+      if (session !== lastSession) {
+        displayedRainbow = 0;
+        lastSession = session;
+      }
       uniforms.uTop.value.setRGB(sky.skyTop[0], sky.skyTop[1], sky.skyTop[2]);
       uniforms.uHorizon.value.setRGB(sky.skyHorizon[0], sky.skyHorizon[1], sky.skyHorizon[2]);
       uniforms.uSunColor.value.setRGB(sky.sunColor[0], sky.sunColor[1], sky.sunColor[2]);
@@ -330,7 +338,12 @@ export function createSkyDome(): SkyDome {
       uniforms.uCloud.value = cloud;
       uniforms.uDaylight.value = sky.daylight;
       uniforms.uStarAngle.value = elapsedHours * SIDEREAL_RATE;
-      uniforms.uRainbow.value = rainbow;
+      // Weather and solar geometry decide the target instantly, but water
+      // droplets do not assemble into a decal. Let the bow gather over about
+      // a second and dissolve more slowly when the shower or sunlight leaves.
+      const fadeSeconds = rainbow > displayedRainbow ? 0.45 : 0.8;
+      displayedRainbow += (rainbow - displayedRainbow) * (1 - Math.exp(-dt / fadeSeconds));
+      uniforms.uRainbow.value = displayedRainbow;
       // Downwind: `twd` is where the wind comes *from*, and the cloud goes the
       // other way. Render coordinates put x east and z south, so a compass
       // bearing b is (sin b, -cos b) -- and the deck's own uv is that plane.

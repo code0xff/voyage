@@ -625,6 +625,8 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       f.elapsedHours,
       wind.baseTwd,
       rainbowStrength(f.weather.rain, f.weather.cloud, sky.sunElevation),
+      dt,
+      f.session,
     );
     islandView.update(sky);
     regionView.update(state.pos.x, state.pos.y, sky);
