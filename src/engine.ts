@@ -807,7 +807,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       sound.gullCall(d, ev.strength, weather.state.fog);
     }
     whales.update(PHYS_DT, state.pos, query, state.heading);
-    sharks.update(PHYS_DT, state.pos, query, state.heading);
+    // After the whales, and given them: a shark is placed clear of whatever is
+    // already in the water this step.
+    sharks.update(PHYS_DT, state.pos, query, state.heading, whales.events);
 
     diag = step(state, cfg, env, ctl, PHYS_DT, { sea, anchored });
     snapshot.diag = diag;

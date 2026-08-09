@@ -146,6 +146,39 @@ describe('sharks', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  /**
+   * Two sightings on top of each other are one confused shape, not two animals.
+   * Reported from the game: a shark drawn inside a whale.
+   *
+   * The whale is stood still here rather than simulated, because what is being
+   * asserted is the shark's rule -- that it will neither open on top of another
+   * animal nor swim into one -- and a moving whale would make the test depend
+   * on where the encounter happened to put it.
+   */
+  it('neither opens on nor swims into another animal', () => {
+    let checked = 0;
+
+    for (const seed of [11, 12, 33, 9812]) {
+      const sharks = new SharkField(seed);
+      const boat = { x: 0, y: 0 };
+      // Inside the spawn envelope but off to one side. Parked dead centre it
+      // legitimately suppresses the encounter altogether, which asserts nothing.
+      const whale = { pos: { x: 55, y: 55 } };
+
+      for (let t = 0; t < 2400; t += STEP) {
+        sharks.update(STEP, boat, EMPTY_TERRAIN, 0, [whale]);
+        for (const shark of sharks.events) {
+          checked++;
+          expect(
+            Math.hypot(shark.pos.x - whale.pos.x, shark.pos.y - whale.pos.y),
+          ).toBeGreaterThanOrEqual(45);
+        }
+      }
+    }
+
+    expect(checked).toBeGreaterThan(0);
+  });
+
   it('restarts its stream on reseed', () => {
     const reused = new SharkField(9812);
     for (let t = 0; t < 600; t += STEP) reused.update(STEP, { x: 0, y: 0 }, EMPTY_TERRAIN, 0);

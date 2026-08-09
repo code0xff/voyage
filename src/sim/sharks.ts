@@ -51,6 +51,34 @@ const SPAWN_ARC = 1.6;
 /** Fraction of eligible attempts that actually produce a shark. */
 const ENCOUNTER_CHANCE = 0.35;
 
+/**
+ * How far a shark keeps from another animal, m.
+ *
+ * Two sightings on top of each other are one confused shape rather than two
+ * animals. Sized off what is actually drawn: an 18 m whale reaches 9 m from its
+ * centre and the footprint it lies in about 10 m, and a shark half that again,
+ * so a little over thirty metres already separates them and this leaves margin.
+ *
+ * Not larger, and that is the constraint rather than the taste. A shark opens
+ * between 45 m and 115 m inside an arc off the bow; an exclusion disc much
+ * wider than this covers the whole of that envelope, and the animal then has
+ * nowhere to be at all. At 90 m -- the first value tried -- a whale parked in
+ * the middle of the arc suppressed every shark in every seed.
+ */
+const CLEAR_OF_OTHERS = 45;
+
+/** What a shark keeps clear of. Structural, so this file need not know of whales. */
+export interface Occupant {
+  readonly pos: Vec2;
+}
+
+function clashes(x: number, y: number, others: readonly Occupant[]): boolean {
+  for (const other of others) {
+    if (Math.hypot(x - other.pos.x, y - other.pos.y) < CLEAR_OF_OTHERS) return true;
+  }
+  return false;
+}
+
 export class SharkField {
   readonly events: SharkSighting[] = [];
 
@@ -75,7 +103,18 @@ export class SharkField {
     this.events.length = 0;
   }
 
-  update(dt: number, boat: Vec2, terrain: TerrainQuery, boatHeading = 0): void {
+  /**
+   * @param others sightings already placed this step -- the whale -- that this
+   *   one must not be drawn on top of. Read structurally rather than imported,
+   *   so the two species stay independent of each other.
+   */
+  update(
+    dt: number,
+    boat: Vec2,
+    terrain: TerrainQuery,
+    boatHeading = 0,
+    others: readonly Occupant[] = [],
+  ): void {
     this.events.length = 0;
 
     if (this.active) {
@@ -91,8 +130,9 @@ export class SharkField {
       const nextX = this.active.pos.x + dir.x * SPEED * dt;
       const nextY = this.active.pos.y + dir.y * SPEED * dt;
       // Turns off a shoal rather than swimming up it, so the view never has to
-      // hide an animal inside an island.
-      if (terrain.depthAt(nextX, nextY) >= MIN_DEPTH) {
+      // hide an animal inside an island -- and off another animal for the same
+      // reason, so two sightings never converge into one shape.
+      if (terrain.depthAt(nextX, nextY) >= MIN_DEPTH && !clashes(nextX, nextY, others)) {
         this.active.pos.x = nextX;
         this.active.pos.y = nextY;
       } else {
@@ -108,7 +148,7 @@ export class SharkField {
     this.timer = 50 + this.rand() * 100;
     if (this.rand() > ENCOUNTER_CHANCE) return;
 
-    const shark = this.findSpawn(boat, boatHeading, terrain);
+    const shark = this.findSpawn(boat, boatHeading, terrain, others);
     if (!shark) return;
     this.active = shark;
     this.age = 0;
@@ -123,7 +163,12 @@ export class SharkField {
    * starboard, which reads as a scripted event rather than as an animal that
    * was already there.
    */
-  private findSpawn(boat: Vec2, boatHeading: number, terrain: TerrainQuery): SharkSighting | null {
+  private findSpawn(
+    boat: Vec2,
+    boatHeading: number,
+    terrain: TerrainQuery,
+    others: readonly Occupant[],
+  ): SharkSighting | null {
     for (let attempt = 0; attempt < 10; attempt++) {
       const bearing = boatHeading + (this.rand() - 0.5) * SPAWN_ARC;
       const distance =
@@ -131,6 +176,7 @@ export class SharkField {
       const dir = compassVec(bearing);
       const pos = { x: boat.x + dir.x * distance, y: boat.y + dir.y * distance };
       if (terrain.depthAt(pos.x, pos.y) < MIN_DEPTH) continue;
+      if (clashes(pos.x, pos.y, others)) continue;
 
       // Crossing rather than closing: the shark is going about its own business
       // and happens to pass, which is the only relationship it has to the boat.
