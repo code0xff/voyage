@@ -13,7 +13,7 @@ import { CRUISER } from './config';
  *
  * It differs from the whale in two ways that are deliberate. It passes close
  * enough to be recognised as a shark rather than a shape, and it stays up for
- * the whole encounter instead of running a dive cycle: the interest is in a fin
+ * most of the encounter before sounding at the end: the interest is in a fin
  * holding a steady course across your bow, not in a performance.
  */
 export interface SharkSighting {
@@ -27,6 +27,8 @@ export interface SharkSighting {
   size: number;
   /** Seed for small visual differences that must not affect the simulation. */
   seed: number;
+  /** End-of-encounter dive, from fully surfaced at 0 to submerged at 1. */
+  diveT: number;
 }
 
 /**
@@ -38,6 +40,8 @@ export interface SharkSighting {
 const MIN_DEPTH = 8;
 const SPEED = 1.6;
 const ENCOUNTER_DURATION = 42;
+/** Long enough to read as a deliberate sounding rather than a disappearing mesh. */
+const DIVE_DURATION = 6;
 // Close enough to read as an animal, far enough not to look staged. Below about
 // 40 m the chase camera cannot hold both the boat and the fin in one frame.
 const ENCOUNTER_RADIUS_MIN = 45;
@@ -126,6 +130,11 @@ export class SharkField {
         return;
       }
 
+      this.active.diveT = Math.max(
+        0,
+        Math.min(1, (this.age - (ENCOUNTER_DURATION - DIVE_DURATION)) / DIVE_DURATION),
+      );
+
       const dir = compassVec(this.active.heading);
       const nextX = this.active.pos.x + dir.x * SPEED * dt;
       const nextY = this.active.pos.y + dir.y * SPEED * dt;
@@ -187,6 +196,7 @@ export class SharkField {
         heading,
         size: SHARK_LENGTH_MIN + this.rand() * (SHARK_LENGTH_MAX - SHARK_LENGTH_MIN),
         seed: Math.floor(this.rand() * 0xffffffff),
+        diveT: 0,
       };
     }
     return null;

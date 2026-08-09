@@ -34,6 +34,16 @@ const WATERLINE = 0.62;
  */
 const SINK = 0.025;
 
+/** How far the body descends while sounding, as a fraction of its length. */
+const DIVE_DEPTH = 0.18;
+
+/** Root height for a shark at the surface or sounding below it. */
+export function sharkSurfaceY(surface: number, size: number, diveT: number): number {
+  const t = Math.max(0, Math.min(1, diveT));
+  const smooth = t * t * (3 - 2 * t);
+  return surface - size * SINK - size * DIVE_DEPTH * smooth;
+}
+
 /** Body beam as a fraction of length, for the slope samples. Sharks are slim. */
 const BEAM = 0.18;
 
@@ -189,7 +199,7 @@ export function createSharkView(): SharkView {
         // sim (x=east, y=north) -> three (x=east, y=up, z=south)
         instance.root.position.set(
           sighting.pos.x,
-          surface - sighting.size * SINK,
+          sharkSurfaceY(surface, sighting.size, sighting.diveT),
           -sighting.pos.y,
         );
         // Along the sea, not flat on it, and by the same rule the whale and the

@@ -11,6 +11,7 @@ interface Seen {
   heading: number;
   size: number;
   seed: number;
+  diveT: number;
 }
 
 /** Hold a boat somewhere on a fixed heading and collect what swam past. */
@@ -33,6 +34,7 @@ function record(
         heading: shark.heading,
         size: shark.size,
         seed: shark.seed,
+        diveT: shark.diveT,
       });
     }
   }
@@ -144,6 +146,24 @@ describe('sharks', () => {
     }
     expect(ids.length).toBeGreaterThan(1);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('sounds gradually at the end of an encounter', () => {
+    const seen = record(12);
+    const firstId = seen[0]?.id;
+    const encounter = seen.filter((shark) => shark.id === firstId);
+
+    expect(encounter.length).toBeGreaterThan(0);
+    expect(encounter[0].diveT).toBe(0);
+    const firstDive = encounter.findIndex((shark) => shark.diveT > 0);
+    expect(firstDive).toBeGreaterThan(0);
+    expect(firstDive * STEP).toBeGreaterThan(36);
+    expect(firstDive * STEP).toBeLessThanOrEqual(36 + STEP);
+    expect(encounter[firstDive].diveT).toBeLessThan(1);
+    for (let i = 1; i < encounter.length; i++) {
+      expect(encounter[i].diveT).toBeGreaterThanOrEqual(encounter[i - 1].diveT);
+    }
+    expect(encounter[encounter.length - 1].diveT).toBeGreaterThan(0.9);
   });
 
   /**
