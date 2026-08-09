@@ -225,6 +225,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   const weather = new Weather(settings.seed, 'fair');
   const wildlife = new Wildlife(settings.seed);
   const whales = new WhaleField(settings.seed);
+  /**
+   * The encounter whose blow has already been heard.
+   *
+   * The sighting is republished every physics step, so without an edge the
+   * blow would fire 120 times a second for the four seconds the phase lasts.
+   * Held as the id rather than as a flag because ids are never reissued, which
+   * makes "this one has sounded" the whole of the test.
+   */
+  let blownFor = 0;
   const sharks = new SharkField(settings.seed);
 
   // Reused every physics step; allocating per step would keep the GC busy at 120 Hz.
@@ -631,6 +640,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     wind.reseed(current.seed);
     wildlife.reseed(current.seed);
     whales.reseed(current.seed);
+    // Ids restart with the world, so a stale one would silence the first blow.
+    blownFor = 0;
     sharks.reseed(current.seed);
     // A new session starts with the sea its weather implies, not the one the
     // last session left behind.
@@ -807,6 +818,16 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       sound.gullCall(d, ev.strength, weather.state.fog);
     }
     whales.update(PHYS_DT, state.pos, query, state.heading);
+    for (const whale of whales.events) {
+      if (whale.phase !== 'blow' || whale.id === blownFor) continue;
+      blownFor = whale.id;
+      // Heard, and heard late: whaleBlow schedules itself for when the sound
+      // would actually arrive. At these ranges that is a second or more after
+      // the spout is drawn, which is the right way round and is most of why
+      // the blow is worth having -- it is how a whale is found.
+      const d = Math.hypot(whale.pos.x - state.pos.x, whale.pos.y - state.pos.y);
+      sound.whaleBlow(d, whale.size, weather.state.fog);
+    }
     // After the whales, and given them: a shark is placed clear of whatever is
     // already in the water this step.
     sharks.update(PHYS_DT, state.pos, query, state.heading, whales.events);

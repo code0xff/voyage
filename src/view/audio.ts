@@ -489,6 +489,81 @@ export class SoundEngine {
     }
   }
 
+  /**
+   * A whale's blow.
+   *
+   * Noise and not an oscillator, which is the whole difference from the gull:
+   * this is a lungful of air leaving under pressure, so it is broadband, and
+   * the shape of it is entirely in the envelope. An abrupt front edge, a body
+   * that empties in about a second, and a wet hiss that outlives it.
+   *
+   * It carries much further than a gull -- a humpback blow is genuinely loud,
+   * and on a calm day you hear one before you find it, which is exactly the
+   * job it does here: the sighting opens at 220-560 m, where the animal itself
+   * is a few pixels, and this is what tells you there is something to look at
+   * and roughly where.
+   *
+   * @param distance metres from the boat, for the fall-off and the delay
+   * @param size the whale's length in metres; a bigger animal blows deeper
+   * @param fog carries sound further, for the reason set out in gullCall
+   */
+  whaleBlow(distance: number, size: number, fog = 0): void {
+    const ctx = this.ctx;
+    const master = this.master;
+    const noise = this.noise;
+    if (!ctx || !master || !noise || ctx.state !== 'running') return;
+
+    const gain = this.carry(distance, 520 * (1 + clamp(fog, 0, 1) * 1.5)) * 0.5;
+    if (gain < 0.01) return;
+
+    /*
+     * Heard late, by however long the sound takes to arrive.
+     *
+     * 343 m/s, so a blow at 400 m is heard more than a second after the spout
+     * is drawn. This is free -- WebAudio schedules against its own clock, so it
+     * costs one addition -- and it is one of the few places where the delay is
+     * long enough to notice and true enough to be worth having. It is also the
+     * right way round: you see the spout, and then it reaches you.
+     */
+    const t = ctx.currentTime + distance / 343;
+    // Bigger animals blow lower. Referenced to a 15 m adult so the constants
+    // below read as the sound rather than as a ratio.
+    const scale = 15 / clamp(size, 8, 25);
+
+    const layer = (
+      type: BiquadFilterType,
+      freq: number,
+      q: number,
+      delay: number,
+      attack: number,
+      decay: number,
+      peak: number,
+    ) => {
+      const src = ctx.createBufferSource();
+      src.buffer = noise;
+      src.loop = true;
+      const f = ctx.createBiquadFilter();
+      f.type = type;
+      f.frequency.value = freq;
+      f.Q.value = q;
+      const g = ctx.createGain();
+      const t0 = t + delay;
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(peak * gain, t0 + attack);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + decay);
+      src.connect(f).connect(g).connect(master);
+      src.start(t0, Math.random() * 2);
+      src.stop(t0 + attack + decay + 0.05);
+    };
+
+    // The lungful. A 25 ms edge, which is as sharp as anything in this file --
+    // a blow is a burst, and softening it turned it into a passing wave.
+    layer('bandpass', 320 * scale, 0.8, 0, 0.025, 0.85, 1);
+    // Spray, and the breath still going after the crack of it has gone. Late,
+    // slow and bright: this is the half that says water rather than air.
+    layer('highpass', 1900 * scale, 0.4, 0.05, 0.16, 1.1, 0.42);
+  }
+
   dispose(): void {
     this.ctx?.close();
     this.ctx = null;
