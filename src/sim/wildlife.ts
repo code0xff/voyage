@@ -3,7 +3,7 @@ import { rng } from './rng';
 import type { TerrainQuery } from './terrain';
 
 /**
- * Gulls: the wildlife you hear rather than see.
+ * Gulls: a coastal cue heard often and seen occasionally.
  *
  * Nothing here has a body, and that is still a decision. Whales, dolphins and
  * gulls were all *modelled by hand* early on, and all three were cut after
@@ -13,15 +13,14 @@ import type { TerrainQuery } from './terrain';
  * smooth low dome -- and not one of them was a whale.
  *
  * That argument was about modelling, and it has not been overturned; it has
- * been sidestepped. `sim/whales.ts` and `sim/sharks.ts` now place encounters
- * the player can see, drawn from authored, licensed assets that were never ours
- * to get wrong. Nothing in this file changed, because the case for the gull was
- * never that animals are unaffordable.
+ * been sidestepped. The visible animals use authored, licensed assets that were
+ * never ours to get wrong. A flock remains rare because even a good animation
+ * loop reads as machinery when it becomes permanent scenery.
  *
  * What survives here is the part that never had the problem at all. Near a
- * shore you hear gulls. Nothing to draw, nothing to get wrong, and it does real
- * work: it is a bearing to land you can hear before the haze gives it up, which
- * is exactly how you find a coast from a small boat. Open water stays silent.
+ * shore you hear gulls, and sometimes a flock crosses nearby. Both do real
+ * work: they are a bearing to land before the haze gives it up, which is exactly
+ * how you find a coast from a small boat. Open water stays silent and empty.
  *
  * Seeded, so the same world sounds the same way -- the same rule the wind, the
  * weather and the islands already follow.
@@ -34,25 +33,50 @@ export interface WildlifeEvent {
   strength: number;
 }
 
+export interface GullFlockSighting {
+  id: number;
+  pos: Vec2;
+  altitude: number;
+  wingspan: number;
+  duration: number;
+  opacity: number;
+}
+
+interface ActiveFlock extends GullFlockSighting {
+  age: number;
+}
+
 /** Gulls are audible within about this far of a shore, m. */
 const GULL_RANGE = 800;
 
 export class Wildlife {
   /** Filled during update(), drained by whoever plays the sounds. */
   readonly events: WildlifeEvent[] = [];
+  readonly flocks: GullFlockSighting[] = [];
 
   private rand: () => number;
+  private flockRand: () => number;
   private timer = 3;
+  private flockTimer = 10;
+  private nextFlockId = 1;
+  private activeFlock: ActiveFlock | null = null;
 
   constructor(seed = 1) {
     this.rand = rng(seed ^ 0x5eed);
+    this.flockRand = rng(seed ^ 0x6a11);
+    this.flockTimer = 5 + this.flockRand() * 10;
   }
 
   /** Restart the sound event stream when a new seeded world begins. */
   reseed(seed: number): void {
     this.rand = rng(seed ^ 0x5eed);
+    this.flockRand = rng(seed ^ 0x6a11);
     this.timer = 3;
+    this.flockTimer = 5 + this.flockRand() * 10;
+    this.nextFlockId = 1;
+    this.activeFlock = null;
     this.events.length = 0;
+    this.flocks.length = 0;
   }
 
   /**
@@ -61,6 +85,7 @@ export class Wildlife {
    */
   update(dt: number, boat: Vec2, terrain: TerrainQuery): void {
     this.events.length = 0;
+    this.updateFlock(dt, boat, terrain);
 
     this.timer -= dt;
     if (this.timer > 0) return;
@@ -86,5 +111,49 @@ export class Wildlife {
       pos: { x: boat.x + dir.x * range, y: boat.y + dir.y * range },
       strength: 0.5 + closeness * 0.5,
     });
+  }
+
+  private updateFlock(dt: number, boat: Vec2, terrain: TerrainQuery): void {
+    this.flocks.length = 0;
+    this.flockTimer -= dt;
+    if (this.activeFlock) {
+      const flock = this.activeFlock;
+      flock.age += dt;
+      flock.opacity = Math.min(1, flock.age / 0.5, (flock.duration - flock.age) / 1.5);
+      if (flock.age < flock.duration && Math.hypot(flock.pos.x - boat.x, flock.pos.y - boat.y) < 900) {
+        this.flocks.push(flock);
+        return;
+      }
+      this.activeFlock = null;
+    }
+
+    if (this.flockTimer > 0) return;
+
+    const shore = terrain.distanceToShore(boat.x, boat.y);
+    const closeness = Number.isFinite(shore) ? clamp(1 - shore / 500, 0, 1) : 0;
+    // Check again soon offshore; near a coast, 35–75 seconds between checks
+    // keeps the authored loop an event rather than permanent scenery. A failed
+    // check stretches the average interval without introducing another timer.
+    this.flockTimer = closeness > 0 ? 75 - closeness * 40 : 20;
+    if (closeness < 0.1 || this.flockRand() > 0.9) return;
+
+    const shoreBearing = terrain.bearingToShore(boat.x, boat.y) ?? this.flockRand() * TAU;
+    const bearing = shoreBearing + (this.flockRand() - 0.5) * 1.8;
+    const distance = 50 + this.flockRand() * 90;
+    const offset = compassVec(bearing);
+    const baseAltitude = 10 + this.flockRand() * 16;
+    const flock: ActiveFlock = {
+      id: this.nextFlockId++,
+      pos: { x: boat.x + offset.x * distance, y: boat.y + offset.y * distance },
+      altitude: baseAltitude,
+      // Slightly larger than life at this distance: readability wins by less
+      // than half a metre, without turning the birds into aircraft.
+      wingspan: 1.6 + this.flockRand() * 0.3,
+      age: 0,
+      duration: 6 + this.flockRand() * 2,
+      opacity: 0,
+    };
+    this.activeFlock = flock;
+    this.flocks.push(flock);
   }
 }

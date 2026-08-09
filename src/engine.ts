@@ -1031,6 +1031,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       session,
       whales: whales.events,
       sharks: sharks.events,
+      gullFlocks: wildlife.flocks,
       dt,
     });
   }

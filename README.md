@@ -39,7 +39,7 @@ src/sim/     pure physics core -- no Three.js, no React, no browser APIs
   terrain    islands: depth field, wind shadow, wave shelter, grounding
   sky        time of day -- sun position, light and colour palettes
   weather    conditions that evolve on their own
-  wildlife   gulls: a bearing to land you can hear before you can see it
+  wildlife   gull calls and occasional seeded coastal flocks
   whales     seeded whale encounters, kept outside boat physics
   sharks     seeded shark encounters, kept outside boat physics
   noise      deterministic value noise
@@ -62,6 +62,7 @@ src/view/    3D rendering
   creature   what the animal views share: scale, waterline, wave slope, disposal
   whale      humpback: dive cycle, blow and the footprint it leaves
   shark      a fin holding its course across yours
+  gull       an animated flock crossing the coastal sky
   rain       wind-slanted rain around the camera
   telemetry  rolling time-series graph
   polarplot  polar diagram, drawn with the UI design tokens
@@ -777,7 +778,7 @@ meaning anything.
 
 ## Credits
 
-Everything in this repository is written for it, with two exceptions. The
+Everything in this repository is written for it, with three exceptions. The
 animals you meet at sea are authored models, used under
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/):
 
@@ -785,12 +786,15 @@ animals you meet at sea are authored models, used under
   [model](https://sketchfab.com/3d-models/humpback-whale-d3f5039a8c624e099724dd7bcd51a680)
 - **Shark** — [eelislay](https://sketchfab.com/eelislay),
   [model](https://sketchfab.com/3d-models/shark-1b45eb40145a4cf981c601f5d9f168d3)
+- **Seagulls animated** — [vicente betoret ferrero](https://sketchfab.com/deathcow),
+  [model](https://sketchfab.com/3d-models/seagulls-animated-73aed843190a4dfda55f2b65cc0f8d63)
 
-Both live under `public/assets/`, each beside an `ATTRIBUTION.txt` giving the
-same notice and stating what was changed, which the licence asks for. Both are
-compressed (`EXT_meshopt_compression`, `KHR_mesh_quantization`, and the whale's
-textures re-encoded to WebP) and both are scaled, positioned and animated at
-runtime. Nothing has been added to or taken out of either.
+All three live under `public/assets/`, each beside an `ATTRIBUTION.txt` giving
+the same notice and stating what was changed, which the licence asks for. The
+whale and shark are compressed (`EXT_meshopt_compression`,
+`KHR_mesh_quantization`, and the whale's textures re-encoded to WebP); all three
+are scaled, positioned and animated at runtime. Nothing has been added to or
+taken out of them.
 
 That compression is worth its own line: 4.6 MB became 620 kB, and the shark
 alone went from 3.9 MB to 509 kB. It is all geometry — sixty-five thousand
@@ -799,16 +803,15 @@ Meshopt rather than Draco, which is five times smaller again but arrives with a
 300 kB wasm decoder that has to be served separately; the meshopt decoder is a
 25 kB module that bundles with the rest.
 
-Neither is fetched when the page opens. The whale is requested when the
-simulation first places one, and the shark — an encounter many passages never
-produce — only when there is one to draw.
+None is fetched when the page opens. Each is requested only when its first
+sighting exists to draw.
 
 Using an authored asset at all is a reversal, and worth recording as one.
 Hand-modelled whales, dolphins and gulls were built early and all cut: a
 low-poly animal reads as geometry rather than as life, and a bad animal is worse
 than none, because it tells you the sea is a set. That argument was about
-*modelling* them and it still stands — which is exactly why these two are not
-modelled here. The gulls in `sim/wildlife.ts` never had the problem and never
-changed: they are sound, and there is nothing to draw.
+*modelling* them and it still stands — which is exactly why these three are not
+modelled here. The procedural gull call remains the navigational cue; an
+occasional authored flock now gives the same cue a body when haze permits.
 
 The sound is still entirely procedural. There are no audio assets.

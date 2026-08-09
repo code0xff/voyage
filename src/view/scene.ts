@@ -19,8 +19,10 @@ import { createOrbit } from './orbit';
 import { chaseEyePosition, chaseTarget, deckOrientation } from './eye';
 import type { WhaleSighting } from '../sim/whales';
 import type { SharkSighting } from '../sim/sharks';
+import type { GullFlockSighting } from '../sim/wildlife';
 import { createWhaleView } from './whale';
 import { createSharkView } from './shark';
+import { createGullView } from './gull';
 
 /**
  * Scene assembly.
@@ -85,6 +87,7 @@ export interface FrameInput {
   /** Rare environmental encounters, kept outside the boat physics. */
   whales: readonly WhaleSighting[];
   sharks: readonly SharkSighting[];
+  gullFlocks: readonly GullFlockSighting[];
   dt: number;
 }
 
@@ -336,6 +339,8 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   scene.add(whaleView.group);
   const sharkView = createSharkView();
   scene.add(sharkView.group);
+  const gullView = createGullView();
+  scene.add(gullView.group);
 
   const rain = createRain();
   scene.add(rain.object);
@@ -649,6 +654,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     // loop does not need to be making.
     whaleView.update(f.whales, state.pos, water, waves, f.session, sky, f.visibility, dt);
     sharkView.update(f.sharks, state.pos, water, waves, f.session, f.visibility, dt);
+    gullView.update(f.gullFlocks, state.pos, f.session, f.visibility, dt);
 
     // The boat floats on the waves; heave, pitch and heel all come from the
     // integrated physics state.
@@ -959,6 +965,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       regionView.dispose();
       whaleView.dispose();
       sharkView.dispose();
+      gullView.dispose();
       rain.dispose();
       skyDome.dispose();
       renderer.dispose();

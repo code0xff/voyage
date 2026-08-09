@@ -1,0 +1,11 @@
+Seagulls animated
+
+Creator: vicente betoret ferrero (deathcow)
+Creator profile: https://sketchfab.com/deathcow
+Original model: https://sketchfab.com/3d-models/seagulls-animated-73aed843190a4dfda55f2b65cc0f8d63
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+License text: https://creativecommons.org/licenses/by/4.0/
+
+The downloaded Sketchfab GLB is redistributed in converted form. Voyage scales,
+positions, and varies animation playback at runtime; the geometry and embedded
+textures have not otherwise been modified.

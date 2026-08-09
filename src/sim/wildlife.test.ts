@@ -23,6 +23,95 @@ function calls(seed: number, terrain: Terrain, at: { x: number; y: number }, sec
 }
 
 describe('gulls', () => {
+  it('keeps a visible flock brief, nearby and separated from the next one', () => {
+    const wildlife = new Wildlife(17);
+    const land = new Terrain([island(0, 0)]);
+    const boat = { x: 350, y: 0 };
+    const step = 0.25;
+    let elapsed = 0;
+    while (wildlife.flocks.length === 0 && elapsed < 20) {
+      wildlife.update(step, boat, land);
+      elapsed += step;
+    }
+    const first = wildlife.flocks[0];
+    if (!first) throw new Error('expected the seeded first flock');
+    const firstAt = elapsed;
+    expect(firstAt).toBeGreaterThanOrEqual(5);
+    expect(firstAt).toBeLessThanOrEqual(15.25);
+    expect(Math.hypot(first.pos.x - boat.x, first.pos.y - boat.y)).toBeGreaterThanOrEqual(50);
+    expect(Math.hypot(first.pos.x - boat.x, first.pos.y - boat.y)).toBeLessThanOrEqual(140);
+    expect(first.wingspan).toBeGreaterThanOrEqual(1.6);
+    expect(first.wingspan).toBeLessThanOrEqual(1.9);
+
+    const opacities = [first.opacity];
+    while (wildlife.flocks.some((flock) => flock.id === first.id)) {
+      wildlife.update(step, boat, land);
+      elapsed += step;
+      if (wildlife.flocks[0]?.id === first.id) opacities.push(wildlife.flocks[0].opacity);
+    }
+    expect(elapsed - firstAt).toBeGreaterThanOrEqual(6);
+    expect(elapsed - firstAt).toBeLessThanOrEqual(8.25);
+    expect(opacities[0]).toBe(0);
+    expect(Math.max(...opacities)).toBe(1);
+    expect(opacities.at(-1)).toBeLessThan(0.2);
+
+    while (wildlife.flocks.length === 0 && elapsed - firstAt < 80) {
+      wildlife.update(step, boat, land);
+      elapsed += step;
+    }
+    expect(wildlife.flocks[0]?.id).not.toBe(first.id);
+    expect(elapsed - firstAt).toBeGreaterThanOrEqual(35);
+    expect(elapsed - firstAt).toBeLessThanOrEqual(75.25);
+  });
+
+  it('shows a bounded, deterministic flock near land and none offshore', () => {
+    const record = (at: { x: number; y: number }, step: number) => {
+      const wildlife = new Wildlife(17);
+      const seen: string[] = [];
+      const land = new Terrain([island(0, 0)]);
+      for (let t = 0; t < 600; t += step) {
+        wildlife.update(step, at, land);
+        for (const flock of wildlife.flocks) {
+          expect(flock.altitude).toBeGreaterThan(8);
+          expect(flock.altitude).toBeLessThan(28);
+          seen.push(`${flock.id}:${flock.pos.x}:${flock.pos.y}:${flock.altitude}:${flock.duration}`);
+        }
+      }
+      return seen;
+    };
+    const near = record({ x: 350, y: 0 }, 0.25);
+    expect(near.length).toBeGreaterThan(0);
+    const encounters = new Set(near.map((sample) => sample.slice(0, sample.indexOf(':'))));
+    expect(encounters.size).toBeGreaterThanOrEqual(7);
+    expect(encounters.size).toBeLessThanOrEqual(15);
+    expect(near).toEqual(record({ x: 350, y: 0 }, 0.25));
+    expect(record({ x: 4000, y: 0 }, 0.25)).toHaveLength(0);
+    // Once the same flock exists, cadence must not change its trajectory. This
+    // drives the implementation rather than re-stating its altitude formula.
+    const cadenceLand = new Terrain([island(0, 0)]);
+    const advance = (wildlife: Wildlife, step: number, seconds: number) => {
+      for (let elapsed = 0; elapsed < seconds - step / 2; elapsed += step) {
+        wildlife.update(step, { x: 350, y: 0 }, cadenceLand);
+      }
+      return wildlife.flocks[0];
+    };
+    const slow = new Wildlife(17);
+    const fast = new Wildlife(17);
+    let spawned = false;
+    for (let elapsed = 0; elapsed < 600 && !spawned; elapsed += 0.25) {
+      slow.update(0.25, { x: 350, y: 0 }, cadenceLand);
+      fast.update(0.25, { x: 350, y: 0 }, cadenceLand);
+      spawned = slow.flocks.length > 0;
+    }
+    expect(spawned).toBe(true);
+    const slowFlock = advance(slow, 0.25, 4);
+    const fastFlock = advance(fast, 1 / 120, 4);
+    if (!slowFlock || !fastFlock) throw new Error('the active flock ended before cadence comparison');
+    expect(fastFlock.altitude).toBeCloseTo(slowFlock.altitude, 8);
+    expect(fastFlock.pos.x).toBeCloseTo(slowFlock.pos.x, 8);
+    expect(fastFlock.pos.y).toBeCloseTo(slowFlock.pos.y, 8);
+  });
+
   it('replays exactly from a seed', () => {
     const land = new Terrain([island(0, 0)]);
     expect(calls(11, land, { x: 420, y: 0 })).toEqual(calls(11, land, { x: 420, y: 0 }));
