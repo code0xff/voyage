@@ -58,8 +58,9 @@ src/view/    3D rendering
              flat sea that carries it on to the horizon
   skydome    sky gradient and sun glow
   islands    island meshes, sampled from the same elevation field
-  creature   what the two animal views share: scaling, waterline, disposal
-  whale      humpback: dive cycle, blow and the ring it leaves
+  eye        where the camera is and which way it faces, for both views
+  creature   what the animal views share: scale, waterline, wave slope, disposal
+  whale      humpback: dive cycle, blow and the footprint it leaves
   shark      a fin holding its course across yours
   rain       wind-slanted rain around the camera
   telemetry  rolling time-series graph
@@ -548,6 +549,12 @@ Vertex displacement runs in a GPU vertex shader; the height the boat floats at
 is computed on the CPU. The two use *literally the same formula*, which is why
 the wave model is restricted to a sum of sines whose parameters fit in uniforms.
 
+Anything else drawn on the water reads it through `Water.surfaceHeight`, which
+is that same formula plus the two things the shader does to it and the boat
+never sees: the fade that flattens the grid towards its edge, and the land
+shelter. A whale lying on the swell in an island's lee would otherwise be
+riding a sea nobody is drawing.
+
 ### 11. Integration
 
 Three degrees of freedom in hull axes plus roll, pitch and heave, semi-implicit
@@ -685,19 +692,21 @@ writes itself into the logbook.
 | `Y` | auto-reef |
 | `Q E` | mean wind direction |
 | `[ ]` | mean wind speed |
-| `C` | camera (chase / top-down) |
+| `C` | camera: astern / on deck / overhead |
 | `0` | hand all sail, or set it again |
 | `A` | let go the anchor, or weigh it |
+| `B` | binoculars — five power, from wherever you are looking |
 | `N` | chart range |
 | wheel over the chart | chart range |
 | drag the chart | look around it; double-click recentres on the boat |
 | click the chart | set where you are bound; right-click clears it |
-| drag | orbit the camera around the boat |
-| wheel anywhere else | zoom the camera |
+| drag | look around — the eye follows your hand, as in a first-person view |
+| wheel anywhere else | the eye closer in or further out (not magnification: that is `B`) |
 | double-click | recentre the view astern |
 | `P` | recompute polar |
 | `R` | restart |
 | `M` | sound |
+| `L` | navigation lights |
 | `Esc` | menu / settings |
 
 From the console the whole engine is exposed as `voyage`: `voyage.advance(60, 0.5)`
@@ -752,6 +761,15 @@ meaning anything.
 - No AI opponents, and nothing to chase: the passage ghost is designed and not
   built. See [docs/open-questions.md](docs/open-questions.md).
 - No boat-to-boat collision.
+- **The whales and sharks are sightings, not bodies.** They exert no force, they
+  are not in the way, and losing one changes no outcome; what they do is happen
+  where you can see them. A whale gives way to an approaching boat, which is
+  both what one does and what keeps the hull out of it, but only against a boat
+  sailing a course. Chase one deliberately and you will catch it: she makes
+  3.09 m/s to its 1.8, and a pursuer that keeps re-aiming at something slower
+  than itself always closes. Preventing that would need the animal able to
+  outrun you, or a collision model, and neither is worth it for a thing you
+  have to go out of your way to see.
 - The sun is not astronomical, and islands shadow the wind without bending it
   around headlands. Both are deliberate: see AGENTS.md.
 

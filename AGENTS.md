@@ -282,7 +282,29 @@ Examples:
 ## 7. Testing guidance
 
 Tests live next to the code as `*.test.ts` and cover the **physics core and the
-rules**, not the renderer.
+rules**. The renderer is verified by looking at it -- that is what the
+`run-voyage` skill is for, and no assertion is going to tell you the water
+reads as water.
+
+**With one exception, which is signs.** `src/view/eye.test.ts` and
+`src/view/creature.test.ts` exist because the camera's response to a drag and
+the attitude of a body on a wave are not matters of appearance: they are a
+handful of signs, and signs are what this project gets wrong most often. Both
+were wrong, both survived screenshots and review, and both were eventually
+reported by someone using it rather than caught. If a renderer change is a sign
+or a convention, it can be asserted and should be. If it is a look, it cannot.
+
+Two things those two files learned the hard way, and neither is optional:
+
+- **Assert against the world, not against other code.** `creature.test.ts` first
+  asserted that an animal was posed exactly as the boat is posed. It passed, and
+  both were wrong -- the boat's own use of the wave slope had a sign error, so
+  the test had blessed a bug rather than caught one. It now puts a body on a
+  plane of known slope and checks its up against the analytic surface normal,
+  which no convention can argue with.
+- **Test the code, not a restatement of the rule.** A test that re-derives the
+  answer beside the implementation only proves the two agree. Drive the real
+  function.
 
 The tests that matter here assert *behavioural properties*, not exact numbers:
 
@@ -297,6 +319,12 @@ every legitimate tuning change. Assert the property that must hold.
 
 **When you fix a bug, add the regression test.** Several tests in this repo are
 labelled with the bug they lock down; follow that pattern.
+
+**And check that it fails without the fix.** This is not a formality. Three
+tests written in one recent session passed with their fix removed -- one drove
+the boat at a whale it could not physically reach, one used a seed that never
+produced the encounter it was asserting about, and one is described above. A
+test you have not seen fail is a test you have not written.
 
 ## 8. Tuning the boat
 
@@ -317,8 +345,17 @@ The loop is:
 
 Do not "fix" these without being asked; they are known, intentional
 simplifications documented in the README: no spinnaker, no surfing, no AI
-opponents, no current, no main/jib slot interaction, no boat-to-boat collision,
-no tide.
+opponents, no main/jib slot interaction, no boat-to-boat collision, and no
+tide.
+
+There *is* a current -- `sim/current.ts`, and a set and drift the boat feels --
+which this list denied for a while after it was built. What is missing is the
+tide: the stream varies with depth but not with time.
+
+The whales and the sharks belong here too. They are sightings and not bodies:
+no force, no collision, and a whale gives way to a boat sailing a course but
+cannot outrun one that is chasing it. See the README for why that is the right
+place to stop.
 
 Two more that look like bugs but are not:
 
