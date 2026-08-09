@@ -61,6 +61,37 @@ function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
+/**
+ * What a drag does to the look-around, before any limits are applied.
+ *
+ * Separated from the pointer handling so the one rule below can be asserted
+ * without a DOM -- and, more to the point, asserted *through the code that
+ * implements it* rather than against a second copy of the rule written in a
+ * test. See `eye.test.ts`, which drives this and then the camera poses it
+ * feeds, and fails on either sign.
+ *
+ * One rule, both axes: **the scene follows the hand.**
+ *
+ * Drag right and the sea slides right; drag down and it slides down, as though
+ * the view were being pulled about by a corner. That is what the `grab` cursor
+ * on this canvas promises, it is what every map and 3D viewer does, and it is
+ * what a first-person panorama does too -- Street View pans this way, and
+ * nobody reads it as inverted.
+ *
+ * Both signs are negative because both eyes are *cameras*: to slide the scene
+ * one way the camera has to go the other. Getting one of these two signs right
+ * and the other wrong is what this used to do, and it is why the two axes
+ * disagreed. The consumers in eye.ts have to hold up their end.
+ */
+export function dragTo(
+  yaw: number,
+  pitch: number,
+  dx: number,
+  dy: number,
+): { yaw: number; pitch: number } {
+  return { yaw: yaw - dx * YAW_PER_PX, pitch: pitch - dy * PITCH_PER_PX };
+}
+
 export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
   let yaw = 0;
   let pitch = DEFAULT_PITCH;
@@ -92,23 +123,10 @@ export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
     lastX = e.clientX;
     lastY = e.clientY;
 
-    /*
-     * One rule, both axes: **the scene follows the hand.**
-     *
-     * Drag right and the sea slides right; drag down and it slides down, as
-     * though the view were being pulled about by a corner. That is what the
-     * `grab` cursor on this canvas promises, it is what every map and 3D
-     * viewer does, and it is what a first-person panorama does too -- Street
-     * View pans this way, and nobody reads it as inverted.
-     *
-     * Both signs are negative because both eyes are *cameras*: to slide the
-     * scene one way the camera has to go the other. Getting one of these two
-     * signs right and the other wrong is what this used to do, and it is why
-     * the two axes disagreed. The consumers in scene.ts have to hold up their
-     * end -- see the note there on the deck eye.
-     */
-    yaw -= dx * YAW_PER_PX;
-    pitch = clamp(pitch - dy * PITCH_PER_PX, minPitch, maxPitch);
+    // The rule itself is in dragTo, so that it can be tested.
+    const next = dragTo(yaw, pitch, dx, dy);
+    yaw = next.yaw;
+    pitch = clamp(next.pitch, minPitch, maxPitch);
   };
 
   const endDrag = (e: PointerEvent) => {

@@ -16,6 +16,7 @@ import { createRain } from './rain';
 import { createSkyDome } from './skydome';
 import { createBoatLights, lampLevel } from './lights';
 import { createOrbit } from './orbit';
+import { chaseEyePosition, chaseTarget, deckOrientation } from './eye';
 import type { WhaleSighting } from '../sim/whales';
 import type { SharkSighting } from '../sim/sharks';
 import { createWhaleView } from './whale';
@@ -567,8 +568,6 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
    * nobody is steering can do without making people ill. Pitch never exceeds
    * 7 deg/s even untouched, which is why it can afford 0.8.
    */
-  const HEAD_ROLL = 0.6;
-  const HEAD_PITCH = 0.8;
   const camPos = new THREE.Vector3(0, 14, 30);
   const camTarget = new THREE.Vector3();
   // Scratch for the spreader lamp's world position, read every frame.
@@ -832,18 +831,12 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       boat.updateMatrixWorld(true);
       eye.getWorldPosition(camPos);
 
-      const q = new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(
-          // Both look-around terms are subtracted, which is what puts the
-          // deck eye on the same rule as the chase camera: drag right and the
-          // sea goes right, drag down and it goes down. Added, as they were,
-          // this eye moved opposite the chase camera on *both* axes -- the two
-          // views disagreed with each other as well as with themselves.
-          state.pitch * HEAD_PITCH - orbit.pitch,
-          -state.heading - orbit.yaw,
-          -state.heel * HEAD_ROLL,
-          'YXZ',
-        ),
+      const q = deckOrientation(
+        state.pitch,
+        state.heading,
+        state.heel,
+        orbit.yaw,
+        orbit.pitch,
       );
       camera.position.copy(camPos);
       camera.quaternion.copy(q);
@@ -854,23 +847,21 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       // heading, which is what keeps a chosen view fixed relative to the boat
       // rather than to the compass.
       const dist = (26 + diag.speed * 2.2) * orbit.zoom;
-      const az = state.heading + orbit.yaw;
-      const horiz = Math.cos(orbit.pitch) * dist;
-      // The camera only partly follows the heave; tracking it fully is nauseating.
-      const want = new THREE.Vector3(
-        bx - Math.sin(az) * horiz,
-        3 + state.heave * 0.4 + Math.sin(orbit.pitch) * dist,
-        bz + Math.cos(az) * horiz,
+      const want = chaseEyePosition(
+        bx,
+        bz,
+        state.heading,
+        state.heave,
+        orbit.yaw,
+        orbit.pitch,
+        dist,
       );
       // Half a second of smoothing is right for following the boat and far too
       // slow for following a hand: dragged with it, the view visibly trails the
       // mouse. Tighten it while the mouse has hold of the camera.
       const follow = orbit.dragging ? 0.06 : 0.5;
       camPos.lerp(want, jumped ? 1 : 1 - Math.exp(-dt / follow));
-      camTarget.lerp(
-        new THREE.Vector3(bx, 3 + state.heave * 0.6, bz),
-        jumped ? 1 : 1 - Math.exp(-dt / 0.25),
-      );
+      camTarget.lerp(chaseTarget(bx, bz, state.heave), jumped ? 1 : 1 - Math.exp(-dt / 0.25));
 
       // At a low orbit angle in a seaway the eye ends up inside a crest, which
       // renders as a full-screen flash of blue. Ride over the local surface
