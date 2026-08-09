@@ -86,8 +86,10 @@ describe('gulls', () => {
     expect(encounters.size).toBeLessThanOrEqual(15);
     expect(near).toEqual(record({ x: 350, y: 0 }, 0.25));
     expect(record({ x: 4000, y: 0 }, 0.25)).toHaveLength(0);
-    // Once the same flock exists, cadence must not change its trajectory. This
-    // drives the implementation rather than re-stating its altitude formula.
+    // A flock holds its patch of sky, so there is no trajectory to compare --
+    // what this pins is that the step size cannot change where one ends up.
+    // It guards the day something here does start to move, and it already
+    // catches a spawn whose draws depend on how the time was sliced.
     const cadenceLand = new Terrain([island(0, 0)]);
     const advance = (wildlife: Wildlife, step: number, seconds: number) => {
       for (let elapsed = 0; elapsed < seconds - step / 2; elapsed += step) {

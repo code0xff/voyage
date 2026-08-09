@@ -62,7 +62,7 @@ src/view/    3D rendering
   creature   what the animal views share: scale, waterline, wave slope, disposal
   whale      humpback: dive cycle, blow and the footprint it leaves
   shark      a fin holding its course across yours
-  gull       an animated flock crossing the coastal sky
+  gull       an authored flock, circling within sight of a coast
   rain       wind-slanted rain around the camera
   telemetry  rolling time-series graph
   polarplot  polar diagram, drawn with the UI design tokens
@@ -812,6 +812,7 @@ low-poly animal reads as geometry rather than as life, and a bad animal is worse
 than none, because it tells you the sea is a set. That argument was about
 *modelling* them and it still stands — which is exactly why these three are not
 modelled here. The procedural gull call remains the navigational cue; an
-occasional authored flock now gives the same cue a body when haze permits.
+occasional authored flock now gives the same cue a body, circling for a few
+seconds within sight and then gone.
 
 The sound is still entirely procedural. There are no audio assets.

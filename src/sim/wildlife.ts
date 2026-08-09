@@ -5,22 +5,26 @@ import type { TerrainQuery } from './terrain';
 /**
  * Gulls: a coastal cue heard often and seen occasionally.
  *
- * Nothing here has a body, and that is still a decision. Whales, dolphins and
- * gulls were all *modelled by hand* early on, and all three were cut after
- * being looked at: a low-poly animal reads as geometry, not as life, and a bad
- * animal is worse than none, because it tells you the sea is a set. The whale
- * went through three shapes -- flukes and a sounding arch, a long capsule, a
- * smooth low dome -- and not one of them was a whale.
+ * Nothing here was ever *modelled by hand*, and that is still the decision.
+ * Whales, dolphins and gulls were all built that way early on and all three
+ * were cut after being looked at: a low-poly animal reads as geometry, not as
+ * life, and a bad animal is worse than none, because it tells you the sea is a
+ * set. The whale went through three shapes -- flukes and a sounding arch, a
+ * long capsule, a smooth low dome -- and not one of them was a whale.
  *
  * That argument was about modelling, and it has not been overturned; it has
- * been sidestepped. The visible animals use authored, licensed assets that were
- * never ours to get wrong. A flock remains rare because even a good animation
- * loop reads as machinery when it becomes permanent scenery.
+ * been sidestepped. The visible animals, this flock included, use authored and
+ * licensed assets that were never ours to get wrong. Rarity is the other half
+ * of it: even a good animation loop reads as machinery once it becomes
+ * permanent scenery, which is why a flock is a thing that happens rather than
+ * a thing that is there.
  *
- * What survives here is the part that never had the problem at all. Near a
- * shore you hear gulls, and sometimes a flock crosses nearby. Both do real
- * work: they are a bearing to land before the haze gives it up, which is exactly
- * how you find a coast from a small boat. Open water stays silent and empty.
+ * The call came first and still does the navigational work. Near a shore you
+ * hear gulls, and now and then a flock is circling within sight of you as well
+ * -- circling, and not passing through: it holds its patch of sky for the few
+ * seconds it is up, the way birds do over something worth staying for. Both
+ * say the same thing, which is that there is land, and say it before the haze
+ * gives the land itself up. Open water stays silent and empty.
  *
  * Seeded, so the same world sounds the same way -- the same rule the wind, the
  * weather and the islands already follow.
