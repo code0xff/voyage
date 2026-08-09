@@ -47,6 +47,7 @@ import { VENUES, venueById } from "@/sim/venues";
 import { REGIONS, placeName, regionById } from "@/sim/regions";
 import { Logbook } from "./Logbook";
 import { SailingGuide } from "./SailingGuide";
+import { Credits } from "./Credits";
 import type { LogStore } from "@/logbook";
 import type { PassageRecord } from "@/sim/passage";
 import { formatDistance, formatDuration, formatWhen } from "@/sim/units";
@@ -728,6 +729,11 @@ export function MenuDialog({
               {t(CONTROLS_NOTE)}
             </p>
           </TabsContent>
+
+          {/* Under the tabs rather than inside one of them: attribution is not
+              a setting, and burying it behind a tab someone has to guess at is
+              the thing CC BY's "reasonable manner" is asking us not to do. */}
+          <Credits />
         </Tabs>
       </div>
     </Dialog>

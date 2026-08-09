@@ -96,6 +96,19 @@ export const TABS: Record<string, Phrase> = {
   controls: { en: 'Controls', ko: '조작' },
 };
 
+/**
+ * Asset attribution. The label and the statement of what was changed are prose;
+ * the creator, the licence and the model names are references and live in
+ * `Credits.tsx` untranslated.
+ */
+export const CREDITS: Record<string, Phrase> = {
+  title: { en: '3D models', ko: '3D 모델' },
+  note: {
+    en: 'Scaled, positioned and animated at runtime; geometry and textures are otherwise unmodified. Everything else here, the sound included, is written for this project.',
+    ko: '실행 중에 크기와 위치를 맞추고 애니메이션을 적용하며, 형상과 텍스처는 그 밖에 수정하지 않았습니다. 소리를 포함한 나머지 전부는 이 프로젝트를 위해 직접 만든 것입니다.',
+  },
+};
+
 export const CONTROLS_NOTE: Phrase = {
   en: 'New to this? The Sailing tab explains what the boat is doing and what every reading means.',
   ko: '처음이신가요? 항해 탭에서 배가 무엇을 하고 있는지, 각 계기값이 무엇인지 설명합니다.',
