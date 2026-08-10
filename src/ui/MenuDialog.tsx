@@ -276,17 +276,28 @@ export function MenuDialog({
           </span>
         ) : (
           <span className="flex items-center gap-2">
+            {/* This runs the identical `setView("play")` as Done in the footer,
+                and it stays anyway.
+
+                Two controls for one action is normally a fault, and the arrow
+                was taken out on that argument. It went straight back in on
+                use: the two are not interchangeable in the hand even though
+                they are in the code. Coming out of a screen you stepped into,
+                the reflex is the top-left corner, and a settings panel you can
+                leave only by crossing to the far bottom corner reads as one
+                that wants something from you first. Done is for when you have
+                finished; this is for when you want out.
+
+                It costs a 28-pixel ghost button. That is the right price. */}
             <Button
               variant="ghost"
               size="sm"
               className="-ml-2 h-7 px-2"
               onClick={() => setView("play")}
+              aria-label={t(MENU.back)}
             >
               <ArrowLeft />
             </Button>
-            {/* Named for what is actually open. Every screen here is now one
-                kind of thing, so this can be read straight off the view and
-                its tab rather than having to avoid a heading that would lie. */}
             <span className="text-base font-medium">{t(heading)}</span>
           </span>
         )

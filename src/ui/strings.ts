@@ -94,6 +94,8 @@ export const MENU: Record<string, Phrase> = {
   settings: { en: 'Settings', ko: '설정' },
   help: { en: 'Help', ko: '도움말' },
   done: { en: 'Done', ko: '완료' },
+  /** The back arrow carries no text, so this is the only name a screen reader gets. */
+  back: { en: 'Back', ko: '뒤로' },
   close: { en: 'Close', ko: '닫기' },
   changingWeather: { en: 'changing weather', ko: '변하는 날씨' },
   openSea: { en: 'open sea', ko: '먼바다' },
