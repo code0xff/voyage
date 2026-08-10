@@ -31,7 +31,7 @@ import { compassVec, smoothstep } from '../sim/math';
 // m of coverage. Wide enough that race marks stay visible, and small enough
 // that the grid corner stays inside QUERY_REACH in terrain.ts -- the shelter
 // under the far corner of this grid has to be one the island window can answer.
-const SIZE = 900;
+export const SIZE = 900;
 const SEG = 300; // subdivisions -> 3 m per cell
 /**
  * The island window is defined by the physics, not here: the shader has to loop
@@ -88,6 +88,64 @@ const rippleGlsl = /* glsl */ `
   // moire. By then the fog has taken over anyway.
   float rippleAmp(float dist, float scale) {
     return scale * (1.0 - smoothstep(800.0, 2500.0, dist));
+  }
+`;
+
+/**
+ * Pale water over a shoal, shared by both sea surfaces.
+ *
+ * Shared rather than copied, and that is the whole point of it existing as a
+ * snippet. It began in the wave grid alone, so the near sea shaded its shallows
+ * and the flat sea beyond 450 m never did -- which drew a straight line across
+ * an island's pale halo wherever the halo crossed the grid's edge. Two copies
+ * would have fixed the line and set up the older failure this file already
+ * carries scars from: a formula that agreed in two shaders until one of them
+ * was tuned.
+ *
+ * It declares its own uniforms, so neither shader may declare them again. That
+ * is safe because both materials are built on the *same* uniforms object.
+ *
+ * Two sources, because there are two kinds of world. A surveyed region reads
+ * the depth straight off the field texture, so the pale water is where the
+ * water really is shallow; the procedural ocean has only circles, so it fades
+ * out over 110 m from each island's edge.
+ */
+const shoalGlsl = /* glsl */ `
+  uniform vec4 uIslands[${MAX_ISLANDS}];
+  uniform sampler2D uField;
+  uniform vec3 uRegion;
+
+  float shoalAt(vec2 simP) {
+    float shoal = 0.0;
+    vec2 fuv = vec2(
+      (simP.x + uRegion.x) / (2.0 * uRegion.x),
+      1.0 - (simP.y + uRegion.y) / (2.0 * uRegion.y)
+    );
+    float beyond = 0.0;
+    if (uRegion.z > 0.5) {
+      float ox = max(0.0, abs(simP.x) - uRegion.x);
+      float oy = max(0.0, abs(simP.y) - uRegion.y);
+      beyond = min(1.0, max(ox, oy) / ${EDGE_FADE.toFixed(1)});
+    }
+    if (uRegion.z > 0.5 && beyond < 1.0) {
+      // Faded out over the same band as the shelter, so the shoal shading does
+      // not run on past the edge of the data that justified it.
+      float depth = texture2D(uField, clamp(fuv, 0.0, 1.0)).g * ${FIELD_DEPTH.toFixed(1)};
+      shoal = (1.0 - smoothstep(0.0, ${SHOAL_DEPTH.toFixed(1)}, depth)) * (1.0 - beyond);
+    } else {
+      for (int i = 0; i < ${MAX_ISLANDS}; i++) {
+        if (uIslands[i].w < 0.5) continue;
+        float d = distance(simP, uIslands[i].xy) - uIslands[i].z;
+        shoal = max(shoal, 1.0 - smoothstep(0.0, 110.0, max(d, 0.0)));
+      }
+    }
+    return shoal;
+  }
+
+  // Shoal water is paler. It is also where you run aground, so this doubles as
+  // the only warning the player gets.
+  vec3 shoalTint(vec3 col, vec3 shallow, vec2 simP) {
+    return mix(col, mix(shallow, vec3(0.55, 0.62, 0.55), 0.55), shoalAt(simP) * 0.75);
   }
 `;
 
@@ -266,9 +324,6 @@ const fragmentShader = /* glsl */ `
   uniform float uRipple;
   uniform vec4 uLamp;
   uniform vec3 uLampColor;
-  uniform vec4 uIslands[${MAX_ISLANDS}];
-  uniform sampler2D uField;
-  uniform vec3 uRegion;
 
   varying vec3 vNormal;
   varying vec3 vWorld;
@@ -278,6 +333,7 @@ const fragmentShader = /* glsl */ `
   varying float vShelter;
 
   ${rippleGlsl}
+  ${shoalGlsl}
 
   void main() {
     float dist = length(cameraPosition - vWorld);
@@ -300,35 +356,8 @@ const fragmentShader = /* glsl */ `
 
     vec3 col = mix(uDeep, uShallow, diff * 0.65);
 
-    // Shoal water is paler. It is also where you run aground, so this doubles
-    // as the only warning the player gets.
     vec2 simP = vec2(vWorld.x, -vWorld.z);
-    float shoal = 0.0;
-    vec2 fuv = vec2(
-      (simP.x + uRegion.x) / (2.0 * uRegion.x),
-      1.0 - (simP.y + uRegion.y) / (2.0 * uRegion.y)
-    );
-    float beyond = 0.0;
-    if (uRegion.z > 0.5) {
-      float ox = max(0.0, abs(simP.x) - uRegion.x);
-      float oy = max(0.0, abs(simP.y) - uRegion.y);
-      beyond = min(1.0, max(ox, oy) / ${EDGE_FADE.toFixed(1)});
-    }
-    if (uRegion.z > 0.5 && beyond < 1.0) {
-      // Straight off the surveyed depth, so the pale water is where the water
-      // really is shallow rather than where a circle's radius happened to fall.
-      // Faded out over the same band as the shelter, so the shoal shading does
-      // not run on past the edge of the data that justified it.
-      float depth = texture2D(uField, clamp(fuv, 0.0, 1.0)).g * ${FIELD_DEPTH.toFixed(1)};
-      shoal = (1.0 - smoothstep(0.0, ${SHOAL_DEPTH.toFixed(1)}, depth)) * (1.0 - beyond);
-    } else {
-      for (int i = 0; i < ${MAX_ISLANDS}; i++) {
-        if (uIslands[i].w < 0.5) continue;
-        float d = distance(simP, uIslands[i].xy) - uIslands[i].z;
-        shoal = max(shoal, 1.0 - smoothstep(0.0, 110.0, max(d, 0.0)));
-      }
-    }
-    col = mix(col, mix(uShallow, vec3(0.55, 0.62, 0.55), 0.55), shoal * 0.75);
+    col = shoalTint(col, uShallow, simP);
 
     col = mix(col, uSky, clamp(fres * 0.85, 0.0, 0.75));
 
@@ -404,14 +433,26 @@ const fragmentShader = /* glsl */ `
  * only ever a few hundred metres away; in an endless ocean, where land is drawn
  * out to the fog, it makes every island look like it is floating.
  *
- * So a flat plane fills in the rest. It is shaded by the same formula as the
+ * So a flat sea fills in the rest. It is shaded by the same formulae as the
  * grid with a flat normal, which is exactly what the grid itself has out there
  * -- its waves are faded to zero by its own edge -- so the join does not show.
- * It sits a third of a metre lower to stay out of a depth fight with the grid
- * that covers it.
+ *
+ * A ring, and at exactly the grid's own height. It was a full plane a third of
+ * a metre lower, which kept it out of a depth fight with the grid covering it
+ * and cost far more than it bought: a 35 cm step in a square ring 450 m from
+ * the boat, following her about. From a deck-height eye that lip hides some
+ * eighty metres of sea behind it, and what it reads as is water pooled on top
+ * of the water -- you sail in a raised basin. Animals crossing it dropped the
+ * same 35 cm, and whales are seeded 220-560 m out, so they crossed it often.
+ *
+ * Cutting the hole removes the overlap instead of hiding it, which is what
+ * makes it safe to put both surfaces on y = 0: there is no depth fight to lose
+ * when nothing is drawn twice. The seam is exact rather than merely close --
+ * the grid's fade reaches zero before its rim, so the outer nine metres of it
+ * carry no wave height and no Gerstner displacement at all, and the rim lands
+ * on exactly the square this hole is cut to.
  */
 const FAR_SIZE = 8000;
-const FAR_Y = -0.35;
 
 const farVertexShader = /* glsl */ `
   varying vec3 vWorld;
@@ -438,10 +479,16 @@ const farFragmentShader = /* glsl */ `
   varying vec3 vWorld;
 
   ${rippleGlsl}
+  ${shoalGlsl}
 
   // The colour half of the grid's fragment shader, with the swell gone and only
-  // the ripple left on the surface. Whitecaps and the shoal tint are left out:
-  // both need wave amplitude or nearby land, and neither survives out here.
+  // the ripple left on the surface.
+  //
+  // Whitecaps are left out and the shoal tint is not, which is the difference
+  // between a term that cannot reach the join and one that can. Breaking needs
+  // wave amplitude, and the grid has faded its own to zero by the time it meets
+  // this plane, so there is nothing on either side to disagree about. Shallow
+  // water needs only land, and land sits either side of the join all the time.
   void main() {
     float dist = length(cameraPosition - vWorld);
     vec2 rs = rippleSlope(vec2(vWorld.x, -vWorld.z), uTime, rippleAmp(dist, uRipple));
@@ -453,6 +500,9 @@ const farFragmentShader = /* glsl */ `
     float fres = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
 
     vec3 col = mix(uDeep, uShallow, diff * 0.65);
+    // Before the sky and the sun, in the grid's order. Applied after them it is
+    // the same tint over a different base, which is a join by another name.
+    col = shoalTint(col, uShallow, vec2(vWorld.x, -vWorld.z));
     col = mix(col, uSky, clamp(fres * 0.85, 0.0, 0.75));
 
     vec3 h = normalize(sunDir + viewDir);
@@ -498,6 +548,40 @@ export interface Water {
    */
   setLamp(simX: number, simY: number, level: number, height: number): void;
   dispose(): void;
+}
+
+/**
+ * A square annulus in the XZ plane: everything between `inner` and `outer`
+ * half-extents, with a hole in the middle.
+ *
+ * Four quads rather than a plane with a hole punched by `THREE.Shape`, which
+ * would triangulate to the same thing through a general tessellator and give up
+ * the one property that matters here -- that the hole's corners are the exact
+ * numbers the grid's rim lands on, not whatever a triangulator rounded them to.
+ *
+ * Two triangles each and nothing subdivided: the far sea's shading is entirely
+ * per-fragment, so more vertices would buy nothing at all.
+ */
+export function ringGeometry(inner: number, outer: number): THREE.BufferGeometry {
+  const pos: number[] = [];
+  // Each quad is given as corners in XZ; the ring is walked as four bands, so
+  // the north and south bands run the full width and the east and west ones
+  // fill what is left beside the hole.
+  // Wound to face +Y, which is what `PlaneGeometry` rotated onto the XZ plane
+  // does and what the material's default FrontSide needs. Wound the other way
+  // the sea is simply not there when you look down at it.
+  const quad = (x0: number, z0: number, x1: number, z1: number) => {
+    pos.push(x0, 0, z0, x1, 0, z1, x1, 0, z0);
+    pos.push(x0, 0, z0, x0, 0, z1, x1, 0, z1);
+  };
+  quad(-outer, -outer, outer, -inner); // north band
+  quad(-outer, inner, outer, outer); // south band
+  quad(-outer, -inner, -inner, inner); // west band
+  quad(inner, -inner, outer, inner); // east band
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  return geo;
 }
 
 export function createWater(): Water {
@@ -557,8 +641,7 @@ export function createWater(): Water {
 
   // The same uniform objects, so the far sea cannot fall out of step with the
   // grid it joins: one update() sets the colours for both.
-  const farGeo = new THREE.PlaneGeometry(FAR_SIZE, FAR_SIZE);
-  farGeo.rotateX(-Math.PI / 2);
+  const farGeo = ringGeometry(SIZE / 2, FAR_SIZE / 2);
   const farMat = new THREE.ShaderMaterial({
     uniforms,
     vertexShader: farVertexShader,
@@ -671,7 +754,9 @@ export function createWater(): Water {
       currentTwd = twd;
       uniforms.uOrigin.value.set(ox, oy);
       mesh.position.set(ox, 0, -oy);
-      far.position.set(ox, FAR_Y, -oy);
+      // Same height and same origin, so the ring's hole sits exactly on the
+      // grid it is cut for.
+      far.position.set(ox, 0, -oy);
       uniforms.uTime.value = waves.time;
 
       const from = compassVec(twd);
@@ -724,15 +809,14 @@ export function createWater(): Water {
         : physicsTerrain.waveShelter(x, y, currentTwd);
       const fade = (1 - smoothstep(0.28, 0.49, edge)) * shelter;
 
-      // Beyond the grid the far plane is deliberately 0.35 m below it, so what
-      // floats out there must join that plane rather than stay at y = 0.
-      //
-      // Tested against the grid's own half-extent and not against the fade,
-      // which is the near-miss this replaces: the fade reaches zero at edge
-      // 0.4897 while the grid is drawn out to 0.5, so a 9 m band existed where
-      // the water was still drawn at h = 0 and this function was already
-      // answering -0.35. Whales spawn 220-560 m out and cross it.
-      return edge < 0.5 ? waves.heightAt(x, y) * fade : FAR_Y;
+      // No case for "beyond the grid" any more, and that is the point rather
+      // than an oversight. The far sea is at the grid's own height now, and
+      // `fade` has already reached zero by edge 0.4897, so this returns 0 out
+      // there on its own. The branch this replaces existed only to step down to
+      // a plane that was deliberately sunk, and it had already been wrong once:
+      // it tested the rim at 0.5 while the fade ended at 0.4897, leaving a 9 m
+      // band where the water was drawn at 0 and this answered -0.35.
+      return waves.heightAt(x, y) * fade;
     },
     dispose() {
       geo.dispose();
