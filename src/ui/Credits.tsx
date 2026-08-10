@@ -19,18 +19,35 @@ import { CREDITS } from './strings';
  * word order for a translation to have to fight.
  */
 
-const AUTHOR = { name: 'eelislay', href: 'https://sketchfab.com/eelislay' };
-
 const LICENCE = { name: 'CC BY 4.0', href: 'https://creativecommons.org/licenses/by/4.0/' };
 
+/**
+ * One line each, and the creator on every line.
+ *
+ * It was a run-on sentence with a single `AUTHOR` beside it, which held for
+ * exactly as long as both models came from the same person. The gulls did not,
+ * and went uncredited here -- in the one place a player ever looks, which is
+ * the whole reason this component exists. A shape that cannot express a second
+ * creator will silently drop one, so the creator belongs to the model.
+ */
 const MODELS = [
   {
     name: 'Humpback whale',
     href: 'https://sketchfab.com/3d-models/humpback-whale-d3f5039a8c624e099724dd7bcd51a680',
+    by: 'eelislay',
+    byHref: 'https://sketchfab.com/eelislay',
   },
   {
     name: 'Shark',
     href: 'https://sketchfab.com/3d-models/shark-1b45eb40145a4cf981c601f5d9f168d3',
+    by: 'eelislay',
+    byHref: 'https://sketchfab.com/eelislay',
+  },
+  {
+    name: 'Seagulls',
+    href: 'https://sketchfab.com/3d-models/seagulls-animated-73aed843190a4dfda55f2b65cc0f8d63',
+    by: 'vicente betoret ferrero',
+    byHref: 'https://sketchfab.com/deathcow',
   },
 ];
 
@@ -54,17 +71,15 @@ export function Credits() {
       <h3 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
         {t(CREDITS.title)}
       </h3>
-      <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
-        {MODELS.map((model, i) => (
-          <span key={model.href}>
-            {i > 0 && ' · '}
-            <Ref {...model} />
-          </span>
+      <ul className="mt-1.5 space-y-0.5 text-[10px] leading-relaxed text-muted-foreground">
+        {MODELS.map((model) => (
+          <li key={model.href}>
+            <Ref name={model.name} href={model.href} /> — <Ref name={model.by} href={model.byHref} />
+          </li>
         ))}
-        {' — '}
-        <Ref {...AUTHOR} />
-        {' · '}
-        <Ref {...LICENCE} />
+      </ul>
+      <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+        All <Ref {...LICENCE} />.
       </p>
       <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
         {t(CREDITS.note)}
