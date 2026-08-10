@@ -13,12 +13,26 @@ import type { Lang, Phrase } from '@/i18n';
  *
  * ## What is deliberately *not* translated
  *
- * **The instrument abbreviations.** BSP, VMG, TWA, AWA, SOG, COG, HDG and TWS
- * are international: they are what is printed on a Korean boat's instruments
- * too. Translating them would make the panel easier to read and the player
- * worse at sailing, because the words they had learned would be no use the
- * moment they stepped aboard anything real. The abbreviations stay; the
- * glossary that explains them is translated, which is where the help belongs.
+ * **The instrument panel, all of it.** BSP, VMG, TWA, TWD, AWA, AWS, SOG, COG,
+ * HDG, TWS and AoA are international: they are what is printed on a Korean
+ * boat's instruments too. Translating them would make the panel easier to read
+ * and the player worse at sailing, because the words they had learned would be
+ * no use the moment they stepped aboard anything real. The abbreviations stay;
+ * the glossary that explains them is translated, which is where the help
+ * belongs.
+ *
+ * The panel also carries five whole words -- Heel, Leeway, Sheet, Sea and Depth
+ * -- and they stay too. This was decided rather than overlooked, and it is the
+ * weaker half of the argument, so the reasoning is worth having: the first three
+ * are the terms a sailor meets in English anywhere real, and the last two are
+ * not, but a panel labelled half in one language and half in the other reads as
+ * an accident rather than as a choice. `경사 / Heel / 깊이 / TWA` down one column
+ * is worse than either language alone. It is one instrument face, so it is one
+ * decision.
+ *
+ * That list is exhaustive on purpose. A sweep for untranslated strings will find
+ * these every time -- one did, and reported them as a defect -- so what it
+ * should find is this paragraph.
  *
  * **Place names, and where the survey came from.** `San Francisco Bay` is what
  * is written on the chart, and `NOAA NCEI CUDEM 1/9 arc-second` is there so
