@@ -107,8 +107,15 @@ function Slider({
  */
 const TAB_TRIGGER = "flex-1 gap-1.5 [&_svg]:size-3.5 [&_svg]:shrink-0";
 
+/** Where the dialog is: the front page, or one of the three places it leads to. */
+type View = "play" | "settings" | "help" | "log";
+
 /**
  * What each screen is called.
+ *
+ * Keyed on the view rather than on `string`, so leaving a screen out or
+ * misspelling one is a type error. With a loose key both compiled and fell
+ * through to a default, which is the failure this heading already had once.
  *
  * This used to read the heading off whichever tab was open, which was a
  * workaround from the days when one strip held two settings, the logbook and
@@ -123,7 +130,7 @@ const TAB_TRIGGER = "flex-1 gap-1.5 [&_svg]:size-3.5 [&_svg]:shrink-0";
  * the screen: under a heading that said "World" they read as part of the World
  * tab.
  */
-const SCREEN_TITLE: Record<string, Phrase> = {
+const SCREEN_TITLE: Record<Exclude<View, "play">, Phrase> = {
   settings: MENU.settings,
   help: MENU.help,
   log: TABS.log,
@@ -223,7 +230,7 @@ export function MenuDialog({
    * The front page already led straight to all three -- it just arrived by way
    * of a settings screen it had to correct on the way in.
    */
-  const [view, setView] = useState<"play" | "settings" | "help" | "log">("play");
+  const [view, setView] = useState<View>("play");
   const t = useT();
   const lang = useLang();
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) =>
@@ -243,7 +250,9 @@ export function MenuDialog({
    * on the way in it would be an alarm about a thing nobody asked for yet.
    */
   /** What the header says: the screen, never the tab open inside it. */
-  const heading = SCREEN_TITLE[view] ?? MENU.settings;
+  // Read only when `view` is not "play", which the title branch below enforces;
+  // the map has no entry for it and needs none.
+  const heading = view === "play" ? MENU.settings : SCREEN_TITLE[view];
 
   const [last, setLast] = useState<PassageRecord | null>(null);
   useEffect(() => {
