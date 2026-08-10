@@ -162,6 +162,14 @@ export type EngineEvent =
    * a React render through at wheel speed for a number nothing is reading yet.
    */
   | { type: 'binocularPower'; power: number }
+  /**
+   * A photograph of the sea, taken on the next drawn frame.
+   *
+   * Handed out as a blob rather than saved here, because naming a file is a
+   * question about words and the words live in the UI: the place she is in has
+   * a translated name there and none here.
+   */
+  | { type: 'photo'; blob: Blob }
   /** A fresh world was rolled. The settings hold the seed so it can be sailed again. */
   | { type: 'world'; seed: number }
   /** `N` was pressed: the chart should step to its next range. */
@@ -1007,6 +1015,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (input.wasPressed('h')) cyclePilot(pilot, state.heading, wrapPi(env.twd - state.heading));
     if (input.wasPressed('c')) view.toggleCamera();
     if (input.wasPressed('l')) snapshot.lightsOn = !snapshot.lightsOn;
+    // Resolves a frame later -- see SceneView.capture -- so this cannot be
+    // written as a plain call. A refusal from the encoder is silent on purpose:
+    // there is nothing the player could do about it and nothing worth stopping
+    // a passage for.
+    if (input.wasPressed('k')) {
+      void view.capture().then((blob) => {
+        if (blob) emit({ type: 'photo', blob });
+      });
+    }
     if (input.wasPressed('b')) {
       snapshot.binoculars = !snapshot.binoculars;
       // Only on the way down. Up, the stored power is what they open at; down,

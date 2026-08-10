@@ -719,6 +719,7 @@ writes itself into the logbook.
 | double-click | recentre the view astern |
 | `P` | recompute polar |
 | `R` | restart |
+| `K` | photograph the sea — the view alone, no instruments |
 | `M` | sound |
 | `L` | navigation lights |
 | `Esc` | menu / settings |

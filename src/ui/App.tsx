@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createEngine, type Engine } from "@/engine";
 import { loadSettings, saveSettings, type Settings } from "@/settings";
+import { regionById } from "@/sim/regions";
+import { venueById } from "@/sim/venues";
 import { EngineProvider } from "./engine-context";
 import { LangProvider } from "./i18n";
 import { Instruments } from "./Instruments";
@@ -92,6 +94,27 @@ export function App() {
       // Same path as the sound toggle, and for the same reason: the value is
       // set out in the view, so the only way it survives a reload is for the
       // view to say so and the owner of the settings to write it down.
+      if (ev.type === "photo") {
+        // Named for where she was and when, so a folder of these reads as a
+        // voyage rather than as `screenshot (14).png`.
+        const s = settingsRef.current;
+        const where =
+          regionById(s.region)?.name ?? venueById(s.venue)?.name ?? "open sea";
+        const t = new Date();
+        const pad = (n: number) => String(n).padStart(2, "0");
+        const stamp = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}-${pad(t.getHours())}${pad(t.getMinutes())}`;
+        const slug = where.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        const url = URL.createObjectURL(ev.blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `voyage-${slug}-${stamp}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+        flash.current?.animate(
+          [{ opacity: 0.75 }, { opacity: 0 }],
+          { duration: 260, easing: "ease-out" },
+        );
+      }
       if (ev.type === "binocularPower") {
         setSettings((s) => {
           if (s.binocularPower === ev.power) return s;
@@ -143,6 +166,17 @@ export function App() {
     [engine],
   );
 
+  /**
+   * The white blink after a photograph.
+   *
+   * Animated straight on the element rather than through state: it is a
+   * two-hundred-millisecond flicker, and pushing it through the reconciler
+   * would re-render the whole shell twice for something React cannot help
+   * with. It is also the only sign the shot was taken -- some browsers drop a
+   * download in without a word.
+   */
+  const flash = useRef<HTMLDivElement>(null);
+
   const putToSea = useCallback(() => {
     engine?.applySettings(settingsRef.current);
     engine?.putToSea();
@@ -171,6 +205,14 @@ export function App() {
         className="relative h-screen w-screen overflow-hidden bg-background"
       >
         <canvas ref={canvasRef} className="block h-full w-full" />
+
+        {/* Sits over everything and catches nothing. Opacity starts at zero, so
+            it is invisible until `animate` runs on it. */}
+        <div
+          ref={flash}
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-50 bg-white opacity-0"
+        />
 
         {engine && (
           <EngineProvider value={engine}>

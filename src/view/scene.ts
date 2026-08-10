@@ -101,6 +101,19 @@ export interface SceneView {
   /** Install a surveyed region, or null for the procedural ocean. */
   setRegion(terrain: RegionTerrain | null): void;
   toggleCamera(): void;
+  /**
+   * A photograph of the sea as it is this instant, or null if the encoder
+   * refused.
+   *
+   * Resolves on the next drawn frame rather than at once, and that is the whole
+   * design. The renderer is built without `preserveDrawingBuffer`, so the
+   * drawing buffer is cleared the moment the browser composites and a canvas
+   * read taken at any other time comes back blank. Turning that flag on would
+   * buy a synchronous capture and charge for it on every frame of every
+   * session, for a key almost nobody presses; grabbing the pixels on the line
+   * after `render()` costs nothing until it is asked for.
+   */
+  capture(): Promise<Blob | null>;
   /** Seed the glasses from the stored preference. */
   setBinocularPower(power: number): void;
   /** What the glasses are set to now, so it can be stored when they come down. */
@@ -305,6 +318,8 @@ function twistSail(sail: Sail, twist: number): void {
 
 export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneView {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  /** Everyone waiting on the next frame's pixels. See `SceneView.capture`. */
+  let waitingForShot: ((blob: Blob | null) => void)[] = [];
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 
   const scene = new THREE.Scene();
@@ -919,6 +934,17 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     water.setLamp(lampWorld.x, -lampWorld.z, lamp, Math.max(lampWorld.y, 1));
 
     renderer.render(scene, camera);
+
+    // Immediately after, and in the same task: see `capture`. Anything between
+    // this and the render -- an await, a timeout, a rAF -- lets the compositor
+    // run and hands back an empty picture.
+    if (waitingForShot.length > 0) {
+      const waiting = waitingForShot;
+      waitingForShot = [];
+      canvas.toBlob((blob) => {
+        for (const settle of waiting) settle(blob);
+      }, 'image/png');
+    }
   }
 
   /**
@@ -957,6 +983,11 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       // and would throw away the bearing the player is holding a target on.
       // Lowering them reframes for whatever this left behind.
       if (!glassesUp) framePitchFor(camMode, false);
+    },
+    capture() {
+      // Queued rather than answered: two presses in one frame get the same
+      // photograph, which is the honest answer -- there was only one frame.
+      return new Promise<Blob | null>((settle) => waitingForShot.push(settle));
     },
     setBinocularPower(power) {
       orbit.setMagnify(power);

@@ -186,6 +186,7 @@ export const KEYS: [string, Phrase][] = [
   ['P', { en: 're-solve polar', ko: '폴라 다시 계산' }],
   ['R', { en: 'restart', ko: '다시 시작' }],
   ['M', { en: 'sound', ko: '소리' }],
+  ['K', { en: 'photograph the sea', ko: '바다 사진 찍기' }],
   ['L', { en: 'navigation lights', ko: '항해등' }],
   ['B', { en: 'binoculars — wheel sets the power', ko: '쌍안경 — 휠로 배율 조절' }],
   ['Esc', { en: 'this menu', ko: '이 메뉴' }],
