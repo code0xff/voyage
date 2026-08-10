@@ -89,6 +89,17 @@ export function App() {
           return next;
         });
       }
+      // Same path as the sound toggle, and for the same reason: the value is
+      // set out in the view, so the only way it survives a reload is for the
+      // view to say so and the owner of the settings to write it down.
+      if (ev.type === "binocularPower") {
+        setSettings((s) => {
+          if (s.binocularPower === ev.power) return s;
+          const next = { ...s, binocularPower: ev.power };
+          saveSettings(next);
+          return next;
+        });
+      }
     });
 
     const onResize = () => e.resize();

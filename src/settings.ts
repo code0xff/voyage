@@ -76,6 +76,16 @@ export interface Settings {
    * only when nothing has been stored yet.
    */
   lang: Lang;
+  /**
+   * Binocular power, 3 to 12.
+   *
+   * Kept because it is a preference and not a condition: how far you like to
+   * see is about your eyes, not about the sea, so it belongs beside `lang` and
+   * `sound` rather than beside the wind. It is set on the wheel while the
+   * glasses are up and saved when they come down -- persisting it on every
+   * notch would push a settings write through React at wheel speed.
+   */
+  binocularPower: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -95,6 +105,7 @@ export const DEFAULT_SETTINGS: Settings = {
   randomWorld: true,
   // Overwritten by `loadSettings` on a first run, which asks the browser.
   lang: 'en',
+  binocularPower: 5,
 };
 
 const KEY = 'voyage.settings.v2';
@@ -140,6 +151,9 @@ export function loadSettings(): Settings {
       // Falls back to the browser rather than to English: a stored file written
       // before this setting existed should still open in the reader's language.
       lang: o.lang === 'en' || o.lang === 'ko' ? o.lang : detectLang(),
+      // Clamped to the same range the wheel allows, so a hand-edited file
+      // cannot open the game at a power the control could never reach.
+      binocularPower: num(o.binocularPower, DEFAULT_SETTINGS.binocularPower, 3, 12),
     };
   } catch {
     return { ...DEFAULT_SETTINGS, lang: detectLang() };

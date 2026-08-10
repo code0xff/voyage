@@ -32,6 +32,8 @@ export interface OrbitControl {
    * already had -- away from you for more of the scene, towards you for less.
    */
   setWheelTarget(target: 'distance' | 'magnify'): void;
+  /** Restore a stored power, so the glasses open where they were last left. */
+  setMagnify(power: number): void;
   /** True while the eye is being dragged, so the scene can stop smoothing it. */
   readonly dragging: boolean;
   /**
@@ -76,8 +78,8 @@ const MAX_ZOOM = 3.5;
  * is a bird on the water, for anyone willing to hold it steady.
  */
 const DEFAULT_MAGNIFY = 5;
-const MIN_MAGNIFY = 3;
-const MAX_MAGNIFY = 12;
+export const MIN_MAGNIFY = 3;
+export const MAX_MAGNIFY = 12;
 
 // Roughly a full turn per screen width, which is what every other orbit control
 // does and therefore what the hand expects.
@@ -222,6 +224,12 @@ export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
     },
     setWheelTarget(target) {
       wheelTarget = target;
+    },
+    setMagnify(power) {
+      // Clamped here as well as on load, because this is the only door: a
+      // stored value, a hand-edited file and the wheel all end up at the same
+      // number through it.
+      magnify = clamp(power, MIN_MAGNIFY, MAX_MAGNIFY);
     },
     get dragging() {
       return dragging !== -1;

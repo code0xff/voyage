@@ -154,6 +154,14 @@ export interface Snapshot {
 export type EngineEvent =
   | { type: 'toggleMenu' }
   | { type: 'sound'; on: boolean }
+  /**
+   * The glasses came down, carrying whatever power they were left at.
+   *
+   * Emitted on the way down rather than on every wheel notch: the power moves
+   * continuously while they are up, and a settings write per notch would push
+   * a React render through at wheel speed for a number nothing is reading yet.
+   */
+  | { type: 'binocularPower'; power: number }
   /** A fresh world was rolled. The settings hold the seed so it can be sailed again. */
   | { type: 'world'; seed: number }
   /** `N` was pressed: the chart should step to its next range. */
@@ -558,6 +566,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let last = performance.now();
   let diag: Diagnostics | null = null;
 
+  /** The last binocular power handed to the view. See `applySettings`. */
+  let pushedPower = NaN;
+
   function applySettings(s: Settings): void {
     const venueChanged = s.venue !== current.venue || s.region !== current.region;
     const worldChanged =
@@ -566,6 +577,21 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       s.region !== current.region ||
       s.seed !== current.seed;
     current = s;
+    /*
+     * Pushed only when the stored power has actually moved, never on every
+     * settings write.
+     *
+     * The wheel changes the power out in the view and it is only written down
+     * when the glasses come down, so between those two moments the view holds
+     * a newer number than the settings do. Pushing unconditionally meant that
+     * touching any unrelated slider -- opening the menu with the glasses up and
+     * nudging the wind -- shoved the old stored power back over it. NaN to
+     * start with, so the first call always seeds.
+     */
+    if (s.binocularPower !== pushedPower) {
+      pushedPower = s.binocularPower;
+      view.setBinocularPower(s.binocularPower);
+    }
 
     // Arriving at a venue brings its breeze with it: its land is laid out
     // around that direction, so a venue picked mid-session was otherwise
@@ -981,7 +1007,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (input.wasPressed('h')) cyclePilot(pilot, state.heading, wrapPi(env.twd - state.heading));
     if (input.wasPressed('c')) view.toggleCamera();
     if (input.wasPressed('l')) snapshot.lightsOn = !snapshot.lightsOn;
-    if (input.wasPressed('b')) snapshot.binoculars = !snapshot.binoculars;
+    if (input.wasPressed('b')) {
+      snapshot.binoculars = !snapshot.binoculars;
+      // Only on the way down. Up, the stored power is what they open at; down,
+      // whatever the wheel left is what they should open at next time.
+      if (!snapshot.binoculars) emit({ type: 'binocularPower', power: view.binocularPower() });
+    }
     // Weighing is always allowed; letting go is not. A refusal that says why is
     // the whole of the anchoring decision, so it goes through the same judgement
     // the readout is showing rather than a second copy of the rules.

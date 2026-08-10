@@ -101,6 +101,10 @@ export interface SceneView {
   /** Install a surveyed region, or null for the procedural ocean. */
   setRegion(terrain: RegionTerrain | null): void;
   toggleCamera(): void;
+  /** Seed the glasses from the stored preference. */
+  setBinocularPower(power: number): void;
+  /** What the glasses are set to now, so it can be stored when they come down. */
+  binocularPower(): number;
   resize(): void;
   dispose(): void;
 }
@@ -953,6 +957,12 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       // and would throw away the bearing the player is holding a target on.
       // Lowering them reframes for whatever this left behind.
       if (!glassesUp) framePitchFor(camMode, false);
+    },
+    setBinocularPower(power) {
+      orbit.setMagnify(power);
+    },
+    binocularPower() {
+      return orbit.magnify;
     },
     setRegion(terrain) {
       regionView.setRegion(terrain);
