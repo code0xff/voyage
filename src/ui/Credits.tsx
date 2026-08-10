@@ -48,9 +48,25 @@ const LICENCE = { name: 'CC BY 4.0', href: 'https://creativecommons.org/licenses
  * fixes that whatever this string says -- the notice and the registration are
  * separate things.
  */
-// Typed as `string` rather than left to infer `''`, so the empty default does
-// not narrow to a literal and make the line below look like dead code.
-const OWNER: string = '';
+/*
+ * A pen name, deliberately, and not the handle this repository is kept under.
+ *
+ * That handle is attached to a day job, and this is not that -- so the one
+ * string a player can see is the one place the two must not be joined up. It is
+ * the last link in that chain rather than the first: the repository is private,
+ * the build carries no source map, no absolute path and no author field, and
+ * `package.json` names nobody. Checked, not assumed.
+ *
+ * What is still joined up is the commit history, which is signed with a real
+ * name and address 208 times over. That costs nothing while the repository
+ * stays private and everything the day the it does not, so it is a decision to
+ * take before publishing rather than after.
+ *
+ * Rendered as plain text and never as a link. It reads like a domain and is not
+ * one -- `.iv` is not a TLD -- and this screen is otherwise wall to wall with
+ * live links, so making it clickable would promise a page that cannot exist.
+ */
+const OWNER: string = 'baudouin.iv';
 /** First publication. Becomes a range -- `2026-2027` -- on the first year it changes. */
 const YEAR = 2026;
 
