@@ -401,14 +401,23 @@ export function MenuDialog({
                 Someone who has never sailed is not looking for a guide under a
                 button that says it changes the weather, and they are exactly
                 who it is for -- so the one line that admits the boat will not
-                do the obvious thing sits where they will actually be. */}
+                do the obvious thing sits where they will actually be.
+
+                Drawn as a line and not as a card, like the two doors below it.
+                It had a border once, for emphasis, and that put it in the same
+                shape as the conditions panel directly above -- same height,
+                same radius, eight pixels apart, and the panel is not clickable
+                while this is. Worse, the panel's border was the stronger of the
+                two, so the shape that could be pressed was the fainter one. The
+                emphasis was never coming from the border anyway; it comes from
+                the lead line. */}
             <button
               type="button"
               onClick={() => {
                 setHelpTab("sailing");
                 setView("help");
               }}
-              className="mt-2 w-full rounded-md border border-border/60 px-3 py-2 text-left text-[11px] leading-relaxed text-muted-foreground transition-colors hover:border-border hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="mt-3 block w-full rounded-md px-1 py-1 text-left text-[11px] leading-relaxed text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <span className="font-medium text-foreground">
                 {t(MENU.guideLead)}
