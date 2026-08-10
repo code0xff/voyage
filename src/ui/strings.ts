@@ -118,6 +118,7 @@ export const CREDITS: Record<string, Phrase> = {
     en: 'Scaled, positioned and animated at runtime; geometry and textures are otherwise unmodified. Everything else here, the sound included, is written for this project.',
     ko: '실행 중에 크기와 위치를 맞추고 애니메이션을 적용하며, 형상과 텍스처는 그 밖에 수정하지 않았습니다. 소리를 포함한 나머지 전부는 이 프로젝트를 위해 직접 만든 것입니다.',
   },
+  code: { en: 'The libraries it is built on:', ko: '사용한 오픈소스 라이브러리:' },
 };
 
 export const CONTROLS_NOTE: Phrase = {

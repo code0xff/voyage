@@ -4,16 +4,19 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "dev": "vite",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test": "vitest run",
+    "notices": "tsx scripts/notices.ts",
     "polar": "tsx scripts/polar.ts",
-    "verify": "npm run typecheck && npm run lint && npm run test",
-    "test:watch": "vitest"
+    "prebuild": "npm run notices",
+    "predev": "npm run notices",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm run lint && npm run test"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.15",

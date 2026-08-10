@@ -4,3 +4,5 @@ coverage
 .DS_Store
 *.log
 .vite
+# Generated from node_modules by scripts/notices.ts; never edited by hand.
+public/third-party-notices.txt

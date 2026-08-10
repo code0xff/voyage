@@ -22,6 +22,17 @@ import { CREDITS } from './strings';
 const LICENCE = { name: 'CC BY 4.0', href: 'https://creativecommons.org/licenses/by/4.0/' };
 
 /**
+ * The code that ships with it, as opposed to the art.
+ *
+ * A plain text file rather than a panel: it is a hundred and thirty licences
+ * and nobody reads it, but MIT, BSD and Apache-2.0 all require it to travel
+ * with the software and bundling does not change that. Generated at build time
+ * from what is actually installed -- see `scripts/notices.ts` -- so it cannot
+ * drift from the tree the way a hand-kept list would.
+ */
+const NOTICES = { name: 'Open-source licences', href: '/third-party-notices.txt' };
+
+/**
  * One line each, and the creator on every line.
  *
  * It was a run-on sentence with a single `AUTHOR` beside it, which held for
@@ -83,6 +94,9 @@ export function Credits() {
       </p>
       <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
         {t(CREDITS.note)}
+      </p>
+      <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
+        {t(CREDITS.code)} <Ref {...NOTICES} />
       </p>
     </section>
   );
