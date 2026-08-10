@@ -529,15 +529,57 @@ describe('landmasses', () => {
     }
   });
 
-  /** The water beside a landmass is its own: this is what pays for the slots. */
-  it('keeps single islands out of the water beside it', () => {
+  /**
+   * The water beside a landmass is its own, and by a wide margin.
+   *
+   * This is what pays for the shader's sixteen slots -- a landmass replaces the
+   * islands around it rather than adding to them -- so "not overlapping" is far
+   * too weak a bar. Five hundred metres is well under the elbow the field
+   * actually keeps and still fails the moment that clearance is dropped, which
+   * is the failure worth catching: the first version of this test asserted only
+   * that a single island was outside a landmass's own radius, and would have
+   * passed with the clearance removed altogether.
+   */
+  it('keeps single islands well clear of the water beside it', () => {
     for (let seed = 1; seed <= 40; seed++) {
       const all = sea(seed).debugCollectAll(0, 0, 8000);
       const loose = all.filter((i) => i.land === undefined && Math.hypot(i.pos.x, i.pos.y) < 6000);
       for (const g of groups(all)) {
         for (const m of g) {
           for (const isl of loose) {
-            expect(Math.hypot(isl.pos.x - m.pos.x, isl.pos.y - m.pos.y)).toBeGreaterThanOrEqual(m.radius);
+            expect(Math.hypot(isl.pos.x - m.pos.x, isl.pos.y - m.pos.y)).toBeGreaterThan(
+              m.radius + 500,
+            );
+          }
+        }
+      }
+    }
+  });
+
+  /**
+   * Regression: a landmass seeded outside the range still lays coast inside it.
+   *
+   * `collect` walks cells, and a landmass reaches more than a kilometre past
+   * the cell that seeded it. Scanning only the cells the range touches missed
+   * those arms entirely -- the window came back without land the boat could
+   * feel, which is the one thing it promises never to do. Over ten thousand
+   * seeds it cost up to 0.46 of wave shelter, and the forty seeds the window
+   * test uses never showed it: seed 9533 is one that did.
+   *
+   * Asserted against a wider collect rather than against a second copy of the
+   * arithmetic -- a range three times over cannot have the same blind spot,
+   * because the cells it misses are far too distant to reach back in.
+   */
+  it('finds a landmass whose seed lies outside the range but whose coast does not', () => {
+    for (const seed of [9533, 322, 1, 77]) {
+      const f = sea(seed);
+      for (let i = 0; i < 4; i++) {
+        const x = i * 613 + seed * 7;
+        const y = i * 389 - seed * 11;
+        const near = new Set(f.debugCollectAll(x, y, ACTIVE_RANGE));
+        for (const isl of f.debugCollectAll(x, y, ACTIVE_RANGE * 3)) {
+          if (Math.hypot(isl.pos.x - x, isl.pos.y - y) <= ACTIVE_RANGE) {
+            expect(near.has(isl)).toBe(true);
           }
         }
       }

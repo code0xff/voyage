@@ -476,11 +476,13 @@ export const CHART_RANGE = 8300;
  * in a smaller coat: land inside the chart's own frame, not drawn.
  *
  * Measured across seeds rather than from one, which is how the first attempt at
- * this number went wrong. At MAX_DENSITY over 400 seeds the window holds 136
- * islands at the thinnest, 177 at the median and 210 at the worst -- and 192,
- * taken from a single seed that happened to sit near the median, would have
- * truncated 32 of those 400. This is the worst case with room over it, and
- * `minimap.test.ts` scans seeds to keep it that way.
+ * this number went wrong: 192, taken from a single seed that happened to sit
+ * near the median, truncated 32 seeds in 400.
+ *
+ * Re-measured after landmasses started clearing the water beside them, which
+ * thinned the sea by about a tenth. Over ten thousand seeds at MAX_DENSITY the
+ * window holds 54 at the thinnest, 98 on average and 177 at the worst, so this
+ * has room over it -- and `minimap.test.ts` scans seeds to keep it that way.
  *
  * Affordable only because a coastline is traced against its own neighbours now:
  * 54 ms for 169 of them, where the old whole-terrain sampling would have been
@@ -528,6 +530,17 @@ const MASS_MAX = 4;
 const MASS_BEND = 1.5;
 /** Cells around a landmass that are searched for it. Its reach, in cells, plus one. */
 const MASS_CELLS = 4;
+/**
+ * How far a landmass's circles can sit from the cell that seeded it, m.
+ *
+ * Three links at most, each at most `(250 + 250) * 0.78`. It exists because
+ * `collect` walks cells: a landmass seeded outside the range being asked for
+ * can still lay a circle well inside it, and scanning only the cells the range
+ * touches missed those entirely. Over ten thousand seeds that cost up to 0.46
+ * of wave shelter -- land the boat could feel, that the window did not know
+ * about. Anything that changes MASS_MAX or the link spacing has to move this.
+ */
+const MASS_REACH = 1170;
 /** Open water kept between a landmass and the nearest island to it, m. */
 const MASS_ELBOW = 2300;
 /**
@@ -751,10 +764,15 @@ export class IslandField {
     max: number,
     twd?: number,
   ): Island[] {
-    const c0 = Math.floor((x - range) / CELL);
-    const c1 = Math.floor((x + range) / CELL);
-    const r0 = Math.floor((y - range) / CELL);
-    const r1 = Math.floor((y + range) / CELL);
+    // Widened by a landmass's reach, not by the range alone. A cell outside the
+    // range can seed land that lies inside it, and the distance test below
+    // throws away whatever really is too far -- so this costs a ring of empty
+    // cells and buys the guarantee that nothing in range is missed.
+    const pad = range + MASS_REACH;
+    const c0 = Math.floor((x - pad) / CELL);
+    const c1 = Math.floor((x + pad) / CELL);
+    const r0 = Math.floor((y - pad) / CELL);
+    const r1 = Math.floor((y + pad) / CELL);
     const from = twd === undefined ? null : compassVec(twd);
 
     const found: { isl: Island; d: number; rank: number }[] = [];
@@ -831,10 +849,15 @@ export class IslandField {
     // time the window slid -- the one thing the outline cache exists to stop.
     // The doubling is the original margin: keep a window's worth beyond need.
     const keep = Math.max(VISUAL_RANGE, CHART_RANGE) * 1.5;
-    for (const [key, c] of this.cells) {
-      const dx = (c.cx + 0.5) * CELL - x;
-      const dy = (c.cy + 0.5) * CELL - y;
-      if (Math.abs(dx) > keep || Math.abs(dy) > keep) this.cells.delete(key);
+    const far = (cx: number, cy: number) =>
+      Math.abs((cx + 0.5) * CELL - x) > keep || Math.abs((cy + 0.5) * CELL - y) > keep;
+    for (const [key, c] of this.cells) if (far(c.cx, c.cy)) this.cells.delete(key);
+    // And the landmasses with them. This map is filled by every cell asking its
+    // neighbours, including the empty answers, so it grows faster than `cells`
+    // and left alone it was the one thing on a long passage that never stopped.
+    for (const key of this.masses.keys()) {
+      const [cx, cy] = key.split(',');
+      if (far(Number(cx), Number(cy))) this.masses.delete(key);
     }
   }
 }
