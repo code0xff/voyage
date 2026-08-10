@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Wildlife } from './wildlife';
+import { FLOCK_DURATION_MAX, FLOCK_DURATION_MIN, Wildlife } from './wildlife';
 import { Terrain, type Island } from './terrain';
 
 const OPEN = new Terrain([]);
@@ -49,8 +49,9 @@ describe('gulls', () => {
       elapsed += step;
       if (wildlife.flocks[0]?.id === first.id) opacities.push(wildlife.flocks[0].opacity);
     }
-    expect(elapsed - firstAt).toBeGreaterThanOrEqual(14);
-    expect(elapsed - firstAt).toBeLessThanOrEqual(18.25);
+    // Derived, so retuning the flock does not fail a test about the fade.
+    expect(elapsed - firstAt).toBeGreaterThanOrEqual(FLOCK_DURATION_MIN);
+    expect(elapsed - firstAt).toBeLessThanOrEqual(FLOCK_DURATION_MAX + step);
     expect(opacities[0]).toBe(0);
     expect(Math.max(...opacities)).toBe(1);
     expect(opacities.at(-1)).toBeLessThan(0.2);

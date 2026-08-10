@@ -52,9 +52,14 @@ interface ActiveFlock extends GullFlockSighting {
 
 /** Gulls are audible within about this far of a shore, m. */
 const GULL_RANGE = 800;
-/** Two leisurely circuits: observable without becoming permanent scenery. */
-const FLOCK_DURATION_MIN = 14;
-const FLOCK_DURATION_MAX = 18;
+/**
+ * Two leisurely circuits: observable without becoming permanent scenery.
+ *
+ * Exported because `wildlife.test.ts` asserts how long a sighting lasts, and a
+ * test that writes the seconds out has quietly decided these may never move.
+ */
+export const FLOCK_DURATION_MIN = 14;
+export const FLOCK_DURATION_MAX = 18;
 
 export class Wildlife {
   /** Filled during update(), drained by whoever plays the sounds. */
