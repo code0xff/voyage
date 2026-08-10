@@ -47,18 +47,21 @@ const MODELS = [
     href: 'https://sketchfab.com/3d-models/humpback-whale-d3f5039a8c624e099724dd7bcd51a680',
     by: 'eelislay',
     byHref: 'https://sketchfab.com/eelislay',
+    notice: '/assets/whale/ATTRIBUTION.txt',
   },
   {
     name: 'Shark',
     href: 'https://sketchfab.com/3d-models/shark-1b45eb40145a4cf981c601f5d9f168d3',
     by: 'eelislay',
     byHref: 'https://sketchfab.com/eelislay',
+    notice: '/assets/shark/ATTRIBUTION.txt',
   },
   {
     name: 'Seagulls',
     href: 'https://sketchfab.com/3d-models/seagulls-animated-73aed843190a4dfda55f2b65cc0f8d63',
     by: 'vicente betoret ferrero',
     byHref: 'https://sketchfab.com/deathcow',
+    notice: '/assets/gull/ATTRIBUTION.txt',
   },
 ];
 
@@ -85,12 +88,13 @@ export function Credits() {
       <ul className="mt-1.5 space-y-0.5 text-[10px] leading-relaxed text-muted-foreground">
         {MODELS.map((model) => (
           <li key={model.href}>
-            <Ref name={model.name} href={model.href} /> — <Ref name={model.by} href={model.byHref} />
+            <Ref name={model.name} href={model.href} /> — <Ref name={model.by} href={model.byHref} />{' · '}
+            <Ref name={t(CREDITS.changes)} href={model.notice} />
           </li>
         ))}
       </ul>
       <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
-        All <Ref {...LICENCE} />.
+        {t(CREDITS.allUnder)} <Ref {...LICENCE} />.
       </p>
       <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
         {t(CREDITS.note)}
