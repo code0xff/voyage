@@ -634,7 +634,29 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
 
     const fogColor = new THREE.Color(sky.fogColor[0], sky.fogColor[1], sky.fogColor[2]);
     scene.background = fogColor;
-    (scene.fog as THREE.Fog).color.copy(fogColor);
+    /*
+     * Linearised before it is handed to the fog, so that land dissolves into
+     * the colour the water actually paints.
+     *
+     * The two families of surface here do not share a colour space. Land, the
+     * boat, the sails and the animals are built-in materials, so three appends
+     * its linear-to-sRGB conversion to them; the water and the sky are raw
+     * shaders that write `gl_FragColor` straight out and were tuned by eye
+     * against that. Hand both the same fog colour and they do not agree:
+     * (0.53, 0.63, 0.73) reaches the screen as (135, 161, 186) on water and
+     * (192, 207, 222) on land.
+     *
+     * Distant land therefore could not dissolve into the sea -- it always sat
+     * forty levels brighter than the water it was supposed to be merging with,
+     * which is what read as an island going white on the horizon. Undoing the
+     * conversion in advance lands it on the water's own number.
+     *
+     * `scene.background` above is deliberately left alone, and that asymmetry
+     * is not an oversight. It is only ever seen where nothing else is drawn,
+     * and the sky dome is a 1800 m sphere around the camera with no hole in it,
+     * so nothing else is ever drawn is nowhere.
+     */
+    (scene.fog as THREE.Fog).color.copy(fogColor).convertSRGBToLinear();
     (scene.fog as THREE.Fog).near = f.visibility * 0.35;
     (scene.fog as THREE.Fog).far = f.visibility;
     // The mean wind, not the gust: a cloud deck does not shift with a puff.
