@@ -680,7 +680,7 @@ export function MenuDialog({
               max={1}
               step={0.05}
               value={settings.gustiness}
-              format={(v) => (v === 0 ? "steady" : `${Math.round(v * 100)}%`)}
+              format={(v) => (v === 0 ? t(SETTINGS_UI.steady) : `${Math.round(v * 100)}%`)}
               onChange={(v) => set("gustiness", v)}
             />
             <Slider

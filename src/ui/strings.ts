@@ -66,7 +66,9 @@ export const nowhereToAnchor = (why: Phrase): Phrase => ({
  * noun. A function for the same reason `holding` is one.
  */
 export const islandCount = (n: number): Phrase => ({
-  en: `${n} islands`,
+  // The slider goes down to one, so the singular is reachable. Korean counters
+  // take no singular form, which is half of why this is a function.
+  en: n === 1 ? '1 island' : `${n} islands`,
   ko: `섬 ${n}개`,
 });
 
@@ -285,6 +287,8 @@ export const PANEL: Record<string, Phrase> = {
 export const SETTINGS_UI: Record<string, Phrase> = {
   meanWind: { en: 'Mean wind', ko: '평균 바람' },
   gusts: { en: 'Gusts / shifts', ko: '돌풍 / 풍향 변화' },
+  /** The zero end of the gust slider, beside `slack`, `frozen` and `flat`. */
+  steady: { en: 'steady', ko: '일정함' },
   seaState: { en: 'Sea state', ko: '파도' },
   /** The zero end of the sea slider, as `slack` and `frozen` are for theirs. */
   flat: { en: 'flat', ko: '잔잔함' },
@@ -321,13 +325,18 @@ export const SETTINGS_UI: Record<string, Phrase> = {
  * venue. Listed rather than counted -- the first version of this said "six",
  * which was wrong twice over, and a tally is the part that goes stale.
  *
- * Most are conditional, which is why a sweep of one rendered screen missed
- * them: "open sea" wants the slider at zero or a stored id that no longer
- * resolves, "flat" wants the sea slider at zero, the set slider wants a drift
- * above zero, the Where entry wants the select open, and the venue note wants a
- * venue -- which nothing can currently select, because `VENUES` is empty. The
- * island count is the exception and the worst of them: it is the default state,
- * so every Korean player saw "4 islands" on the first screen.
+ * Some are conditional, which is part of why a sweep of one rendered screen
+ * missed them: "open sea" wants the slider at zero or a stored id that no
+ * longer resolves, "flat" and "steady" want their sliders at zero, the set
+ * slider wants a drift above zero, the Where entry wants the select open, and
+ * the venue note wants a venue -- which nothing can currently select, because
+ * `VENUES` is empty.
+ *
+ * But not all, and that is the part worth remembering. The islands label sat
+ * unconditionally on the World tab, and the island count sat on the very first
+ * screen in the default state, so every Korean player was shown "4 islands"
+ * before touching anything. Neither needed a sweep to find. They needed someone
+ * to open the menu in Korean and read it.
  */
 export const ALERT: Record<string, Phrase> = {
   aground: { en: 'AGROUND', ko: '좌초' },
