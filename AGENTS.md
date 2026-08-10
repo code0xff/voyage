@@ -133,10 +133,12 @@ the wrong way to judge a mark rounding. Keep writing them that way.
 **Read `src/sim/math.ts` before writing a helper.** Clamping, `lerp`,
 `smoothstep`, `approach` — the first-order lag every fade and every eased
 transition in this project wants — and the vector and angle helpers are all
-there, and have been since the first commit. Three local copies were written
-anyway, in `weather.ts`, `whale.ts` and `orbit.ts`, and two more were caught and
-removed one at a time before anyone noticed it was a pattern. `src/view/` may
-import from `src/sim/` freely; only the other direction is forbidden.
+there. `clamp`, `lerp` and `approach` since the first commit, `smoothstep`
+almost as long, and every local copy of one was written *after* the shared
+version already existed. Three were written anyway, in `weather.ts`, `whale.ts`
+and `orbit.ts`, and two more were caught and removed one at a time before anyone
+noticed it was a pattern. `src/view/` may import from `src/sim/` freely; only
+the other direction is forbidden.
 
 This costs more than tidiness. `weather.ts` had reimplemented `approach` without
 its `Math.max(tau, 1e-6)` guard, so the copy was the original minus a
