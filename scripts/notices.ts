@@ -74,7 +74,7 @@ function collect(): Package[] {
   // range, an extraneous package, a workspace it cannot see -- while still
   // printing every path it did resolve. Letting that abort the build would mean
   // a licence file breaking a release over something npm merely disapproves of.
-  let listed = '';
+  let listed: string;
   try {
     listed = execFileSync('npm', ['ls', '--omit=dev', '--all', '--parseable'], {
       encoding: 'utf8',
