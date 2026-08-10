@@ -92,99 +92,23 @@ const rippleGlsl = /* glsl */ `
 `;
 
 /**
- * Pale water over a shoal, shared by both sea surfaces.
+ * The uniforms that describe the world's land, and the two conversions into a
+ * surveyed region's raster.
  *
- * Shared rather than copied, and that is the whole point of it existing as a
- * snippet. It began in the wave grid alone, so the near sea shaded its shallows
- * and the flat sea beyond 450 m never did -- which drew a straight line across
- * an island's pale halo wherever the halo crossed the grid's edge. Two copies
- * would have fixed the line and set up the older failure this file already
- * carries scars from: a formula that agreed in two shaders until one of them
- * was tuned.
- *
- * It declares its own uniforms, so neither shader may declare them again. That
- * is safe because both materials are built on the *same* uniforms object.
- *
- * Two sources, because there are two kinds of world. A surveyed region reads
- * the depth straight off the field texture, so the pale water is where the
- * water really is shallow; the procedural ocean has only circles, so it fades
- * out over 110 m from each island's edge.
+ * Split out because three separate things need them -- the wave shelter, the
+ * shoal tint, and the vertex displacement that reads the shelter -- and until
+ * this existed, `shoalGlsl` carried its own copy of both conversions written
+ * out inline. Two copies of a uv flip is exactly the kind of duplication that
+ * has bitten this file before: the v axis runs the other way from the raster's
+ * rows, and getting it wrong mirrors a bay about its own middle.
  */
-const shoalGlsl = /* glsl */ `
-  uniform vec4 uIslands[${MAX_ISLANDS}];
-  uniform sampler2D uField;
-  uniform vec3 uRegion;
-
-  float shoalAt(vec2 simP) {
-    float shoal = 0.0;
-    vec2 fuv = vec2(
-      (simP.x + uRegion.x) / (2.0 * uRegion.x),
-      1.0 - (simP.y + uRegion.y) / (2.0 * uRegion.y)
-    );
-    float beyond = 0.0;
-    if (uRegion.z > 0.5) {
-      float ox = max(0.0, abs(simP.x) - uRegion.x);
-      float oy = max(0.0, abs(simP.y) - uRegion.y);
-      beyond = min(1.0, max(ox, oy) / ${EDGE_FADE.toFixed(1)});
-    }
-    if (uRegion.z > 0.5 && beyond < 1.0) {
-      // Faded out over the same band as the shelter, so the shoal shading does
-      // not run on past the edge of the data that justified it.
-      float depth = texture2D(uField, clamp(fuv, 0.0, 1.0)).g * ${FIELD_DEPTH.toFixed(1)};
-      shoal = (1.0 - smoothstep(0.0, ${SHOAL_DEPTH.toFixed(1)}, depth)) * (1.0 - beyond);
-    } else {
-      // Break rather than continue: the slots are filled from zero, so the
-      // first empty one is the end. This runs over most of the sea now rather
-      // than over the grid alone, and an open ocean with three islands in the
-      // window should cost three iterations and not sixteen.
-      for (int i = 0; i < ${MAX_ISLANDS}; i++) {
-        if (uIslands[i].w < 0.5) break;
-        float d = distance(simP, uIslands[i].xy) - uIslands[i].z;
-        shoal = max(shoal, 1.0 - smoothstep(0.0, 110.0, max(d, 0.0)));
-      }
-    }
-    return shoal;
-  }
-
-  // Shoal water is paler. It is also where you run aground, so this doubles as
-  // the only warning the player gets.
-  vec3 shoalTint(vec3 col, vec3 shallow, vec2 simP) {
-    return mix(col, mix(shallow, vec3(0.55, 0.62, 0.55), 0.55), shoalAt(simP) * 0.75);
-  }
-`;
-
-const vertexShader = /* glsl */ `
-  uniform float uTime;
-  uniform vec2 uOrigin;                  // world position of the grid centre (sim coords)
-  uniform vec4 uWaveA[${MAX_WAVES}];     // dirX, dirY, k, omega
-  uniform vec2 uWaveB[${MAX_WAVES}];     // amp, phase
-  uniform vec4 uIslands[${MAX_ISLANDS}]; // x, y, radius, active
-  uniform vec2 uDownwind;                // unit vector, the way the wind travels
-  uniform float uSteep;
+const fieldGlsl = /* glsl */ `
+  uniform vec4 uIslands[${MAX_ISLANDS}]; // x, y, radius, landmass id + 1
   uniform sampler2D uField;              // r = wave shelter, g = depth
-  uniform vec3 uRegion;                  // halfWidth, halfHeight, 1 if a region is loaded
+  uniform vec3 uRegion;                  // halfWidth, halfHeight, 1 if loaded
 
-  varying vec3 vNormal;
-  varying vec3 vWorld;
-  varying float vHeight;
-  varying float vAmp;
-  varying float vSteepness;
-  varying float vShelter;
-
-  // Must stay identical to Terrain.waveShelter() in src/sim/terrain.ts,
-  // including the taper that ends the wake at WAKE_MAX.
-  //
-  // The w component carries the landmass: 0 is an empty slot, anything else is
-  // the group id plus one. Strongest wake within a landmass, multiplied
-  // across landmasses --
-  // a coast drawn as eight circles has to shade its lee once, not eight times.
-  // Walking the list and closing a group off when the id changes needs the
-  // pieces of a landmass to be adjacent, which Terrain's constructor guarantees
-  // and terrain.test.ts holds it to; the obvious alternative, an array indexed
-  // by group id, is not available in GLSL ES 1.00.
   /**
-   * Where the field says a point is, in texture space, or outside 0..1 when
-   * there is no region or the point is beyond it.
+   * Where the field says a point is, in texture space.
    *
    * Row 0 of the raster is the *north* edge and v runs the other way, which is
    * the one thing this conversion can get wrong and the reason the land and the
@@ -213,6 +137,79 @@ const vertexShader = /* glsl */ `
     float dy = max(0.0, abs(p.y) - uRegion.y);
     return min(1.0, max(dx, dy) / ${EDGE_FADE.toFixed(1)});
   }
+`;
+
+/**
+ * Pale water over a shoal, shared by both sea surfaces.
+ *
+ * Shared rather than copied, and that is the whole point of it existing as a
+ * snippet. It began in the wave grid alone, so the near sea shaded its shallows
+ * and the flat sea beyond 450 m never did -- which drew a straight line across
+ * an island's pale halo wherever the halo crossed the grid's edge. Two copies
+ * would have fixed the line and set up the older failure this file already
+ * carries scars from: a formula that agreed in two shaders until one of them
+ * was tuned.
+ *
+ * It declares its own uniforms, so neither shader may declare them again. That
+ * is safe because both materials are built on the *same* uniforms object.
+ *
+ * Two sources, because there are two kinds of world. A surveyed region reads
+ * the depth straight off the field texture, so the pale water is where the
+ * water really is shallow; the procedural ocean has only circles, so it fades
+ * out over 110 m from each island's edge.
+ */
+const shoalGlsl = /* glsl */ `
+  float shoalAt(vec2 simP) {
+    float shoal = 0.0;
+    float beyond = uRegion.z > 0.5 ? regionFade(simP) : 0.0;
+    if (uRegion.z > 0.5 && beyond < 1.0) {
+      // Faded out over the same band as the shelter, so the shoal shading does
+      // not run on past the edge of the data that justified it.
+      float depth = texture2D(uField, clamp(fieldUv(simP), 0.0, 1.0)).g * ${FIELD_DEPTH.toFixed(1)};
+      shoal = (1.0 - smoothstep(0.0, ${SHOAL_DEPTH.toFixed(1)}, depth)) * (1.0 - beyond);
+    } else {
+      // Break rather than continue: the slots are filled from zero, so the
+      // first empty one is the end. This runs over most of the sea now rather
+      // than over the grid alone, and an open ocean with three islands in the
+      // window should cost three iterations and not sixteen.
+      for (int i = 0; i < ${MAX_ISLANDS}; i++) {
+        if (uIslands[i].w < 0.5) break;
+        float d = distance(simP, uIslands[i].xy) - uIslands[i].z;
+        shoal = max(shoal, 1.0 - smoothstep(0.0, 110.0, max(d, 0.0)));
+      }
+    }
+    return shoal;
+  }
+
+  // Shoal water is paler. It is also where you run aground, so this doubles as
+  // the only warning the player gets.
+  vec3 shoalTint(vec3 col, vec3 shallow, vec2 simP) {
+    return mix(col, mix(shallow, vec3(0.55, 0.62, 0.55), 0.55), shoalAt(simP) * 0.75);
+  }
+`;
+
+/**
+ * How much of the sea's wave energy survives at a point, 0..1.
+ *
+ * Shared because both surfaces need it now. The grid has always damped its
+ * waves and its ripple by the lee -- flat water behind an island is the whole
+ * point -- while the flat sea beyond 450 m did not, so a lee that reaches
+ * 1500 m downwind changed texture at the grid's rim. That is the same class of
+ * seam as the shoal tint, and it wants the same answer: one function, not two.
+ *
+ * Must stay identical to Terrain.waveShelter() in src/sim/terrain.ts,
+ * including the taper that ends the wake at WAKE_MAX.
+ *
+ * The w component carries the landmass: 0 is an empty slot, anything else is
+ * the group id plus one. Strongest wake within a landmass, multiplied across
+ * landmasses -- a coast drawn as eight circles has to shade its lee once, not
+ * eight times. Walking the list and closing a group off when the id changes
+ * needs the pieces of a landmass to be adjacent, which Terrain's constructor
+ * guarantees and terrain.test.ts holds it to; the obvious alternative, an array
+ * indexed by group id, is not available in GLSL ES 1.00.
+ */
+const shelterGlsl = /* glsl */ `
+  uniform vec2 uDownwind; // unit vector, the way the wind travels
 
   float waveShelter(vec2 p) {
     // A region carries its shelter as data, computed by the same sweep the
@@ -258,6 +255,24 @@ const vertexShader = /* glsl */ `
     shelter *= 1.0 - groupMax; // the last landmass has no successor to close it
     return max(0.05, shelter);
   }
+`;
+
+const vertexShader = /* glsl */ `
+  uniform float uTime;
+  uniform vec2 uOrigin;                  // world position of the grid centre (sim coords)
+  uniform vec4 uWaveA[${MAX_WAVES}];     // dirX, dirY, k, omega
+  uniform vec2 uWaveB[${MAX_WAVES}];     // amp, phase
+  uniform float uSteep;
+
+  varying vec3 vNormal;
+  varying vec3 vWorld;
+  varying float vHeight;
+  varying float vAmp;
+  varying float vSteepness;
+  varying float vShelter;
+
+  ${fieldGlsl}
+  ${shelterGlsl}
 
   void main() {
     // The plane is built in XY, so local xy is the east/north offset directly.
@@ -343,6 +358,7 @@ const fragmentShader = /* glsl */ `
   varying float vShelter;
 
   ${rippleGlsl}
+  ${fieldGlsl}
   ${shoalGlsl}
 
   void main() {
@@ -489,7 +505,9 @@ const farFragmentShader = /* glsl */ `
   varying vec3 vWorld;
 
   ${rippleGlsl}
+  ${fieldGlsl}
   ${shoalGlsl}
+  ${shelterGlsl}
 
   // The colour half of the grid's fragment shader, with the swell gone and only
   // the ripple left on the surface.
@@ -501,7 +519,17 @@ const farFragmentShader = /* glsl */ `
   // water needs only land, and land sits either side of the join all the time.
   void main() {
     float dist = length(cameraPosition - vWorld);
-    vec2 rs = rippleSlope(vec2(vWorld.x, -vWorld.z), uTime, rippleAmp(dist, uRipple));
+    vec2 simP = vec2(vWorld.x, -vWorld.z);
+    // Damped by the lee, exactly as the grid damps its own ripple by vShelter.
+    // Without it a lee reaching 1500 m downwind changed texture at the grid's
+    // rim: smooth inside, rippled outside, on a straight line.
+    //
+    // Guarded on the amplitude rather than computed always. The ripple is gone
+    // by 2500 m from the eye anyway, and beyond that this would be a sixteen
+    // island loop per fragment for a number about to be multiplied by zero.
+    float amp = rippleAmp(dist, uRipple);
+    if (amp > 0.0) amp *= waveShelter(simP);
+    vec2 rs = rippleSlope(simP, uTime, amp);
     vec3 n = normalize(vec3(-rs.x, 1.0, rs.y));
     vec3 viewDir = normalize(cameraPosition - vWorld);
     vec3 sunDir = normalize(uSun);
@@ -512,7 +540,7 @@ const farFragmentShader = /* glsl */ `
     vec3 col = mix(uDeep, uShallow, diff * 0.65);
     // Before the sky and the sun, in the grid's order. Applied after them it is
     // the same tint over a different base, which is a join by another name.
-    col = shoalTint(col, uShallow, vec2(vWorld.x, -vWorld.z));
+    col = shoalTint(col, uShallow, simP);
     col = mix(col, uSky, clamp(fres * 0.85, 0.0, 0.75));
 
     vec3 h = normalize(sunDir + viewDir);
