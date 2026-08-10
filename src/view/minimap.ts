@@ -86,6 +86,67 @@ export function maxChartOffset(rangeIndex: number): number {
   return Math.max(range * PAN_AT, CHART_RANGE - range - ISLAND_DRAW_REACH);
 }
 
+/**
+ * Where the chart looks this frame.
+ *
+ * The whole centring rule, and pure, so that it can be driven by a test instead
+ * of inferred from a canvas -- the same reason `dragTo` is separated out in
+ * `orbit.ts`. Keeping the clamp alone pure was not enough: a first attempt put
+ * it in the pointer handler, where it was correct for exactly as long as a
+ * finger was down, and the test happily passed because it was checking the
+ * arithmetic rather than the code that used it.
+ *
+ * @param prev  last frame's centre, or null on the first frame
+ * @param boat  where she is now
+ * @param pan   where the player has dragged the chart, or null to follow
+ */
+export function chartCentre(
+  prev: Vec2 | null,
+  boat: Vec2,
+  pan: Vec2 | null,
+  rangeIndex: number,
+): Vec2 {
+  const range = RANGES[rangeIndex] ?? RANGES[0];
+  // Dragged: the chart stays where it was put and the boat is free to sail off
+  // the edge of it, which is the point of having taken hold. Held inside the
+  // island window, though -- that window is collected around the boat and
+  // follows her, so a chart put down at the limit and then left alone would
+  // drift outside it as she sails on.
+  if (pan) return clampChartCentre(pan, boat, rangeIndex);
+  // First frame, or the boat has been teleported by a restart.
+  if (!prev || Math.hypot(boat.x - prev.x, boat.y - prev.y) > range * 2) return { ...boat };
+  // Otherwise hold the view still and let her move across it, panning only once
+  // she reaches the limit -- and then by exactly the distance she is over it, so
+  // the pan matches her speed rather than chasing it.
+  const offX = boat.x - prev.x;
+  const offY = boat.y - prev.y;
+  const off = Math.hypot(offX, offY);
+  const limit = range * PAN_AT;
+  if (off <= limit) return prev;
+  return { x: prev.x + (offX / off) * (off - limit), y: prev.y + (offY / off) * (off - limit) };
+}
+
+/**
+ * Where a dragged chart is actually centred: where it was put, pulled back
+ * along the same line if that is outside the window.
+ *
+ * Separated from the drawing so the rule can be asserted without a canvas --
+ * and, as with `dragTo` in `orbit.ts`, so that it is asserted *through the code
+ * that implements it* rather than against a second copy of the arithmetic. A
+ * test that only checked `maxChartOffset` returned safe numbers passed happily
+ * while the draw path ignored them, which is how the first version of this went
+ * in.
+ */
+export function clampChartCentre(want: Vec2, boat: Vec2, rangeIndex: number): Vec2 {
+  const off = Math.hypot(want.x - boat.x, want.y - boat.y);
+  const reach = maxChartOffset(rangeIndex);
+  if (off <= reach || off === 0) return want;
+  return {
+    x: boat.x + ((want.x - boat.x) / off) * reach,
+    y: boat.y + ((want.y - boat.y) / off) * reach,
+  };
+}
+
 /*
  * This list used to be bounded by the physics, and the comment here said so:
  * the island window reaches ACTIVE_RANGE, so beyond it the chart would show
@@ -467,30 +528,14 @@ export function createMinimap(): Minimap {
       const bx = input.state.pos.x;
       const by = input.state.pos.y;
 
-      if (input.pan) {
-        // Dragged: the chart stays exactly where it was put, and the boat is
-        // free to sail off the edge of it. Nothing is recentred until the
-        // player lets go of it, which is the whole point of having taken hold.
-        centreX = input.pan.x;
-        centreY = input.pan.y;
-      } else if (!Number.isFinite(centreX) || Math.hypot(bx - centreX, by - centreY) > range * 2) {
-        // First frame, or the boat has been teleported by a restart.
-        centreX = bx;
-        centreY = by;
-      }
-      if (!input.pan) {
-        // Hold the view still and let the boat move across it, panning only
-        // once she reaches the limit -- and then by exactly the distance she is
-        // over it, so the pan matches her speed rather than chasing it.
-        const offX = bx - centreX;
-        const offY = by - centreY;
-        const off = Math.hypot(offX, offY);
-        const limit = range * PAN_AT;
-        if (off > limit) {
-          centreX += (offX / off) * (off - limit);
-          centreY += (offY / off) * (off - limit);
-        }
-      }
+      const centred = chartCentre(
+        Number.isFinite(centreX) ? { x: centreX, y: centreY } : null,
+        { x: bx, y: by },
+        input.pan,
+        rangeIndex,
+      );
+      centreX = centred.x;
+      centreY = centred.y;
 
       const sx = (x: number) => cx + (x - centreX) * k;
       const sy = (y: number) => cy - (y - centreY) * k;

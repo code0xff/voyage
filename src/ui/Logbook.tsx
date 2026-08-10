@@ -8,6 +8,7 @@ import { formatDistance, formatDuration, formatWhen, msToKnots } from '@/sim/uni
 import { venueById } from '@/sim/venues';
 import { placeName } from '@/sim/regions';
 import type { PassageRecord } from '@/sim/passage';
+import type { Phrase } from '@/i18n';
 
 /**
  * The logbook.
@@ -91,7 +92,16 @@ export function Logbook({
 }) {
   const t = useT();
   const [passages, setPassages] = useState<PassageRecord[] | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
+  /**
+   * What went wrong, kept as a phrase rather than as translated text.
+   *
+   * Storing `t(...)` froze the message in whichever language was current when
+   * it failed, so switching language left the error behind in the old one --
+   * on the one panel where the reader is already confused. It is translated at
+   * render instead, which is also what lets `reload` stay out of the language's
+   * way: nothing here captures the translator.
+   */
+  const [problem, setProblem] = useState<Phrase | null>(null);
   /**
    * Which read is the newest.
    *
@@ -120,7 +130,7 @@ export function Logbook({
         // able to leave the panel saying "reading" forever, which is what an
         // unhandled rejection did.
         setPassages([]);
-        setProblem(t(LOG.readFailed));
+        setProblem(LOG.readFailed);
       },
     );
   }, [store]);
@@ -145,7 +155,7 @@ export function Logbook({
       async (raw) => {
         const rows = fromExport(raw);
         if (!rows) {
-          setProblem(t(LOG.notALogbook));
+          setProblem(LOG.notALogbook);
           return;
         }
         try {
@@ -154,7 +164,7 @@ export function Logbook({
           for (const r of rows) await store.add(r);
           setProblem(null);
         } catch {
-          setProblem(t(LOG.partlySaved));
+          setProblem(LOG.partlySaved);
         } finally {
           // Announced either way. A partial import has written real rows, and
           // leaving them off the screen would show a logbook that is not the
@@ -162,7 +172,7 @@ export function Logbook({
           onChanged();
         }
       },
-      () => setProblem(t(LOG.fileUnreadable)),
+      () => setProblem(LOG.fileUnreadable),
     );
   };
 
@@ -173,7 +183,7 @@ export function Logbook({
         onChanged();
       },
       () => {
-        setProblem(t(LOG.removeFailed));
+        setProblem(LOG.removeFailed);
         // Announced on the failure too: the row may or may not have gone, and
         // every reader has to end up looking at the store either way.
         onChanged();
@@ -229,7 +239,7 @@ export function Logbook({
         who never finds it can lose a year of passages to a routine clear of
         site data without ever having been told.
       */}
-      {problem && <p className="pt-2 text-[10px] text-destructive">{problem}</p>}
+      {problem && <p className="pt-2 text-[10px] text-destructive">{t(problem)}</p>}
       <p className="pt-2 text-[10px] leading-relaxed text-muted-foreground">
         {t(LOG.kept)}
       </p>

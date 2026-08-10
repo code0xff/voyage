@@ -472,17 +472,23 @@ export const CHART_RANGE = 8300;
 /**
  * Cap on charted islands.
  *
- * Measured, not chosen: the thickest sea the field makes puts 169 islands
- * inside this window, so the cap holds all of them and the chart never lies by
- * truncation -- which would be the same defect in a smaller coat.
+ * A backstop that must never bite. Truncating here would be the original defect
+ * in a smaller coat: land inside the chart's own frame, not drawn.
+ *
+ * Measured across seeds rather than from one, which is how the first attempt at
+ * this number went wrong. At MAX_DENSITY over 400 seeds the window holds 136
+ * islands at the thinnest, 177 at the median and 210 at the worst -- and 192,
+ * taken from a single seed that happened to sit near the median, would have
+ * truncated 32 of those 400. This is the worst case with room over it, and
+ * `minimap.test.ts` scans seeds to keep it that way.
  *
  * Affordable only because a coastline is traced against its own neighbours now:
- * 54 ms for all 169, where the old whole-terrain sampling would have been the
- * better part of a second. Traced once each and cached on island identity, so
- * this is the cost of a chart's first look at a new stretch of sea, not a
+ * 54 ms for 169 of them, where the old whole-terrain sampling would have been
+ * the better part of a second. Traced once each and cached on island identity,
+ * so this is the cost of a chart's first look at a new stretch of sea, not a
  * per-frame cost.
  */
-const MAX_CHART_ISLANDS = 192;
+const MAX_CHART_ISLANDS = 256;
 
 export interface IslandFieldOptions {
   seed: number;

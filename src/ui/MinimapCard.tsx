@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp, Crosshair, Maximize2, X } from 'lucide-react';
-import { RANGES, createMinimap, maxChartOffset } from '@/view/minimap';
+import { RANGES, createMinimap } from '@/view/minimap';
 import { CRUISER } from '@/sim/config';
 import { formatDistance } from '@/sim/units';
 import type { Vec2 } from '@/sim/math';
@@ -212,23 +212,13 @@ export function MinimapCard({
       // Dragging right moves the *chart* right, which means looking at water to
       // the west -- so the centre goes the other way. Screen y grows downward
       // and north is up, so that axis flips again.
-      const want = { x: d.from.x - dx * perPixel, y: d.from.y + dy * perPixel };
-      // Held inside the sea the chart was handed. The island window is
-      // collected around the boat, so a drag past it would scroll onto water
-      // nothing has been asked about -- which draws as empty ocean and is the
-      // one thing this chart must not do. Clamped along the drag direction
-      // rather than refused, so it slides to the edge and stops.
-      const bx = engine.snapshot.state.pos.x;
-      const by = engine.snapshot.state.pos.y;
-      const off = Math.hypot(want.x - bx, want.y - by);
-      const limit = maxChartOffset(range);
-      pan.current =
-        off > limit
-          ? { x: bx + ((want.x - bx) / off) * limit, y: by + ((want.y - by) / off) * limit }
-          : want;
+      // Not clamped here. Where the chart may be held is a question about the
+      // island window, which follows the boat, so it has to be answered every
+      // frame rather than only while a finger is down -- see `createMinimap`.
+      pan.current = { x: d.from.x - dx * perPixel, y: d.from.y + dy * perPixel };
       setPanned(true);
     },
-    [engine, range, size],
+    [range, size],
   );
 
   const onPointerUp = useCallback(
