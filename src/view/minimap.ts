@@ -1,5 +1,5 @@
 import type { BoatState } from '../sim/boat';
-import { sameIslands, type Island, type Terrain } from '../sim/terrain';
+import { Terrain, sameIslands, type Island } from '../sim/terrain';
 import type { RegionTerrain } from '../sim/region-terrain';
 import type { WindField } from '../sim/wind';
 import { clamp, compassVec, type Vec2 } from '../sim/math';
@@ -230,6 +230,21 @@ function traceOutline(terrain: Terrain, isl: Island, draft: number): Outline {
   const shore = new Float32Array(BEARINGS);
   const safe = new Float32Array(BEARINGS);
   const deps = terrain.islandsAffecting(isl);
+  /*
+   * Sampled against this island and its neighbours alone, not the whole chart.
+   *
+   * `elevationAt` walks every island it is given, so tracing against the full
+   * terrain made this quadratic in how much land is on screen -- fine for the
+   * dozen the physics window holds, and 317 ms for the hundred and twenty a
+   * five-kilometre chart can hold at the thickest island setting.
+   *
+   * The answers are identical, and that is not a hope. `islandsAffecting` is
+   * defined as every island whose ground can reach inside this one's tracing
+   * radius, which is the same claim the outline cache already stakes its
+   * correctness on: `deps` is what a redraw is checked against. Anything
+   * outside it cannot raise the seabed anywhere this march looks.
+   */
+  const local = new Terrain([isl, ...deps]);
   // Far enough out to clear the shelf: the seabed falls away slowly, so safe
   // water is a good way beyond the beach.
   const outer = isl.radius * 1.45 + draft * 14 + 30;
@@ -247,7 +262,7 @@ function traceOutline(terrain: Terrain, isl: Island, draft: number): Outline {
     shore[i] = outer;
     safe[i] = outer;
     for (let r = isl.radius * 0.35; r <= outer; r += step) {
-      const e = terrain.elevationAt(isl.pos.x + dx * r, isl.pos.y + dy * r);
+      const e = local.elevationAt(isl.pos.x + dx * r, isl.pos.y + dy * r);
       if (!foundShore && e < 0) {
         shore[i] = r;
         foundShore = true;
