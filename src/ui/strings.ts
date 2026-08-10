@@ -70,6 +70,20 @@ export const MENU: Record<string, Phrase> = {
   putToSea: { en: 'Put to sea', ko: '출항' },
   putToSeaHint: { en: 'a new world, and time to sail it', ko: '새로운 바다, 그리고 항해할 시간' },
   adjust: { en: 'Adjust', ko: '설정' },
+  /**
+   * The names of the screens behind the menu, used as their headings.
+   *
+   * `settings` is a noun where the door that opens it is a verb, which is the
+   * ordinary shape: you press Adjust and arrive at Settings. In Korean both are
+   * 설정 and the two match exactly.
+   *
+   * `help` is the umbrella on purpose. That screen holds the sailing guide and
+   * the key list, and it is reached from both "Read the guide" and "all the
+   * keys" -- naming it Guide would be a lie to everyone who arrived the second
+   * way.
+   */
+  settings: { en: 'Settings', ko: '설정' },
+  help: { en: 'Help', ko: '도움말' },
   done: { en: 'Done', ko: '완료' },
   close: { en: 'Close', ko: '닫기' },
   changingWeather: { en: 'changing weather', ko: '변하는 날씨' },

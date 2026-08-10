@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatClock } from "@/sim/sky";
 import { WEATHER_KINDS, type WeatherKind } from "@/sim/weather";
 import { LANGS, type Lang } from "@/i18n";
+import type { Phrase } from "@/i18n";
 import { Rich, useLang, useT } from "./i18n";
 import {
   CONTROLS_NOTE,
@@ -106,14 +107,25 @@ function Slider({
 const TAB_TRIGGER = "flex-1 gap-1.5 [&_svg]:size-3.5 [&_svg]:shrink-0";
 
 /**
- * The tab values, which are not all the same word as the labels. Only the two
- * strips are here; the logbook has no tabs and names itself.
+ * What each screen is called.
+ *
+ * This used to read the heading off whichever tab was open, which was a
+ * workaround from the days when one strip held two settings, the logbook and
+ * two pieces of help: a screen called Settings would have opened on the sailing
+ * guide, so it was named for the tab instead to stop the title lying.
+ *
+ * That strip is gone and every screen is now one kind of thing, so the
+ * workaround outlived its reason -- and had turned into a defect of its own,
+ * because naming the screen after the open tab printed the same word twice,
+ * once as the title and once in the highlighted tab directly beneath it. It
+ * also mis-filed the credits, which sit under the settings tabs and belong to
+ * the screen: under a heading that said "World" they read as part of the World
+ * tab.
  */
-const TAB_TITLE: Record<string, (typeof TABS)[keyof typeof TABS]> = {
-  world: TABS.world,
-  conditions: TABS.conditions,
-  sailing: TABS.sailing,
-  keys: TABS.controls,
+const SCREEN_TITLE: Record<string, Phrase> = {
+  settings: MENU.settings,
+  help: MENU.help,
+  log: TABS.log,
 };
 
 /**
@@ -229,9 +241,8 @@ export function MenuDialog({
    * read it;
    * on the way in it would be an alarm about a thing nobody asked for yet.
    */
-  /** What the header says, which is the open tab where a view has tabs. */
-  const heading =
-    view === "log" ? TABS.log : TAB_TITLE[view === "help" ? helpTab : tab] ?? TABS.world;
+  /** What the header says: the screen, never the tab open inside it. */
+  const heading = SCREEN_TITLE[view] ?? MENU.settings;
 
   const [last, setLast] = useState<PassageRecord | null>(null);
   useEffect(() => {
