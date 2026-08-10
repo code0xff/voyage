@@ -61,6 +61,15 @@ export const nowhereToAnchor = (why: Phrase): Phrase => ({
   ko: `닻 내릴 곳이 아님: ${why.ko}`,
 });
 
+/**
+ * `4 islands`, assembled per language because Korean puts the counter after the
+ * noun. A function for the same reason `holding` is one.
+ */
+export const islandCount = (n: number): Phrase => ({
+  en: `${n} islands`,
+  ko: `섬 ${n}개`,
+});
+
 export const MENU: Record<string, Phrase> = {
   tagline: {
     en: 'A sailing simulator that computes apparent wind, sail lift, keel side force and wave-making resistance. Wind differs from place to place, weather turns, and land steals your breeze.',
@@ -275,8 +284,12 @@ export const SETTINGS_UI: Record<string, Phrase> = {
   meanWind: { en: 'Mean wind', ko: '평균 바람' },
   gusts: { en: 'Gusts / shifts', ko: '돌풍 / 풍향 변화' },
   seaState: { en: 'Sea state', ko: '파도' },
+  /** The zero end of the sea slider, as `slack` and `frozen` are for theirs. */
+  flat: { en: 'flat', ko: '잔잔함' },
   tidalDrift: { en: 'Tidal drift', ko: '조류' },
   slack: { en: 'slack', ko: '정조' },
+  /** The direction a current flows *towards*, which is the opposite of how wind is named. */
+  set: { en: 'Set (towards)', ko: '유향 (향하는 쪽)' },
   startTime: { en: 'Start time', ko: '시작 시각' },
   timeSpeed: { en: 'Time speed', ko: '시간 배속' },
   frozen: { en: 'frozen', ko: '정지' },
@@ -295,10 +308,24 @@ export const SETTINGS_UI: Record<string, Phrase> = {
 /**
  * The alerts, which only appear in the states that produce them.
  *
- * They were the last English left in the interface and the hardest to find:
- * the check that swept the rendered page for text with no Hangul in it cannot
- * see a warning that needs the boat to be aground before it exists. Found by
- * reading the code that pushes them instead.
+ * They were the hardest English to find: the check that swept the rendered page
+ * for text with no Hangul in it cannot see a warning that needs the boat to be
+ * aground before it exists. Found by reading the code that pushes them instead.
+ *
+ * They were not the last, which this claimed until a batch of them turned up in
+ * the menu: the islands slider and its label, the island count on the front
+ * page, "open sea", "flat" at the bottom of the sea slider, the procedural
+ * entry in the Where list, the set-of-the-current slider, and the note under a
+ * venue. Listed rather than counted -- the first version of this said "six",
+ * which was wrong twice over, and a tally is the part that goes stale.
+ *
+ * Most are conditional, which is why a sweep of one rendered screen missed
+ * them: "open sea" wants the slider at zero or a stored id that no longer
+ * resolves, "flat" wants the sea slider at zero, the set slider wants a drift
+ * above zero, the Where entry wants the select open, and the venue note wants a
+ * venue -- which nothing can currently select, because `VENUES` is empty. The
+ * island count is the exception and the worst of them: it is the default state,
+ * so every Korean player saw "4 islands" on the first screen.
  */
 export const ALERT: Record<string, Phrase> = {
   aground: { en: 'AGROUND', ko: '좌초' },
@@ -352,6 +379,13 @@ export const LOG: Record<string, Phrase> = {
 /** The World tab, where a place is chosen. */
 export const WORLD: Record<string, Phrase> = {
   where: { en: 'Where', ko: '어디서' },
+  islands: { en: 'Islands', ko: '섬' },
+  openOcean: { en: 'Open ocean (procedural)', ko: '먼바다 (절차적 생성)' },
+  /** Why a venue is worth sailing even though its coastline is not the real one. */
+  venueSketch: {
+    en: 'The land, depths and stream are a sketch meant to reproduce the decisions the place asks of you, not its geography.',
+    ko: '육지와 수심, 조류는 스케치입니다. 그 장소의 지형이 아니라, 그곳이 요구하는 판단을 재현하기 위한 것입니다.',
+  },
   surveyedTag: { en: 'surveyed', ko: '실측' },
   sketchTag: { en: 'sketch', ko: '스케치' },
   surveyedLead: { en: 'Surveyed.', ko: '실측 데이터.' },

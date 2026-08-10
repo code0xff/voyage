@@ -30,6 +30,7 @@ import {
   CONTROLS_NOTE,
   KEYS,
   MENU,
+  islandCount,
   PANEL,
   REGION_BRIEF,
   SETTINGS_UI,
@@ -383,12 +384,12 @@ export function MenuDialog({
                       own land, so reading "open sea" off that field alone
                       announced San Francisco as an empty ocean. */}
                   {settings.region
-                    ? (regionById(settings.region)?.name ?? "open sea")
+                    ? (regionById(settings.region)?.name ?? t(MENU.openSea))
                     : settings.venue
-                      ? (venueById(settings.venue)?.name ?? "open sea")
+                      ? (venueById(settings.venue)?.name ?? t(MENU.openSea))
                       : settings.islandCount === 0
-                        ? "open sea"
-                        : `${settings.islandCount} islands`}
+                        ? t(MENU.openSea)
+                        : t(islandCount(settings.islandCount))}
                 </div>
               </div>
               {/* Opens on World rather than on whichever tab was last left.
@@ -559,7 +560,7 @@ export function MenuDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="open">Open ocean (procedural)</SelectItem>
+                  <SelectItem value="open">{t(WORLD.openOcean)}</SelectItem>
                   {REGIONS.map((r) => (
                     <SelectItem key={r.id} value={`region:${r.id}`}>
                       {r.name} — {t(WORLD.surveyedTag)}
@@ -593,17 +594,16 @@ export function MenuDialog({
                 <span className="text-warning">
                   {t(WORLD.sketchWarning)}
                 </span>{" "}
-                The land, depths and stream are a sketch meant to reproduce the
-                decisions the place asks of you, not its geography.
+                {t(WORLD.venueSketch)}
               </p>
             ) : (
               <Slider
-                label="Islands"
+                label={t(WORLD.islands)}
                 min={0}
                 max={10}
                 step={1}
                 value={settings.islandCount}
-                format={(v) => (v === 0 ? "open sea" : `${v}/10`)}
+                format={(v) => (v === 0 ? t(MENU.openSea) : `${v}/10`)}
                 onChange={(v) => set("islandCount", v)}
               />
             )}
@@ -669,7 +669,7 @@ export function MenuDialog({
               max={2}
               step={0.1}
               value={settings.seaScale}
-              format={(v) => (v === 0 ? "flat" : `${v.toFixed(1)}x`)}
+              format={(v) => (v === 0 ? t(SETTINGS_UI.flat) : `${v.toFixed(1)}x`)}
               onChange={(v) => set("seaScale", v)}
             />
             <Slider
@@ -690,7 +690,7 @@ export function MenuDialog({
             */}
             {settings.driftKnots > 0 && (
               <Slider
-                label="Set (towards)"
+                label={t(SETTINGS_UI.set)}
                 min={0}
                 max={355}
                 step={5}
