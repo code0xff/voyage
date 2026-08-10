@@ -21,8 +21,8 @@ import type { TerrainQuery } from './terrain';
  *
  * The call came first and still does the navigational work. Near a shore you
  * hear gulls, and now and then a flock is circling within sight of you as well
- * -- circling, and not passing through: it holds its patch of sky for the few
- * seconds it is up, the way birds do over something worth staying for. Both
+ * -- circling, and not passing through: it holds its patch of sky long enough
+ * to watch, the way birds do over something worth staying for. Both
  * say the same thing, which is that there is land, and say it before the haze
  * gives the land itself up. Open water stays silent and empty.
  *
@@ -52,6 +52,9 @@ interface ActiveFlock extends GullFlockSighting {
 
 /** Gulls are audible within about this far of a shore, m. */
 const GULL_RANGE = 800;
+/** Two leisurely circuits: observable without becoming permanent scenery. */
+const FLOCK_DURATION_MIN = 14;
+const FLOCK_DURATION_MAX = 18;
 
 export class Wildlife {
   /** Filled during update(), drained by whoever plays the sounds. */
@@ -154,7 +157,8 @@ export class Wildlife {
       // than half a metre, without turning the birds into aircraft.
       wingspan: 1.6 + this.flockRand() * 0.3,
       age: 0,
-      duration: 6 + this.flockRand() * 2,
+      duration:
+        FLOCK_DURATION_MIN + this.flockRand() * (FLOCK_DURATION_MAX - FLOCK_DURATION_MIN),
       opacity: 0,
     };
     this.activeFlock = flock;

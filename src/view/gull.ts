@@ -55,8 +55,8 @@ export function createGullView(): GullView {
       undefined,
       () => {
         // Not retried. `requested` stays set, because a flock is on screen for
-        // six to eight seconds and clearing the guard here would ask for a
-        // missing file on every frame of it -- some hundreds of requests for an
+        // fourteen to eighteen seconds and clearing the guard here would ask
+        // for a missing file on every frame of it -- hundreds of requests for an
         // answer that is not going to change. The calls carry on without it,
         // which is what they were doing before there was anything to draw.
       },
@@ -105,12 +105,10 @@ export function createGullView(): GullView {
           const mixer = asset.animations.length > 0 ? new THREE.AnimationMixer(model) : null;
           if (mixer) {
             const action = mixer.clipAction(asset.animations[0]);
-            // Stretch one complete authored circuit over this sighting. Starting
-            // at a random phase with LoopOnce could leave a newly spawned flock
-            // frozen at the final frame for most of its short lifetime.
-            action.timeScale = asset.animations[0].duration / flock.duration;
-            action.setLoop(THREE.LoopOnce, 1);
-            action.clampWhenFinished = true;
+            // Two circuits keep the old, leisurely flight speed while leaving
+            // enough time to watch. Stretching one circuit across the longer
+            // sighting makes the wingbeats and turns look unnaturally slow.
+            action.timeScale = asset.animations[0].duration / (flock.duration * 0.5);
             action.play();
           }
           instance = { root, model, mixer, materials };

@@ -23,7 +23,7 @@ function calls(seed: number, terrain: Terrain, at: { x: number; y: number }, sec
 }
 
 describe('gulls', () => {
-  it('keeps a visible flock brief, nearby and separated from the next one', () => {
+  it('keeps a visible flock observable, nearby and separated from the next one', () => {
     const wildlife = new Wildlife(17);
     const land = new Terrain([island(0, 0)]);
     const boat = { x: 350, y: 0 };
@@ -49,8 +49,8 @@ describe('gulls', () => {
       elapsed += step;
       if (wildlife.flocks[0]?.id === first.id) opacities.push(wildlife.flocks[0].opacity);
     }
-    expect(elapsed - firstAt).toBeGreaterThanOrEqual(6);
-    expect(elapsed - firstAt).toBeLessThanOrEqual(8.25);
+    expect(elapsed - firstAt).toBeGreaterThanOrEqual(14);
+    expect(elapsed - firstAt).toBeLessThanOrEqual(18.25);
     expect(opacities[0]).toBe(0);
     expect(Math.max(...opacities)).toBe(1);
     expect(opacities.at(-1)).toBeLessThan(0.2);
