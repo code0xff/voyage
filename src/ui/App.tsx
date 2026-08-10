@@ -108,8 +108,15 @@ export function App() {
         const a = document.createElement("a");
         a.href = url;
         a.download = `voyage-${slug}-${stamp}.png`;
+        // In the document, and revoked a task later. Clicking a detached
+        // anchor and revoking on the next line works in Chrome and is not
+        // promised anywhere: the download has only been *started*, and a
+        // browser that had not yet read the blob would cancel it. The timeout
+        // is the whole fix -- the URL still goes, just after the read.
+        document.body.append(a);
         a.click();
-        URL.revokeObjectURL(url);
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
         flash.current?.animate(
           [{ opacity: 0.75 }, { opacity: 0 }],
           { duration: 260, easing: "ease-out" },

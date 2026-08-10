@@ -320,6 +320,10 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   /** Everyone waiting on the next frame's pixels. See `SceneView.capture`. */
   let waitingForShot: ((blob: Blob | null) => void)[] = [];
+  /** Once this is set there will be no more frames, so no more pixels either. */
+  let disposed = false;
+  /** Reused every frame. `scene.background` holds this object, not a copy. */
+  const fogColor = new THREE.Color();
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 
   const scene = new THREE.Scene();
@@ -632,7 +636,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     hemi.intensity = sky.ambientIntensity * (0.65 + f.weather.cloud * 0.35);
     fill.intensity = 0.25 + sky.daylight * 0.55;
 
-    const fogColor = new THREE.Color(sky.fogColor[0], sky.fogColor[1], sky.fogColor[2]);
+    fogColor.setRGB(sky.fogColor[0], sky.fogColor[1], sky.fogColor[2]);
     scene.background = fogColor;
     /*
      * Linearised before it is handed to the fog, so that land dissolves into
@@ -1009,6 +1013,11 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     capture() {
       // Queued rather than answered: two presses in one frame get the same
       // photograph, which is the honest answer -- there was only one frame.
+      //
+      // After disposal there will never be another frame, so the queue would be
+      // a promise that never settles. Answering null says the same thing and
+      // says it now.
+      if (disposed) return Promise.resolve(null);
       return new Promise<Blob | null>((settle) => waitingForShot.push(settle));
     },
     setBinocularPower(power) {
@@ -1026,6 +1035,12 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       water.setTerrain(physics);
     },
     dispose() {
+      // Before anything else: whoever is waiting on a photograph is waiting on
+      // a frame that is no longer coming.
+      disposed = true;
+      const stranded = waitingForShot;
+      waitingForShot = [];
+      for (const settle of stranded) settle(null);
       boatLights.dispose();
       orbit.dispose();
       water.dispose();
