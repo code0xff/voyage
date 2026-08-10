@@ -130,6 +130,19 @@ Comments carry the reasoning that is not recoverable from the code — why the
 righting moment is referenced to the water surface normal, why swept angle is
 the wrong way to judge a mark rounding. Keep writing them that way.
 
+**Read `src/sim/math.ts` before writing a helper.** Clamping, `lerp`,
+`smoothstep`, `approach` — the first-order lag every fade and every eased
+transition in this project wants — and the vector and angle helpers are all
+there, and have been since the first commit. Three local copies were written
+anyway, in `weather.ts`, `whale.ts` and `orbit.ts`, and two more were caught and
+removed one at a time before anyone noticed it was a pattern. `src/view/` may
+import from `src/sim/` freely; only the other direction is forbidden.
+
+This costs more than tidiness. `weather.ts` had reimplemented `approach` without
+its `Math.max(tau, 1e-6)` guard, so the copy was the original minus a
+protection someone had already thought to add — which is the general shape of
+the damage: a copy inherits the formula and not the corrections.
+
 ### Fix what you find on the way
 
 If you notice documentation that has gone out of date, a refactor worth making
@@ -316,6 +329,22 @@ The tests that matter here assert *behavioural properties*, not exact numbers:
 
 Exact-value assertions on a tuned physical model are brittle and will fight
 every legitimate tuning change. Assert the property that must hold.
+
+**A duration the test has to outlast must be imported, not written out.** This
+has gone wrong twice — the shark's dive and the gull flock's stay were both
+retuned, and both tests carried on passing while quietly measuring nothing,
+because a loop that runs for a hardcoded 8 seconds stops covering an encounter
+the moment the encounter becomes 18. Export the constant and derive the bound
+from it, the way `wildlife.test.ts` now does with `FLOCK_DURATION_MIN/MAX`. The
+test then survives the retuning and still catches the fade being deleted.
+
+**The opposite holds for a number that is itself the property.** `sharks.test.ts`
+asserts a shark is never in less than 8 m of water and `whales.test.ts` that a
+whale stays 120 m off a shore. Importing `MIN_DEPTH` there would turn a safety
+assertion into `depth >= theDepthLimit`, which is true whatever the limit is set
+to, including zero. Write those out. The distinction is whether the constant is
+a *precondition the test needs in order to look at anything* or the *claim being
+made*.
 
 **When you fix a bug, add the regression test.** Several tests in this repo are
 labelled with the bug they lock down; follow that pattern.
