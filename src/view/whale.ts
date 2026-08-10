@@ -198,15 +198,14 @@ function seededBlowPoints(seed: number): readonly [number, number, number][] {
 }
 
 /**
- * Put every vertex of the footprint on the water it is supposed to be lying on.
+ * Rotate a wake-local offset into the simulation's east/north plane.
  *
- * The mesh is in the XY plane and turned flat, so local +Z remains world up.
- * Its local XY is rotated into east/north by `whaleWakeOffset`, using the same
- * heading as the rendered mesh. Each local Z is then the absolute height from
- * the same `surfaceHeight` the whale and water shader use, so a wake cannot lie
- * on water the shader is not drawing.
+ * `across` is positive to starboard and `forward` along the heading, matching
+ * the starboard convention `sampleHull` uses in sim/waves.ts. This is one half
+ * of a pair: `orientWhaleWake` has to place the mesh by the same angle, or a
+ * vertex is drawn at one point on the water and takes its height from another.
+ * `whale.test.ts` holds the two together.
  */
-/** Rotate a wake-local offset into the simulation's east/north plane. */
 export function whaleWakeOffset(
   across: number,
   forward: number,
@@ -218,16 +217,28 @@ export function whaleWakeOffset(
   };
 }
 
-/** Three.js local +Y points along the heading after the footprint is laid flat. */
-export function whaleWakeRotation(heading: number): number {
-  return -heading;
-}
-
-/** Lay local XY on the water while keeping vertex Z as absolute world height. */
+/**
+ * Lay the wake's local XY on the water, keeping its Z as an absolute height.
+ *
+ * Euler order is the default XYZ, so the heading is applied first about local
+ * Z and the quarter turn about X afterwards: local +Y ends up along the
+ * heading and local +X to starboard, which is the frame `whaleWakeOffset`
+ * samples in. Local +Z survives as world up, which is why the vertex heights
+ * can be absolute metres and the mesh's own Z scale must stay at one.
+ */
 export function orientWhaleWake(object: THREE.Object3D, heading: number): void {
-  object.rotation.set(-Math.PI / 2, 0, whaleWakeRotation(heading));
+  object.rotation.set(-Math.PI / 2, 0, -heading);
 }
 
+/**
+ * Put every vertex of the wake on the water it is supposed to be lying on.
+ *
+ * The heights come from the same `surfaceHeight` the whale and the water
+ * shader both read, so a mark on the sea cannot be on a sea the shader is not
+ * drawing. The horizontal offsets go through `whaleWakeOffset` with the same
+ * heading `orientWhaleWake` gave the mesh, which is what keeps the sampled
+ * point and the drawn point the same point.
+ */
 function layFootprint(
   whale: WhaleInstance,
   pos: Vec2,
@@ -287,8 +298,11 @@ function makeInstance(size: number, seed: number, asset: WhaleAsset): WhaleInsta
     new THREE.RingGeometry(size * 0.02, size * FOAM_RADIUS, FOAM_SEGMENTS, FOAM_RINGS),
     foamMaterial,
   );
-  // Laid in the world rather than on the whale: it is a mark left on the water,
-  // so it must not swing when the animal turns under it.
+  // A sibling of the whale rather than a child of it, so the body's dive and
+  // sway do not drag the water about. Its heading it does take, and must: a
+  // wake is longer than it is wide and lies along the way the animal is going.
+  // Culling is off because the vertex heights are rewritten every frame and
+  // the bounding sphere computed at construction knows nothing about them.
   foam.frustumCulled = false;
 
   const blowGeometry = new THREE.BufferGeometry();

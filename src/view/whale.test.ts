@@ -2,6 +2,14 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { orientWhaleWake, whaleWakeOffset } from './whale';
 
+/**
+ * A renderer test, for the reason AGENTS.md allows one: this is a pair of
+ * signs, not a look. The wake is sampled in one frame and drawn in another,
+ * and if the two ever disagree the mesh takes its heights from water it is not
+ * lying on -- which would show as a wake sunk into a wave or floating over
+ * one, and would be nobody's obvious first guess as to why.
+ */
+
 describe('whale view', () => {
   it('lays the long wake axis along the whale heading', () => {
     expect(whaleWakeOffset(0, 10, 0)).toEqual({ x: 0, y: 10 });
