@@ -22,7 +22,7 @@ const WHALE_ASSET_URL = '/assets/whale/humpback-whale.glb';
  * belly up. High, so the back breaks the surface and the belly stays hidden
  * rather than the whole animal appearing to float on the water like a hull.
  */
-const WATERLINE = 0.86;
+const WATERLINE = 0.91;
 
 /**
  * This model is authored head-towards-+Z, so it has to be turned end for end.
@@ -45,11 +45,11 @@ const HEAD_TOWARDS_POSITIVE_Z = true;
  * How a whale is actually spotted, and what these three numbers are for.
  *
  * Not by its back. An encounter opens at 220-560 m and an adult shows about
- * 0.57 m of itself above an opaque surface, which is three and a half pixels
- * at the near end of that and under two at the far: dark on dark, at any
+ * 0.4 m of itself above an opaque surface, which is only a few pixels even at
+ * the near end and less at the far: dark on dark, at any
  * distance it is ever seen from. What a lookout sees first is the blow, and
- * after that the footprint -- the flat pale patch a surfacing animal leaves,
- * which lies flat on the water and therefore shows its whole area to someone
+ * after that the wake -- the pale disturbed water a swimming animal leaves,
+ * which lies flat on the surface and therefore shows its whole area to someone
  * looking across at it.
  *
  * So the blow and the foam do the work of being seen, and the body is what
@@ -63,10 +63,15 @@ const HEAD_TOWARDS_POSITIVE_Z = true;
  * Deliberately small. A whale lying at the surface shows its back and dorsal
  * and no more, and the alternative -- lowering WATERLINE so more of the model
  * clears the water at all times -- puts the flanks permanently on show and
- * turns the animal into a hull. This lifts roughly 0.45 m on a 15 m whale,
- * taking the exposed back from about 0.57 m to 1.0 m, and only while it is up.
+ * turns the animal into a hull. This lifts roughly 0.23 m on a 15 m whale.
+ * Together with the higher waterline, the back and blowhole break the surface
+ * without exposing the flanks.
  */
-const SURFACED_LIFT = 0.03;
+const SURFACED_LIFT = 0.015;
+
+/** Small whole-body motion layered over the authored tail stroke. */
+const SWIM_HEAVE = 0.004;
+const SWIM_PITCH = 0.018;
 
 /**
  * Body beam as a fraction of length, for the slope samples only.
@@ -123,6 +128,7 @@ interface WhaleInstance {
   blowMaterial: THREE.PointsMaterial;
   blowSeeds: readonly [number, number, number][];
   mixer: THREE.AnimationMixer | null;
+  swimCycle: number;
   size: number;
 }
 
@@ -194,21 +200,54 @@ function seededBlowPoints(seed: number): readonly [number, number, number][] {
 /**
  * Put every vertex of the footprint on the water it is supposed to be lying on.
  *
- * The mesh is in the XY plane and turned flat, so after the rotation its local
- * +Z is world up and its local +Y is world -Z, which is sim north. That makes
- * the sim coordinate of a vertex (pos.x + lx, pos.y + ly) and its height the
- * local z -- which is what gets written here, straight from the same
- * `surfaceHeight` the whale and the water shader both use, so a mark on the
- * water cannot be on water the shader is not drawing.
+ * The mesh is in the XY plane and turned flat, so local +Z remains world up.
+ * Its local XY is rotated into east/north by `whaleWakeOffset`, using the same
+ * heading as the rendered mesh. Each local Z is then the absolute height from
+ * the same `surfaceHeight` the whale and water shader use, so a wake cannot lie
+ * on water the shader is not drawing.
  */
-function layFootprint(whale: WhaleInstance, pos: Vec2, water: Water, waves: WaveField): void {
+/** Rotate a wake-local offset into the simulation's east/north plane. */
+export function whaleWakeOffset(
+  across: number,
+  forward: number,
+  heading: number,
+): Vec2 {
+  return {
+    x: Math.cos(heading) * across + Math.sin(heading) * forward,
+    y: -Math.sin(heading) * across + Math.cos(heading) * forward,
+  };
+}
+
+/** Three.js local +Y points along the heading after the footprint is laid flat. */
+export function whaleWakeRotation(heading: number): number {
+  return -heading;
+}
+
+/** Lay local XY on the water while keeping vertex Z as absolute world height. */
+export function orientWhaleWake(object: THREE.Object3D, heading: number): void {
+  object.rotation.set(-Math.PI / 2, 0, whaleWakeRotation(heading));
+}
+
+function layFootprint(
+  whale: WhaleInstance,
+  pos: Vec2,
+  heading: number,
+  water: Water,
+  waves: WaveField,
+): void {
   whale.foam.position.set(pos.x, 0, -pos.y);
+  orientWhaleWake(whale.foam, heading);
   const attr = whale.foam.geometry.attributes.position as THREE.BufferAttribute;
-  const scale = whale.foam.scale.x;
   for (let i = 0; i < attr.count; i++) {
-    const lx = attr.getX(i) * scale;
-    const ly = attr.getY(i) * scale;
-    attr.setZ(i, water.surfaceHeight(pos.x + lx, pos.y + ly, waves) + FOAM_LIFT);
+    const offset = whaleWakeOffset(
+      attr.getX(i) * whale.foam.scale.x,
+      attr.getY(i) * whale.foam.scale.y,
+      heading,
+    );
+    attr.setZ(
+      i,
+      water.surfaceHeight(pos.x + offset.x, pos.y + offset.y, waves) + FOAM_LIFT,
+    );
   }
   attr.needsUpdate = true;
 }
@@ -250,7 +289,6 @@ function makeInstance(size: number, seed: number, asset: WhaleAsset): WhaleInsta
   );
   // Laid in the world rather than on the whale: it is a mark left on the water,
   // so it must not swing when the animal turns under it.
-  foam.rotation.x = -Math.PI / 2;
   foam.frustumCulled = false;
 
   const blowGeometry = new THREE.BufferGeometry();
@@ -283,6 +321,7 @@ function makeInstance(size: number, seed: number, asset: WhaleAsset): WhaleInsta
     blowMaterial,
     blowSeeds: seededBlowPoints(seed),
     mixer,
+    swimCycle: asset.animations[0]?.duration ?? 5.2,
     size,
   };
 }
@@ -435,6 +474,9 @@ export function createWhaleView(): WhaleView {
           whale.size *
           SURFACED_LIFT *
           (phase === 'surfacing' ? smooth(t) : phase === 'diving' ? 1 - smooth(t) : 1);
+        const swimming = phase === 'surfacing' ? smooth(t) : phase === 'diving' ? 1 - smooth(t) : 1;
+        const strokeClock = whale.mixer?.time ?? clock + sighting.seed * 0.00001;
+        const stroke = Math.sin((strokeClock / whale.swimCycle) * Math.PI * 2);
 
         whale.root.position.set(sighting.pos.x, surface, -sighting.pos.y);
         // Lying along the sea rather than flat on it. An eighteen-metre animal
@@ -447,8 +489,13 @@ export function createWhaleView(): WhaleView {
           sighting.heading,
           waveTilt(water, waves, sighting.pos, sighting.heading, whale.size, whale.size * BEAM),
         );
-        whale.bodyGroup.position.y = rise + lift - dive * whale.size * 0.18;
-        whale.bodyGroup.rotation.set(-dive * 0.35, wave * 0.012, wave * 0.025);
+        whale.bodyGroup.position.y =
+          rise + lift - dive * whale.size * 0.18 + stroke * whale.size * SWIM_HEAVE * swimming;
+        whale.bodyGroup.rotation.set(
+          -dive * 0.35 + stroke * SWIM_PITCH * swimming,
+          wave * 0.012,
+          wave * 0.025,
+        );
 
         const blow = phaseAmount(phase, t);
         whale.blowMaterial.opacity = blow * (0.6 + sky.daylight * 0.4);
@@ -469,20 +516,25 @@ export function createWhaleView(): WhaleView {
         }
         points.needsUpdate = true;
 
-        // The footprint: the flat pale patch a surfacing whale leaves. Held at
-        // a real strength through the blow and the roll rather than at the
-        // 0.22 it used to sit at, because at these ranges it is doing more of
-        // the work of being seen than the animal is.
-        // The footprint. Its strength is a slick, not a paint mark: the texture
-        // carries the falloff and this only says how much of it there is.
+        // The wake stays legible through the blow and roll. Its strength is a
+        // slick, not a paint mark: the texture carries the falloff and this
+        // only says how much disturbed water there is.
         const foam = phase === 'surfacing' ? smooth(t) : phase === 'diving' ? 1 - smooth(t) : 0.55;
         whale.foamMaterial.opacity = foam * (0.18 + sky.daylight * 0.28);
-        const foamScale = 0.75 + foam * 0.5;
+        const wakeAcross = 0.55 + foam * 0.35;
+        const wakeAlong = 0.9 + foam * 0.65;
         // Z is left alone: the heights written by layFootprint are already in
         // world metres, and scaling them would lift the patch off the sea.
-        whale.foam.scale.set(foamScale, foamScale, 1);
+        whale.foam.scale.set(wakeAcross, wakeAlong, 1);
         whale.foam.visible = whale.foamMaterial.opacity > 0.004;
-        if (whale.foam.visible) layFootprint(whale, sighting.pos, water, waves);
+        if (whale.foam.visible) {
+          const astern = whaleWakeOffset(0, -whale.size * 0.18, sighting.heading);
+          const wakePos = {
+            x: sighting.pos.x + astern.x,
+            y: sighting.pos.y + astern.y,
+          };
+          layFootprint(whale, wakePos, sighting.heading, water, waves);
+        }
       }
     },
     dispose() {

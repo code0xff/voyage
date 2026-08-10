@@ -29,9 +29,9 @@ const MIN_SHORE_DISTANCE = 120;
  *
  * Far, and deliberately so: a whale is an animal already out in its own water,
  * not one staged alongside. It was brought in to 80-200 m for a while because
- * at this range there is very little to see -- an adult shows about 0.57 m of
- * back above an opaque surface, four pixels at 220 m -- and that turned out to
- * be the wrong repair. It changed the world to suit the camera.
+ * at this range there is very little to see -- an adult shows about 0.4 m of
+ * back above an opaque surface, only a few pixels at 220 m -- and that turned
+ * out to be the wrong repair. It changed the world to suit the camera.
  *
  * What it needed instead was something to see it *with*, and a reason to look.
  * The blow reaches 3.2 m and stands about 19 px at 220 m, which is a mark on
