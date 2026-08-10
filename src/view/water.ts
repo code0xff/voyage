@@ -234,7 +234,13 @@ const shelterGlsl = /* glsl */ `
     float groupMax = 0.0;
     float group = -1.0;
     for (int i = 0; i < ${MAX_ISLANDS}; i++) {
-      if (uIslands[i].w < 0.5) continue;
+      // Break rather than continue on an empty slot: they are filled from zero,
+      // so the first empty one is the end. Skipping instead cost every eligible
+      // far-sea fragment the full sixteen iterations -- which mattered little
+      // while only the grid's vertices ran this and matters now that most of
+      // the water's pixels do. The trailing close below is unaffected: the
+      // slots this used to walk past were all empty.
+      if (uIslands[i].w < 0.5) break;
       if (uIslands[i].w != group) {
         shelter *= 1.0 - groupMax;
         groupMax = 0.0;
