@@ -1,4 +1,4 @@
-import { compassVec, smoothstep, type Vec2 } from './math';
+import { compassVec, smoothstep, type Vec2, TAU } from './math';
 import { fbm2, valueNoise2 } from './noise';
 
 /**
@@ -503,8 +503,44 @@ export interface IslandFieldOptions {
 interface Cell {
   cx: number;
   cy: number;
-  island: Island | null;
+  /** Empty, one island, or the several circles of a single landmass. */
+  islands: Island[];
 }
+
+/**
+ * How often a cell that has an island grows it into a landmass instead.
+ *
+ * The ocean was uniform before this: one circle per cell, radius 60 to 250 m
+ * flat, so nothing was ever more than half a kilometre across and every cell
+ * rolled the same odds. What that reads as is a field of dots.
+ *
+ * A landmass is several overlapping circles sharing a `land` id. `elevationAt`
+ * takes the highest of every island, so they union into one continuous shore
+ * for free -- which is how the surveyed regions already build a mainland, and
+ * why this needs no new shape. One big circle would have been simpler and would
+ * have drawn a disc; five overlapping ones have bays and headlands.
+ */
+const MASS_CHANCE = 0.05;
+/** Circles in a landmass. Below three it is not a coast, above six it is a continent. */
+const MASS_MIN = 3;
+const MASS_MAX = 4;
+/** How far the spine may wander between circles, radians. */
+const MASS_BEND = 1.5;
+/** Cells around a landmass that are searched for it. Its reach, in cells, plus one. */
+const MASS_CELLS = 4;
+/** Open water kept between a landmass and the nearest island to it, m. */
+const MASS_ELBOW = 2300;
+/**
+ * A landmass's id: distinct for any two cells this side of three thousand
+ * kilometres, and never zero.
+ *
+ * Never zero because `Terrain` numbers its ungrouped islands from zero up, and
+ * a landmass colliding with one of those would shade its lee as though the two
+ * were the same piece of ground. Distinct because a collision between two
+ * landmasses does the same thing at a distance: folded to a million, two masses
+ * four kilometres apart shared an id and measured as one 5.3 km coast.
+ */
+const massId = (cx: number, cy: number): number => 1 + ((cx * 1000003 + cy) >>> 0);
 
 /**
  * An upper bound, 0..1, on how much this island could matter to anything asked
@@ -581,10 +617,63 @@ function cellSeed(seed: number, cx: number, cy: number): number {
  */
 export class IslandField {
   private cells = new Map<string, Cell>();
+  /** Landmasses, kept apart from `cells` because neighbours ask for them. */
+  private masses = new Map<string, Island[] | null>();
   private density: number;
 
   constructor(private opts: IslandFieldOptions) {
     this.density = Math.min(Math.max(opts.density, 0), MAX_DENSITY);
+  }
+
+  /**
+   * The circles of the landmass this cell seeds, or null if it seeds none.
+   *
+   * Pure and memoised, and deliberately *not* routed through `cell()`. A cell
+   * has to ask its neighbours whether they are growing land before it decides
+   * whether to grow anything itself, and going through `cell()` for that would
+   * recurse for ever. One function rather than a cheap predicate beside a
+   * builder, so the answer a neighbour gets and the land that is actually
+   * placed cannot drift apart.
+   */
+  private massIslands(cx: number, cy: number): Island[] | null {
+    const key = `${cx},${cy}`;
+    const hit = this.masses.get(key);
+    if (hit !== undefined) return hit;
+
+    const rand = rng(cellSeed(this.opts.seed, cx, cy));
+    let made: Island[] | null = null;
+    if (rand() < this.density && rand() < MASS_CHANCE) {
+      const base = {
+        x: (cx + 0.18 + rand() * 0.64) * CELL,
+        y: (cy + 0.18 + rand() * 0.64) * CELL,
+      };
+      const n = MASS_MIN + Math.floor(rand() * (MASS_MAX + 1 - MASS_MIN));
+      // A spine, and circles strung along it. Hanging each one off a randomly
+      // chosen predecessor instead is a random walk: it piles up around the
+      // seed and the result was 600 m across, barely wider than a single
+      // island. Strung along a line that wanders a little, the same circles
+      // make a ridge with headlands at its ends.
+      let angle = rand() * TAU;
+      made = [];
+      let prev = { pos: base, radius: 190 + rand() * 60 };
+      made.push({ pos: prev.pos, radius: prev.radius, height: 70 + rand() * 70, land: massId(cx, cy), seed: Math.floor(rand() * 1e6) });
+      for (let i = 1; i < n; i++) {
+        angle += (rand() - 0.5) * MASS_BEND;
+        const radius = 170 + rand() * 80;
+        // Close enough that the shores merge: `elevationAt` takes the highest
+        // of every island, so an overlap is one coast and a gap is two islands
+        // pretending to be one.
+        const d = (prev.radius + radius) * (0.5 + rand() * 0.28);
+        const pos = { x: prev.pos.x + Math.cos(angle) * d, y: prev.pos.y + Math.sin(angle) * d };
+        // Lower along the arms than at the seed, so it reads as a ridge running
+        // out to headlands rather than a row of equal humps.
+        made.push({ pos, radius, height: 24 + rand() * 60 * (radius / 200), land: massId(cx, cy), seed: Math.floor(rand() * 1e6) });
+        prev = { pos, radius };
+      }
+      if (this.blocked(made)) made = null;
+    }
+    this.masses.set(key, made);
+    return made;
   }
 
   private cell(cx: number, cy: number): Cell {
@@ -592,26 +681,59 @@ export class IslandField {
     const hit = this.cells.get(key);
     if (hit) return hit;
 
-    const rand = rng(cellSeed(this.opts.seed, cx, cy));
-    let island: Island | null = null;
-    if (rand() < this.density) {
-      // Jitter inside the cell, but not right up to the edge: two islands
-      // either side of a boundary would otherwise fuse into one landmass.
-      const pos = {
-        x: (cx + 0.18 + rand() * 0.64) * CELL,
-        y: (cy + 0.18 + rand() * 0.64) * CELL,
-      };
-      const radius = 60 + rand() * (MAX_ISLAND_RADIUS - 60);
-      const height = 18 + rand() * 90 * (radius / 200);
-      const clear = this.opts.keepClear.every(
-        (p) => Math.hypot(p.x - pos.x, p.y - pos.y) > radius * 1.3 + this.opts.clearance,
-      );
-      if (clear) island = { pos, radius, height, seed: Math.floor(rand() * 1e6) };
-    }
-
-    const made: Cell = { cx, cy, island };
+    const made: Cell = { cx, cy, islands: this.build(cx, cy) };
     this.cells.set(key, made);
     return made;
+  }
+
+  private build(cx: number, cy: number): Island[] {
+    const mine = this.massIslands(cx, cy);
+    if (mine) return mine;
+
+    const rand = rng(cellSeed(this.opts.seed, cx, cy));
+    if (rand() >= this.density) return [];
+    rand(); // the landmass draw, already spent above
+    const pos = {
+      x: (cx + 0.18 + rand() * 0.64) * CELL,
+      y: (cy + 0.18 + rand() * 0.64) * CELL,
+    };
+
+    // Land next door gets the water to itself. A ridge reaches well past its
+    // own cell, and a scattering of dots around a coast reads as debris rather
+    // than as an archipelago -- so an island inside a landmass's reach is not
+    // placed at all. That is also what keeps the shader's sixteen slots
+    // affordable: a landmass replaces the islands around it rather than adding
+    // to them. Measured against the mass's real footprint and not a fixed ring,
+    // because a five-circle ridge is twice the length of a three-circle one.
+    for (let dx = -MASS_CELLS; dx <= MASS_CELLS; dx++) {
+      for (let dy = -MASS_CELLS; dy <= MASS_CELLS; dy++) {
+        if (dx === 0 && dy === 0) continue;
+        const near = this.massIslands(cx + dx, cy + dy);
+        if (!near) continue;
+        for (const m of near) {
+          if (Math.hypot(m.pos.x - pos.x, m.pos.y - pos.y) < m.radius + MASS_ELBOW) return [];
+        }
+      }
+    }
+
+    const radius = 60 + rand() * (MAX_ISLAND_RADIUS - 60);
+    const height = 18 + rand() * 90 * (radius / 200);
+    const single = [{ pos, radius, height, seed: Math.floor(rand() * 1e6) }];
+    return this.blocked(single) ? [] : single;
+  }
+
+  /**
+   * Whether this land would sit on top of where the boat starts.
+   *
+   * All of it or none of it: a landmass with one circle deleted out of its
+   * middle is a shape nothing else in this file expects.
+   */
+  private blocked(islands: Island[]): boolean {
+    return islands.some((isl) =>
+      this.opts.keepClear.some(
+        (p) => Math.hypot(p.x - isl.pos.x, p.y - isl.pos.y) <= isl.radius * 1.3 + this.opts.clearance,
+      ),
+    );
   }
 
   /**
@@ -638,11 +760,11 @@ export class IslandField {
     const found: { isl: Island; d: number; rank: number }[] = [];
     for (let cx = c0; cx <= c1; cx++) {
       for (let cy = r0; cy <= r1; cy++) {
-        const isl = this.cell(cx, cy).island;
-        if (!isl) continue;
-        const d = Math.hypot(isl.pos.x - x, isl.pos.y - y);
-        if (d > range) continue;
-        found.push({ isl, d, rank: from ? relevance(isl, x, y, -from.x, -from.y, d) : 1 });
+        for (const isl of this.cell(cx, cy).islands) {
+          const d = Math.hypot(isl.pos.x - x, isl.pos.y - y);
+          if (d > range) continue;
+          found.push({ isl, d, rank: from ? relevance(isl, x, y, -from.x, -from.y, d) : 1 });
+        }
       }
     }
     // Most relevant first, nearest first among equals. Distance alone is the

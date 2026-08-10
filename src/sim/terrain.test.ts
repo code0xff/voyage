@@ -433,3 +433,144 @@ describe('landmass ids', () => {
     expect(new Set(t.landGroup).size).toBe(1);
   });
 });
+
+/**
+ * Landmasses in the procedural ocean.
+ *
+ * The field used to make one circle per cell, radius 60 to 250 m flat, so
+ * nothing was ever more than half a kilometre across and every cell rolled the
+ * same odds -- a field of dots. A landmass is several overlapping circles
+ * sharing a `land` id, which `elevationAt` unions into one coast for free.
+ *
+ * What is asserted here is what would be silently wrong otherwise: that the
+ * pieces really do share an id, that they really do overlap into one shore
+ * rather than sitting as a row of separate islands, and that the water around
+ * one is left clear -- which is not decoration but what pays for the shader's
+ * sixteen slots.
+ */
+describe('landmasses', () => {
+  const sea = (seed: number, density = MAX_DENSITY) =>
+    new IslandField({ seed, density, keepClear: [], clearance: 130 });
+  const groups = (islands: readonly Island[]) => {
+    const by = new Map<number, Island[]>();
+    for (const isl of islands) if (isl.land !== undefined) {
+      const g = by.get(isl.land);
+      if (g) g.push(isl);
+      else by.set(isl.land, [isl]);
+    }
+    return [...by.values()];
+  };
+  const width = (g: Island[]) => {
+    let mx = 0;
+    for (const a of g) for (const b of g) {
+      mx = Math.max(mx, Math.hypot(a.pos.x - b.pos.x, a.pos.y - b.pos.y) + a.radius + b.radius);
+    }
+    return mx;
+  };
+  /**
+   * Every *whole* landmass in a good stretch of ocean, over enough seeds to
+   * mean something.
+   *
+   * Collected wide and then kept only where the whole of it is well inside,
+   * because a sample boundary cuts through land: a landmass straddling the edge
+   * comes back with some of its circles missing, and half a coast fails every
+   * assertion below for a reason that is about the sample and not the sea.
+   */
+  const many = () => {
+    const out: Island[][] = [];
+    for (let seed = 1; seed <= 40; seed++) {
+      for (const g of groups(sea(seed).debugCollectAll(0, 0, 8000))) {
+        if (g.every((i) => Math.hypot(i.pos.x, i.pos.y) < 6000)) out.push(g);
+      }
+    }
+    return out;
+  };
+
+  it('makes land wider than any single island can be', () => {
+    const all = many();
+    expect(all.length).toBeGreaterThan(20);
+    // 500 m is 2 * MAX_ISLAND_RADIUS: the widest a lone circle can manage.
+    const big = all.filter((g) => width(g) > 500);
+    expect(big.length / all.length).toBeGreaterThan(0.7);
+    expect(Math.max(...all.map(width))).toBeGreaterThan(1000);
+  });
+
+  /**
+   * A landmass is one piece of land, not two that happen to share a number.
+   *
+   * Four circles chained at most, each link under 390 m, so the ends cannot be
+   * more than about 1670 m apart. Anything wider means two masses collided on
+   * an id -- which the shelter model would then shade once instead of twice,
+   * for a coast that does not exist between them. Folding the id to a million
+   * did exactly that: two masses four kilometres apart measured as one 5.3 km
+   * coast, and nothing else in the suite noticed.
+   */
+  it('is one piece of land, so no two of them share an id', () => {
+    for (const g of many()) expect(width(g)).toBeLessThan(2000);
+  });
+
+  /**
+   * One coast, not a row of islands.
+   *
+   * Every circle has to overlap another of its own landmass, or `elevationAt`
+   * leaves open water between them and the "landmass" is a line of separate
+   * islands that merely share a label -- which would still shade its lee once,
+   * so the shelter would be wrong for a shape that is not there.
+   */
+  it('joins its circles into one shore rather than a row of separate ones', () => {
+    for (const g of many()) {
+      for (const isl of g) {
+        if (g.length === 1) continue;
+        const touches = g.some(
+          (o) => o !== isl && Math.hypot(o.pos.x - isl.pos.x, o.pos.y - isl.pos.y) < o.radius + isl.radius,
+        );
+        expect(touches).toBe(true);
+      }
+    }
+  });
+
+  /** The water beside a landmass is its own: this is what pays for the slots. */
+  it('keeps single islands out of the water beside it', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const all = sea(seed).debugCollectAll(0, 0, 8000);
+      const loose = all.filter((i) => i.land === undefined && Math.hypot(i.pos.x, i.pos.y) < 6000);
+      for (const g of groups(all)) {
+        for (const m of g) {
+          for (const isl of loose) {
+            expect(Math.hypot(isl.pos.x - m.pos.x, isl.pos.y - m.pos.y)).toBeGreaterThanOrEqual(m.radius);
+          }
+        }
+      }
+    }
+  });
+
+  it('replays exactly from a seed, landmasses and all', () => {
+    const a = sea(31).debugCollectAll(0, 0, 4000);
+    const b = sea(31).debugCollectAll(0, 0, 4000);
+    expect(a.map((i) => [i.pos.x, i.pos.y, i.radius, i.height, i.land])).toEqual(
+      b.map((i) => [i.pos.x, i.pos.y, i.radius, i.height, i.land]),
+    );
+  });
+
+  /**
+   * A landmass shades its lee once.
+   *
+   * The shelter model walks the list and closes a group off when the id
+   * changes, so this only holds while a landmass's pieces are adjacent in
+   * `Terrain.islands` -- which its constructor guarantees. Asserted against a
+   * single island of the same footprint: eight circles must not shade eight
+   * times.
+   */
+  it('does not shade its own lee once per circle', () => {
+    const g = many().find((m) => m.length >= 3 && width(m) > 800);
+    if (!g) throw new Error('expected a landmass of three or more circles');
+    const twd = 0;
+    const asOne = new Terrain(g);
+    const asMany = new Terrain(g.map((i) => ({ ...i, land: undefined })));
+    const seed = g[0];
+    // Straight downwind of the landmass, where a wake is strongest.
+    const x = seed.pos.x;
+    const y = seed.pos.y - 400;
+    expect(asOne.waveShelter(x, y, twd)).toBeGreaterThan(asMany.waveShelter(x, y, twd));
+  });
+});

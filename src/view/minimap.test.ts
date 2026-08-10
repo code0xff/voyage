@@ -167,7 +167,13 @@ describe('chart ranges', () => {
     }
     // Guards the guard: if the field ever stopped producing land, the loop
     // above would pass without having asked anything.
-    expect(most).toBeGreaterThan(150);
+    //
+    // Deliberately far below what the field actually makes -- around 140 at the
+    // thickest, which is itself down from 150-odd since landmasses started
+    // clearing the water beside them. A bound set close to the real figure is a
+    // tripwire for every tuning change, and this one is a precondition rather
+    // than a claim: it only has to tell "there is land" from "there is none".
+    expect(most).toBeGreaterThan(50);
   });
 
   /** And that the physics window is emphatically not enough to do that. */
