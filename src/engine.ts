@@ -82,6 +82,20 @@ export interface Snapshot {
   waves: WaveField;
   terrain: Terrain;
   /**
+   * The same sea, out as far as the chart can be zoomed.
+   *
+   * `terrain` is the physics window and stops at ACTIVE_RANGE, which is less
+   * than half the radius of the widest chart -- so a chart drawn from it showed
+   * five islands where fifty-four were, and open water for the rest. This is
+   * the chart's own window and nothing else may read it: it holds land that is
+   * provably too far to be felt, which is exactly what makes it useless to the
+   * physics and necessary to a passage-scale chart.
+   *
+   * Equal to `terrain` when a region or venue is loaded, because a surveyed
+   * coast is not windowed at all -- the whole place is already known.
+   */
+  chart: Terrain;
+  /**
    * The surveyed region being sailed, or null in the procedural ocean.
    *
    * Alongside `terrain` rather than replacing it, because the two are read by
@@ -289,6 +303,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     currents,
     waves,
     terrain: EMPTY_TERRAIN,
+    chart: EMPTY_TERRAIN,
     region: null,
     sky: skyState(hour),
     weather,
@@ -344,6 +359,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   /** The islands currently loaded, so a refresh that changes nothing costs nothing. */
   let activeIslands: readonly Island[] = [];
   let visibleIslands: readonly Island[] = [];
+  let chartIslands: readonly Island[] = [];
   /** The venue's land, or EMPTY_TERRAIN in the open ocean. Fixed for a session. */
   let venueTerrain: Terrain = EMPTY_TERRAIN;
   /**
@@ -471,6 +487,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       if (!published || snapshot.terrain !== venueTerrain || snapshot.region !== regionTerrain) {
         activeIslands = [];
         visibleIslands = [];
+        chartIslands = [];
         published = true;
         query = regionTerrain ?? venueTerrain;
         wind.terrain = query;
@@ -478,6 +495,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
         // decides where it runs, and it must never be reading last world's.
         currents.terrain = query;
         snapshot.terrain = venueTerrain;
+        // A surveyed coast is not windowed, so the chart wants the same thing
+        // the physics has. The wider window only exists to undo a windowing.
+        snapshot.chart = venueTerrain;
         snapshot.region = regionTerrain;
         // The circle meshes and the region tiles are mutually exclusive, so the
         // one not in use is handed nothing and draws nothing.
@@ -503,11 +523,21 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // while still very much in sight.
     const active = field.active(x, y, wind.baseTwd);
     const visible = field.visible(x, y);
-    if (published && sameIslands(active, activeIslands) && sameIslands(visible, visibleIslands)) {
+    // Checked alongside the other two rather than on its own timer. It is the
+    // widest window and therefore the slowest to change, so it costs a
+    // comparison and saves rebuilding a hundred-island Terrain.
+    const charted = field.chart(x, y);
+    if (
+      published &&
+      sameIslands(active, activeIslands) &&
+      sameIslands(visible, visibleIslands) &&
+      sameIslands(charted, chartIslands)
+    ) {
       return;
     }
     activeIslands = active;
     visibleIslands = visible;
+    chartIslands = charted;
     published = true;
 
     const terrain = new Terrain(active);
@@ -515,6 +545,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     wind.terrain = terrain;
     currents.terrain = terrain;
     snapshot.terrain = terrain;
+    snapshot.chart = new Terrain(charted);
     snapshot.region = null;
     view.setRegion(null);
     view.setTerrain(terrain, new Terrain(visible));

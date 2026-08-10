@@ -381,7 +381,8 @@ const CELL = 820;
  */
 const QUERY_REACH = 650;
 /** The largest island the field will generate. The bounds below depend on it. */
-const MAX_ISLAND_RADIUS = 250;
+/** Exported so the chart can work out how far a coast reaches past its centre. */
+export const MAX_ISLAND_RADIUS = 250;
 /**
  * How far from an island's centre its influence can possibly reach, m.
  *
@@ -436,6 +437,52 @@ export const MAX_DENSITY = 0.55;
 export const VISUAL_RANGE = 2800;
 /** Cap on drawn islands, purely to bound the mesh budget in a crowded archipelago. */
 const MAX_VISIBLE_ISLANDS = 40;
+
+/**
+ * How far the chart is given land, m.
+ *
+ * A third window, and the only one that is not about what the boat can feel or
+ * see. Nothing in it need be reachable: it is never handed to the physics, the
+ * wind, the stream or the water shader. It exists so that a chart drawn at a
+ * passage scale is a chart of the sea that is actually there. Reading the
+ * physics window instead showed five islands of the fifty-four inside a 5 km
+ * chart's own frame, because that window stops at 2240 m.
+ *
+ * Three things add up, and the first version of this had only counted the
+ * first:
+ *
+ *   the disc                5000  the widest range, and the chart is clipped
+ *                                 to a circle, so the corner never matters
+ *   the pan                +2750  the chart is not centred on the boat. It
+ *                                 holds still and lets her cross it, up to
+ *                                 PAN_AT of the range, which is what makes
+ *                                 progress visible at all
+ *   an island's own reach   +418  a shape is drawn from its centre outwards,
+ *                                 so land whose centre is outside the disc
+ *                                 still has a coast inside it
+ *                          -----
+ *                           8168
+ *
+ * `minimap.test.ts` adds those up from the same constants and holds this to the
+ * total, rather than leaving it to a comment. A comment is what failed last
+ * time: the one in `minimap.ts` named 1200 m as the widest range long after
+ * 2500 and 5000 had been added beneath it.
+ */
+export const CHART_RANGE = 8300;
+/**
+ * Cap on charted islands.
+ *
+ * Measured, not chosen: the thickest sea the field makes puts 169 islands
+ * inside this window, so the cap holds all of them and the chart never lies by
+ * truncation -- which would be the same defect in a smaller coat.
+ *
+ * Affordable only because a coastline is traced against its own neighbours now:
+ * 54 ms for all 169, where the old whole-terrain sampling would have been the
+ * better part of a second. Traced once each and cached on island identity, so
+ * this is the cost of a chart's first look at a new stretch of sea, not a
+ * per-frame cost.
+ */
+const MAX_CHART_ISLANDS = 192;
 
 export interface IslandFieldOptions {
   seed: number;
@@ -630,13 +677,32 @@ export class IslandField {
   }
 
   /**
+   * The widest window, for the chart alone. Never handed to anything that
+   * decides what the boat feels.
+   *
+   * Unranked, so it truncates by distance: if the cap is ever reached it is the
+   * far edge that goes, which is the part of a chart that matters least. The
+   * wind ranking `active()` uses would be wrong here -- what is worth drawing
+   * is not what is worth feeling.
+   */
+  chart(x: number, y: number): Island[] {
+    return this.collect(x, y, CHART_RANGE, MAX_CHART_ISLANDS);
+  }
+
+  /**
    * Forget cells far astern. The cache is what gives islands a stable identity,
    * but a long passage would otherwise grow it without limit. Anything dropped
    * regenerates identically if the boat ever comes back.
    */
   private prune(x: number, y: number): void {
     if (this.cells.size < 2048) return;
-    const keep = VISUAL_RANGE * 2;
+    // Measured from the widest window, which is now the chart's and not the
+    // meshes'. Trimming to the mesh range would evict cells the chart is about
+    // to ask for again, and since a cell is what gives an island its identity,
+    // the coastlines traced from them would be thrown away and retraced every
+    // time the window slid -- the one thing the outline cache exists to stop.
+    // The doubling is the original margin: keep a window's worth beyond need.
+    const keep = Math.max(VISUAL_RANGE, CHART_RANGE) * 1.5;
     for (const [key, c] of this.cells) {
       const dx = (c.cx + 0.5) * CELL - x;
       const dy = (c.cy + 0.5) * CELL - y;

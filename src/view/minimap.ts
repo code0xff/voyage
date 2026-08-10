@@ -1,5 +1,6 @@
 import type { BoatState } from '../sim/boat';
-import { Terrain, sameIslands, type Island } from '../sim/terrain';
+import { CHART_RANGE, MAX_ISLAND_RADIUS, Terrain, sameIslands, type Island } from '../sim/terrain';
+import { CRUISER } from '../sim/config';
 import type { RegionTerrain } from '../sim/region-terrain';
 import type { WindField } from '../sim/wind';
 import { clamp, compassVec, type Vec2 } from '../sim/math';
@@ -58,10 +59,53 @@ const GRID = [100, 200, 500] as const;
 const PAN_AT = 0.55;
 
 /**
- * The furthest range is bounded by the physics: the island window reaches
- * ACTIVE_RANGE from the boat, so beyond that the chart would show open water
- * where there is land, which is worse than showing nothing. 1200 m to the edge
- * puts the far corner at 1700 m, inside the window with room to spare.
+ * How far a chart's own drawing reaches past an island's centre, m.
+ *
+ * A shape is traced outwards from the centre, so land whose centre sits outside
+ * the disc still puts a coast inside it. `traceOutline` marches to exactly this
+ * for the largest island the field makes.
+ */
+export const ISLAND_DRAW_REACH = MAX_ISLAND_RADIUS * 1.45 + CRUISER.draft * 14 + 30;
+
+/**
+ * How far the chart may be dragged off the boat at this range, m.
+ *
+ * The chart is drawn from a window of sea collected around the *boat*, so a
+ * drag is only honest as long as it stays inside it. Unbounded, which it was,
+ * it could be pulled into water the field has never been asked about -- and
+ * that water draws as empty ocean, which is the exact lie this whole window
+ * exists to stop, arrived at from the other direction.
+ *
+ * Wider at the close ranges, where looking around is what the drag is for, and
+ * tighter at 5 km, where the disc has already eaten most of the window. Always
+ * at least the automatic pan, so holding the chart still while she sails across
+ * it can never hit the limit.
+ */
+export function maxChartOffset(rangeIndex: number): number {
+  const range = RANGES[rangeIndex] ?? RANGES[0];
+  return Math.max(range * PAN_AT, CHART_RANGE - range - ISLAND_DRAW_REACH);
+}
+
+/*
+ * This list used to be bounded by the physics, and the comment here said so:
+ * the island window reaches ACTIVE_RANGE, so beyond it the chart would show
+ * open water where there is land. It named 1200 m as the ceiling that kept the
+ * far corner inside the window.
+ *
+ * Then 2500 and 5000 were added beneath it for the surveyed regions, which
+ * bring their own coast and never had the problem -- and the comment was left
+ * alone, so the procedural ocean quietly got the failure the comment had
+ * predicted. At 5 km the chart held five islands of the fifty-four inside its
+ * own frame.
+ *
+ * The bound is the other way round now: `CHART_RANGE` is the sea the field
+ * hands the chart, and `minimap.test.ts` adds up what the widest range actually
+ * needs -- the disc, the pan, and how far a coast is drawn past its own centre
+ * -- and holds CHART_RANGE to it. Adding a range wider than the window fails a
+ * test instead of quietly drawing an empty ocean.
+ *
+ * Not the corner: the chart is clipped to a circle, so the range is the radius
+ * and the square's corners are never painted.
  */
 
 /** How many wind samples across the chart. Coarse: this is pressure, not detail. */
@@ -87,6 +131,16 @@ export interface MinimapInput {
   state: BoatState;
   wind: WindField;
   terrain: Terrain;
+  /**
+   * The land to draw: the same sea as `terrain`, but out as far as this chart
+   * can be zoomed rather than as far as the boat can feel.
+   *
+   * The two are different windows on purpose. `terrain` stops at ACTIVE_RANGE
+   * because nothing beyond it can change what the boat does, which is exactly
+   * the wrong bound for a chart -- at the 5 km range that window covers 45% of
+   * the radius, and the chart drew open water over the rest.
+   */
+  chart: Terrain;
   /** The surveyed region, or null in the procedural ocean. */
   region: RegionTerrain | null;
   /** Depth the hull needs, m. The shoal contour is drawn at exactly this. */
@@ -519,10 +573,10 @@ export function createMinimap(): Minimap {
       if (input.region) {
         drawRegion(chart, ctx, input.region, size, centreX, centreY, range, input.draft);
       }
-      for (const isl of input.terrain.islands) {
+      for (const isl of input.chart.islands) {
         let outline = outlines.get(isl);
-        if (!outline || !sameIslands(outline.deps, input.terrain.islandsAffecting(isl))) {
-          outline = traceOutline(input.terrain, isl, input.draft);
+        if (!outline || !sameIslands(outline.deps, input.chart.islandsAffecting(isl))) {
+          outline = traceOutline(input.chart, isl, input.draft);
           outlines.set(isl, outline);
         }
         const ring = (radii: Float32Array) => {
@@ -547,8 +601,8 @@ export function createMinimap(): Minimap {
 
       // Drop stale outlines. Islands fall astern for ever in an endless ocean,
       // and a map that never forgot them would grow all session.
-      if (outlines.size > input.terrain.islands.length + 24) {
-        const live = new Set(input.terrain.islands);
+      if (outlines.size > input.chart.islands.length + 24) {
+        const live = new Set(input.chart.islands);
         for (const isl of [...outlines.keys()]) if (!live.has(isl)) outlines.delete(isl);
       }
 
