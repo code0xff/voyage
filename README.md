@@ -63,6 +63,7 @@ src/view/    3D rendering
   whale      humpback: dive cycle, blow and the footprint it leaves
   shark      a fin holding its course across yours
   gull       an authored flock, circling within sight of a coast
+  minimap    the chart: land, breeze, tide, and where she is bound
   rain       wind-slanted rain around the camera
   telemetry  rolling time-series graph
   polarplot  polar diagram, drawn with the UI design tokens
@@ -74,6 +75,7 @@ src/ui/      React overlay, built on the shadcn/ui design system
   Instruments     gauges, sail plan, alerts
   PassageBar      where she is bound, and what to steer
   Logbook         the passages she has made
+  MinimapCard     the chart panel, and the full-screen view of it
   PolarCard       the polar diagram
   MenuDialog      menu, settings, results
 
@@ -466,6 +468,17 @@ at any visibility, so land is always born unseen rather than appearing out of
 clear air. Nothing in that outer ring affects the boat, so the two windows are
 allowed to differ.
 
+The chart gets a third, wider still, and it is the one that is not about the
+boat at all. `ACTIVE_RANGE` is the right bound for the physics precisely because
+it is the distance past which nothing can be felt — which makes it the wrong
+bound for a chart, whose whole job at a passage scale is water you have not
+reached. Drawn from the physics window, the 5 km range showed five islands of
+the fifty-four inside its own frame and open ocean over the rest of it.
+`CHART_RANGE` covers the widest range, how far the chart may be held off the
+boat, and how far a coastline is drawn past its own centre; `minimap.test.ts`
+adds those three up from the same constants, so a range added without the sea to
+back it fails a test rather than quietly drawing an empty sea.
+
 ### 8. Time of day and weather
 
 The sun is not astronomical: elevation is a sine between fixed sunrise and sunset
@@ -696,13 +709,13 @@ writes itself into the logbook.
 | `C` | camera: astern / on deck / overhead |
 | `0` | hand all sail, or set it again |
 | `A` | let go the anchor, or weigh it |
-| `B` | binoculars — five power, from wherever you are looking |
+| `B` | binoculars — the wheel sets the power, and it is remembered |
 | `N` | chart range |
 | wheel over the chart | chart range |
 | drag the chart | look around it; double-click recentres on the boat |
 | click the chart | set where you are bound; right-click clears it |
 | drag | look around — the eye follows your hand, as in a first-person view |
-| wheel anywhere else | the eye closer in or further out (not magnification: that is `B`) |
+| wheel anywhere else | the eye closer in or further out — or the power, through the glasses |
 | double-click | recentre the view astern |
 | `P` | recompute polar |
 | `R` | restart |
@@ -811,7 +824,8 @@ low-poly animal reads as geometry rather than as life, and a bad animal is worse
 than none, because it tells you the sea is a set. That argument was about
 *modelling* them and it still stands — which is exactly why these three are not
 modelled here. The procedural gull call remains the navigational cue; an
-occasional authored flock now gives the same cue a body, circling for a few
-seconds within sight and then gone.
+occasional authored flock now gives the same cue a body, holding its patch of
+sky for a quarter of a minute within sight and then gone. Long enough to look up
+at, which six seconds was not: it read as a glitch rather than as birds.
 
 The sound is still entirely procedural. There are no audio assets.
