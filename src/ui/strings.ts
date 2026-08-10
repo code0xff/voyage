@@ -385,7 +385,68 @@ export const LOG: Record<string, Phrase> = {
     en: 'Kept in this browser only. Export it to keep it — clearing site data will take it.',
     ko: '이 브라우저에만 저장됩니다. 사이트 데이터를 지우면 사라지니, 보관하려면 내보내세요.',
   },
+  /** The units on a passage row. `kn` itself stays, as every other reading does. */
+  avg: { en: 'kn avg', ko: 'kn 평균' },
+  max: { en: 'max', ko: '최고' },
+  wind: { en: 'kn wind', ko: 'kn 바람' },
+  /** Track over straight line: 1.4 is a beat, 1 is a fetch. */
+  straightLine: { en: '× the straight line', ko: '× 직선거리' },
+  remove: { en: 'Remove', ko: '삭제' },
+  /** Shown while the store has not answered, which is distinct from an empty log. */
+  reading: { en: 'Reading the logbook…', ko: '항해일지를 읽는 중…' },
+  /**
+   * What went wrong, in the panel rather than in a console.
+   *
+   * A logbook that cannot be read has to say so where someone came to read it.
+   * These were the last English in the logbook and the easiest to leave: none
+   * of them renders unless something has already failed.
+   */
+  readFailed: { en: 'The logbook could not be read.', ko: '항해일지를 읽을 수 없습니다.' },
+  notALogbook: {
+    en: 'That is not a voyage logbook, or it is a version this cannot read.',
+    ko: '항해일지 파일이 아니거나, 이 버전에서 읽을 수 없는 형식입니다.',
+  },
+  partlySaved: { en: 'Some of that file could not be saved.', ko: '파일의 일부를 저장하지 못했습니다.' },
+  fileUnreadable: { en: 'That file could not be read.', ko: '파일을 읽을 수 없습니다.' },
+  removeFailed: {
+    en: 'That passage could not be removed.',
+    ko: '항해 기록을 삭제하지 못했습니다.',
+  },
 };
+
+/** The chart card: its controls, and the line that says what the mouse does. */
+export const CHART: Record<string, Phrase> = {
+  escToClose: { en: 'Esc to close', ko: 'Esc로 닫기' },
+  centre: { en: 'Centre on the boat', ko: '배 위치로 되돌리기' },
+  openFull: { en: 'Open the full chart', ko: '전체 차트 열기' },
+  closeFull: { en: 'Close the full chart', ko: '전체 차트 닫기' },
+  hint: {
+    en: 'Click to set where you are bound · drag to look around · double-click to recentre · right-click to clear · wheel or N for range',
+    ko: '클릭해 목적지 정하기 · 드래그로 둘러보기 · 더블클릭으로 중앙 복귀 · 우클릭으로 해제 · 휠 또는 N으로 축척',
+  },
+};
+
+/**
+ * The passage line's advice, which is the one piece of prose that is written
+ * per frame. It is assembled in a readout rather than rendered by React, so the
+ * translator is captured in the component and used inside the callback --
+ * `useEngineFrame` refreshes the callback every render, so switching language
+ * switches this too.
+ */
+export const PASSAGE: Record<string, Phrase> = {
+  setOff: {
+    en: 'the tide is setting her off the track',
+    ko: '조류가 배를 항로에서 밀어내고 있습니다',
+  },
+  deadUpwind: { en: 'dead upwind — work to windward', ko: '정면 맞바람 — 태킹으로 올라가세요' },
+  afterDark: { en: 'arrives after dark', ko: '해 진 뒤 도착' },
+};
+
+/** `steer 043° to hold the track`, where Korean wants the verb last. */
+export const steerToHold = (deg: string): Phrase => ({
+  en: `steer ${deg}° to hold the track`,
+  ko: `항로를 지키려면 ${deg}°로 조타`,
+});
 
 /** The World tab, where a place is chosen. */
 export const WORLD: Record<string, Phrase> = {

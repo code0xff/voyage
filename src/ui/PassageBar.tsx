@@ -4,6 +4,8 @@ import { DEG, RAD, wrapPi } from '@/sim/math';
 import { mustTack } from '@/sim/passage';
 import { formatDistance, formatDuration } from '@/sim/units';
 import { useReadout } from './engine-context';
+import { useT } from './i18n';
+import { PASSAGE, steerToHold } from './strings';
 import { COMPACT_COLUMN, PANEL_COLUMN, useViewport } from './viewport';
 
 /**
@@ -26,6 +28,10 @@ import { COMPACT_COLUMN, PANEL_COLUMN, useViewport } from './viewport';
 export function PassageBar() {
   const root = useRef<HTMLDivElement>(null);
   const { compact } = useViewport();
+  // Safe to capture for a per-frame readout: `useEngineFrame` replaces the
+  // callback on every render, so a language change takes effect on the next one
+  // rather than leaving this line in the language it was mounted in.
+  const t = useT();
 
   const line = useReadout<HTMLDivElement>((s) => {
     const p = s.passage;
@@ -50,7 +56,7 @@ export function PassageBar() {
     if (!p) return '';
     const bits: string[] = [];
     if (p.courseToSteer === null) {
-      bits.push('the tide is setting her off the track');
+      bits.push(t(PASSAGE.setOff));
     } else {
       const off = Math.abs(wrapPi(p.courseToSteer - p.bearing)) * RAD;
       // Only once the tide is actually bending the track. Below a degree it is
@@ -58,11 +64,11 @@ export function PassageBar() {
       // that the line is not worth reading.
       if (off >= 1) {
         const cts = (((p.courseToSteer * RAD) % 360) + 360) % 360;
-        bits.push(`steer ${cts.toFixed(0)}° to hold the track`);
+        bits.push(t(steerToHold(cts.toFixed(0))));
       }
     }
-    if (mustTack(p, 40 * DEG)) bits.push('dead upwind — work to windward');
-    if (p.eta !== null && p.eta > s.darkIn) bits.push('arrives after dark');
+    if (mustTack(p, 40 * DEG)) bits.push(t(PASSAGE.deadUpwind));
+    if (p.eta !== null && p.eta > s.darkIn) bits.push(t(PASSAGE.afterDark));
     return bits.join('  ·  ');
   });
 

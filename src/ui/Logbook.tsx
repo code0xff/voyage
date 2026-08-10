@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, Trash2, Upload } from 'lucide-react';
 import { fromExport, toExport, type LogStore } from '@/logbook';
-import { useT } from './i18n';
+import { useLang, useT } from './i18n';
 import { LOG } from './strings';
 import { formatDistance, formatDuration, formatWhen, msToKnots } from '@/sim/units';
 import { venueById } from '@/sim/venues';
@@ -22,17 +22,25 @@ import type { PassageRecord } from '@/sim/passage';
  */
 
 function Entry({ p, onRemove }: { p: PassageRecord; onRemove: () => void }) {
+  const t = useT();
+  const lang = useLang();
   return (
     <div className="group grid grid-cols-[1fr_auto] items-start gap-2 border-b border-border/60 py-2 last:border-0">
       <div>
         <div className="text-[11px]">
           {placeName(p.venue, (id) => venueById(id)?.name ?? null)}
-          <span className="ml-2 text-[10px] text-muted-foreground">{formatWhen(p.startedAt)}</span>
+          {/* The chosen language, not the browser's. The same passage's date is
+              on the front page through `LastPassage`, which already passes it,
+              and the two read differently without this. */}
+          <span className="ml-2 text-[10px] text-muted-foreground">
+            {formatWhen(p.startedAt, lang)}
+          </span>
         </div>
         <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
           {formatDuration(p.duration)} · {formatDistance(p.distance)} ·{' '}
-          {msToKnots(p.avgSog).toFixed(1)} kn avg ·{' '}
-          {msToKnots(p.maxSog).toFixed(1)} max · {p.windKnots.toFixed(0)} kn wind
+          {msToKnots(p.avgSog).toFixed(1)} {t(LOG.avg)} ·{' '}
+          {msToKnots(p.maxSog).toFixed(1)} {t(LOG.max)} · {p.windKnots.toFixed(0)}{' '}
+          {t(LOG.wind)}
           {/*
             How much was tacked, which is the number here a sailor reads first:
             a beat is about 1.4, a reach about 1. Shown only when it means
@@ -42,7 +50,11 @@ function Entry({ p, onRemove }: { p: PassageRecord; onRemove: () => void }) {
             passage.
           */}
           {p.direct > 1 && p.distance >= p.direct && (
-            <> · {(p.distance / p.direct).toFixed(2)}× the straight line</>
+            <>
+              {' '}
+              · {(p.distance / p.direct).toFixed(2)}
+              {t(LOG.straightLine)}
+            </>
           )}
         </div>
       </div>
@@ -50,7 +62,7 @@ function Entry({ p, onRemove }: { p: PassageRecord; onRemove: () => void }) {
         variant="ghost"
         size="sm"
         className="h-6 px-1.5 opacity-0 transition-opacity group-hover:opacity-100"
-        aria-label="Remove"
+        aria-label={t(LOG.remove)}
         onClick={onRemove}
       >
         <Trash2 />
@@ -108,7 +120,7 @@ export function Logbook({
         // able to leave the panel saying "reading" forever, which is what an
         // unhandled rejection did.
         setPassages([]);
-        setProblem('The logbook could not be read.');
+        setProblem(t(LOG.readFailed));
       },
     );
   }, [store]);
@@ -133,7 +145,7 @@ export function Logbook({
       async (raw) => {
         const rows = fromExport(raw);
         if (!rows) {
-          setProblem('That is not a voyage logbook, or it is a version this cannot read.');
+          setProblem(t(LOG.notALogbook));
           return;
         }
         try {
@@ -142,7 +154,7 @@ export function Logbook({
           for (const r of rows) await store.add(r);
           setProblem(null);
         } catch {
-          setProblem('Some of that file could not be saved.');
+          setProblem(t(LOG.partlySaved));
         } finally {
           // Announced either way. A partial import has written real rows, and
           // leaving them off the screen would show a logbook that is not the
@@ -150,7 +162,7 @@ export function Logbook({
           onChanged();
         }
       },
-      () => setProblem('That file could not be read.'),
+      () => setProblem(t(LOG.fileUnreadable)),
     );
   };
 
@@ -161,7 +173,7 @@ export function Logbook({
         onChanged();
       },
       () => {
-        setProblem('That passage could not be removed.');
+        setProblem(t(LOG.removeFailed));
         // Announced on the failure too: the row may or may not have gone, and
         // every reader has to end up looking at the store either way.
         onChanged();
@@ -169,7 +181,7 @@ export function Logbook({
     );
 
   if (passages === null) {
-    return <p className="py-4 text-[11px] text-muted-foreground">Reading the logbook…</p>;
+    return <p className="py-4 text-[11px] text-muted-foreground">{t(LOG.reading)}</p>;
   }
 
   return (

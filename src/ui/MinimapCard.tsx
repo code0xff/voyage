@@ -10,7 +10,7 @@ import type { Vec2 } from '@/sim/math';
 import { useEngine, useEngineFrame, useReadout } from './engine-context';
 import { COMPACT_COLUMN, PANEL_COLUMN, PANEL_PAD } from './viewport';
 import { useT } from './i18n';
-import { PANEL } from './strings';
+import { CHART, PANEL } from './strings';
 
 /**
  * The chart, px. One size, matching the polar exactly -- 208 in a 232 px card.
@@ -293,7 +293,7 @@ export function MinimapCard({
               hint is worth having: this is the one panel that takes the whole
               screen, so how to get out of it should be on it. */}
           {full && (
-            <span className="text-[9px] text-muted-foreground">Esc to close</span>
+            <span className="text-[9px] text-muted-foreground">{t(CHART.escToClose)}</span>
           )}
           {/* Only while it is off the boat: a button that does nothing is worse
               than no button, and this one is also the only sign that the chart
@@ -303,8 +303,8 @@ export function MinimapCard({
               variant="ghost"
               size="sm"
               className="h-5 w-5 p-0 [&_svg]:size-3"
-              aria-label="Centre on the boat"
-              title="Centre on the boat"
+              aria-label={t(CHART.centre)}
+              title={t(CHART.centre)}
               onClick={recentre}
             >
               <Crosshair />
@@ -314,8 +314,8 @@ export function MinimapCard({
             variant="ghost"
             size="sm"
             className="h-5 w-5 p-0 [&_svg]:size-3"
-            aria-label={full ? 'Close the full chart' : 'Open the full chart'}
-            title={full ? 'Close the full chart' : 'Open the full chart'}
+            aria-label={t(full ? CHART.closeFull : CHART.openFull)}
+            title={t(full ? CHART.closeFull : CHART.openFull)}
             onClick={() => onFull(!full)}
           >
             {full ? <X /> : <Maximize2 />}
@@ -357,7 +357,7 @@ export function MinimapCard({
           engine.setDestination(null);
         }}
         onWheel={onWheel}
-        title="Click to set where you are bound · drag to look around · double-click to recentre · right-click to clear · wheel or N for range"
+        title={t(CHART.hint)}
         className="block cursor-crosshair touch-none"
         /*
          * `display` inline rather than a `hidden` attribute or class. The
