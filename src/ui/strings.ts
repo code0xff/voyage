@@ -146,13 +146,16 @@ export const KEYS: [string, Phrase][] = [
   ['drag', { en: 'orbit around the boat', ko: '배 주위로 시점 돌리기' }],
   // Not "zoom": it moves the eye nearer or further, and B is the thing that
   // actually magnifies. Calling both zoom is why one gets mistaken for the other.
-  ['wheel elsewhere', { en: 'eye closer / further out', ko: '시점 거리 조절' }],
+  [
+    'wheel elsewhere',
+    { en: 'eye closer / further out — or the power, through the glasses', ko: '시점 거리 조절 — 쌍안경 중에는 배율' },
+  ],
   ['double-click', { en: 'recentre astern', ko: '선미 뒤로 시점 복귀' }],
   ['P', { en: 're-solve polar', ko: '폴라 다시 계산' }],
   ['R', { en: 'restart', ko: '다시 시작' }],
   ['M', { en: 'sound', ko: '소리' }],
   ['L', { en: 'navigation lights', ko: '항해등' }],
-  ['B', { en: 'binoculars', ko: '쌍안경' }],
+  ['B', { en: 'binoculars — wheel sets the power', ko: '쌍안경 — 휠로 배율 조절' }],
   ['Esc', { en: 'this menu', ko: '이 메뉴' }],
 ];
 

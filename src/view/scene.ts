@@ -46,16 +46,16 @@ const ACCENT = 0x4fd1c5;
 const EYE_FOV = 55;
 
 /**
- * Binocular magnification.
+ * Binocular power is the player's to set, not this file's.
  *
- * Real cruising glasses are 7x50 and a whale at 400 m needs about that, but 7x
- * over a 55-degree field leaves under 8 degrees to find anything in, from a
- * deck that is pitching -- and the motion is magnified with everything else.
- * Five is the compromise this arrived at by being looked through: an 11-degree
- * field, which a hand can still hold on a target, and enough to turn the mark
- * on the water that a blow makes into an animal.
+ * It was a constant here, at five, and five is a compromise rather than an
+ * answer: seven is what a real cruising pair gives you and leaves under eight
+ * degrees to find anything in from a pitching deck, where the motion is
+ * magnified along with everything else. Which side of that a given pair of
+ * hands wants is not knowable from here, and it is a preference rather than a
+ * fact about the world, so the wheel decides it while the glasses are up --
+ * see `setWheelTarget` in orbit.ts. The range and the default live there.
  */
-const BINOCULAR_POWER = 5;
 
 
 /**
@@ -596,7 +596,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     // instrument the helmsman is holding rather than a flight to the subject.
     // Everything the eye can see is magnified with it, the boat's motion
     // included, which is exactly the trade a real pair makes.
-    const wantFov = f.binoculars ? EYE_FOV / BINOCULAR_POWER : EYE_FOV;
+    const wantFov = f.binoculars ? EYE_FOV / orbit.magnify : EYE_FOV;
     if (camera.fov !== wantFov) {
       camera.fov = wantFov;
       camera.updateProjectionMatrix();
@@ -820,6 +820,9 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     if (f.binoculars !== glassesUp) {
       glassesUp = f.binoculars;
       framePitchFor(eyeMode, true);
+      // The wheel follows the eye. Astern it is the distance to the boat; on
+      // deck that distance does not exist, so it would otherwise do nothing.
+      orbit.setWheelTarget(f.binoculars ? 'magnify' : 'distance');
     }
 
     if (eyeMode === BOW) {

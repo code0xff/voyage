@@ -18,6 +18,18 @@ export interface OrbitControl {
   readonly pitch: number;
   /** Distance multiplier applied to the default chase range. */
   readonly zoom: number;
+  /** Binocular power, when the wheel is pointed at it. */
+  readonly magnify: number;
+  /**
+   * What the wheel turns.
+   *
+   * There is only one wheel and two things worth turning with it, and they are
+   * never both live: the eye's distance means nothing on deck, where the eye is
+   * fixed to the boat, and the glasses only exist there. So the wheel follows
+   * the view rather than needing a second gesture, and it keeps the meaning it
+   * already had -- away from you for more of the scene, towards you for less.
+   */
+  setWheelTarget(target: 'distance' | 'magnify'): void;
   /** True while the eye is being dragged, so the scene can stop smoothing it. */
   readonly dragging: boolean;
   /**
@@ -50,6 +62,20 @@ const MIN_PITCH = 0.02;
 const MAX_PITCH = 1.45;
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 3.5;
+
+/**
+ * Binocular power: where it starts, and how far it goes either way.
+ *
+ * Five is what this arrived at by being looked through, and it is a compromise
+ * rather than an answer -- seven is what a real cruising pair gives you and
+ * leaves under eight degrees to find anything in from a pitching deck. Which
+ * side of that trade a given player wants is not something the code can know,
+ * so the wheel decides it. Three is a wide sweep for finding the blow; twelve
+ * is a bird on the water, for anyone willing to hold it steady.
+ */
+const DEFAULT_MAGNIFY = 5;
+const MIN_MAGNIFY = 3;
+const MAX_MAGNIFY = 12;
 
 // Roughly a full turn per screen width, which is what every other orbit control
 // does and therefore what the hand expects.
@@ -106,6 +132,8 @@ export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
   /** Where a reset puts the pitch. Level on deck, over the boat from astern. */
   let restPitch = DEFAULT_PITCH;
   let zoom = 1;
+  let magnify = DEFAULT_MAGNIFY;
+  let wheelTarget: 'distance' | 'magnify' = 'distance';
 
   let dragging = -1; // pointerId, or -1
   let lastX = 0;
@@ -146,7 +174,17 @@ export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
     // deltaMode 1 is lines and 2 is pages; both come in far smaller numbers
     // than pixels, and untreated a line-mode mouse would barely zoom at all.
     const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
-    zoom = clamp(zoom * Math.exp(e.deltaY * scale * ZOOM_PER_LINE), MIN_ZOOM, MAX_ZOOM);
+    const step = Math.exp(e.deltaY * scale * ZOOM_PER_LINE);
+    if (wheelTarget === 'magnify') {
+      // Inverted against the distance, because the two mean the same thing to
+      // the hand and opposite things to the number: pushing the wheel away
+      // brings the scene closer, which is a smaller eye distance and a larger
+      // power. Multiplied rather than added, so a notch is the same fraction
+      // at three power as at twelve.
+      magnify = clamp(magnify / step, MIN_MAGNIFY, MAX_MAGNIFY);
+    } else {
+      zoom = clamp(zoom * step, MIN_ZOOM, MAX_ZOOM);
+    }
     e.preventDefault(); // otherwise the page scrolls behind the canvas
   };
 
@@ -180,6 +218,12 @@ export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
     },
     get zoom() {
       return zoom;
+    },
+    get magnify() {
+      return magnify;
+    },
+    setWheelTarget(target) {
+      wheelTarget = target;
     },
     get dragging() {
       return dragging !== -1;
