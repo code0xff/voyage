@@ -1,4 +1,5 @@
-import { clamp, compassAngle, compassVec, wrapPi, type Vec2 } from './math';
+import { compassVec, type Vec2 } from './math';
+import { giveWay } from './giveway';
 import { rng } from './rng';
 import type { TerrainQuery } from './terrain';
 import { CRUISER } from './config';
@@ -45,15 +46,12 @@ const WHALE_SPEED = 1.8;
 const FIRST_ENCOUNTER_DELAY = 8;
 
 /**
- * The range at which a whale starts giving way to the boat, m.
+ * The range at which a whale starts giving way to the boat, m. See `giveway.ts`
+ * for why an animal needs the rule at all; this is the whale's tuning of it.
  *
- * There is no collision anywhere in this simulation, so without a rule of its
- * own nothing stops the hull passing straight through the animal -- and the
- * spawn geometry cannot prevent it, because the player can turn. Worse, the
- * crossing track this feature generates contains an exact collision course: a
- * whale is on a constant bearing when the boat's speed across the line of
- * sight matches the whale's own, which is asin(1.8 / 3.09) = 0.62 rad off the
- * bow at six knots -- well inside the arc a sighting may open in.
+ * The collision course that argument describes is, for this animal, asin(1.8 /
+ * 3.09) = 0.62 rad off the bow at six knots -- well inside the arc a sighting
+ * may open in.
  *
  * Set far enough out that the whale is not seen to notice at the last moment.
  * A whale hears a hull a long way before it can see one, so a boat that keeps
@@ -162,7 +160,14 @@ export class WhaleField {
         this.timer = 18 + this.rand() * 30;
         this.age = 0;
       } else {
-        this.giveWay(boat, dt);
+        this.active.heading = giveWay(
+          this.active.pos,
+          this.active.heading,
+          boat,
+          dt,
+          AVOID_RANGE,
+          AVOID_TURN_RATE,
+        );
         this.swim(dt, terrain);
 
         const phase = phaseAt(this.age);
@@ -188,36 +193,6 @@ export class WhaleField {
     this.age = 0;
     this.firstEncounter = false;
     this.events.push(whale);
-  }
-
-  /**
-   * Bend the whale's course away from the boat, at a limited rate.
-   *
-   * Rate-limited rather than assigned, or the animal would snap round to face
-   * directly away the instant the boat crossed AVOID_RANGE, which reads as a
-   * thing reacting to a trigger rather than as a whale.
-   *
-   * Urgency scales the turn with how close the boat has come, so a distant
-   * pass barely deflects the track -- the encounter is still an animal going
-   * about its own business -- while a boat driven straight at it gets the full
-   * rate. Nothing here acts on the boat: the whale gives way, and the helmsman
-   * feels nothing, which is the whole reason this lives outside the physics.
-   */
-  private giveWay(boat: Vec2, dt: number): void {
-    const whale = this.active;
-    if (!whale) return;
-
-    const offX = whale.pos.x - boat.x;
-    const offY = whale.pos.y - boat.y;
-    const range = Math.hypot(offX, offY);
-    // Exactly on the boat there is no direction to flee in, and asking for one
-    // would be atan2(0, 0). Hold course; the next step will have an answer.
-    if (range >= AVOID_RANGE || range < 1e-6) return;
-
-    const away = compassAngle({ x: offX, y: offY });
-    const urgency = 1 - range / AVOID_RANGE;
-    const rate = AVOID_TURN_RATE * urgency * dt;
-    whale.heading += clamp(wrapPi(away - whale.heading), -rate, rate);
   }
 
   /**
