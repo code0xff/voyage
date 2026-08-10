@@ -32,7 +32,7 @@ import { compassVec, smoothstep } from '../sim/math';
 // that the grid corner stays inside QUERY_REACH in terrain.ts -- the shelter
 // under the far corner of this grid has to be one the island window can answer.
 export const SIZE = 900;
-const SEG = 300; // subdivisions -> 3 m per cell
+export const SEG = 300; // subdivisions -> 3 m per cell
 /**
  * The island window is defined by the physics, not here: the shader has to loop
  * over exactly the islands the boat feels, or the flat water and the flat ride
@@ -133,8 +133,12 @@ const shoalGlsl = /* glsl */ `
       float depth = texture2D(uField, clamp(fuv, 0.0, 1.0)).g * ${FIELD_DEPTH.toFixed(1)};
       shoal = (1.0 - smoothstep(0.0, ${SHOAL_DEPTH.toFixed(1)}, depth)) * (1.0 - beyond);
     } else {
+      // Break rather than continue: the slots are filled from zero, so the
+      // first empty one is the end. This runs over most of the sea now rather
+      // than over the grid alone, and an open ocean with three islands in the
+      // window should cost three iterations and not sixteen.
       for (int i = 0; i < ${MAX_ISLANDS}; i++) {
-        if (uIslands[i].w < 0.5) continue;
+        if (uIslands[i].w < 0.5) break;
         float d = distance(simP, uIslands[i].xy) - uIslands[i].z;
         shoal = max(shoal, 1.0 - smoothstep(0.0, 110.0, max(d, 0.0)));
       }
@@ -292,9 +296,15 @@ const vertexShader = /* glsl */ `
       ampSum += av;
     }
 
-    vec2 disp = p - horiz;
     // sim (x=east, y=north) -> three (x=east, y=up, z=south)
-    vec3 pos = vec3(disp.x - uOrigin.x, h, -(disp.y - uOrigin.y));
+    //
+    // Built from the local position rather than by subtracting uOrigin back
+    // off p. The two are the same algebraically, and in float they are the same
+    // only because the origin is snapped to whole cells and integers under 2^24
+    // are exact -- a guarantee that lives in update() for an unrelated reason
+    // and would take this with it if it ever moved. The rim has to land on
+    // exactly the square the far sea's hole is cut to, so it does not borrow.
+    vec3 pos = vec3(position.x - horiz.x, h, -(position.y - horiz.y));
 
     // Normal. three.z = -sim.y, so the z component flips sign.
     vNormal = normalize(vec3(-dhdx, 1.0, dhdy));
@@ -554,30 +564,47 @@ export interface Water {
  * A square annulus in the XZ plane: everything between `inner` and `outer`
  * half-extents, with a hole in the middle.
  *
- * Four quads rather than a plane with a hole punched by `THREE.Shape`, which
- * would triangulate to the same thing through a general tessellator and give up
- * the one property that matters here -- that the hole's corners are the exact
- * numbers the grid's rim lands on, not whatever a triangulator rounded them to.
+ * Built by hand rather than by punching a hole with `THREE.Shape`, which would
+ * run a general triangulator over it and give up the property the whole thing
+ * exists for: the hole's edge has to be the exact numbers the grid's rim lands
+ * on, and it has to carry a vertex at every one of them.
  *
- * Two triangles each and nothing subdivided: the far sea's shading is entirely
- * per-fragment, so more vertices would buy nothing at all.
+ * That second half is why `seg` is here. The grid's rim is 301 vertices a side;
+ * an inner edge of two would meet it in a row of T-junctions, where a vertex on
+ * one surface sits partway along an edge of the other. The lines agree
+ * mathematically and the rasteriser still need not, because it snaps vertices
+ * to a fixed-point grid and a long edge and a chain of short ones can land on
+ * different pixels -- which shows as a dotted line of pinholes exactly where
+ * this join must not show. Subdivided to match, there are no T-junctions and
+ * every edge is shared end to end.
+ *
+ * Four bands for the shared sides and four quads for the corners. About 2400
+ * triangles, which is nothing: the far sea's shading is entirely per-fragment,
+ * so the only reason for any of these vertices is the seam.
  */
-export function ringGeometry(inner: number, outer: number): THREE.BufferGeometry {
+export function ringGeometry(inner: number, outer: number, seg: number): THREE.BufferGeometry {
   const pos: number[] = [];
-  // Each quad is given as corners in XZ; the ring is walked as four bands, so
-  // the north and south bands run the full width and the east and west ones
-  // fill what is left beside the hole.
   // Wound to face +Y, which is what `PlaneGeometry` rotated onto the XZ plane
   // does and what the material's default FrontSide needs. Wound the other way
-  // the sea is simply not there when you look down at it.
+  // the sea is simply not there when you look down at it. Callers must pass
+  // x1 > x0 and z1 > z0.
   const quad = (x0: number, z0: number, x1: number, z1: number) => {
     pos.push(x0, 0, z0, x1, 0, z1, x1, 0, z0);
     pos.push(x0, 0, z0, x0, 0, z1, x1, 0, z1);
   };
-  quad(-outer, -outer, outer, -inner); // north band
-  quad(-outer, inner, outer, outer); // south band
-  quad(-outer, -inner, -inner, inner); // west band
-  quad(inner, -inner, outer, inner); // east band
+  const step = (2 * inner) / seg;
+  for (let i = 0; i < seg; i++) {
+    const a0 = -inner + i * step;
+    const a1 = a0 + step;
+    quad(a0, -outer, a1, -inner); // north
+    quad(a0, inner, a1, outer); // south
+    quad(-outer, a0, -inner, a1); // west
+    quad(inner, a0, outer, a1); // east
+  }
+  quad(-outer, -outer, -inner, -inner);
+  quad(inner, -outer, outer, -inner);
+  quad(-outer, inner, -inner, outer);
+  quad(inner, inner, outer, outer);
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -641,7 +668,9 @@ export function createWater(): Water {
 
   // The same uniform objects, so the far sea cannot fall out of step with the
   // grid it joins: one update() sets the colours for both.
-  const farGeo = ringGeometry(SIZE / 2, FAR_SIZE / 2);
+  // Same subdivision as the grid along the shared edge, so the two meet
+  // vertex for vertex and leave no T-junction to crack.
+  const farGeo = ringGeometry(SIZE / 2, FAR_SIZE / 2, SEG);
   const farMat = new THREE.ShaderMaterial({
     uniforms,
     vertexShader: farVertexShader,
