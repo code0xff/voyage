@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
-import type { Vec2 } from '../sim/math';
+import { smoothstep, type Vec2 } from '../sim/math';
 import { rng } from '../sim/rng';
 import type { WaveField } from '../sim/waves';
 import type { SkyState } from '../sim/sky';
@@ -340,13 +340,8 @@ function makeInstance(size: number, seed: number, asset: WhaleAsset): WhaleInsta
   };
 }
 
-function smooth(t: number): number {
-  const x = Math.max(0, Math.min(1, t));
-  return x * x * (3 - 2 * x);
-}
-
 function phaseAmount(phase: WhalePhase, t: number): number {
-  return phase === 'blow' ? Math.sin(Math.PI * t) : phase === 'surfacing' ? smooth(t) : 0;
+  return phase === 'blow' ? Math.sin(Math.PI * t) : phase === 'surfacing' ? smoothstep(0, 1, t) : 0;
 }
 
 function disposeInstance(group: THREE.Group, whale: WhaleInstance): void {
@@ -478,17 +473,19 @@ export function createWhaleView(): WhaleView {
         const surface = water.surfaceHeight(sighting.pos.x, sighting.pos.y, waves);
         const phase = sighting.phase;
         const t = sighting.phaseT;
+        // Every use below eases the same phase fraction, so ease it once.
+        const eased = smoothstep(0, 1, t);
         const wave = Math.sin(clock * 1.7 + sighting.seed * 0.00001);
-        const rise = phase === 'surfacing' ? whale.size * 0.08 * (smooth(t) - 1) : 0;
-        const dive = phase === 'diving' ? smooth(t) : 0;
+        const rise = phase === 'surfacing' ? whale.size * 0.08 * (eased - 1) : 0;
+        const dive = phase === 'diving' ? eased : 0;
         // Up while it is up. Fades in over the surfacing, holds through the
         // blow and the roll, and is already gone by the time the dive starts
         // taking the whole body down.
         const lift =
           whale.size *
           SURFACED_LIFT *
-          (phase === 'surfacing' ? smooth(t) : phase === 'diving' ? 1 - smooth(t) : 1);
-        const swimming = phase === 'surfacing' ? smooth(t) : phase === 'diving' ? 1 - smooth(t) : 1;
+          (phase === 'surfacing' ? eased : phase === 'diving' ? 1 - eased : 1);
+        const swimming = phase === 'surfacing' ? eased : phase === 'diving' ? 1 - eased : 1;
         const strokeClock = whale.mixer?.time ?? clock + sighting.seed * 0.00001;
         const stroke = Math.sin((strokeClock / whale.swimCycle) * Math.PI * 2);
 
@@ -533,7 +530,7 @@ export function createWhaleView(): WhaleView {
         // The wake stays legible through the blow and roll. Its strength is a
         // slick, not a paint mark: the texture carries the falloff and this
         // only says how much disturbed water there is.
-        const foam = phase === 'surfacing' ? smooth(t) : phase === 'diving' ? 1 - smooth(t) : 0.55;
+        const foam = phase === 'surfacing' ? eased : phase === 'diving' ? 1 - eased : 0.55;
         whale.foamMaterial.opacity = foam * (0.18 + sky.daylight * 0.28);
         const wakeAcross = 0.55 + foam * 0.35;
         const wakeAlong = 0.9 + foam * 0.65;

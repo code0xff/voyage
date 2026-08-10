@@ -1,4 +1,4 @@
-import { clamp } from './math';
+import { approach, clamp } from './math';
 
 /**
  * Weather that changes on its own.
@@ -238,11 +238,11 @@ export class Weather {
     // is how it feels on the water: the gust arrives before the sky changes.
     const s = this.state;
     const t = this.target;
-    s.cloud = ease(s.cloud, t.cloud, 45, dt);
-    s.rain = ease(s.rain, t.rain, 30, dt);
-    s.fog = ease(s.fog, t.fog, 60, dt);
-    s.windScale = ease(s.windScale, t.windScale, 22, dt);
-    s.gustScale = ease(s.gustScale, t.gustScale, 22, dt);
+    s.cloud = approach(s.cloud, t.cloud, 45, dt);
+    s.rain = approach(s.rain, t.rain, 30, dt);
+    s.fog = approach(s.fog, t.fog, 60, dt);
+    s.windScale = approach(s.windScale, t.windScale, 22, dt);
+    s.gustScale = approach(s.gustScale, t.gustScale, 22, dt);
   }
 
   /** Visibility in metres, for fog and rain. */
@@ -252,10 +252,6 @@ export class Weather {
     const rained = 1600 - s.rain * 700;
     return clamp(Math.min(fogged, rained), 90, 2600);
   }
-}
-
-function ease(current: number, target: number, tau: number, dt: number): number {
-  return current + (target - current) * (1 - Math.exp(-dt / tau));
 }
 
 export const WEATHER_LABEL: Record<WeatherKind, string> = {

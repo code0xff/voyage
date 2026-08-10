@@ -11,6 +11,8 @@
  * exactly the moment you want the view to hold still.
  */
 
+import { clamp } from '../sim/math';
+
 export interface OrbitControl {
   /** Azimuth away from dead astern, radians. Positive swings the eye to port. */
   readonly yaw: number;
@@ -82,10 +84,6 @@ const MAX_MAGNIFY = 12;
 const YAW_PER_PX = 0.006;
 const PITCH_PER_PX = 0.004;
 const ZOOM_PER_LINE = 0.0012;
-
-function clamp(v: number, lo: number, hi: number): number {
-  return v < lo ? lo : v > hi ? hi : v;
-}
 
 /**
  * What a drag does to the look-around, before any limits are applied.
