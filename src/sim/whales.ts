@@ -46,27 +46,37 @@ const WHALE_SPEED = 1.8;
 const FIRST_ENCOUNTER_DELAY = 8;
 
 /**
- * The range at which a whale starts giving way to the boat, m. See `giveway.ts`
- * for why an animal needs the rule at all; this is the whale's tuning of it.
+ * The whale's tuning of the give-way rule. See `giveway.ts` for why an animal
+ * needs one at all and what each of these means.
  *
  * The collision course that argument describes is, for this animal, asin(1.8 /
  * 3.09) = 0.62 rad off the bow at six knots -- well inside the arc a sighting
  * may open in.
  *
- * Set far enough out that the whale is not seen to notice at the last moment.
- * A whale hears a hull a long way before it can see one, so a boat that keeps
- * coming meets an animal that quietly stops being where it was going to be,
- * which is both what happens and what keeps the two apart.
+ * Both are far larger than the shark's 50 and 26, and neither is a scaling of
+ * them. A whale hears a hull a long way before it can see one, so a boat that
+ * keeps coming should meet an animal that quietly stops being where it was
+ * going to be. The measured reason is the same fact seen from the other side:
+ * at 0.2 rad/s the turn itself takes tens of seconds, so the animal has to have
+ * started long before the boat is on it. Measured at the worst speed over the
+ * ground the boat can make -- 8.1 kn of boat with four knots of fair tide under
+ * it -- 110 m, which is what this was while the rule was radial, gives a worst
+ * pass of 13.0 m; for something 18 m long that is a contact. 160 m puts it at
+ * 25.9 m. 220 m would give 43.5, but 220 is also the closest a sighting can
+ * open, so the whale would be giving way from the moment it appeared.
  *
- * At the distances above the clock keeps the two apart on its own -- a boat
- * covers about 100 m in the 32.5 s an encounter lasts, and a converging one
- * closes to roughly 62 m at worst -- so this is no longer the only thing
- * standing between them. It still fires, because 62 m is inside it, and it
- * should: a whale that holds its course into an approaching hull is the wrong
- * animal. Kept at the value tuned when the encounter was brought close, which
- * cost nothing to leave and is the margin that survives if it ever is again.
+ * `LANE` is wide because the animal is, and because it can afford to be: a
+ * sighting opens 220 m off, so even 100 m leaves the median encounter untouched
+ * at 233 m. Below it the whale gives way too late to finish -- 60 m measures
+ * 23.5 m worst against this 25.9 -- and above it nothing more is bought.
+ *
+ * At these distances the clock keeps the two apart on its own -- a boat covers
+ * about 100 m in the 32.5 s an encounter lasts -- so this is not the only thing
+ * standing between them. It should still fire: a whale that holds its course
+ * into an approaching hull is the wrong animal.
  */
-const AVOID_RANGE = 110;
+const AVOID_NOTICE = 160;
+const AVOID_LANE = 100;
 
 /**
  * How fast it can come round, rad/s.
@@ -74,7 +84,7 @@ const AVOID_RANGE = 110;
  * At 1.8 m/s this is a turning circle of about 9 m -- half a body length, which
  * is tight for something this size and is meant to be: the limit exists so the
  * turn is a curve rather than the instant reversal the shoal rule used to be,
- * not to make the animal ponderous. From AVOID_RANGE against the fastest
+ * not to make the animal ponderous. From AVOID_NOTICE against the fastest
  * closing this feature can produce there are ten seconds in hand, and this
  * spends them on 115 degrees.
  */
@@ -150,7 +160,21 @@ export class WhaleField {
     this.events.length = 0;
   }
 
-  update(dt: number, boat: Vec2, terrain: TerrainQuery, boatHeading = 0): void {
+  /**
+   * @param boatHeading where the bow points, which is where the chase camera
+   *   looks and so where a sighting may open.
+   * @param boatCourse the boat's track over ground, which is the line the whale
+   *   has to get off. Distinct from the heading, and deliberately so: with a
+   *   current running the boat crabs, and an animal that cleared the way the
+   *   bow pointed would step into the way the hull is actually going.
+   */
+  update(
+    dt: number,
+    boat: Vec2,
+    terrain: TerrainQuery,
+    boatHeading = 0,
+    boatCourse = boatHeading,
+  ): void {
     this.events.length = 0;
 
     if (this.active) {
@@ -163,9 +187,12 @@ export class WhaleField {
         this.active.heading = giveWay(
           this.active.pos,
           this.active.heading,
+          WHALE_SPEED,
           boat,
+          boatCourse,
           dt,
-          AVOID_RANGE,
+          AVOID_NOTICE,
+          AVOID_LANE,
           AVOID_TURN_RATE,
         );
         this.swim(dt, terrain);

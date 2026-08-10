@@ -42,6 +42,7 @@ src/sim/     pure physics core -- no Three.js, no React, no browser APIs
   wildlife   gull calls and occasional seeded coastal flocks
   whales     seeded whale encounters, kept outside boat physics
   sharks     seeded shark encounters, kept outside boat physics
+  giveway    how an animal clears the track of an approaching boat
   noise      deterministic value noise
   rng        the seeded stream, stirred so nearby seeds start apart
   polar      steady-state polar solver -- the physics validation tool
@@ -778,13 +779,13 @@ meaning anything.
 - No boat-to-boat collision.
 - **The whales and sharks are sightings, not bodies.** They exert no force, they
   are not in the way, and losing one changes no outcome; what they do is happen
-  where you can see them. A whale gives way to an approaching boat, which is
-  both what one does and what keeps the hull out of it, but only against a boat
+  where you can see them. Both give way to an approaching boat, which is both
+  what an animal does and what keeps the hull out of it, but only against a boat
   sailing a course. Chase one deliberately and you will catch it: she makes
-  3.09 m/s to its 1.8, and a pursuer that keeps re-aiming at something slower
-  than itself always closes. Preventing that would need the animal able to
-  outrun you, or a collision model, and neither is worth it for a thing you
-  have to go out of your way to see.
+  3.09 m/s to a whale's 1.8 and a shark's 1.6, and a pursuer that keeps
+  re-aiming at something slower than itself always closes. Preventing that would
+  need the animal able to outrun you, or a collision model, and neither is worth
+  it for a thing you have to go out of your way to see.
 - The sun is not astronomical, and islands shadow the wind without bending it
   around headlands. Both are deliberate: see AGENTS.md.
 

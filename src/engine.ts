@@ -884,7 +884,13 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       const d = Math.hypot(ev.pos.x - state.pos.x, ev.pos.y - state.pos.y);
       sound.gullCall(d, ev.strength, weather.state.fog);
     }
-    whales.update(PHYS_DT, state.pos, query, state.heading);
+    // Last step's course over ground, because this step's is not solved until
+    // `step()` below. At 120 Hz that is 8 ms of lag on a number that changes
+    // over seconds, and the alternative -- reordering the loop so the animals
+    // run after the physics -- would put the whale a frame behind the boat it
+    // is giving way to, which is the error that actually shows.
+    const course = diag ? diag.cog : state.heading;
+    whales.update(PHYS_DT, state.pos, query, state.heading, course);
     for (const whale of whales.events) {
       if (whale.phase !== 'blow' || whale.id === blownFor) continue;
       // Heard, and heard late: whaleBlow schedules itself for when the sound
@@ -899,7 +905,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     }
     // After the whales, and given them: a shark is placed clear of whatever is
     // already in the water this step.
-    sharks.update(PHYS_DT, state.pos, query, state.heading, whales.events);
+    sharks.update(PHYS_DT, state.pos, query, state.heading, whales.events, course);
 
     diag = step(state, cfg, env, ctl, PHYS_DT, { sea, anchored });
     snapshot.diag = diag;

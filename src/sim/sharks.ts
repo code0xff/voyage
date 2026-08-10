@@ -1,4 +1,5 @@
 import { compassVec, type Vec2 } from './math';
+import { giveWay } from './giveway';
 import { rng } from './rng';
 import type { TerrainQuery } from './terrain';
 import { CRUISER } from './config';
@@ -77,6 +78,47 @@ const ENCOUNTER_CHANCE = 0.35;
  */
 const CLEAR_OF_OTHERS = 45;
 
+/**
+ * The shark's tuning of the give-way rule. See `giveway.ts` for why it needs
+ * one at all and what each of these means.
+ *
+ * Reported from the game: a shark swimming through the hull. Measured before
+ * changing anything, over 4561 encounters with the boat sailing a straight
+ * course at six knots, 31.0% passed inside 20 m, 15.4% inside 10 m and 7.5%
+ * inside 5 m, with the worst at 0.0 m -- dead centre. Standing still the worst
+ * was 40.5 m, which is why this went unnoticed so long: every test in
+ * `sharks.test.ts` parked the boat, and a shark on a fixed heading past a
+ * stationary boat cannot hit it.
+ *
+ * After, at the same six knots: worst 20.1 m and nothing at all inside 20 m.
+ * At 8.2 kn, the fastest the polar gives at the strongest wind the settings
+ * allow, 15.5 m; with four knots of fair tide under that, 10.5 m. Nothing
+ * inside 10 m at any speed, against a hull and a fin that meet at about 8 m.
+ *
+ * `LANE` is what sets that floor, and it is also where the character is spent,
+ * which is why there is a limit to how safe this can be made: a fin crossing
+ * your bow has to cross your track. At 26 m the median closest pass goes from
+ * 34 m to 40 m, which is if anything better framing -- below about 40 m the
+ * chase camera cannot hold both the boat and the fin.
+ *
+ * `NOTICE` mostly decides how early the deflection starts, and so how much of
+ * it accumulates, but it is not free: 45 leaves too little lead and the floor
+ * at 8.2 kn falls from 15.5 m to 14.4, and 40 to 12.5. 50 is the smallest that
+ * keeps a shark clear at every speed the boat can actually make.
+ */
+const AVOID_NOTICE = 50;
+const AVOID_LANE = 26;
+
+/**
+ * How fast it can come round, rad/s -- ten times the whale's.
+ *
+ * A shark is a third of the length and turns inside its own body; the whale's
+ * 0.2 rad/s exists to stop something 18 m long pivoting like a dinghy, and
+ * applying it here would only mean the turn never finishes in the seconds this
+ * animal has. At 1.6 m/s this is a turning circle of about 0.8 m.
+ */
+const AVOID_TURN_RATE = 2.0;
+
 /** What a shark keeps clear of. Structural, so this file need not know of whales. */
 export interface Occupant {
   readonly pos: Vec2;
@@ -114,9 +156,15 @@ export class SharkField {
   }
 
   /**
+   * @param boatHeading where the bow points, which is where the chase camera
+   *   looks and so where a sighting may open.
    * @param others sightings already placed this step -- the whale -- that this
    *   one must not be drawn on top of. Read structurally rather than imported,
    *   so the two species stay independent of each other.
+   * @param boatCourse the boat's track over ground, which is the line the shark
+   *   has to get off. Distinct from the heading, and deliberately so: with a
+   *   current running the boat crabs, and an animal that cleared the way the
+   *   bow pointed would step into the way the hull is actually going.
    */
   update(
     dt: number,
@@ -124,6 +172,7 @@ export class SharkField {
     terrain: TerrainQuery,
     boatHeading = 0,
     others: readonly Occupant[] = [],
+    boatCourse = boatHeading,
   ): void {
     this.events.length = 0;
 
@@ -139,6 +188,18 @@ export class SharkField {
       this.active.diveT = Math.max(
         0,
         Math.min(1, (this.age - (ENCOUNTER_DURATION - DIVE_DURATION)) / DIVE_DURATION),
+      );
+
+      this.active.heading = giveWay(
+        this.active.pos,
+        this.active.heading,
+        SPEED,
+        boat,
+        boatCourse,
+        dt,
+        AVOID_NOTICE,
+        AVOID_LANE,
+        AVOID_TURN_RATE,
       );
 
       const dir = compassVec(this.active.heading);

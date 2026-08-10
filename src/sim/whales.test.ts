@@ -134,9 +134,11 @@ describe('whales', () => {
    * simulation puts them.
    *
    * It is what would catch someone bringing the encounter closer again without
-   * the rest of the change. At the current 80-200 m the worst approach over
-   * this set is 31 m; with the reaction range left at its first value of 70 m
-   * it was 13.3 m, which is a whale and a boat occupying the same water.
+   * the rest of the change. At the current 220-560 m the worst approach over
+   * this set is 125.8 m, so the assertion has a great deal of room; what it
+   * guards is the spawn distances rather than the give-way rule, which at these
+   * ranges and six knots barely has to do anything. The rule itself is asserted
+   * by the test above and in `giveway.test.ts`.
    */
   it('keeps its distance from a boat that simply sails on, at real spawn ranges', () => {
     const BOAT_SPEED = 3.09;

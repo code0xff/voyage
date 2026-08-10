@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { compassVec } from './math';
 import { EMPTY_TERRAIN, Terrain, type TerrainQuery } from './terrain';
 import { DIVE_DURATION, ENCOUNTER_DURATION, SharkField } from './sharks';
 
@@ -208,6 +209,105 @@ describe('sharks', () => {
     }
 
     expect(checked).toBeGreaterThan(0);
+  });
+
+  /**
+   * Reported from the game: a shark swimming through the hull.
+   *
+   * Every test above parks the boat, and that is exactly why this went unseen
+   * for so long -- a shark on a fixed heading past a stationary boat cannot hit
+   * it, and standing still the worst approach measured 40.5 m. Sailed at six
+   * knots the same seeds put 31% of encounters inside 20 m, 15% inside 10 m and
+   * the worst at 0.0 m, dead centre.
+   *
+   * 15 m is written out rather than derived from the give-way constants,
+   * because it is the claim and not a precondition: read from `AVOID_LANE` this
+   * would assert that the shark clears by however much it clears by, which is
+   * true at any setting including none. The boat is 10 m and a shark up to
+   * 6.5 m, so the meshes touch at about 8 m; this leaves most of that again.
+   *
+   * Driven at 4.2 m/s, a shade over the 8.11 kn the polar gives at the strongest
+   * wind the settings allow, and on five headings so that no single seed and
+   * course can carry the result.
+   */
+  it('is not run over by a boat sailing a course', () => {
+    const BOAT_SPEED = 4.2;
+    let worst = Infinity;
+    let encounters = 0;
+
+    for (let seed = 1; seed <= 60; seed++) {
+      for (const course of [0, 0.7, 1.9, -2.6, 3.0]) {
+        const sharks = new SharkField(seed);
+        const boat = { x: 0, y: 0 };
+        const dir = compassVec(course);
+        let open = false;
+
+        for (let t = 0; t < 1800; t += STEP) {
+          boat.x += dir.x * BOAT_SPEED * STEP;
+          boat.y += dir.y * BOAT_SPEED * STEP;
+          sharks.update(STEP, boat, EMPTY_TERRAIN, course, [], course);
+
+          const shark = sharks.events[0];
+          if (!shark) {
+            open = false;
+            continue;
+          }
+          if (!open) {
+            open = true;
+            encounters++;
+          }
+          worst = Math.min(worst, Math.hypot(shark.pos.x - boat.x, shark.pos.y - boat.y));
+        }
+      }
+    }
+
+    expect(encounters).toBeGreaterThan(500);
+    expect(worst).toBeGreaterThan(15);
+  });
+
+  /**
+   * The same claim with a current running, which is the case that says the
+   * shark is given the boat's track and not its heading. With four knots of set
+   * on the beam -- the most the settings allow -- the hull crabs about 45
+   * degrees off the way the bow points, and an animal that cleared the way the
+   * bow pointed would step neatly into the way the boat is actually going.
+   *
+   * The spawn arc still opens off the bow, because that is where the chase
+   * camera looks; only the give-way uses the course.
+   */
+  it('clears the boat track rather than the way the bow points', () => {
+    const HEADING = 0;
+    const COURSE = Math.PI * 0.25;
+    const SOG = 4.2;
+    let worst = Infinity;
+    let encounters = 0;
+
+    for (let seed = 1; seed <= 120; seed++) {
+      const sharks = new SharkField(seed);
+      const boat = { x: 0, y: 0 };
+      const dir = compassVec(COURSE);
+      let open = false;
+
+      for (let t = 0; t < 1800; t += STEP) {
+        boat.x += dir.x * SOG * STEP;
+        boat.y += dir.y * SOG * STEP;
+        sharks.update(STEP, boat, EMPTY_TERRAIN, HEADING, [], COURSE);
+
+        const shark = sharks.events[0];
+        if (!shark) {
+          open = false;
+          continue;
+        }
+        if (!open) {
+          open = true;
+          encounters++;
+        }
+        worst = Math.min(worst, Math.hypot(shark.pos.x - boat.x, shark.pos.y - boat.y));
+      }
+    }
+
+    expect(encounters).toBeGreaterThan(200);
+    expect(worst).toBeGreaterThan(15);
   });
 
   it('restarts its stream on reseed', () => {
