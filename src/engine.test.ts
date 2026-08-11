@@ -430,10 +430,11 @@ describe('engine', () => {
    * The stream turns, and everything that reads it turns with it.
    *
    * `currents.peak` is rebuilt from the world hour every physics step, so this
-   * is really an assertion about the wiring: the boat's drift, the sea built
-   * from the wind over moving water, and the displacement the waves and the
-   * wake are carried by all come off that one vector. Driven at a high time
-   * scale so half a cycle passes in a few seconds of sailing.
+   * is really an assertion about the wiring. Three of the consumers are checked
+   * here -- the stream itself, the water under the boat, and the displacement
+   * the waves and the wake are carried by. The chart reads the same field and
+   * is checked by looking. Driven at a high time scale so half a cycle passes
+   * in a few seconds of sailing.
    */
   it('turns the stream, and carries the boat and the sea round with it', () => {
     const engine = sailing({ driftKnots: 4, setDeg: 0, startHour: 9, timeScale: 900 });
@@ -441,6 +442,7 @@ describe('engine', () => {
     engine.advance(1);
     const atStart = engine.snapshot.currents.peak.y;
     const seaAtStart = engine.snapshot.waves.drift.y;
+    const currentAtStart = engine.snapshot.env.current!.y;
 
     // A quarter of a cycle at 900x is about 12 seconds of sailing.
     engine.advance((TIDE_PERIOD / 4) * 3600 / 900 - 1);
@@ -449,6 +451,7 @@ describe('engine', () => {
     engine.advance((TIDE_PERIOD / 4) * 3600 / 900);
     const atEbb = engine.snapshot.currents.peak.y;
     const seaAtEbb = engine.snapshot.waves.drift.y;
+    const currentAtEbb = engine.snapshot.env.current!.y;
     engine.dispose();
 
     // Full run at the start, slack a quarter in, running back at the half.
@@ -458,6 +461,10 @@ describe('engine', () => {
     // ...and the sea was carried one way and then back, rather than on and on.
     expect(seaAtStart).toBeGreaterThan(0);
     expect(seaAtEbb).toBeLessThan(seaAtStart);
+    // ...and the water under the boat turned with it, which is the consumer
+    // that actually moves her. The others are asserted where they live.
+    expect(currentAtStart).toBeGreaterThan(0);
+    expect(currentAtEbb).toBeLessThan(0);
   });
 
   it('leaves a steady stream steady when the cycle is switched off', () => {

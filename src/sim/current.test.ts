@@ -367,11 +367,38 @@ describe('the tide turning', () => {
   });
 
   /**
-   * It is a function of the hour and nothing else. Three separate bugs in this
-   * project have been a clock that survived a restart; a tide that holds no
-   * state cannot join them.
+   * It repeats, which is the property that says it is a clock and not a ramp --
+   * and the one that says it holds no state, since the only way the same hour
+   * can give the same answer is if there is nothing else in it. Three separate
+   * bugs in this project have been a clock that survived a restart.
    */
-  it('depends on nothing but the clock it is given', () => {
-    expect(tideRate(14.3, 9, TIDE_PERIOD)).toBe(tideRate(14.3, 9, TIDE_PERIOD));
+  it('comes back to the same rate a cycle later', () => {
+    for (const period of [6, TIDE_PERIOD, 24]) {
+      for (const h of [9, 14.3, 30, 200]) {
+        expect(tideRate(h + period, 9, period)).toBeCloseTo(tideRate(h, 9, period), 9);
+      }
+    }
+  });
+
+  /** A period the player chose, not just the default one. */
+  it('turns on whatever cycle it is given', () => {
+    expect(tideRate(3, 0, 6)).toBeCloseTo(-1, 12); // half of six hours
+    expect(tideRate(6, 0, 24)).toBeCloseTo(0, 9); // a quarter of a day
+  });
+
+  /**
+   * The world clock is unwrapped and counts on past midnight, so the tide has
+   * to as well -- and a period small enough to overflow the quotient would hand
+   * `Math.cos` an Infinity and poison the engine with a NaN. The slider cannot
+   * produce one; a hand-edited setting can.
+   */
+  it('stays a number at any hour and any cycle', () => {
+    for (const h of [-40, 0, 27.5, 1e5]) {
+      for (const period of [0, -3, 1e-320, 0.5, TIDE_PERIOD, 24]) {
+        const r = tideRate(h, 9, period);
+        expect(Number.isFinite(r)).toBe(true);
+        expect(Math.abs(r)).toBeLessThanOrEqual(1);
+      }
+    }
   });
 });

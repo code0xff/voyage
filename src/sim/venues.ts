@@ -8,7 +8,7 @@ import type { Island } from './terrain';
  * **Not for navigation.** Every number here is a sketch. The land is drawn from
  * overlapping circles because that is the shape primitive the physics and the
  * water shader share; depths come from one uniform shelf slope and not from a
- * survey; the stream is one direction that does not turn with the tide. A
+ * survey; the stream runs on one axis, turning with the tide but never bending. A
  * venue is meant to reproduce *the decisions* a place asks of a sailor, not its
  * geography. Nothing here should be used to take a boat anywhere.
  *

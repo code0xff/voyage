@@ -166,7 +166,10 @@ model never has to think about flow running onto a beach. And open water has no
 land, so the depth is the deep-water constant and the field is uniform — a
 player who sets a plain set and drift gets exactly that, everywhere.
 
-There is a set and a drift; there is no tidal *cycle*. See the deliberate
+The stream turns. `driftKnots` is its rate at full run, and it dies to slack
+about three hours in, runs back the other way and returns — a 12.42-hour cycle
+measured from the session's start hour, which the player can lengthen, shorten
+or switch off. What there is no model of is the *height*: see the deliberate
 simplifications.
 
 ### 1c. Regions

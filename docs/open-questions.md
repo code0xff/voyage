@@ -49,7 +49,7 @@ It is not visible while sailing.
 
 ---
 
-## The sea moves with the water; the tide does not turn
+## The sea moves with the water, and the stream turns; the height does not
 
 **Done, and removed from this list as a defect.** The wave field is carried by
 the water's integrated displacement, folded into each component's phase, and

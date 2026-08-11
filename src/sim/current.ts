@@ -23,11 +23,10 @@ import { knotsToMs } from './units';
  * land's shadow is; and less water, because that is where you go aground. Three
  * things pulling against each other is a tactical decision.
  *
- * Deliberately not modelled: the *cycle*. The stream sets one way for the whole
- * session rather than turning with the tide. Reversing it is a phase term and
- * almost free, but the height of tide is not -- a falling tide has to decide
- * what happens to a boat anchored over a bank -- and the two belong together.
- * See the deliberate simplifications in the README.
+ * The stream turns -- see `tideRate` -- but the *height* is deliberately not
+ * modelled. A falling tide has to decide what happens to a boat anchored over
+ * a bank, and what the chart's soundings are measured from, which is a rules
+ * decision before it is code. See the deliberate simplifications in the README.
  */
 
 /**
@@ -43,8 +42,9 @@ import { knotsToMs } from './units';
 export const SLACK = 0.05;
 
 /**
- * The semi-diurnal period, hours. Two highs and two lows a day, which is what
- * most of the world gets and all of the surveyed places do.
+ * The semi-diurnal period, hours: two highs and two lows a day, which is what
+ * most of the world's coasts get. A default rather than a claim about any
+ * particular place -- the player can set it to whatever a place actually does.
  */
 export const TIDE_PERIOD = 12.42;
 
@@ -54,9 +54,11 @@ export const TIDE_PERIOD = 12.42;
  *
  * A cosine rather than a square wave, because the thing a tide actually does to
  * a passage is the *slack*: the stream does not turn, it dies away, hangs, and
- * builds the other way, and an hour either side of the turn is worth nothing at
- * all. A square wave would give a player a stream to fight and never a window
- * to wait for, which is the whole of tidal tactics.
+ * builds the other way. On the default period, half an hour either side of the
+ * turn is a quarter of the stream and an hour either side is a half -- the
+ * fractions scale with whatever period is set. A square wave would give a
+ * player a stream to fight and never a window to wait for, which is the whole
+ * of tidal tactics.
  *
  * Measured from the session's own start hour so that a passage begins on the
  * set the player asked for, at its full rate, and reverses about six hours
@@ -71,7 +73,11 @@ export const TIDE_PERIOD = 12.42;
  *   which is what this was before there was a tide at all.
  */
 export function tideRate(hour: number, startHour: number, period: number): number {
-  if (!(period > 0)) return 1;
+  // Guarded above zero rather than at it: a period small enough to overflow the
+  // quotient hands `Math.cos` an Infinity and poisons the engine with a NaN,
+  // and nothing under a minute is a tide anyway. The slider cannot produce one,
+  // but a hand-edited setting can.
+  if (!(period > 1 / 60)) return 1;
   return Math.cos((2 * Math.PI * (hour - startHour)) / period);
 }
 

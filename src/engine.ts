@@ -286,6 +286,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let session = 0;
   /** The wind the wave field is currently built from; it lags the real one. */
   let seaTws = windMs(settings);
+  /** The bearing the sea is running from -- the wind over the moving water. */
+  let seaTwd = 0;
   /** The set at its full run, before the tide takes it down to slack. */
   let fullStream: Vec2 = currentVec(settings);
   /**
@@ -875,7 +877,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // raising it, and the boat would have met waves from a direction nothing
     // was blowing from. `compassAngle` of the travel direction, reversed, is
     // the bearing it is coming from.
-    waves.setFromWind(seaTws * current.seaScale, compassAngle(scale(overWater, -1)));
+    // Where the sea is coming from: the wind over the *water*, which a stream
+    // turns as well as raising. Kept so the added resistance below is told the
+    // same bearing the waves were built from.
+    seaTwd = compassAngle(scale(overWater, -1));
+    waves.setFromWind(seaTws * current.seaScale, seaTwd);
 
     wind.update(PHYS_DT);
     // Wind is a function of position: sample it where the boat actually is.
@@ -920,7 +926,13 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     sea.heave = hullWave.heave;
     sea.pitchSlope = hullWave.pitchSlope;
     sea.rollSlope = hullWave.rollSlope;
-    sea.dir = wind.baseTwd + Math.PI;
+    // The way the waves actually travel, from the bearing they were built on
+    // rather than from the true wind. Those are the same in still water and
+    // part company the moment a stream runs across the breeze -- and with the
+    // stream turning they part company by more, and differently, through a
+    // passage. Taking the true wind here meant the boat felt her head sea
+    // coming from somewhere the water was not.
+    sea.dir = seaTwd + Math.PI;
     sea.depth = query.depthAt(state.pos.x, state.pos.y);
     snapshot.depth = sea.depth;
     snapshot.clearance = sea.depth - cfg.draft;
