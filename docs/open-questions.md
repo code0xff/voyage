@@ -49,22 +49,29 @@ It is not visible while sailing.
 
 ---
 
-## Waves do not move with the water
+## The wake does not move with the water
 
-The wave field is a function of world position and time. With a tide running it
-stays put rather than being carried along, and the wake is a trail of ground
-positions rather than something laid in the water and drifting with it.
+**The waves now do.** The field is a function of world position, so with a tide
+running the pattern stayed pinned to the ground while the water it is made of
+moved through it. The water's displacement is integrated and folded into each
+component's phase, which is exact rather than an approximation: shifting the
+sample point by `O` is the same thing as shifting the phase by `-k(D.O)`.
 
-This is a *simplification and not a divergence*, which is the distinction that
-matters here: the physics and the water shader read the same field, so they
-agree with each other. They agree on something slightly wrong.
+That turned out cheaper than this entry expected. It anticipated "a matching
+uniform in the shader, which duplicates the wave formula"; in the event the
+GLSL did not change at all, because it already takes a phase per component and
+the view already copies it from the field. Both sides drift because they read
+the same number, which is a better kind of agreement than two transcriptions
+kept in step.
 
-Fixing it means offsetting the wave field by the integrated displacement of the
-water — cheap in the physics, and a matching uniform in the shader, which
-duplicates the wave formula. Worth doing when the shader is next opened.
+Asserted by the property that no other change could satisfy: a point carried
+along with the stream sees exactly the sea it would see in still water, to nine
+decimals, while a point fixed to the ground does not.
 
-Note that wind against tide *does* now raise the sea (the sea is built from the
-wind relative to the moving water), so the most visible part of this is covered.
+**The wake still does not.** It is a trail of ground positions rather than
+something laid in the water and drifting with it, and it is a view concern
+rather than a field one -- a separate change, and a smaller one now that the
+water's displacement is already integrated where the renderer can reach it.
 
 ---
 

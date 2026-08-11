@@ -829,7 +829,9 @@ export function createWater(): Water {
         const c = waves.comps[i];
         if (c) {
           waveA[i].set(c.dirX, c.dirY, c.k, c.omega);
-          waveB[i].set(c.amp, c.phase);
+          // `phaseAt`, not `c.phase`: it carries the water's drift, and this is
+          // the one place the shader and the physics have to agree about it.
+          waveB[i].set(c.amp, waves.phaseAt(i));
         } else {
           waveA[i].set(0, 0, 0, 0);
           waveB[i].set(0, 0);

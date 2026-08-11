@@ -1,4 +1,4 @@
-import { compassVec } from './math';
+import { compassVec, wrap2Pi } from './math';
 
 /**
  * Wind sea: a sum of sine waves.
@@ -38,6 +38,16 @@ export interface WaveComponent {
 export class WaveField {
   readonly comps: WaveComponent[] = [];
   private t = 0;
+  /**
+   * How far the water itself has been carried, m.
+   *
+   * The wave field is a function of world position, so with a tide running the
+   * pattern stayed pinned to the ground while the water it is made of moved
+   * through it. Waves are carried by the water they are in; this is that
+   * displacement, integrated, and every sample is taken relative to it.
+   */
+  private driftX = 0;
+  private driftY = 0;
   /** Significant wave height H1/3, m. Used by the HUD and added resistance. */
   sigWaveHeight = 0;
 
@@ -64,10 +74,22 @@ export class WaveField {
    */
   restart(): void {
     this.t = 0;
+    this.driftX = 0;
+    this.driftY = 0;
   }
 
-  update(dt: number): void {
+  /**
+   * @param drift the water's own velocity here, m/s. Its integral is what the
+   *   wave pattern is carried along by. One vector for the whole field, which
+   *   is what the shader can be given -- and what the stream mostly is, since
+   *   it only varies with depth.
+   */
+  update(dt: number, drift?: { x: number; y: number }): void {
     this.t += dt;
+    if (drift) {
+      this.driftX += drift.x * dt;
+      this.driftY += drift.y * dt;
+    }
   }
 
   /**
@@ -117,12 +139,35 @@ export class WaveField {
     }
   }
 
+  /**
+   * The phase of one component, with the water's drift folded into it.
+   *
+   * Carrying the field along is a shift of the sample point, and a shift of the
+   * sample point *is* a shift of phase:
+   *
+   *     A sin(k (D . (P - O)) - wt + f) == A sin(k (D . P) - wt + (f - k (D . O)))
+   *
+   * which is the whole reason this is one number rather than a change to the
+   * water shader. The GLSL already takes a phase per component and the view
+   * already copies it from here, so both sides drift because they read the same
+   * value -- not because two transcriptions of the formula were kept in step,
+   * which is how that agreement usually has to be maintained and how it usually
+   * eventually breaks.
+   *
+   * Wrapped, because the drift grows without bound: two knots for an hour is
+   * 7 km, which is thousands of radians, and these end up in a float32 uniform.
+   */
+  phaseAt(i: number): number {
+    const c = this.comps[i];
+    return wrap2Pi(c.phase - c.k * (c.dirX * this.driftX + c.dirY * this.driftY));
+  }
+
   /** Surface elevation at a point, in metres. */
   heightAt(x: number, y: number): number {
     let h = 0;
     for (let i = 0; i < this.comps.length; i++) {
       const c = this.comps[i];
-      h += c.amp * Math.sin(c.k * (c.dirX * x + c.dirY * y) - c.omega * this.t + c.phase);
+      h += c.amp * Math.sin(c.k * (c.dirX * x + c.dirY * y) - c.omega * this.t + this.phaseAt(i));
     }
     return h;
   }
@@ -133,7 +178,9 @@ export class WaveField {
     for (let i = 0; i < this.comps.length; i++) {
       const c = this.comps[i];
       v +=
-        -c.amp * c.omega * Math.cos(c.k * (c.dirX * x + c.dirY * y) - c.omega * this.t + c.phase);
+        -c.amp *
+        c.omega *
+        Math.cos(c.k * (c.dirX * x + c.dirY * y) - c.omega * this.t + this.phaseAt(i));
     }
     return v;
   }
@@ -149,7 +196,7 @@ export class WaveField {
       out[o + 2] = c.k;
       out[o + 3] = c.omega;
       out[o + 4] = c.amp;
-      out[o + 5] = c.phase;
+      out[o + 5] = this.phaseAt(i);
     }
   }
 }

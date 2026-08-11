@@ -867,7 +867,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // Sample four points on the hull to get the local water surface slope.
     // Land shelters the sea in its lee, so waves are scaled by the same shelter
     // term the water shader uses.
-    waves.update(PHYS_DT);
+    // Given the stream, so the wave pattern is carried along by the water it is
+    // made of instead of staying pinned to the ground. `peak` rather than the
+    // sample under the boat: one vector for the whole field is what the shader
+    // can be handed, and the stream only varies with depth.
+    waves.update(PHYS_DT, currents.peak);
     const shelter = query.waveShelter(state.pos.x, state.pos.y, wind.baseTwd);
     sampleHull(
       waves,

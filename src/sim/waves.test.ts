@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { WaveField, dominantEncounter, waveHitStrength } from './waves';
+import { MAX_WAVES, WaveField, dominantEncounter, waveHitStrength } from './waves';
 
 /**
  * Wind from the north, so the waves travel south. Everything below is stated in
@@ -120,5 +120,87 @@ describe('wave hit strength', () => {
   it('never exceeds one, however hard she is pressed', () => {
     const gale = new WaveField(45, 0);
     expect(waveHitStrength(dominantEncounter(gale, 0, 9, 0), 9)).toBeLessThanOrEqual(1);
+  });
+});
+
+/**
+ * Waves are carried by the water they are in.
+ *
+ * The field is a function of world position, so with a tide running the pattern
+ * used to stay pinned to the ground while the water moved through it -- the
+ * physics and the shader agreeing with each other on something slightly wrong.
+ * The drift is now integrated and folded into each component's phase.
+ */
+describe('drift with the water', () => {
+  const DT = 1 / 120;
+  const run = (field: WaveField, seconds: number, drift?: { x: number; y: number }) => {
+    for (let n = 0; n < Math.round(seconds / DT); n++) field.update(DT, drift);
+  };
+
+  /**
+   * The property that says it is really the water carrying them, and the only
+   * one that cannot be satisfied by any other change: a point going along with
+   * the stream must see exactly the sea it would see in still water. Asserted
+   * against the still-water field rather than against the formula.
+   */
+  it('shows a point carried along with the water the still-water sea', () => {
+    const still = new WaveField(8, 0);
+    const tide = new WaveField(8, 0);
+    const set = { x: 0.4, y: 2 };
+
+    for (let n = 1; n <= 20 / DT; n++) {
+      still.update(DT);
+      tide.update(DT, set);
+      const t = n * DT;
+      // The same parcel of water, which has been carried to here.
+      expect(tide.heightAt(set.x * t, set.y * t)).toBeCloseTo(still.heightAt(0, 0), 9);
+    }
+  });
+
+  /** ...and a point fixed to the ground does not, or nothing has moved. */
+  it('runs the sea past a point fixed to the ground', () => {
+    const still = new WaveField(8, 0);
+    const tide = new WaveField(8, 0);
+    run(still, 6);
+    run(tide, 6, { x: 0, y: 2 });
+    expect(Math.abs(tide.heightAt(0, 0) - still.heightAt(0, 0))).toBeGreaterThan(0.02);
+  });
+
+  /**
+   * The shader is handed a phase per component and reads nothing else, so what
+   * it draws has to be reconstructible from the packed uniform alone. This is
+   * the agreement between the physics and the water in the same sense
+   * `creature.test.ts` means it: the surface is asked, not the formula copied.
+   */
+  it('packs a uniform that reproduces the surface it floats the boat on', () => {
+    const w = new WaveField(10, 1.1);
+    run(w, 9, { x: 1.3, y: -0.7 });
+    const packed = new Float32Array(MAX_WAVES * 6);
+    w.packUniform(packed);
+
+    for (const [x, y] of [
+      [0, 0],
+      [12, -30],
+      [-140, 65],
+    ]) {
+      let h = 0;
+      for (let i = 0; i < MAX_WAVES; i++) {
+        const o = i * 6;
+        const amp = packed[o + 4];
+        if (amp <= 0) continue;
+        h +=
+          amp *
+          Math.sin(packed[o + 2] * (packed[o] * x + packed[o + 1] * y) - packed[o + 3] * w.time + packed[o + 5]);
+      }
+      expect(h).toBeCloseTo(w.heightAt(x, y), 5);
+    }
+  });
+
+  it('starts the drift again with the session', () => {
+    const w = new WaveField(8, 0);
+    run(w, 30, { x: 0, y: 2 });
+    w.restart();
+    const fresh = new WaveField(8, 0);
+    expect(w.heightAt(50, -20)).toBeCloseTo(fresh.heightAt(50, -20), 12);
   });
 });
