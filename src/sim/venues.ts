@@ -19,7 +19,8 @@ import type { Island } from './terrain';
  *    the course, so that the choice of which side to take is the choice the
  *    place is known for.
  *  - **Not.** Coastline shape beyond a recognisable arrangement. Real depths.
- *    Tidal cycle, springs and neaps, or the height of tide. Local effects that
+ *    Springs and neaps, or the height of tide -- the stream turns, but only on
+ *    the one cycle every place here shares. Local effects that
  *    would need a model this simulator does not have -- the wind bending around
  *    a headland rather than simply being blocked by it, most of all.
  *

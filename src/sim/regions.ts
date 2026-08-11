@@ -187,7 +187,8 @@ const NEWPORT: Region = {
   area: 'Rhode Island, USA',
   brief:
     'The East Passage from Prudence to the sea, Conanicut and Aquidneck either side, ' +
-    'and the open sound beyond Brenton. A sea breeze rather than a tide.',
+    'and the open sound beyond Brenton. A sea breeze first, and a stream that ' +
+    'turns under it.',
   // Mid-channel in the East Passage abreast of Rose Island, so the passage runs
   // down the middle of the square with both islands inside it.
   //
@@ -406,10 +407,11 @@ const PUGET: Region = {
  * to sail** -- the most of any region, San Francisco's 13% included. The bottom
  * is never far, everywhere, all the time.
  *
- * It also carries the lightest breeze in the list at 9 knots, and almost no
- * stream. That combination is the point: with no tide to play and no lee worth
- * having -- a wind deficit of 0.025, second lowest -- what is left is finding
- * pressure in light air over water that will ground you if you stop looking.
+ * It also carries the lightest breeze in the list at 9 knots, and the weakest
+ * stream. That combination is the point: with little tide to play and no lee
+ * worth having -- a wind deficit of 0.025, second lowest -- what is left is
+ * finding pressure in light air over water that will ground you if you stop
+ * looking.
  * The other regions all hand you something to fight; this one hands you very
  * little and asks what you do with it.
  */

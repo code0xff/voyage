@@ -76,9 +76,10 @@ not tidal tactics.
 It is a function of the world hour and holds no state, which is deliberate:
 three separate bugs in this project have been a clock that survived a restart,
 and a tide that cannot hold a clock cannot join them. Every consumer follows
-from the one vector, so the boat's drift, the chart's arrows, the sea built
-from the wind over moving water, and the displacement carrying the waves and
-the wake all turn together without being told.
+from the one vector, so the boat's drift, the sea built from the wind over
+moving water, and the displacement carrying the waves and the wake all turn
+together without being told. The chart's arrows turn with them and then go out
+altogether at slack, which is right: there is no stream to draw.
 
 **What is still missing is the height.** No springs and neaps, no depth that
 changes with the tide, and no gate that opens and shuts. That one is not a
