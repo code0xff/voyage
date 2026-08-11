@@ -49,31 +49,28 @@ It is not visible while sailing.
 
 ---
 
-## The wake does not move with the water
+## The sea moves with the water; the tide does not turn
 
-**The waves now do.** The field is a function of world position, so with a tide
-running the pattern stayed pinned to the ground while the water it is made of
-moved through it. The water's displacement is integrated and folded into each
-component's phase. The identity is exact -- shifting the sample point by `O` is
-the same thing as shifting the phase by `-k(D.O)` -- but the field is given one
-vector, the deep-water set, so where depth throttles the stream the sea drifts
-a little faster than the water it is in.
+**Done, and removed from this list as a defect.** The wave field is carried by
+the water's integrated displacement, folded into each component's phase, and
+the wake is laid in the water with it -- kept in the water's frame and
+translated by the same offset the sea uses, so the two cannot come apart.
 
-That turned out cheaper than this entry expected. It anticipated "a matching
-uniform in the shader, which duplicates the wave formula"; in the event the
-GLSL did not change at all, because it already takes a phase per component and
-the view already copies it from the field. Both sides drift because they read
-the same number, which is a better kind of agreement than two transcriptions
-kept in step.
+The identity is exact: shifting the sample point by `O` is the same thing as
+shifting the phase by `-k(D.O)`. The approximation is that the field is given
+one vector, the deep-water set, so where depth throttles the stream the sea
+drifts a little faster than the water it is in.
 
-Asserted on the property rather than the formula: a point moving at the set
-sees exactly the sea it would see in still water, to nine decimals, while a
-point fixed to the ground does not.
+It cost no shader change at all. The GLSL already takes a phase per component
+and the view already copies it from the field, so both sides drift because they
+read the same number.
 
-**The wake still does not.** It is a trail of ground positions rather than
-something laid in the water and drifting with it, and it is a view concern
-rather than a field one -- a separate change, and a smaller one now that the
-water's displacement is already integrated where the renderer can reach it.
+What remains is not this: **there is a current but no tide.** The stream varies
+with depth and not with time -- no cycle, no turn mid-passage, no springs and
+neaps, no height, and no gate that opens and shuts. Reversing the stream is a
+phase term and nearly free; the height is not, because a falling tide has to
+decide what happens to a boat anchored over a bank, and the two belong
+together.
 
 ---
 

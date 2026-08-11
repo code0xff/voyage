@@ -826,8 +826,19 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       wakeGeo.setDrawRange(0, 0);
     }
 
-    // The wake follows the actual track, not the heading, which is what makes
-    // leeway visible.
+    /*
+     * The wake follows the actual track, not the heading, which is what makes
+     * leeway visible -- and it is laid *in the water*, so a tide carries it
+     * along with the sea it is made of.
+     *
+     * Kept in the water's frame and translated by one offset rather than
+     * advecting nine hundred points every frame: the buffer is then only
+     * touched when a point is added, as it always was, and the drift costs a
+     * transform. It comes from `waves.drift` rather than a second integration
+     * of the current, so the trail and the sea it lies on cannot come apart.
+     */
+    const wakeDrift = waves.drift;
+    wake.position.set(wakeDrift.x, 0, -wakeDrift.y);
     wakeTimer += dt;
     if (wakeTimer > 0.12) {
       wakeTimer = 0;
@@ -835,9 +846,9 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
         wakePos.copyWithin(0, 3);
         wakeCount--;
       }
-      wakePos[wakeCount * 3] = bx;
+      wakePos[wakeCount * 3] = bx - wakeDrift.x;
       wakePos[wakeCount * 3 + 1] = state.heave + 0.08;
-      wakePos[wakeCount * 3 + 2] = bz;
+      wakePos[wakeCount * 3 + 2] = bz + wakeDrift.y;
       wakeCount++;
       wakeGeo.setDrawRange(0, wakeCount);
       wakeGeo.attributes.position.needsUpdate = true;

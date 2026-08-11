@@ -763,10 +763,10 @@ meaning anything.
   component's phase. One vector for the whole field, the deep-water set, so
   what the sea is carried along with is that set rather than the local stream —
   the same thing in open water, and a little faster than the water itself where
-  depth throttles it. **The wake still does not drift**: it is a trail of
-  ground positions rather than something laid in the water. Physics and
-  renderer agree throughout — both read the same field, and the shader is
-  handed the drifted phase rather than recomputing it.
+  depth throttles it. The wake is laid in the water with them, kept in the
+  water's frame and moved by the same offset the sea uses. Physics and renderer
+  agree throughout — both read the same field, and the shader is handed the
+  drifted phase rather than recomputing it.
 - There is a current, but no **tide**. The stream varies with depth — it runs in
   the channel and gives up in the shallows — but it does not vary with *time*:
   no cycle, no turn of the tide mid-passage, no springs and neaps, no change of

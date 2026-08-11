@@ -1,4 +1,4 @@
-import { compassVec, wrap2Pi } from './math';
+import { compassVec, wrap2Pi, type Vec2 } from './math';
 
 /**
  * Wind sea: a sum of sine waves.
@@ -66,6 +66,17 @@ export class WaveField {
 
   get time(): number {
     return this.t;
+  }
+
+  /**
+   * How far the water has been carried since the session began, m.
+   *
+   * Exposed so that anything else drawn *in* the water -- the wake is the one
+   * that matters -- is carried by the same number the sea is, rather than by a
+   * second integration of the same current that could drift away from it.
+   */
+  get drift(): Vec2 {
+    return { x: this.driftX, y: this.driftY };
   }
 
   /**
