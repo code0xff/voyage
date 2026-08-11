@@ -26,10 +26,11 @@ export interface Table {
  * **That fold is an approximation and not a symmetry.** These tables are
  * forward-inflow data. A section meeting the water trailing edge first is a
  * poor foil -- less lift, more drag -- and how much is not known here. What is
- * known is which end of the table it is nearer, and it is not the broadside end
- * the boat was using: `FOIL_CD` runs from 0.01 edge-on to 1.32 broadside, and
- * whatever a reversed blade's coefficient is, it is not the far end of that.
- * This buys the right end of the range and no more.
+ * assumed is that it is nearer the edge-on end than the broadside one, on the
+ * grounds that a blade lying along the flow is not presenting the area a blade
+ * square to it does. `FOIL_CD` runs from 0.01 to 1.32 across that range, and
+ * the boat was taking the far end of it. This is an assumption that buys the
+ * right end of the range, and no more than that.
  *
  * This exists because indexing the tables with a track angle instead is a bug
  * this project shipped for a long time. `leeway` is `atan2(v, u)`, so a boat

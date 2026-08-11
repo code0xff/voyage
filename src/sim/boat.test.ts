@@ -314,8 +314,12 @@ describe('reversed flow', () => {
   /**
    * The drag's sign is ramped rather than stepped, so a boat lying dead
    * sideways does not flip it end for end every time `u` crosses zero. Taken
-   * from `sign(u)` it was 6 N one way at the smallest positive surge and 6 N
-   * the other at the smallest negative one.
+   * from `sign(u)`, with 0.2 m/s of sway, it was 24.35 N one way at the
+   * smallest positive surge and 24.35 N the other at the smallest negative one.
+   *
+   * This pins the ramp rather than any one commit: the rudder's came in with
+   * the reversed-flow fix, the weathervane's a commit later, and both are
+   * asserted here because it is the same property.
    */
   it('does not flip the rudder drag end for end at zero surge', () => {
     const at = (u: number) => drift({ u, v: 0.2 }, 0.1, 0).d.rudderDrag;

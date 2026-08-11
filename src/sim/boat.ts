@@ -628,11 +628,14 @@ export function step(
     // rather than the floor, and a total helm angle past 90 degrees folds.
     const alphaR = s.rudder + Math.atan2(vRud, s.u);
     const qR = 0.5 * env.rhoWater * rSpeed * rSpeed * cfg.rudderArea;
-    // Folded onto the chord axis before it reaches the tables. Astern this read
-    // 180 degrees and `sample` clamped it to broadside, where a blade going
-    // backwards is in fact edge-on. It is not the *same* as going forwards --
-    // trailing edge first is a poor foil -- but these tables have nothing to
-    // say about that, and edge-on is much the nearer of the two ends.
+    // Folded onto the chord axis before it reaches the tables. It used to be
+    // sampled unfolded, so astern it asked for 180 degrees, `sample` clamped to
+    // the last entry it has, and the blade was given the broadside coefficient
+    // while it was in fact edge-on. Folded, the same case now reaches the
+    // edge-on end instead. Not because a reversed blade is the same as a
+    // forward one -- trailing edge first is a poor foil and these tables have
+    // nothing to say about it -- but because that is the nearer end of what
+    // they do say.
     const aoa = foilAoA(Math.cos(alphaR), Math.sin(alphaR));
     const clr = sample(FOIL_CL, aoa);
     const cdr = sample(FOIL_CD, aoa);

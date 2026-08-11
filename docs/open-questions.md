@@ -26,9 +26,9 @@ resistance law: `0.5·ρ·S·Cf·v²` decays as 1/t, so the tail is long by
 construction.
 
 **Measured after the fix.** In a flat calm she now makes **80.0% of the tide at
-every stream speed** — 0.25, 0.5, 1 and 2 m/s alike, once settled, which for a
-quarter-knot set takes an hour rather than the fifteen minutes the stronger
-streams need. It used to read 37%, 68%, 84% and 91%. Scale-free is what a balance between two quadratic drags has
+every stream speed** — 0.25, 0.5, 1 and 2 m/s alike, once settled, which for the
+weakest sets takes an hour rather than the fifteen minutes the stronger streams
+need. It used to read 37%, 68%, 84% and 91%. Scale-free is what a balance between two quadratic drags has
 to be, so the remaining lag is the honest consequence of windage against hull
 drag rather than evidence of a broken term.
 

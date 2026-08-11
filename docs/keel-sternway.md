@@ -231,8 +231,9 @@ is why three of these needed a second pass.
    construction: edge-on is zero whichever end the water arrives at. Identical
    to `|leeway|` while `u > 0`. It is an approximation and not a symmetry -- a
    blade meeting the water trailing edge first is a poor foil, and how poor is
-   not known here; what is known is which end of `FOIL_CD` it is nearer, and it
-   is not the broadside end the boat was using.
+   not known here, and neither is which end of `FOIL_CD` it is nearer -- that
+   is an assumption, and the honest case for it is that a blade lying along the
+   flow cannot plausibly be presenting the area a blade square to it does.
 2. **The rudder's angle is folded the same way** before it reaches the tables,
    keeping the old signed `alphaR = rudder + atan2(vRud, u)` so that ordinary
    forward flow is untouched -- not every forward case, since removing the
@@ -278,9 +279,9 @@ blown astern at 0.61 kn and now goes at 2.3 kn, which is the fix working.
 
 The drift in a calm is now **80.0% of the tide at every stream speed** — 0.25,
 0.5, 1 and 2 m/s alike, *once settled*. That qualifier is load-bearing: the
-weaker the stream the weaker the force closing on the equilibrium, so a
-quarter-knot set still reads 104.9% at fifteen minutes and only reaches 80.0% by
-the hour. It used to read 37%, 68%, 84% and 91% at equilibrium. Scale-free is
+weaker the stream the weaker the force closing on the equilibrium: at fifteen
+minutes 0.25 m/s still reads 104.9% and 0.5 m/s reads 84.7%, and both are 80.0%
+by the hour. It used to read 37%, 68%, 84% and 91% at equilibrium. Scale-free is
 what a balance between two quadratic drags has to be, and the old spread was the
 clearest sign that something in it was not quadratic at all.
 
