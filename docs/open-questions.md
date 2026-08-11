@@ -52,6 +52,10 @@ honest at large flow angles and in reversed flow, and a low-speed balance that
 stands without the accident above. Then `CRUISER` retuned until the polar comes
 back to the table in the README.
 
+The full investigation — how to reproduce it, the three fixes that fail, and one
+force measurement that does not add up and should be settled before trying again
+— is in [docs/keel-sternway.md](keel-sternway.md).
+
 **Measured on the way, so nobody repeats it.** The ITTC-57 friction line with a
 form factor — what this entry used to prescribe — does not fix either symptom.
 On a surge-only model (no keel or rudder, which is why its baseline reads 77%
