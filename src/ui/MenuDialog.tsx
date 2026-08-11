@@ -709,15 +709,32 @@ export function MenuDialog({
               does nothing.
             */}
             {settings.driftKnots > 0 && (
-              <Slider
-                label={t(SETTINGS_UI.set)}
-                min={0}
-                max={355}
-                step={5}
-                value={settings.setDeg}
-                format={(v) => `${v.toString().padStart(3, "0")}°`}
-                onChange={(v) => set("setDeg", v)}
-              />
+              <>
+                <Slider
+                  label={t(SETTINGS_UI.set)}
+                  min={0}
+                  max={355}
+                  step={5}
+                  value={settings.setDeg}
+                  format={(v) => `${v.toString().padStart(3, "0")}°`}
+                  onChange={(v) => set("setDeg", v)}
+                />
+                {/*
+                  Behind the drift for the same reason the set is: a cycle on
+                  water that is not moving is a control that does nothing.
+                */}
+                <Slider
+                  label={t(SETTINGS_UI.tideCycle)}
+                  min={0}
+                  max={24}
+                  step={0.5}
+                  value={settings.tideHours}
+                  format={(v) =>
+                    v === 0 ? t(SETTINGS_UI.steadyStream) : `${v.toFixed(1)} h`
+                  }
+                  onChange={(v) => set("tideHours", v)}
+                />
+              </>
             )}
             <Slider
               label={t(SETTINGS_UI.startTime)}

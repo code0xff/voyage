@@ -767,13 +767,14 @@ meaning anything.
   water's frame and moved by the same offset the sea uses. Physics and renderer
   agree throughout — both read the same field, and the shader is handed the
   drifted phase rather than recomputing it.
-- There is a current, but no **tide**. The stream varies with depth — it runs in
-  the channel and gives up in the shallows — but it does not vary with *time*:
-  no cycle, no turn of the tide mid-passage, no springs and neaps, no change of
-  depth with the height of tide, and no gate that opens and shuts. Reversing the
-  stream is a phase term and nearly free; the height is not, because a falling
-  tide has to decide what happens to a boat anchored over a bank, and the two
-  belong together.
+- There is a stream that turns, but no tidal **height**. The set runs at its
+  full rate, dies to slack about three hours in, and runs back — a 12.42-hour
+  cycle on the world clock, which the player can lengthen, shorten or switch
+  off — and it still varies with depth, running in the channel and giving up in
+  the shallows. What is missing is the height: no springs and neaps, no depth
+  that changes with the tide, and no gate that opens and shuts. The height is
+  not another phase term: a falling tide has to decide what happens to a boat
+  anchored over a bank, and what the soundings on the chart are measured from.
 - No wave orbital velocity acting on the hull, and no surfing.
 - No AI opponents, and nothing to chase. Racing's ghost — your own best run,
   replayed alongside you — was put to the question again for passages and

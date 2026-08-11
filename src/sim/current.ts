@@ -42,6 +42,39 @@ import { knotsToMs } from './units';
  */
 export const SLACK = 0.05;
 
+/**
+ * The semi-diurnal period, hours. Two highs and two lows a day, which is what
+ * most of the world gets and all of the surveyed places do.
+ */
+export const TIDE_PERIOD = 12.42;
+
+/**
+ * How much of the full stream is running at a given hour, -1..1, where negative
+ * is the ebb running back the other way.
+ *
+ * A cosine rather than a square wave, because the thing a tide actually does to
+ * a passage is the *slack*: the stream does not turn, it dies away, hangs, and
+ * builds the other way, and an hour either side of the turn is worth nothing at
+ * all. A square wave would give a player a stream to fight and never a window
+ * to wait for, which is the whole of tidal tactics.
+ *
+ * Measured from the session's own start hour so that a passage begins on the
+ * set the player asked for, at its full rate, and reverses about six hours
+ * later. Taking it from midnight instead would mean setting three knots of
+ * drift and getting whatever the clock happened to be doing.
+ *
+ * A function of the world hour and nothing else -- no clock of its own. Three
+ * separate bugs in this project have been a clock that survived a restart, and
+ * a tide that cannot hold state cannot join them.
+ *
+ * @param period the full cycle in hours; zero or less means a steady stream,
+ *   which is what this was before there was a tide at all.
+ */
+export function tideRate(hour: number, startHour: number, period: number): number {
+  if (!(period > 0)) return 1;
+  return Math.cos((2 * Math.PI * (hour - startHour)) / period);
+}
+
 export interface CurrentFieldOptions {
   /**
    * Stream velocity where the water is deep, m/s, world frame. The direction

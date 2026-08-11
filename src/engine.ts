@@ -9,7 +9,7 @@ import {
 } from './sim/boat';
 import { solvePolar, type Polar } from './sim/polar';
 import { WindField } from './sim/wind';
-import { CurrentField, DEFAULT_FULL_DEPTH } from './sim/current';
+import { CurrentField, DEFAULT_FULL_DEPTH, tideRate } from './sim/current';
 import { venueById } from './sim/venues';
 import { regionById } from './sim/regions';
 import type { RegionTerrain } from './sim/region-terrain';
@@ -286,6 +286,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let session = 0;
   /** The wind the wave field is currently built from; it lags the real one. */
   let seaTws = windMs(settings);
+  /** The set at its full run, before the tide takes it down to slack. */
+  let fullStream: Vec2 = currentVec(settings);
   const pilot = initialPilot();
   let destination: Vec2 | null = null;
   let anchored = false;
@@ -616,7 +618,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // overhead is doing, so it is set straight from the player's number and
     // never scaled by `weather.state`. This is the rate in deep water; where
     // the boat actually is, the field decides.
-    currents.peak = currentVec(s);
+    //
+    // The rate at its full run, now that the stream turns -- `tideAt` below
+    // takes it down to slack and back the other way on the world clock.
+    fullStream = currentVec(s);
+    currents.peak = fullStream;
     wind.gustiness = s.gustiness * weather.state.gustScale;
     wind.shiftAmplitude = 0.19 * s.gustiness * 2.2;
     waves.setFromWind(wind.baseTws * s.seaScale, wind.baseTwd);
@@ -806,6 +812,16 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
     // Time of day. timeScale is "simulated minutes per real minute".
     hour += (PHYS_DT / 3600) * current.timeScale;
+    /*
+     * The stream turns.
+     *
+     * Set from the world hour every step rather than held anywhere, so every
+     * consumer follows without being told: the boat's drift, the chart's
+     * arrows, the sea built from the wind over moving water, and the
+     * displacement the waves and the wake are carried by. Nothing here has a
+     * clock of its own to leave running across a restart.
+     */
+    currents.peak = scale(fullStream, tideRate(hour, current.startHour, current.tideHours));
     // Weather keeps world time, not wall-clock time: a front takes hours to
     // come through, and those are the same hours the sun is moving through.
     // Its transitions are eased in real seconds, though -- how fast a squall

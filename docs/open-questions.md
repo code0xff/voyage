@@ -65,12 +65,26 @@ It cost no shader change at all. The GLSL already takes a phase per component
 and the view already copies it from the field, so both sides drift because they
 read the same number.
 
-What remains is not this: **there is a current but no tide.** The stream varies
-with depth and not with time -- no cycle, no turn mid-passage, no springs and
-neaps, no height, and no gate that opens and shuts. Reversing the stream is a
-phase term and nearly free; the height is not, because a falling tide has to
-decide what happens to a boat anchored over a bank, and the two belong
-together.
+**The stream turns now.** `driftKnots` is its rate at full run rather than a
+constant: it dies to slack about three hours in, runs back the other way, and
+returns, on a 12.42-hour semi-diurnal cycle the player can lengthen, shorten or
+switch off. A cosine rather than a square wave, because what a tide does to a
+passage is the *slack* -- half an hour either side of the turn is a quarter of
+the stream, an hour either side a half -- and a stream you can only fight is
+not tidal tactics.
+
+It is a function of the world hour and holds no state, which is deliberate:
+three separate bugs in this project have been a clock that survived a restart,
+and a tide that cannot hold a clock cannot join them. Every consumer follows
+from the one vector, so the boat's drift, the chart's arrows, the sea built
+from the wind over moving water, and the displacement carrying the waves and
+the wake all turn together without being told.
+
+**What is still missing is the height.** No springs and neaps, no depth that
+changes with the tide, and no gate that opens and shuts. That one is not a
+phase term: a falling tide has to decide what happens to a boat anchored over
+a bank, and what the chart's soundings are measured from. It is a rules
+decision before it is code.
 
 ---
 

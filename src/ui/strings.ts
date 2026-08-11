@@ -295,6 +295,8 @@ export const SETTINGS_UI: Record<string, Phrase> = {
   flat: { en: 'flat', ko: '잔잔함' },
   tidalDrift: { en: 'Tidal drift', ko: '조류' },
   slack: { en: 'slack', ko: '정조' },
+  tideCycle: { en: 'Tidal cycle', ko: '조석 주기' },
+  steadyStream: { en: 'steady', ko: '일정' },
   /** The direction a current flows *towards*, which is the opposite of how wind is named. */
   set: { en: 'Set (towards)', ko: '유향 (향하는 쪽)' },
   startTime: { en: 'Start time', ko: '시작 시각' },

@@ -82,6 +82,7 @@ import { DEFAULT_SETTINGS, type Settings } from './settings';
 import { WhaleField } from './sim/whales';
 import { SharkField } from './sim/sharks';
 import { wrapPi } from './sim/math';
+import { TIDE_PERIOD } from './sim/current';
 
 /**
  * Enough of a browser for the engine to start: it listens for a gesture to
@@ -423,5 +424,48 @@ describe('engine', () => {
     reused.dispose();
 
     expect(actual).toBe(expected);
+  });
+
+  /**
+   * The stream turns, and everything that reads it turns with it.
+   *
+   * `currents.peak` is rebuilt from the world hour every physics step, so this
+   * is really an assertion about the wiring: the boat's drift, the sea built
+   * from the wind over moving water, and the displacement the waves and the
+   * wake are carried by all come off that one vector. Driven at a high time
+   * scale so half a cycle passes in a few seconds of sailing.
+   */
+  it('turns the stream, and carries the boat and the sea round with it', () => {
+    const engine = sailing({ driftKnots: 4, setDeg: 0, startHour: 9, timeScale: 900 });
+
+    engine.advance(1);
+    const atStart = engine.snapshot.currents.peak.y;
+    const seaAtStart = engine.snapshot.waves.drift.y;
+
+    // A quarter of a cycle at 900x is about 12 seconds of sailing.
+    engine.advance((TIDE_PERIOD / 4) * 3600 / 900 - 1);
+    const atSlack = engine.snapshot.currents.peak.y;
+
+    engine.advance((TIDE_PERIOD / 4) * 3600 / 900);
+    const atEbb = engine.snapshot.currents.peak.y;
+    const seaAtEbb = engine.snapshot.waves.drift.y;
+    engine.dispose();
+
+    // Full run at the start, slack a quarter in, running back at the half.
+    expect(atStart).toBeGreaterThan(1.9);
+    expect(Math.abs(atSlack)).toBeLessThan(0.2);
+    expect(atEbb).toBeLessThan(-1.9);
+    // ...and the sea was carried one way and then back, rather than on and on.
+    expect(seaAtStart).toBeGreaterThan(0);
+    expect(seaAtEbb).toBeLessThan(seaAtStart);
+  });
+
+  it('leaves a steady stream steady when the cycle is switched off', () => {
+    const engine = sailing({ driftKnots: 4, setDeg: 0, tideHours: 0, timeScale: 900 });
+    engine.advance(1);
+    const first = engine.snapshot.currents.peak.y;
+    engine.advance(60);
+    expect(engine.snapshot.currents.peak.y).toBeCloseTo(first, 12);
+    engine.dispose();
   });
 });

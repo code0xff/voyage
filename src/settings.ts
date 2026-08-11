@@ -3,6 +3,7 @@ import { WEATHER_KINDS } from './sim/weather';
 import { knotsToMs, msToKnots } from './sim/units';
 import type { Vec2 } from './sim/math';
 import { setDriftVec } from './sim/current';
+import { TIDE_PERIOD } from './sim/current';
 import { venueById, type Venue } from './sim/venues';
 import { detectLang, type Lang } from './i18n';
 import { regionById, type Region } from './sim/regions';
@@ -34,6 +35,15 @@ export interface Settings {
    * consistency would only mean the player had to translate.
    */
   setDeg: number;
+  /**
+   * Hours in the tidal cycle, or 0 for a stream that never turns.
+   *
+   * `driftKnots` is then the rate at its full run rather than a constant: it
+   * dies to slack about three hours in, runs the other way, and comes back.
+   * Zero keeps the steady set this had before, which is what every passage
+   * sailed until now was sailed in.
+   */
+  tideHours: number;
   sound: boolean;
 
   /** Hour of day the session starts at, 0..24. */
@@ -94,6 +104,7 @@ export const DEFAULT_SETTINGS: Settings = {
   seaScale: 1,
   driftKnots: 0,
   setDeg: 90,
+  tideHours: TIDE_PERIOD,
   sound: true,
   startHour: 9,
   timeScale: 60,
@@ -129,6 +140,7 @@ export function loadSettings(): Settings {
       seaScale: num(o.seaScale, DEFAULT_SETTINGS.seaScale, 0, 2),
       driftKnots: num(o.driftKnots, DEFAULT_SETTINGS.driftKnots, 0, 4),
       setDeg: num(o.setDeg, DEFAULT_SETTINGS.setDeg, 0, 359),
+      tideHours: num(o.tideHours, DEFAULT_SETTINGS.tideHours, 0, 24),
       sound: typeof o.sound === 'boolean' ? o.sound : DEFAULT_SETTINGS.sound,
       startHour: num(o.startHour, DEFAULT_SETTINGS.startHour, 0, 24),
       timeScale: num(o.timeScale, DEFAULT_SETTINGS.timeScale, 0, 600),

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CRUISER, DEFAULT_ENV } from './config';
 import { initialState, step, type Controls, type SeaState } from './boat';
 import { DEG, RAD, type Vec2 } from './math';
-import { CurrentField, SLACK } from './current';
+import { CurrentField, SLACK, TIDE_PERIOD, tideRate } from './current';
 import { solveOne } from './polar';
 import { Terrain } from './terrain';
 import { knotsToMs, msToKnots } from './units';
@@ -316,5 +316,62 @@ describe('anchored', () => {
     let d = step(s, CRUISER, e, AUTO, DT, { sea: FLAT });
     for (let i = 1; i < Math.round(90 / DT); i++) d = step(s, CRUISER, e, AUTO, DT, { sea: FLAT });
     expect(msToKnots(d.speed)).toBeGreaterThan(3);
+  });
+});
+
+/**
+ * The stream turns.
+ *
+ * `driftKnots` is the rate at its full run rather than a constant now: it dies
+ * to slack, runs back the other way, and returns. Everything downstream follows
+ * from `peak`, so these assert the rate itself and `engine.test.ts` asserts the
+ * boat, the sea and the chart follow it.
+ */
+describe('the tide turning', () => {
+  it('runs at its full rate when the session begins', () => {
+    expect(tideRate(9, 9, TIDE_PERIOD)).toBeCloseTo(1, 12);
+  });
+
+  /**
+   * Slack a quarter of a cycle in, and running the other way at half. The
+   * numbers are the claim -- a stream that dies away and comes back is the
+   * whole of tidal tactics -- so they are written out rather than derived.
+   */
+  it('dies to slack, runs back, and returns', () => {
+    const start = 9;
+    expect(tideRate(start + TIDE_PERIOD / 4, start, TIDE_PERIOD)).toBeCloseTo(0, 9);
+    expect(tideRate(start + TIDE_PERIOD / 2, start, TIDE_PERIOD)).toBeCloseTo(-1, 12);
+    expect(tideRate(start + TIDE_PERIOD, start, TIDE_PERIOD)).toBeCloseTo(1, 12);
+  });
+
+  /**
+   * There is a window round the turn worth waiting through, which a square wave
+   * would not give at all. Measured: half an hour either side is a quarter of
+   * the stream, an hour either side is a half. On a four-knot spring that is
+   * one knot against you at the half hour, where the full run is four.
+   */
+  it('leaves a window round the turn that is worth waiting for', () => {
+    const turn = TIDE_PERIOD / 4;
+    for (const h of [turn - 0.5, turn, turn + 0.5]) {
+      expect(Math.abs(tideRate(h, 0, TIDE_PERIOD))).toBeLessThan(0.26);
+    }
+    for (const h of [turn - 1, turn + 1]) {
+      expect(Math.abs(tideRate(h, 0, TIDE_PERIOD))).toBeLessThan(0.5);
+      // ...and not so flat that the turn is a dead calm for hours.
+      expect(Math.abs(tideRate(h, 0, TIDE_PERIOD))).toBeGreaterThan(0.4);
+    }
+  });
+
+  it('never turns at all when the cycle is switched off', () => {
+    for (const h of [0, 3, 9, 40]) expect(tideRate(h, 0, 0)).toBe(1);
+  });
+
+  /**
+   * It is a function of the hour and nothing else. Three separate bugs in this
+   * project have been a clock that survived a restart; a tide that holds no
+   * state cannot join them.
+   */
+  it('depends on nothing but the clock it is given', () => {
+    expect(tideRate(14.3, 9, TIDE_PERIOD)).toBe(tideRate(14.3, 9, TIDE_PERIOD));
   });
 });
