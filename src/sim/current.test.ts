@@ -87,17 +87,19 @@ describe('current', () => {
    * She does not quite make the full rate, and that is not an error. Still air
    * with the boat moving through it is windage, and windage is a force -- the
    * boat settles where drag through the water balances it, a little under the
-   * drift, with a knot or so of water running past her keel. Measured at 80.0% of the tide at every stream speed -- 0.25, 0.5, 1 and 2 m/s
- * alike, once settled. That last word matters: the weaker the stream the
- * weaker the force closing on the equilibrium, so a quarter-knot set still
- * reads 104.9% at fifteen minutes and only reaches 80.0% by the hour.
+   * drift, with a knot or so of water running past her keel.
    *
-   * Scale-free is what a balance between two quadratic drags has to be.
+   * Measured at 80.0% of the tide at every stream speed -- 0.25, 0.5, 1 and
+   * 2 m/s alike -- *once settled*. That last word carries weight: the weaker
+   * the stream, the weaker the force closing on the equilibrium, so at fifteen
+   * minutes 0.25 m/s still reads 104.9% and 0.5 m/s reads 84.7%, and both are
+   * 80.0% by the hour. Scale-free is what a balance between two quadratic
+   * drags has to be.
    *
-   * It did not used to be. It read 37% of a quarter-knot set and 91% of a
-   * two-knot one, because the keel and the rudder were both being given the
-   * broadside drag coefficient: a boat with sternway reads 180 degrees of
-   * leeway, and `FOIL_CD` stops at 90. See `docs/keel-sternway.md`.
+   * It did not used to be. It read 37% at 0.25 m/s and 91% at 2 m/s, because
+   * the keel and the rudder were both being given the broadside drag
+   * coefficient: a boat with sternway reads 180 degrees of leeway, and
+   * `FOIL_CD` stops at 90. See `docs/keel-sternway.md`.
    */
   it('carries a boat with no sail force along at very nearly the drift', () => {
     const drift = 1; // m/s east

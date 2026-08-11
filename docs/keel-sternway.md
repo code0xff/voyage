@@ -259,7 +259,9 @@ is why three of these needed a second pass.
    1.5 m/s in forty seconds.
 
 7. **The drag's sign is ramped through zero surge** rather than stepped, so a
-   boat lying dead sideways does not flip 6 N end for end every step.
+   boat lying dead sideways does not flip it end for end every step -- 24.35 N
+   of it, with 0.2 m/s of sway. The weathervane moment is ramped with it, for
+   the same reason and in the same place.
 
 Two smaller things fell out of it. The weathervane moment took the full track
 angle, so exact sternway fed ±pi to a term derived for small forward sideslip

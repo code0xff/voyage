@@ -606,10 +606,12 @@ export function step(
    * whichever way she was actually moving, which is to say it *drove* her when
    * she was already going backwards. See `docs/keel-sternway.md`.
    *
-   * The dynamic pressure came off a floor of 0.3 m/s as well, so a rudder
-   * standing still in the water was given 54.8 N. Nothing needs the floor:
-   * `atan2` wants no guard against a small denominator, and the only reason to
-   * clamp was one that never applied.
+   * The dynamic pressure came off a floor of 0.3 m/s as well, so anything
+   * slower than that was charged as though it were making 0.3 -- 54.8 N at the
+   * drift equilibrium, where she was slipping at 0.16. (At a dead stop the old
+   * outer gate skipped the block, so the floor cost nothing there; it is the
+   * slow cases it invented force for.) Nothing needs it: `atan2` wants no
+   * guard against a small denominator.
    */
   const vRud = s.v - s.r * cfg.rudderArm; // the stern swings sideways with yaw rate
   // Her speed past the blade, and no floor under it. The old `uSafe` clamped
@@ -648,8 +650,9 @@ export function step(
     // on working the same way round whichever way she is moving.
     // Ramped rather than a step at exactly zero surge. `sign(u)` is the same
     // number everywhere it matters -- |u| here is 0.05 or more in any case that
-    // is moving -- but a boat lying dead sideways would otherwise flip 6 N of
-    // drag end for end every step as `u` crossed zero.
+    // is moving -- but a boat lying dead sideways would otherwise flip its drag
+    // end for end every step as `u` crossed zero: 24.35 N of it, with 0.2 m/s
+    // of sway.
     const astern = clamp(s.u / 0.05, -1, 1);
     rudderForce = -side(wrapPi(alphaR)) * qR * clr * Math.cos(s.heel);
     // Aft when she is going ahead and forward when she is going astern, which

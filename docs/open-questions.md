@@ -16,7 +16,9 @@ Those were what set the drift lag, not the resistance law.
 **What replaced it is an approximation, not measured physics.** The tables are
 forward-inflow data, and a blade meeting the water trailing edge first is a poor
 foil by an amount nobody here knows. Reverse flow now reads the same
-coefficients as forward flow, which is the right order of magnitude and no more.
+coefficients as forward flow. That is an assumption -- the honest case for it
+is that a blade lying along the flow is not presenting the area a blade square
+to it does -- and not a measurement.
 See
 [docs/keel-sternway.md](keel-sternway.md) and
 [docs/keel-sternway-resolution.md](keel-sternway-resolution.md).
