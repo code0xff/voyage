@@ -330,4 +330,26 @@ describe('engine', () => {
     fast.dispose();
   });
 
+  /**
+   * Regression: a new session reseeded the wind, the weather and the islands
+   * but not every generator, so the same seed could sound different depending
+   * on what had been sailed before it. That is a wiring bug by nature -- each
+   * model's own reseed test passes while the engine forgets to call one.
+   */
+  it('starts a new session from the same world, whatever was sailed before it', () => {
+    const fresh = sailing({ seed: 4711 });
+    fresh.advance(90);
+    const expected = `${fresh.snapshot.state.pos.x}:${fresh.snapshot.state.heading}:${fresh.snapshot.weather.state.rain}`;
+    fresh.dispose();
+
+    const reused = sailing({ seed: 4711 });
+    reused.advance(400); // a whole passage in another world first
+    reused.putToSea(); // ...and then the one that has to match
+    reused.advance(90);
+    const actual = `${reused.snapshot.state.pos.x}:${reused.snapshot.state.heading}:${reused.snapshot.weather.state.rain}`;
+    expect(reused.snapshot.session).toBeGreaterThan(0);
+    reused.dispose();
+
+    expect(actual).toBe(expected);
+  });
 });

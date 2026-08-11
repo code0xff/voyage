@@ -721,6 +721,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
         currents.peak,
       ),
     );
+    // ...and the sea's own clock with it. `seaTws` decides how big the waves
+    // are; this decides where in them she starts, and it was the one piece of
+    // world state a new session inherited from the last.
+    waves.restart();
     weather.evolve = current.weatherMode === 'auto';
     if (current.weatherMode !== 'auto') weather.set(current.weatherMode);
     rebuildWorld();

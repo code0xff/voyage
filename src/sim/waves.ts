@@ -49,6 +49,23 @@ export class WaveField {
     return this.t;
   }
 
+  /**
+   * Start the sea again from the beginning, for a new session.
+   *
+   * The component phases are fixed (`i * 1.7`), so this clock is the whole of
+   * what makes one sea differ from another built the same way -- which means a
+   * session that inherits it inherits a sea the seed did not ask for. It is the
+   * same reset `WindField.reseed` does, and this field is the one that never
+   * had it: a passage sailed, restarted on the same seed, met the wave train at
+   * whatever phase the last one had left it in and sailed a measurably
+   * different track.
+   *
+   * Not a `reseed`, because there is no seed here to take.
+   */
+  restart(): void {
+    this.t = 0;
+  }
+
   update(dt: number): void {
     this.t += dt;
   }
