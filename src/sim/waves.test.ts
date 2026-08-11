@@ -263,7 +263,9 @@ describe('drift with the water', () => {
  * response does not contaminate, and there is not one -- with the stream set
  * two ways she also ends up on two headings, which moves the added resistance
  * by more than the bearing does. What holds the two together is that
- * `setFromWind` and `sea.dir` are handed the same variable.
+ * `setFromWind` and `sea.dir` are both derived from the one `seaTwd`, the
+ * second by adding pi to reverse it from where the sea comes from to where it
+ * runs.
  */
 describe('wind over the water', () => {
   const still = { x: 0, y: 0 };

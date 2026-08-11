@@ -215,8 +215,8 @@ export const REGION_BRIEF: Record<string, Phrase> = {
     ko: '금문, 알카트라즈, 라쿤 해협, 버클리 사주. 해안선도 수심도 실측이라, 화면에서 보이는 여울이 실제로 부딪히는 여울입니다.',
   },
   newport: {
-    en: 'The East Passage from Prudence to the sea, Conanicut and Aquidneck either side, and the open sound beyond Brenton. A sea breeze rather than a tide.',
-    ko: '프루던스에서 바다까지 이어지는 이스트 패시지, 양옆의 코나니컷과 아퀴드넥, 브렌턴 너머의 열린 만. 조류보다 시브리즈가 결정합니다.',
+    en: 'The East Passage from Prudence to the sea, Conanicut and Aquidneck either side, and the open sound beyond Brenton. A sea breeze first, and a stream that turns under it.',
+    ko: '프루던스에서 바다까지 이어지는 이스트 패시지, 양옆의 코나니컷과 아퀴드넥, 브렌턴 너머의 열린 만. 시브리즈가 먼저이고, 그 아래로 조류가 방향을 바꿉니다.',
   },
   'merchant-row': {
     en: 'Stonington, the islands south of it, and the north of Isle au Haut. Twice as much of the sailable water is close aboard a shore as anywhere else here.',
