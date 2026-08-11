@@ -134,6 +134,18 @@ function clashes(x: number, y: number, others: readonly Occupant[]): boolean {
 export class SharkField {
   readonly events: SharkSighting[] = [];
 
+  /**
+   * How far apart the sightings are, as a multiple of the tuned spacing.
+   *
+   * One is the rate these were written at, larger is rarer, and `Infinity` is
+   * none at all -- guarded explicitly in `update`, because a timer already
+   * running when the slider reaches zero would otherwise let one more through.
+   * The field is built before the setting is applied, so that is not a corner:
+   * it is what happens every time. Set from the player's slider; see
+   * `settings.ts`.
+   */
+  spacing = 1;
+
   private rand: () => number;
   private timer = 0;
   private age = 0;
@@ -145,10 +157,15 @@ export class SharkField {
     this.reseed(seed);
   }
 
+  /** The next gap, in seconds, stretched by `spacing`. */
+  private wait(base: number, spread: number): number {
+    return (base + this.rand() * spread) * this.spacing;
+  }
+
   /** Restart the encounter stream with the world. */
   reseed(seed: number): void {
     this.rand = rng(seed ^ 0x5a4b);
-    this.timer = 30 + this.rand() * 50;
+    this.timer = this.wait(30, 50);
     this.age = 0;
     this.nextId = 1;
     this.active = null;
@@ -181,7 +198,7 @@ export class SharkField {
       if (this.age >= ENCOUNTER_DURATION) {
         this.active = null;
         this.age = 0;
-        this.timer = 45 + this.rand() * 90;
+        this.timer = this.wait(45, 90);
         return;
       }
 
@@ -219,9 +236,10 @@ export class SharkField {
       return;
     }
 
+    if (!Number.isFinite(this.spacing)) return;
     this.timer -= dt;
     if (this.timer > 0) return;
-    this.timer = 50 + this.rand() * 100;
+    this.timer = this.wait(50, 100);
     if (this.rand() > ENCOUNTER_CHANCE) return;
 
     const shark = this.findSpawn(boat, boatHeading, terrain, others);

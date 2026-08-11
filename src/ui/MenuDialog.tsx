@@ -737,6 +737,15 @@ export function MenuDialog({
               </>
             )}
             <Slider
+              label={t(SETTINGS_UI.wildlife)}
+              min={0}
+              max={10}
+              step={1}
+              value={settings.wildlife}
+              format={(v) => (v === 0 ? t(SETTINGS_UI.noWildlife) : String(v))}
+              onChange={(v) => set("wildlife", v)}
+            />
+            <Slider
               label={t(SETTINGS_UI.startTime)}
               min={0}
               max={23.5}

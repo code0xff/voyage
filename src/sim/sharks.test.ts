@@ -323,4 +323,29 @@ describe('sharks', () => {
     expect(seen.length).toBeGreaterThan(0);
     expect(seen).toEqual(record(12).map((shark) => shark.x));
   });
+
+  /** The same slider, and the same guarantee that zero is zero. */
+  it('shows none at all when the spacing is infinite', () => {
+    const sharks = new SharkField(17);
+    sharks.spacing = Infinity;
+    for (let t = 0; t < 3600; t += STEP) {
+      sharks.update(STEP, { x: 0, y: 0 }, EMPTY_TERRAIN, 0);
+      expect(sharks.events).toHaveLength(0);
+    }
+  });
+
+  it('opens them further apart the wider the spacing is set', () => {
+    const count = (spacing: number) => {
+      const sharks = new SharkField(11);
+      sharks.spacing = spacing;
+      const ids = new Set<number>();
+      for (let t = 0; t < 7200; t += STEP) {
+        sharks.update(STEP, { x: 0, y: 0 }, EMPTY_TERRAIN, 0);
+        for (const shark of sharks.events) ids.add(shark.id);
+      }
+      return ids.size;
+    };
+    expect(count(1)).toBeGreaterThan(count(10) * 3);
+    expect(count(10)).toBeGreaterThan(0);
+  });
 });

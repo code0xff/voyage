@@ -49,7 +49,7 @@ import { Wildlife } from './sim/wildlife';
 import { WhaleField } from './sim/whales';
 import { SharkField } from './sim/sharks';
 import { Weather } from './sim/weather';
-import { currentVec, windMs, type Settings } from './settings';
+import { currentVec, wildlifeSpacing, windMs, type Settings } from './settings';
 import { Input } from './input';
 import { createScene, type SceneView } from './view/scene';
 import { SoundEngine } from './view/audio';
@@ -632,6 +632,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     streamNow.x = fullStream.x;
     streamNow.y = fullStream.y;
     currents.peak = streamNow;
+    // How often the sea has something in it. Set on both, because the player
+    // sets one slider and they are two fields.
+    whales.spacing = wildlifeSpacing(s);
+    sharks.spacing = whales.spacing;
     wind.gustiness = s.gustiness * weather.state.gustScale;
     wind.shiftAmplitude = 0.19 * s.gustiness * 2.2;
     waves.setFromWind(wind.baseTws * s.seaScale, wind.baseTwd);

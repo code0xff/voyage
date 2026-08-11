@@ -231,4 +231,51 @@ describe('whales', () => {
     };
     expect(record(7, shallow)).toEqual([]);
   });
+
+  /**
+   * How often she meets one, which the player sets.
+   *
+   * These were written as a rare event -- this file's own docblock calls a
+   * whale "an event the player can notice for a few seconds" -- and measured
+   * they were 46 an hour and in sight 42% of the time, which is scenery. The
+   * spacing is the multiple that fixes it and the slider that varies it.
+   */
+  it('meets fewer of them the wider the spacing is set', () => {
+    const perHour = (spacing: number) => {
+      let seen = 0;
+      for (let seed = 1; seed <= 8; seed++) {
+        const whales = new WhaleField(seed);
+        whales.spacing = spacing;
+        let open = false;
+        for (let step = 0; step < 120 * 1800; step++) {
+          whales.update(1 / 120, { x: 0, y: 0 }, EMPTY_TERRAIN, 0);
+          const on = whales.events.length > 0;
+          if (on && !open) seen++;
+          open = on;
+        }
+      }
+      return seen / (8 * 0.5);
+    };
+
+    const often = perHour(2);
+    const seldom = perHour(20);
+    expect(often).toBeGreaterThan(seldom * 3);
+    expect(seldom).toBeGreaterThan(0);
+  });
+
+  /**
+   * And none at all means none. Guarded on the spacing rather than left to the
+   * timer: the field is built before the setting reaches it, so a first
+   * encounter -- which this one guarantees -- was already scheduled and came
+   * through anyway. Measured before the guard, 0.3 an hour with the slider at
+   * zero.
+   */
+  it('shows none at all when the spacing is infinite', () => {
+    const whales = new WhaleField(17);
+    whales.spacing = Infinity;
+    for (let step = 0; step < 120 * 3600; step++) {
+      whales.update(1 / 120, { x: 0, y: 0 }, EMPTY_TERRAIN, 0);
+      expect(whales.events).toHaveLength(0);
+    }
+  });
 });

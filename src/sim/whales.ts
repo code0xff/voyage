@@ -137,6 +137,18 @@ function phaseAt(age: number): { name: WhalePhase; t: number } {
 export class WhaleField {
   readonly events: WhaleSighting[] = [];
 
+  /**
+   * How far apart the sightings are, as a multiple of the tuned spacing.
+   *
+   * One is the rate these were written at, larger is rarer, and `Infinity` is
+   * none at all -- guarded explicitly in `update`, because a timer already
+   * running when the slider reaches zero would otherwise let one more through.
+   * The field is built before the setting is applied, so that is not a corner:
+   * it is what happens every time. Set from the player's slider; see
+   * `settings.ts`.
+   */
+  spacing = 1;
+
   private rand: () => number;
   private timer = 0;
   private age = 0;
@@ -149,10 +161,15 @@ export class WhaleField {
     this.reseed(seed);
   }
 
+  /** The next gap, in seconds, stretched by `spacing`. */
+  private wait(base: number, spread: number): number {
+    return (base + this.rand() * spread) * this.spacing;
+  }
+
   /** Restart the encounter stream with the world. */
   reseed(seed: number): void {
     this.rand = rng(seed ^ 0x5ea41e);
-    this.timer = FIRST_ENCOUNTER_DELAY + this.rand() * FIRST_ENCOUNTER_DELAY;
+    this.timer = this.wait(FIRST_ENCOUNTER_DELAY, FIRST_ENCOUNTER_DELAY);
     this.age = 0;
     this.nextId = 1;
     this.active = null;
@@ -181,7 +198,7 @@ export class WhaleField {
       this.age += dt;
       if (this.age >= ENCOUNTER_DURATION) {
         this.active = null;
-        this.timer = 18 + this.rand() * 30;
+        this.timer = this.wait(18, 30);
         this.age = 0;
       } else {
         this.active.heading = giveWay(
@@ -205,9 +222,10 @@ export class WhaleField {
       }
     }
 
+    if (!Number.isFinite(this.spacing)) return;
     this.timer -= dt;
     if (this.timer > 0) return;
-    this.timer = 14 + this.rand() * 24;
+    this.timer = this.wait(14, 24);
 
     // The first eligible sea gets one sighting so the feature can be discovered
     // without waiting for a rare event that may happen behind the camera. After

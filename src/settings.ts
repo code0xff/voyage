@@ -46,6 +46,22 @@ export interface Settings {
   tideHours: number;
   sound: boolean;
 
+  /**
+   * How often whales and sharks are met, 0 (never) to 10.
+   *
+   * Five is the tuned rate: a whale about every eight minutes, in sight seven
+   * per cent of the time. That is far rarer than these were written at --
+   * measured, they used to be 46 an hour and in sight 42% of the time, which is
+   * a whale on the water nearly half of every passage and not what either
+   * file's own docblock says it is building. Ten is a busy sea and zero is an
+   * empty one, which is a real thing to want.
+   *
+   * Gulls are not on this slider. Their call is a navigational cue -- it says
+   * there is land before the haze gives the land up -- and turning it down is
+   * turning down a piece of the chart.
+   */
+  wildlife: number;
+
   /** Hour of day the session starts at, 0..24. */
   startHour: number;
   /** How many simulated minutes pass per real minute. 1 = real time. */
@@ -106,6 +122,7 @@ export const DEFAULT_SETTINGS: Settings = {
   setDeg: 90,
   tideHours: TIDE_PERIOD,
   sound: true,
+  wildlife: 5,
   startHour: 9,
   timeScale: 60,
   weatherMode: 'auto',
@@ -142,6 +159,7 @@ export function loadSettings(): Settings {
       setDeg: num(o.setDeg, DEFAULT_SETTINGS.setDeg, 0, 359),
       tideHours: num(o.tideHours, DEFAULT_SETTINGS.tideHours, 0, 24),
       sound: typeof o.sound === 'boolean' ? o.sound : DEFAULT_SETTINGS.sound,
+      wildlife: Math.round(num(o.wildlife, DEFAULT_SETTINGS.wildlife, 0, 10)),
       startHour: num(o.startHour, DEFAULT_SETTINGS.startHour, 0, 24),
       timeScale: num(o.timeScale, DEFAULT_SETTINGS.timeScale, 0, 600),
       weatherMode: mode,
@@ -248,3 +266,14 @@ export function withRegion(s: Settings, r: Region): Settings {
 
 /** Leaving a region for the open ocean. Conditions stay as they were left. */
 export const withoutRegion = (s: Settings): Settings => ({ ...s, region: '' });
+
+/**
+ * The gap between sightings the fields want, as a multiple of their tuned
+ * spacing: `Infinity` for none at all, 10 at the default, 5 at the top.
+ *
+ * Here rather than in either animal because both take the same number and the
+ * player sets one slider, and a mapping that lived in one of them would be the
+ * other one's to copy.
+ */
+export const wildlifeSpacing = (s: Settings): number =>
+  s.wildlife <= 0 ? Infinity : 50 / s.wildlife;

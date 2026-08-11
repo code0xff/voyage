@@ -785,7 +785,10 @@ meaning anything.
 - No boat-to-boat collision.
 - **The whales and sharks are sightings, not bodies.** They exert no force, they
   are not in the way, and losing one changes no outcome; what they do is happen
-  where you can see them. Both give way to an approaching boat, which is both
+  where you can see them — now and then, and as often as you ask: the slider
+  runs from an empty sea to a busy one, and the default is a whale about every
+  eight minutes. It used to be one every eighty seconds, in sight for two fifths
+  of every passage, which is scenery rather than an event. Both give way to an approaching boat, which is both
   what an animal does and what keeps the hull out of it, but only against a boat
   sailing a course. Chase one deliberately and you will catch it: she makes
   3.09 m/s to a whale's 1.8 and a shark's 1.6, and a pursuer that keeps
