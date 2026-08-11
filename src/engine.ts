@@ -626,7 +626,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // never scaled by `weather.state`. This is the rate in deep water; where
     // the boat actually is, the field decides.
     //
-    // The rate at its full run, now that the stream turns -- `tideAt` below
+    // The rate at its full run, now that the stream turns -- `tideRate` below
     // takes it down to slack and back the other way on the world clock.
     fullStream = currentVec(s);
     streamNow.x = fullStream.x;
