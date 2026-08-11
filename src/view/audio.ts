@@ -2,6 +2,7 @@ import type { BoatState, Diagnostics } from '../sim/boat';
 import type { WeatherState } from '../sim/weather';
 import { TAU, clamp } from '../sim/math';
 import { dominantEncounter, waveHitStrength, type WaveField } from '../sim/waves';
+import { closeAudioContext, getAudioContext } from './audio-context';
 
 /**
  * Procedural sound: everything is synthesised with WebAudio, no audio files.
@@ -129,7 +130,7 @@ export class SoundEngine {
     }
     this.started = true;
 
-    const ctx = new AudioContext();
+    const ctx = getAudioContext();
     this.ctx = ctx;
     this.noise = makeNoise(ctx);
 
@@ -622,7 +623,7 @@ export class SoundEngine {
   }
 
   dispose(): void {
-    this.ctx?.close();
+    if (this.ctx) closeAudioContext(this.ctx);
     this.ctx = null;
     this.started = false;
   }

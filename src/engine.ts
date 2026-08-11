@@ -181,6 +181,8 @@ export interface Engine {
   readonly snapshot: Snapshot;
   onFrame(cb: (s: Snapshot) => void): () => void;
   onEvent(cb: (e: EngineEvent) => void): () => void;
+  /** Start the sound graph after the view has captured a user gesture. */
+  startAudio(): void;
   /** Start a fresh session: a new world, and the boat put to sea in it. */
   putToSea(): void;
   /** Point her at somewhere, or pass null to just go sailing. */
@@ -1209,6 +1211,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     onEvent(cb) {
       eventSubs.add(cb);
       return () => eventSubs.delete(cb);
+    },
+    startAudio() {
+      void sound.start();
     },
     putToSea,
     setDestination,
