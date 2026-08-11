@@ -494,4 +494,33 @@ describe('engine', () => {
     engine.dispose();
   });
 
+
+  /**
+   * The slider reaches the animals. Read off the fields themselves rather than
+   * from anything they produce: the sightings are rare by design now, so a test
+   * that waited for one would have to run for simulated hours to say anything.
+   */
+  it('sets how often the sea has something in it, from nothing to often', () => {
+    const spacingAt = (wildlife: number) => {
+      const spy = vi.spyOn(WhaleField.prototype, 'update');
+      const sharkSpy = vi.spyOn(SharkField.prototype, 'update');
+      const engine = sailing({ wildlife });
+      engine.advance(1);
+      const whale = (spy.mock.contexts.at(-1) as WhaleField).spacing;
+      const shark = (sharkSpy.mock.contexts.at(-1) as SharkField).spacing;
+      engine.dispose();
+      spy.mockRestore();
+      sharkSpy.mockRestore();
+      return { whale, shark };
+    };
+
+    expect(spacingAt(0).whale).toBe(Infinity);
+    expect(spacingAt(0).shark).toBe(Infinity);
+    // Wider gaps the lower the setting, and both animals get the same one.
+    const few = spacingAt(1);
+    const many = spacingAt(10);
+    expect(few.whale).toBeGreaterThan(many.whale);
+    expect(few.whale).toBe(few.shark);
+    expect(Number.isFinite(many.whale)).toBe(true);
+  });
 });
