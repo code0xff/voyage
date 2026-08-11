@@ -1,5 +1,9 @@
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { SEG, SIZE, createWater, ringGeometry } from './water';
+import { HeightField } from '../sim/heightfield';
+import { RegionTerrain } from '../sim/region-terrain';
+import { regionById } from '../sim/regions';
+import { FIELD_DEPTH, SEG, SIZE, createWater, ringGeometry } from './water';
 
 /**
  * The ring the far sea is cut from.
@@ -125,6 +129,103 @@ describe('the far sea ring', () => {
     const step = SIZE / SEG;
     const north = new Set(built.filter((p) => p.z === -half).map((p) => p.x));
     for (let i = 0; i <= SEG; i++) expect(north.has(-half + i * step)).toBe(true);
+    water.dispose();
+  });
+});
+
+/** A small raster whose north and south edges have deliberately different depths. */
+function textureTerrain(): RegionTerrain {
+  const source = regionById('sf-bay');
+  if (!source) throw new Error('sf-bay region is missing');
+  const region = {
+    ...source,
+    id: 'water-test',
+    grid: { ...source.grid, width: 8, height: 8, unit: 1 },
+  };
+  const samples = new Int16Array(region.grid.width * region.grid.height).fill(-20);
+  for (let col = 0; col < region.grid.width; col++) {
+    samples[col] = -8;
+    samples[(region.grid.height - 1) * region.grid.width + col] = -32;
+  }
+  return new RegionTerrain(region, new HeightField(samples, region));
+}
+
+describe('the surveyed water texture', () => {
+  it('uploads depth in the same north-to-south rows the raster uses', () => {
+    const terrain = textureTerrain();
+    const water = createWater();
+    water.setRegion(terrain);
+
+    const material = water.mesh.material as THREE.ShaderMaterial;
+    const field = material.uniforms.uField.value as THREE.DataTexture;
+    const data = field.image.data as Uint8Array;
+    const { width, height, cell } = terrain.region.grid;
+    const halfW = terrain.height.halfWidth;
+    const halfH = terrain.height.halfHeight;
+    const greenAt = (row: number, col: number) =>
+      (data[(row * width + col) * 4 + 1] / 255) * FIELD_DEPTH;
+    const depthAtCell = (row: number, col: number) =>
+      terrain.depthAt(
+        -halfW + (col + 0.5) * cell,
+        halfH - (row + 0.5) * cell,
+      );
+
+    // The top and bottom rows are intentionally 8 m and 32 m. If the row
+    // convention is mirrored, these two assertions swap and the visible bay
+    // is reflected about its middle even though the raster itself is correct.
+    for (const row of [0, height - 1]) {
+      const expected = Math.min(FIELD_DEPTH, depthAtCell(row, 0));
+      expect(Math.abs(greenAt(row, 0) - expected)).toBeLessThanOrEqual(
+        FIELD_DEPTH / 255,
+      );
+    }
+    expect(greenAt(0, 0)).toBeLessThan(greenAt(height - 1, 0));
+
+    water.dispose();
+  });
+
+  it('keeps the shelter and depth channels independent when the wind updates', () => {
+    const source = regionById('sf-bay');
+    if (!source) throw new Error('sf-bay region is missing');
+    const region = {
+      ...source,
+      id: 'water-shelter-test',
+      grid: { ...source.grid, width: 8, height: 8, unit: 1 },
+    };
+    const samples = new Int16Array(region.grid.width * region.grid.height).fill(-20);
+    // A dry block gives the shelter sweep something to write while the depth
+    // channel remains the independently baked water depth.
+    for (let row = 3; row < 5; row++) {
+      for (let col = 3; col < 5; col++) samples[row * region.grid.width + col] = 30;
+    }
+    const terrain = new RegionTerrain(region, new HeightField(samples, region));
+    const water = createWater();
+    water.setRegion(terrain);
+    water.updateRegion(0);
+
+    const material = water.mesh.material as THREE.ShaderMaterial;
+    const field = material.uniforms.uField.value as THREE.DataTexture;
+    const data = field.image.data as Uint8Array;
+    const { width, cell } = region.grid;
+    const halfW = terrain.height.halfWidth;
+    const halfH = terrain.height.halfHeight;
+    const at = (row: number, col: number) => ({
+      x: -halfW + (col + 0.5) * cell,
+      y: halfH - (row + 0.5) * cell,
+    });
+    const byteAt = (row: number, col: number, channel: number) =>
+      data[(row * width + col) * 4 + channel];
+
+    for (const [row, col] of [[1, 1], [6, 6]]) {
+      const p = at(row, col);
+      expect(byteAt(row, col, 0)).toBe(
+        Math.round(terrain.shelter.shelterInputAt(p.x, p.y) * 255),
+      );
+      expect(byteAt(row, col, 1)).toBe(
+        Math.round(Math.min(1, terrain.depthAt(p.x, p.y) / FIELD_DEPTH) * 255),
+      );
+    }
+
     water.dispose();
   });
 });

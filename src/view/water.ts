@@ -47,7 +47,7 @@ const MAX_ISLANDS = MAX_ACTIVE_ISLANDS;
  * can show and far finer than a 25 m cell means. Anything deeper than this is
  * simply "deep", which is true of everything the colour is trying to say.
  */
-const FIELD_DEPTH = 40;
+export const FIELD_DEPTH = 40;
 /** Water shallower than this is shaded pale, m. */
 const SHOAL_DEPTH = 12;
 
