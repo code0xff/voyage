@@ -53,7 +53,7 @@ export const TIDE_PERIOD = 12.42;
  * is the ebb running back the other way.
  *
  * A cosine rather than a square wave, because the thing a tide actually does to
- * a passage is the *slack*: the stream does not turn, it dies away, hangs, and
+ * a passage is the *slack*: it does not snap round, it dies away, hangs, and
  * builds the other way. On the default period, half an hour either side of the
  * turn is a quarter of the stream and an hour either side is a half -- the
  * fractions scale with whatever period is set. A square wave would give a
