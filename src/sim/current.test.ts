@@ -86,11 +86,17 @@ describe('current', () => {
    *
    * She does not quite make the full rate, and that is not an error. Still air
    * with the boat moving through it is windage, and windage is a force -- the
-   * boat settles where hull drag through the water balances it, a little under
-   * the drift, with a knot or so of water running past her keel. Measured at
-   * 84% of a 1 m/s set. The lag is larger than a real yacht's because the hull
-   * drag that opposes it here is skin friction only, and skin friction is a
-   * poor model of resistance at a fifth of a knot.
+   * boat settles where drag through the water balances it, a little under the
+   * drift, with a knot or so of water running past her keel. Measured at 84% of
+   * a 1 m/s set.
+   *
+   * The lag is larger than a real yacht's, and the reason is not the one that
+   * used to be written here. It is not that skin friction is a poor model at a
+   * fifth of a knot: what actually holds her is the *keel*, given the
+   * broadside drag coefficient because a boat with sternway reads 180 degrees
+   * of leeway and `FOIL_CD` stops at 90. That single term is 56.7 N against
+   * 3.3 N of windage. See `docs/open-questions.md` -- including why removing it
+   * on its own makes things very much worse.
    */
   it('carries a boat with no sail force along at very nearly the drift', () => {
     const drift = 1; // m/s east

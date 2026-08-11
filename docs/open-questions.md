@@ -5,42 +5,65 @@ find it out twice.
 
 ---
 
-## Hull resistance is a single v² law, so she never quite stops
+## The keel is broadside to the flow when she makes sternway
 
-**Symptom.** A boat with the way off her takes a long time to come to rest, and
-in a calm she drifts at less than the rate of the tide.
+**Symptom.** In a flat calm with a 1 m/s stream she settles at **0.838 m/s** —
+84% of the tide — and a boat with the way off her takes a long time to stop.
 
-**Measured.**
+**Cause, and it is not the one this entry used to name.** `leeway` is
+`atan2(v, u)`, so a boat moving backwards through the water reads ±180 degrees.
+`FOIL_CD` is measured over 0–90 and `sample()` clamps above it, so the keel is
+given **1.32 — the coefficient for water hitting it broadside** — when it is in
+fact edge-on. Measured at the drift equilibrium, the fore-and-aft forces are:
 
-- Under bare poles, rounded up head to wind from 2.5 m/s, she reaches 0.47 m/s
-  at forty seconds and about 0.35 at forty-five, having sailed some 30 m.
-- Lying in a flat calm with a 1 m/s stream, she settles at **0.84 m/s** — 84% of
-  the tide. A real yacht makes very nearly all of it.
+| | N |
+|---|---|
+| windage | −3.29 |
+| hull resistance | +1.41 |
+| **keel** | **+56.68** |
 
-**Cause.** `resistance = 0.5·ρ·S·Cf·v²` is the whole of it. A pure v² law decays
-as 1/t, so the tail is long by construction, and the equilibrium in the calm is
-wherever that term balances windage rather than where a real hull would sit.
+`0.5·1025·0.162² × 3.2 m² × 1.32 = 56.8 N` — the arithmetic closes exactly, on
+a keel slipping at 16 cm/s. It is seventeen times the windage that this entry
+used to say was the only thing holding her back, and it, not the resistance
+law, is what sets the 84%.
 
-**Why it is not fixed.** `Cf = 0.0042` is described as a friction coefficient
-and is in practice an *effective total resistance* coefficient, tuned until the
-polar matched a real yacht. Adding the standard ITTC form factor `(1+k)` on top
-double-counts and slows the boat everywhere.
+**The obvious fix does not work, and that is the finding.** Taking the angle
+from the hull-frame components — `atan2(|v|, |u|)`, which folds sternway onto
+zero by construction and cannot ask the table for anything outside its range —
+is right on its own terms and identical for `u > 0`. It also breaks the boat:
 
-A linear damping term was sized instead, to bite at low speed and vanish at
-sailing speed. It cannot do both. At 3 m/s the v² term is about 484 N; a linear
-term small enough to be 1% of that is 1.6 N/(m/s), which contributes 0.3 N at
-0.2 m/s and changes nothing. One large enough to actually stop her at low speed
-is around 20 N/(m/s), which is 12% of the drag at 3 m/s and moves the polar.
+| tried | result |
+|---|---|
+| fold the angle | drift 279%, polar pinned at 7.38 kn at every wind speed |
+| fold, and key the lift on sideslip rather than leeway | the same |
+| fold, and suppress lift entirely on sternway | the same |
 
-**What it would take.** A resistance *curve* rather than one coefficient —
-friction with a form factor, plus residuary resistance as a function of Froude
-number — and then `CRUISER` retuned until the polar comes back to the table in
-the README. That is a deliberate physics project with a measurable outcome, not
-something to slip into another change.
+All three fail the same way, so it is not the lift direction. Instrumented, the
+reason is that the oversized keel term is *load-bearing*: remove it and windage
+drives her backwards over the ground with nothing to arrest it, and she
+accelerates to −3.8 m/s through the water before the hull-speed wall stops her
+at 8500 N. **The 84% is two errors holding each other up** — a foil coefficient
+read outside its domain, propping up a low-speed force balance that is not
+otherwise well posed.
 
-**What it costs today.** The anchoring manoeuvre is slower than it should be,
-which is survivable now that the sails can be handed. The calm drift is 16% shy.
-Neither is visible while actually sailing.
+**What it would take.** The same deliberate physics project this entry always
+called for, now with a diagnosis: a resistance curve, a foil model that is
+honest at large flow angles and in reversed flow, and a low-speed balance that
+stands without the accident above. Then `CRUISER` retuned until the polar comes
+back to the table in the README.
+
+**Measured on the way, so nobody repeats it.** The ITTC-57 friction line with a
+form factor — what this entry used to prescribe — does not fix either symptom.
+On a surge-only model (no keel or rudder, which is why its baseline reads 77%
+where the simulator reads 84%): drift goes 77.2% → 79.2%, the coast down to one
+knot goes 134 s → **140 s, slightly worse**, and drag at 3 m/s falls 22%, which
+costs a full retune. A linear damping term of 8 N/(m/s) does move both (83.5%,
+120 s) for 5% more drag at 3 m/s, but it is a fudge at these Reynolds numbers.
+
+**What it costs today.** The anchoring manoeuvre is slower than it should be.
+Anything that gives her sternway — backing a jib, missing a tack, coming astern
+off a berth — meets a keel with a hundred times the drag it should have.
+Neither is visible while sailing forwards, which is why it lasted.
 
 ---
 
