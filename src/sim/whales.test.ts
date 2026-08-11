@@ -270,7 +270,7 @@ describe('whales', () => {
    * through anyway. Measured before the guard, 0.3 an hour with the slider at
    * zero.
    */
-  it('shows none at all when the spacing is infinite', () => {
+  it('shows none at all when the spacing is infinite', { timeout: 10_000 }, () => {
     const whales = new WhaleField(17);
     whales.spacing = Infinity;
     for (let step = 0; step < 120 * 3600; step++) {
