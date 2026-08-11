@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createEngine, type Engine } from "@/engine";
+import type { Engine } from "@/engine";
 import { loadSettings, saveSettings, type Settings } from "@/settings";
 import { regionById } from "@/sim/regions";
 import { venueById } from "@/sim/venues";
@@ -59,90 +59,122 @@ export function App() {
   // re-creating the engine on every keystroke.
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+  // Keep Three.js out of the menu's initial bundle. The engine is loaded in the
+  // background, so a click made before it arrives must not appear to do nothing.
+  // Preserve a click made during that short load instead of making the button
+  // appear dead while the renderer chunk is arriving.
+  const pendingStart = useRef(false);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const e = createEngine(canvas, settingsRef.current);
-    setEngine(e);
+    let disposed = false;
+    let disposeEngine: (() => void) | null = null;
 
-    const offEvent = e.onEvent((ev) => {
-      // Escape backs out of whatever is in front: the chart first, the world
-      // second. Never the menu while the chart is up, which would leave a
-      // dialog open behind a chart the player thought they were closing.
-      if (ev.type === "toggleMenu") {
-        if (chartFullRef.current) setChartFull(false);
-        else setMenuOpen((v) => !v);
-      }
-      if (ev.type === "arrived") setLogVersion((v) => v + 1);
-      // The engine rolls the world, so the seed shown in the menu has to follow
-      // it -- otherwise the field would name a sea the player is not sailing in.
-      if (ev.type === "world") {
-        setSettings((s) => {
-          const next = { ...s, seed: ev.seed };
-          saveSettings(next);
-          return next;
-        });
-      }
-      if (ev.type === "sound") {
-        setSettings((s) => {
-          const next = { ...s, sound: ev.on };
-          saveSettings(next);
-          return next;
-        });
-      }
-      // Same path as the sound toggle, and for the same reason: the value is
-      // set out in the view, so the only way it survives a reload is for the
-      // view to say so and the owner of the settings to write it down.
-      if (ev.type === "photo") {
-        // Named for where she was and when, so a folder of these reads as a
-        // voyage rather than as `screenshot (14).png`.
-        const s = settingsRef.current;
-        const where =
-          regionById(s.region)?.name ?? venueById(s.venue)?.name ?? "open sea";
-        const t = new Date();
-        const pad = (n: number) => String(n).padStart(2, "0");
-        const stamp = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}-${pad(t.getHours())}${pad(t.getMinutes())}`;
-        const slug = where.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-        const url = URL.createObjectURL(ev.blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `voyage-${slug}-${stamp}.png`;
-        // In the document, and revoked a task later. Clicking a detached
-        // anchor and revoking on the next line works in Chrome and is not
-        // promised anywhere: the download has only been *started*, and a
-        // browser that had not yet read the blob would cancel it. The timeout
-        // is the whole fix -- the URL still goes, just after the read.
-        document.body.append(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 0);
-        flash.current?.animate(
-          [{ opacity: 0.75 }, { opacity: 0 }],
-          { duration: 260, easing: "ease-out" },
-        );
-      }
-      if (ev.type === "binocularPower") {
-        setSettings((s) => {
-          if (s.binocularPower === ev.power) return s;
-          const next = { ...s, binocularPower: ev.power };
-          saveSettings(next);
-          return next;
-        });
-      }
-    });
+    void import("@/engine")
+      .then(({ createEngine }) => {
+        if (disposed) return;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const e = createEngine(canvas, settingsRef.current);
+        if (disposed) {
+          e.dispose();
+          return;
+        }
+        setEngine(e);
 
-    const onResize = () => e.resize();
-    window.addEventListener("resize", onResize);
+        const offEvent = e.onEvent((ev) => {
+          // Escape backs out of whatever is in front: the chart first, the world
+          // second. Never the menu while the chart is up, which would leave a
+          // dialog open behind a chart the player thought they were closing.
+          if (ev.type === "toggleMenu") {
+            if (chartFullRef.current) setChartFull(false);
+            else setMenuOpen((v) => !v);
+          }
+          if (ev.type === "arrived") setLogVersion((v) => v + 1);
+          // The engine rolls the world, so the seed shown in the menu has to follow
+          // it -- otherwise the field would name a sea the player is not sailing in.
+          if (ev.type === "world") {
+            setSettings((s) => {
+              const next = { ...s, seed: ev.seed };
+              saveSettings(next);
+              return next;
+            });
+          }
+          if (ev.type === "sound") {
+            setSettings((s) => {
+              const next = { ...s, sound: ev.on };
+              saveSettings(next);
+              return next;
+            });
+          }
+          // Same path as the sound toggle, and for the same reason: the value is
+          // set out in the view, so the only way it survives a reload is for the
+          // view to say so and the owner of the settings to write it down.
+          if (ev.type === "photo") {
+            // Named for where she was and when, so a folder of these reads as a
+            // voyage rather than as `screenshot (14).png`.
+            const s = settingsRef.current;
+            const where =
+              regionById(s.region)?.name ?? venueById(s.venue)?.name ?? "open sea";
+            const t = new Date();
+            const pad = (n: number) => String(n).padStart(2, "0");
+            const stamp = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}-${pad(t.getHours())}${pad(t.getMinutes())}`;
+            const slug = where.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+            const url = URL.createObjectURL(ev.blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `voyage-${slug}-${stamp}.png`;
+            // In the document, and revoked a task later. Clicking a detached
+            // anchor and revoking on the next line works in Chrome and is not
+            // promised anywhere: the download has only been *started*, and a
+            // browser that had not yet read the blob would cancel it. The timeout
+            // is the whole fix -- the URL still goes, just after the read.
+            document.body.append(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 0);
+            flash.current?.animate(
+              [{ opacity: 0.75 }, { opacity: 0 }],
+              { duration: 260, easing: "ease-out" },
+            );
+          }
+          if (ev.type === "binocularPower") {
+            setSettings((s) => {
+              if (s.binocularPower === ev.power) return s;
+              const next = { ...s, binocularPower: ev.power };
+              saveSettings(next);
+              return next;
+            });
+          }
+        });
 
-    // Development hook. A backgrounded tab freezes requestAnimationFrame, so
-    // advance() is how a specific moment gets set up for a screenshot.
-    (window as unknown as { voyage: unknown }).voyage = e;
+        const onResize = () => e.resize();
+        window.addEventListener("resize", onResize);
+
+        // Development hook. A backgrounded tab freezes requestAnimationFrame, so
+        // advance() is how a specific moment gets set up for a screenshot.
+        (window as unknown as { voyage: unknown }).voyage = e;
+
+        disposeEngine = () => {
+          offEvent();
+          window.removeEventListener("resize", onResize);
+          e.dispose();
+        };
+
+        if (pendingStart.current) {
+          pendingStart.current = false;
+          e.applySettings(settingsRef.current);
+          e.putToSea();
+          setMenuOpen(false);
+          setStarted(true);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!disposed) console.error("Failed to load the sailing engine", error);
+      });
 
     return () => {
-      offEvent();
-      window.removeEventListener("resize", onResize);
-      e.dispose();
+      disposed = true;
+      disposeEngine?.();
     };
     // Intentionally runs once: the engine owns its own lifetime and is torn
     // down only when the app unmounts.
@@ -185,6 +217,10 @@ export function App() {
   const flash = useRef<HTMLDivElement>(null);
 
   const putToSea = useCallback(() => {
+    if (!engine) {
+      pendingStart.current = true;
+      return;
+    }
     engine?.applySettings(settingsRef.current);
     engine?.putToSea();
     setMenuOpen(false);
