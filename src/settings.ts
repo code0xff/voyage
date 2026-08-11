@@ -110,6 +110,15 @@ export interface Settings {
    * `sound` rather than beside the wind. It is set on the wheel while the
    * glasses are up and saved when they come down -- persisting it on every
    * notch would push a settings write through React at wheel speed.
+   *
+   * Opens at the widest rather than in the middle, because finding a thing and
+   * looking at it are two jobs and the first one wants field, not power. A
+   * blow at 220 m is a mark on the water you have to catch sight of before you
+   * can point anything at it, and 12x through a 3x-wide window is looking for
+   * it down a straw. Wind out, find it, then wind in.
+   *
+   * Only the first run, since the last power is remembered. Someone who has
+   * settled on 8x gets 8x.
    */
   binocularPower: number;
 }
@@ -133,7 +142,7 @@ export const DEFAULT_SETTINGS: Settings = {
   randomWorld: true,
   // Overwritten by `loadSettings` on a first run, which asks the browser.
   lang: 'en',
-  binocularPower: 5,
+  binocularPower: 3,
 };
 
 const KEY = 'voyage.settings.v2';

@@ -36,8 +36,8 @@ const MIN_SHORE_DISTANCE = 120;
  *
  * What it needed instead was something to see it *with*, and a reason to look.
  * The blow reaches 3.2 m and stands about 19 px at 220 m, which is a mark on
- * the water you notice; the glasses in view/scene.ts then magnify five times,
- * which is a whale. Spotting and then looking is what actually happens, and it
+ * the water you notice; the glasses in view/scene.ts then magnify it up to
+ * twelve times, which is a whale. Spotting and then looking is what actually happens, and it
  * leaves the sighting where it belongs.
  */
 const ENCOUNTER_RADIUS_MIN = 220;
