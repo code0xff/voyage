@@ -59,6 +59,12 @@ export class Telemetry {
   clear(): void {
     this.head = 0;
     this.filled = 0;
+    // The sampling clock too. Left running, the first sample of a new session
+    // lands wherever the last one happened to be through its interval, so the
+    // trace starts at a different offset depending on what was sailed before
+    // -- the same carried-over-state mistake as the sea's clock and the stale
+    // diagnostics, in the one place a graph rather than the boat can see it.
+    this.acc = 0;
     for (const c of this.channels) c.data.fill(0);
   }
 }
