@@ -13,9 +13,23 @@ import { RAD } from './math';
 describe('polar diagram', () => {
   const polar = solvePolar(CRUISER, { ...DEFAULT_ENV, tws: knotsToMs(12) });
 
+  /**
+   * Asserted on what she makes to windward, not on how fast she is moving.
+   *
+   * This used to require the speed itself to be under 1.5 kn, and passed for
+   * the wrong reason: head to wind with her sails flogging she is blown
+   * *astern*, and what held that to a crawl was a keel and rudder given the
+   * broadside drag coefficient because the flow angle read 180 degrees and the
+   * table stops at 90 (see `docs/keel-sternway.md`). With those corrected she
+   * blows back at 2.3 kn, which is what a boat with sail up does head to wind
+   * -- and the no-go zone is no less closed for it. `leeway` reads 180 and the
+   * VMG is negative, which is the claim.
+   */
   it('cannot sail into the no-go zone', () => {
     const deadUpwind = polar.points.find((p) => p.twa * RAD === 0)!;
-    expect(msToKnots(deadUpwind.speed)).toBeLessThan(1.5);
+    expect(msToKnots(deadUpwind.vmg)).toBeLessThanOrEqual(0);
+    // ...and she is going backwards to earn that, not lying still.
+    expect(Math.abs(deadUpwind.leeway * RAD)).toBeGreaterThan(90);
   });
 
   it('has its best upwind VMG at a realistic angle', () => {

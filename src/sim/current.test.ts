@@ -87,16 +87,14 @@ describe('current', () => {
    * She does not quite make the full rate, and that is not an error. Still air
    * with the boat moving through it is windage, and windage is a force -- the
    * boat settles where drag through the water balances it, a little under the
-   * drift, with a knot or so of water running past her keel. Measured at 84% of
-   * a 1 m/s set.
+   * drift, with a knot or so of water running past her keel. Measured at 80% of
+   * a 1 m/s set, and at 80% of every other set as well -- the ratio is
+   * scale-free, as a balance between two quadratic drags has to be.
    *
-   * The lag is larger than a real yacht's, and the reason is not the one that
-   * used to be written here. It is not that skin friction is a poor model at a
-   * fifth of a knot: what actually holds her is the *keel*, given the
-   * broadside drag coefficient because a boat with sternway reads 180 degrees
-   * of leeway and `FOIL_CD` stops at 90. That single term is 56.7 N against
-   * 3.3 N of windage. See `docs/open-questions.md` -- including why removing it
-   * on its own makes things very much worse.
+   * It did not used to be. It read 37% of a quarter-knot set and 91% of a
+   * two-knot one, because the keel and the rudder were both being given the
+   * broadside drag coefficient: a boat with sternway reads 180 degrees of
+   * leeway, and `FOIL_CD` stops at 90. See `docs/keel-sternway.md`.
    */
   it('carries a boat with no sail force along at very nearly the drift', () => {
     const drift = 1; // m/s east
@@ -116,7 +114,11 @@ describe('current', () => {
    * calm feeling nothing, which is not what happens.
    */
   it('makes its own apparent wind out of a drift in a dead calm', () => {
-    const { d } = settle(900, { tws: 0, current: { x: 1, y: 0 } }, 90, 0.2);
+    // An hour, not the fifteen minutes the other cases use. This asserts an
+    // identity to nine decimals, and the drift only settles that far once the
+    // slip has finished decaying -- which takes longer now that it is not being
+    // slammed into place by two coefficient errors worth fifty newtons.
+    const { d } = settle(3600, { tws: 0, current: { x: 1, y: 0 } }, 90, 0.2);
     expect(d.aws).toBeCloseTo(d.sog, 9);
     expect(d.awa * RAD).toBeCloseTo(0, 6); // heading east, drifting east
   });

@@ -1,11 +1,19 @@
 # The keel when she goes backwards
 
+> **Fixed.** The force missing from this investigation was the rudder's
+> unreported longitudinal drag, which closes both the 84% drift equilibrium and
+> the runaway exactly — see [keel-sternway-resolution.md](keel-sternway-resolution.md)
+> for the arithmetic and the proposed repair, and the section at the foot of
+> this file for what was actually done. This document is kept as the evidence
+> trail: it is wrong about the runaway being unexplained, and that is the point
+> of keeping it.
+
 A confirmed bug, an attempted fix that makes things worse, and one measurement
 that does not add up. Written down mid-investigation so that whoever picks it up
 — including me — starts from the evidence rather than from the beginning.
 
-**Nothing in `src/` has been changed.** The polar is untouched and all tests
-pass. This is a diagnosis, not a fix.
+**Written before the fix.** Everything below describes the shipped behaviour as
+it was; `src/sim/boat.ts` has since been corrected.
 
 ---
 
@@ -31,10 +39,13 @@ const cdk = sample(FOIL_CD, bDeg) + (clk * clk) / (Math.PI * cfg.keelAR);
 
 `FOIL_CD` is tabulated over 0–90 degrees and `sample()` clamps anything above it
 to the last entry, **1.32** — the coefficient for water hitting the keel
-broadside. A keel moving backwards is edge-on to the flow, where the same table
-says 0.01.
+broadside. A keel moving backwards is edge-on rather than broadside, so `1.32`
+is the wrong endpoint.
 
-So the model gives a keel going astern **132 times the drag it should have**.
+The table's `0.01` value is for flow into the leading edge, not reverse flow
+into the trailing edge, so the correct sternway coefficient and the exact
+overstatement cannot be inferred from this table. That distinction was found
+after the original investigation; see the resolution linked above.
 
 ### It is not a rounding error
 
@@ -55,8 +66,9 @@ keel  = 13.42 · 3.2 m² · 1.32 = 56.7 N
 ```
 
 on a keel slipping at 16 cm/s. It is seventeen times the windage that
-`open-questions.md` used to say was the only thing holding her back, and it —
-not the resistance law — is what sets the 84%-of-the-tide figure recorded there.
+`open-questions.md` used to say was the only thing holding her back. The later
+resolution found that it does not set the 84% figure alone: the omitted rudder
+drag supplies 54.8 N astern, and hull resistance and windage close the balance.
 
 ### Where it shows
 
@@ -116,9 +128,10 @@ It is not:
 | fold, lift keyed on `side(s.v)` not `side(leeway)` | 279% | same |
 | fold, lift suppressed entirely while `u < 0` | 279% | same |
 
-All three fail identically, so **it is not the lift direction** and it is not
-reversed-foil lift. What the fold removes is 56 N of drag that the low-speed
-balance was leaning on.
+All three fail identically, so the runaway is insensitive to the keel lift
+direction tried here. They do not establish what the correct trailing-edge-first
+lift curve is. What the fold removes is 56 N of keel drag while leaving the
+rudder's reversed-flow errors in place.
 
 ### What the runaway looks like
 
@@ -137,9 +150,11 @@ at 8500 N, drifting 2.8 m/s **backwards** over the ground in a following tide.
 
 ---
 
-## The measurement that does not add up
+## The measurement that did not add up
 
-**This is the thread to pull.**
+> **Resolved:** the missing force is the rudder's unreported longitudinal drag:
+> `1882 N` astern at `t = 100` and `8773 N` astern at `t = 200`. The original
+> reasoning is retained below as the evidence trail.
 
 At `t = 100` she is making sternway at 1.76 m/s, and the fore-and-aft forces are
 `hull +169 N`, `keel +50 N`, `windage +2.7 N` — **about 222 N, all of it
@@ -163,10 +178,9 @@ Ruled out already:
 - Not a stale probe: `keelFx` and `hullFx` are captured in the same step, inside
   the `speed > 0.02` block, which runs at these speeds.
 
-So either a force is being applied that the instrumentation above does not
-capture, or one of those four is wrong. **Resolve this before attempting the fix
-again** — it is the difference between "the fold exposes a real instability" and
-"the fold is fine and something else is broken".
+The force not captured by that instrumentation is rudder drag. `rudderForce`
+reports only lateral lift, while `qR * cdr` is added directly to surge. In
+sternway it reads the broadside coefficient and is always subtracted from `fx`.
 
 ---
 
@@ -192,11 +206,62 @@ the diagnosed cause.
 ## Where it stands
 
 The shipped behaviour is unchanged and the polar still matches the README. The
-84% figure that `open-questions.md` records is **two errors holding each other
-up**: a foil coefficient read outside its domain, propping up a low-speed force
-balance that has not been shown to stand without it.
+84% figure is a balance dominated by two reversed-flow errors: the keel reads
+the broadside coefficient while edge-on, and the centred rudder does the same
+while also substituting at least `0.3 m/s` for surge in its dynamic-pressure
+calculation and always applying drag astern. The latter is the force that
+resolves the contradiction above.
 
-Fixing it properly is the deliberate physics project that entry always called
-for — a foil model honest at large flow angles and in reversed flow, a low-speed
-balance that stands on its own, and `CRUISER` retuned until the polar comes back
-to the table. The contradiction above is the first thing to settle.
+The remaining work is to correct both foils together, choose and document a
+trailing-edge-first coefficient model, make rudder drag oppose its actual local
+flow, and remove the dynamic-pressure floor. The detailed constraints and tests
+are in [keel-sternway-resolution.md](keel-sternway-resolution.md).
+
+---
+
+## What was done
+
+Four changes, each pinned by a test that fails without it.
+
+1. **The keel's angle comes from the chord axis.** `foilAoA(u, v)` in
+   `tables.ts` returns `atan2(|across|, |along|)`, which is 0..90 by
+   construction: edge-on is zero whichever end the water arrives at. Identical
+   to `|leeway|` while `u > 0`.
+2. **The rudder's angle is folded the same way** before it reaches the tables,
+   keeping the old signed `alphaR = rudder + atan2(vRud, u)` so that forward
+   flow is untouched. `wrapPi` turning the angle end for end *is* the reversal
+   of the helm in sternway, which a boat really does.
+3. **The rudder's drag opposes her way through the water** instead of always
+   pointing aft. `fx -= qR * cdr` drove her when she was already going astern.
+4. **The rudder's dynamic pressure uses the real speed.** The `uSafe` floor
+   clamped `|u|` up to 0.3 m/s before squaring it, so a blade lying still in the
+   water was handed 54.8 N — half of the pair that made the false equilibrium.
+
+Two smaller things fell out of it. The weathervane moment took the full track
+angle, so exact sternway fed ±pi to a term derived for small forward sideslip
+and chose its direction from the sign of a numerical zero; it now takes the
+folded sideslip. And `rudderDrag` is published, because the whole investigation
+above happened for want of it.
+
+### What moved
+
+The polar is **unchanged** and still matches the README table at all four wind
+speeds, which is the point: the fold is algebraically identical for `u > 0`, and
+every steady polar solution has forward way.
+
+The drift in a calm is now **80.0% of the tide at every stream speed** — 0.25,
+0.5, 1 and 2 m/s alike. It used to read 37%, 68%, 84% and 91%. Scale-free is
+what a balance between two quadratic drags has to be, and the old spread was the
+clearest sign that something in it was not quadratic at all.
+
+Head to wind she is now blown **astern at 2.3 kn** where she used to sit nearly
+still. That is what a boat with her sails up does head to wind; what held her
+before was the same broadside coefficient. `polar.test.ts` asserted the *speed*
+was under 1.5 kn and so passed for the wrong reason; it now asserts the VMG is
+not positive, which is what "cannot sail into the no-go zone" means.
+
+### What this does not fix
+
+The coast-down is still long, and `open-questions.md` still carries the
+resistance-curve question. What has been removed is the reason to distrust every
+low-speed measurement taken before it.

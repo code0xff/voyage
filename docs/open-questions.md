@@ -5,69 +5,38 @@ find it out twice.
 
 ---
 
-## The keel is broadside to the flow when she makes sternway
+## Hull resistance is a single v² law, so the way comes off her slowly
 
-**Symptom.** In a flat calm with a 1 m/s stream she settles at **0.838 m/s** —
-84% of the tide — and a boat with the way off her takes a long time to stop.
+**Fixed and removed from this list:** the keel and the rudder were both being
+given the broadside drag coefficient in sternway, because `leeway` reads 180
+degrees and `FOIL_CD` stops at 90; the rudder's drag was taken off the surge
+unconditionally; and its dynamic pressure came off a fabricated 0.3 m/s floor.
+Those were what set the drift lag, not the resistance law. See
+[docs/keel-sternway.md](keel-sternway.md) and
+[docs/keel-sternway-resolution.md](keel-sternway-resolution.md).
 
-**Cause, and it is not the one this entry used to name.** `leeway` is
-`atan2(v, u)`, so a boat moving backwards through the water reads ±180 degrees.
-`FOIL_CD` is measured over 0–90 and `sample()` clamps above it, so the keel is
-given **1.32 — the coefficient for water hitting it broadside** — when it is in
-fact edge-on. Measured at the drift equilibrium, the fore-and-aft forces are:
+**What is left.** The way still comes off her slowly, and that part is the
+resistance law: `0.5·ρ·S·Cf·v²` decays as 1/t, so the tail is long by
+construction.
 
-| | N |
-|---|---|
-| windage | −3.29 |
-| hull resistance | +1.41 |
-| **keel** | **+56.68** |
+**Measured after the fix.** In a flat calm she now makes **80.0% of the tide at
+every stream speed** — 0.25, 0.5, 1 and 2 m/s alike, where it used to read 37%,
+68%, 84% and 91%. Scale-free is what a balance between two quadratic drags has
+to be, so the remaining lag is the honest consequence of windage against hull
+drag rather than evidence of a broken term.
 
-`0.5·1025·0.162² × 3.2 m² × 1.32 = 56.8 N` — the arithmetic closes exactly, on
-a keel slipping at 16 cm/s. It is seventeen times the windage that this entry
-used to say was the only thing holding her back, and it, not the resistance
-law, is what sets the 84%.
-
-**The obvious fix does not work, and that is the finding.** Taking the angle
-from the hull-frame components — `atan2(|v|, |u|)`, which folds sternway onto
-zero by construction and cannot ask the table for anything outside its range —
-is right on its own terms and identical for `u > 0`. It also breaks the boat:
-
-| tried | result |
-|---|---|
-| fold the angle | drift 279%, polar pinned at 7.38 kn at every wind speed |
-| fold, and key the lift on sideslip rather than leeway | the same |
-| fold, and suppress lift entirely on sternway | the same |
-
-All three fail the same way, so it is not the lift direction. Instrumented, the
-reason is that the oversized keel term is *load-bearing*: remove it and windage
-drives her backwards over the ground with nothing to arrest it, and she
-accelerates to −3.8 m/s through the water before the hull-speed wall stops her
-at 8500 N. **The 84% is two errors holding each other up** — a foil coefficient
-read outside its domain, propping up a low-speed force balance that is not
-otherwise well posed.
-
-**What it would take.** The same deliberate physics project this entry always
-called for, now with a diagnosis: a resistance curve, a foil model that is
-honest at large flow angles and in reversed flow, and a low-speed balance that
-stands without the accident above. Then `CRUISER` retuned until the polar comes
-back to the table in the README.
-
-The full investigation — how to reproduce it, the three fixes that fail, and one
-force measurement that does not add up and should be settled before trying again
-— is in [docs/keel-sternway.md](keel-sternway.md).
-
-**Measured on the way, so nobody repeats it.** The ITTC-57 friction line with a
-form factor — what this entry used to prescribe — does not fix either symptom.
-On a surge-only model (no keel or rudder, which is why its baseline reads 77%
-where the simulator reads 84%): drift goes 77.2% → 79.2%, the coast down to one
-knot goes 134 s → **140 s, slightly worse**, and drag at 3 m/s falls 22%, which
-costs a full retune. A linear damping term of 8 N/(m/s) does move both (83.5%,
-120 s) for 5% more drag at 3 m/s, but it is a fudge at these Reynolds numbers.
+**What it would take, and what not to try.** A resistance *curve* — friction
+with a form factor, plus residuary resistance as a function of Froude number —
+and then `CRUISER` retuned until the polar comes back to the README table. The
+ITTC-57 line on its own was measured and does not earn it. On a surge-only
+model (no keel or rudder, which is why its baseline reads 77%): drift 77.2% →
+79.2%, the coast down to one knot 134 s → **140 s, slightly worse**, and drag at
+3 m/s down 22%, which costs a full retune for nothing. A linear damping term of
+8 N/(m/s) moves both (83.5%, 120 s) for 5% more drag at 3 m/s, but it is a fudge
+at these Reynolds numbers.
 
 **What it costs today.** The anchoring manoeuvre is slower than it should be.
-Anything that gives her sternway — backing a jib, missing a tack, coming astern
-off a berth — meets a keel with a hundred times the drag it should have.
-Neither is visible while sailing forwards, which is why it lasted.
+It is not visible while sailing.
 
 ---
 

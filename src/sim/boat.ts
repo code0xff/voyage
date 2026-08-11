@@ -17,7 +17,7 @@ import {
   wrapPi,
   type Vec2,
 } from './math';
-import { FOIL_CD, FOIL_CL, SAIL_CD, SAIL_CL, sample } from './tables';
+import { FOIL_CD, FOIL_CL, SAIL_CD, SAIL_CL, foilAoA, sample } from './tables';
 import { boatHullSpeed, cgHeight, type BoatConfig, type Environment } from './config';
 import {
   DEPOWER_HEEL,
@@ -164,7 +164,16 @@ export interface Diagnostics {
   vmg: number; // m/s made good to windward over the ground (positive = upwind)
   hullDrag: number; // N
   keelLift: number; // N
-  rudderForce: number; // N
+  rudderForce: number; // N, athwartships
+  /**
+   * N, fore and aft. Positive is forward.
+   *
+   * Published because it was not, and that cost an investigation: the blade's
+   * drag went straight into the surge while `rudderForce` reported only its
+   * lift, so the one force that explained the boat's behaviour appeared in no
+   * diagnostic at all. See `docs/keel-sternway.md`.
+   */
+  rudderDrag: number;
   froude: number; // speed / hull speed
   sailFraction: number; // effective area as a fraction of full sail
   ceX: number; // m, longitudinal centre of effort of the current plan
@@ -532,14 +541,22 @@ export function step(
     const flowW = scale(norm(velWaterW), -1); // water flow the hull sees
     const qWater = 0.5 * env.rhoWater * speed * speed;
 
-    const bDeg = Math.abs(leeway) * RAD;
+    // The keel's chord runs fore and aft, so the flow along it is `-u` and the
+    // flow across it `-v`. Taken from the axis rather than from `leeway`, which
+    // reads 180 degrees in sternway and clamped the tables to broadside.
+    const bDeg = foilAoA(s.u, s.v);
     const clk = sample(FOIL_CL, bDeg) * Math.cos(s.heel);
     // Same story as the sail: the more the boat slips sideways, the more speed
     // it loses to induced drag.
     const cdk = sample(FOIL_CD, bDeg) + (clk * clk) / (Math.PI * cfg.keelAR);
     keelLift = qWater * cfg.keelArea * clk;
 
-    const kLiftDir = side(leeway) > 0 ? rotCW90(flowW) : rotCCW90(flowW);
+    // Lift is square to the flow, on whichever side of it resists the sideslip.
+    // Chosen by the component athwartships rather than from `side(leeway)`,
+    // because the perpendicular to the flow turns end for end when she goes
+    // astern and the leeway does not describe which way that landed.
+    const kPerp = rotCW90(flowW);
+    const kLiftDir = dot(kPerp, stb) * s.v < 0 ? kPerp : rotCCW90(flowW);
     const keelF = add(scale(kLiftDir, keelLift), scale(flowW, qWater * cfg.keelArea * cdk));
 
     // Hull resistance: friction plus wave-making. As the Froude number
@@ -576,19 +593,56 @@ export function step(
   );
 
   let rudderForce = 0;
+  let rudderDrag = 0;
   let mz = 0;
-  if (speed > 0.05) {
-    const uSafe = Math.max(Math.abs(s.u), 0.3) * Math.sign(s.u || 1);
-    const vRud = s.v - s.r * cfg.rudderArm; // the stern swings sideways with yaw rate
-    const alphaR = s.rudder + Math.atan2(vRud, uSafe);
-    const qR = 0.5 * env.rhoWater * (uSafe * uSafe + vRud * vRud) * cfg.rudderArea;
-    const clr = sample(FOIL_CL, Math.abs(alphaR) * RAD);
-    const cdr = sample(FOIL_CD, Math.abs(alphaR) * RAD);
+  /*
+   * The blade, worked in its own frame.
+   *
+   * Two things here were wrong for a long time and both only showed when she
+   * had sternway. The angle came from `atan2(vRud, u)`, which reads 180 degrees
+   * going astern and clamped `FOIL_CD` to broadside; and the drag was taken off
+   * the surge unconditionally -- `fx -= qR * cdr` -- so it pushed her aft
+   * whichever way she was actually moving, which is to say it *drove* her when
+   * she was already going backwards. See `docs/keel-sternway.md`.
+   *
+   * The dynamic pressure came off a floor of 0.3 m/s as well, so a rudder
+   * standing still in the water was given 54.8 N. Nothing needs the floor:
+   * `atan2` wants no guard against a small denominator, and the only reason to
+   * clamp was one that never applied.
+   */
+  const vRud = s.v - s.r * cfg.rudderArm; // the stern swings sideways with yaw rate
+  // Her speed past the blade, and no floor under it. The old `uSafe` clamped
+  // |u| up to 0.3 m/s before squaring it into the dynamic pressure, which gave
+  // a rudder standing still in the water 54.8 N of thrust -- half of the pair
+  // of errors that made the drift equilibrium look like one. `atan2` below
+  // needs no guard against a small denominator.
+  const rSpeed = Math.hypot(s.u, vRud);
+  if (rSpeed > 0.05) {
+    // Kept as the old signed angle, so forward flow is untouched: the helm
+    // angle adds to the sideslip the stern actually feels.
+    const alphaR = s.rudder + Math.atan2(vRud, s.u);
+    const qR = 0.5 * env.rhoWater * rSpeed * rSpeed * cfg.rudderArea;
+    // Folded onto the chord axis before it reaches the tables. Astern this read
+    // 180 degrees and `sample` clamped it to broadside; a blade going backwards
+    // is edge-on, exactly as it is going forwards.
+    const aoa = foilAoA(Math.cos(alphaR), Math.sin(alphaR));
+    const clr = sample(FOIL_CL, aoa);
+    const cdr = sample(FOIL_CD, aoa);
     // A positive angle of attack pushes the rudder to port, which kicks the
-    // stern to port, which swings the bow to starboard.
-    rudderForce = -side(alphaR) * qR * clr * Math.cos(s.heel);
+    // stern to port, which swings the bow to starboard. Reversed when she has
+    // sternway, because the water is then coming at the blade from behind --
+    // which is why the helm works backwards going astern, as it does.
+    // No `astern` factor here: `wrapPi` has already turned the angle end for
+    // end, which is the reversal. Applying both cancels them and the helm goes
+    // on working the same way round whichever way she is moving.
+    const astern = s.u < 0 ? -1 : 1;
+    rudderForce = -side(wrapPi(alphaR)) * qR * clr * Math.cos(s.heel);
+    // Drag opposes her way through the water rather than always pointing aft.
+    // Taken off the surge unconditionally, it pushed her astern when she was
+    // already going astern, and drove the runaway in `docs/keel-sternway.md`.
+    rudderDrag = -astern * qR * cdr;
+    fx += rudderDrag;
     fy += rudderForce;
-    fx -= qR * cdr;
     mz += rudderForce * -cfg.rudderArm;
   }
 
@@ -608,7 +662,10 @@ export function step(
   // the heading, so the bow should swing to starboard to line up. Flip this
   // sign and it accelerates the luff-up instead of damping it, and the boat
   // becomes unsteerable.
-  mz += cfg.weathervane * leeway * speed * speed;
+  // The folded sideslip, not the track angle: exact sternway makes `leeway`
+  // read +/-pi, which handed a term derived for small forward sideslip a huge
+  // moment whose direction came from the sign of a numerical zero.
+  mz += cfg.weathervane * Math.atan2(s.v, Math.abs(s.u)) * speed * speed;
   mz += -cfg.yawDamp * s.r * (0.6 + speed);
 
   // --- 8. Roll, pitch and heave --------------------------------------------
@@ -728,6 +785,7 @@ export function step(
     hullDrag,
     keelLift,
     rudderForce,
+    rudderDrag,
     froude: len(newVel) / boatHullSpeed(cfg),
     sailFraction: plan.fraction,
     ceX: plan.ceX,

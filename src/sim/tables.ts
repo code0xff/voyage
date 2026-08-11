@@ -16,6 +16,31 @@ export interface Table {
   y: number[];
 }
 
+/**
+ * How a symmetric foil sees a flow, given the flow in the foil's own frame.
+ *
+ * A keel or a rudder is symmetric about its chord, so the two directions along
+ * that chord are the same to it: water running from the leading edge and water
+ * running from the trailing edge both meet a blade edge-on. The coefficient
+ * angle is therefore measured from the chord *axis* and lives in 0..90, where
+ * zero is edge-on and ninety is broadside.
+ *
+ * This exists because indexing the tables with a track angle instead is a bug
+ * this project shipped for a long time. `leeway` is `atan2(v, u)`, so a boat
+ * with sternway reads 180 degrees; `FOIL_CD` stops at 90 and `sample()` clamps,
+ * so an edge-on keel was given 1.32 -- broadside -- and an edge-on rudder with
+ * it. Both then pushed hard the wrong way, and they were near enough equal and
+ * opposite to look like an equilibrium. See `docs/keel-sternway.md`.
+ *
+ * `along` is the flow component down the chord and `across` the one at right
+ * angles to it; the sign of `across` is which side of the blade the water is
+ * coming from, and is what decides which way the lift acts.
+ *
+ * @returns the angle of attack in degrees, 0..90
+ */
+export const foilAoA = (along: number, across: number): number =>
+  (Math.atan2(Math.abs(across), Math.abs(along)) * 180) / Math.PI;
+
 export function sample(t: Table, x: number): number {
   const { x: xs, y: ys } = t;
   if (x <= xs[0]) return ys[0];

@@ -165,3 +165,103 @@ describe('numerical health', () => {
     expect(msToKnots(Math.hypot(s.u, s.v))).toBeLessThan(15);
   });
 });
+
+/**
+ * What the underwater foils do when the water is not coming from ahead.
+ *
+ * `leeway` is `atan2(v, u)`, so sternway reads ±180 degrees, and `FOIL_CD` is
+ * measured over 0–90 with `sample()` clamping above it. Both the keel and the
+ * rudder were therefore given 1.32 — the coefficient for water hitting a blade
+ * broadside — when they were in fact edge-on, and the rudder's drag was taken
+ * off the surge unconditionally, so it pushed her astern while she was already
+ * going astern. The two were near enough equal and opposite to look like an
+ * equilibrium, which is how they lasted. See `docs/keel-sternway.md`.
+ *
+ * These drive the real `step()` and assert against the world -- what the water
+ * does to a boat going backwards -- rather than against the formulas.
+ */
+describe('reversed flow', () => {
+  const still = { ...DEFAULT_ENV, tws: 0 };
+  /** No sails, no wind: only what the water does to her. */
+  const drift = (over: Partial<BoatState>, seconds: number, rudder = 0) => {
+    const s = initialState({ v: 0, r: 0, heel: 0, stowed: true, ...over });
+    const ctl: Controls = { rudder, sheet: 0, twist: 0, autoTrim: false };
+    let d = step(s, CRUISER, still, ctl, DT);
+    for (let i = 1; i < Math.round(seconds / DT); i++) d = step(s, CRUISER, still, ctl, DT);
+    return { s, d };
+  };
+
+  /**
+   * The property, measured on the boat rather than on a coefficient: water is
+   * water whichever way she meets it. A hull going backwards is not the same
+   * shape as one going forwards, so this does not ask for equality -- only that
+   * the way she loses is the same order either way, which 1.32 against 0.01 is
+   * not. Broadside, she gave up seven times as much.
+   *
+   * Measured as speed lost, because the keel's drag is in no diagnostic and a
+   * test that read `hullDrag` would watch the wrong term entirely.
+   */
+  it('gives up her way at the same sort of rate going backwards', () => {
+    const lost = (u: number) => Math.abs(u) - Math.abs(drift({ u }, 5).s.u);
+    const ahead = lost(1.5);
+    const astern = lost(-1.5);
+    expect(ahead).toBeGreaterThan(0);
+    expect(astern).toBeGreaterThan(0);
+    expect(astern).toBeLessThan(ahead * 2.5);
+    expect(astern).toBeGreaterThan(ahead / 2.5);
+  });
+
+  /** She slows down going backwards, which is the whole of it. */
+  it('takes the way off her instead of driving her further astern', () => {
+    const { s } = drift({ u: -1.5 }, 20);
+    expect(s.u).toBeGreaterThan(-1.5);
+    expect(s.u).toBeLessThanOrEqual(0);
+  });
+
+  /**
+   * The blade's drag, on its own, in both directions. It used to come off the
+   * surge unconditionally -- `fx -= qR * cdr` -- so going astern it pointed the
+   * way she was already travelling. Folding the angle hides most of that by
+   * making the coefficient small, which is exactly why this is asserted on the
+   * sign rather than on anything she ends up doing.
+   */
+  it('always points the rudder drag against her way through the water', () => {
+    expect(drift({ u: 1.5 }, 0.1).d.rudderDrag).toBeLessThan(0);
+    expect(drift({ u: -1.5 }, 0.1).d.rudderDrag).toBeGreaterThan(0);
+  });
+
+  /**
+   * The fabricated dynamic pressure. `uSafe` clamped |u| up to 0.3 m/s before
+   * squaring it, so a rudder lying still in the water was handed 54.8 N -- and
+   * that force, not the resistance law, was half of what set the drift lag.
+   */
+  it('makes no rudder force at all with no water going past the blade', () => {
+    const { d } = drift({ u: 0, v: 0 }, 0.1, 0.9);
+    expect(d.rudderForce).toBe(0);
+    expect(d.rudderDrag).toBe(0);
+  });
+
+  /**
+   * The helm works backwards going astern, which is what a boat does and what
+   * the old model could not express: it took the angle from a clamped `uSafe`
+   * whose sign was the sign of `s.u`, then applied the force the same way round
+   * regardless.
+   */
+  it('reverses the helm when she has sternway', () => {
+    const ahead = drift({ u: 1.5, heading: 90 * DEG }, 4, 0.8).s.heading;
+    const astern = drift({ u: -1.5, heading: 90 * DEG }, 4, 0.8).s.heading;
+    expect(wrapPi(ahead - 90 * DEG)).toBeGreaterThan(0);
+    expect(wrapPi(astern - 90 * DEG)).toBeLessThan(0);
+  });
+
+  /**
+   * Exact sternway has no side to it. The weathervane term multiplied the full
+   * track angle by speed², so ±pi went into a term derived for small forward
+   * sideslip and picked its direction from the sign of a numerical zero.
+   */
+  it('picks no side when she is going exactly straight backwards', () => {
+    const { s } = drift({ u: -1.5, v: 0, r: 0 }, 10);
+    expect(Math.abs(s.v)).toBeLessThan(1e-9);
+    expect(Math.abs(s.r)).toBeLessThan(1e-9);
+  });
+});
