@@ -288,6 +288,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let seaTws = windMs(settings);
   /** The set at its full run, before the tide takes it down to slack. */
   let fullStream: Vec2 = currentVec(settings);
+  /**
+   * `currents.peak` is rewritten every physics step, so it is one object rather
+   * than a fresh one 120 times a second. Nothing downstream keeps a reference
+   * past the step it was handed in.
+   */
+  const streamNow: Vec2 = { x: fullStream.x, y: fullStream.y };
   const pilot = initialPilot();
   let destination: Vec2 | null = null;
   let anchored = false;
@@ -622,7 +628,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // The rate at its full run, now that the stream turns -- `tideAt` below
     // takes it down to slack and back the other way on the world clock.
     fullStream = currentVec(s);
-    currents.peak = fullStream;
+    streamNow.x = fullStream.x;
+    streamNow.y = fullStream.y;
+    currents.peak = streamNow;
     wind.gustiness = s.gustiness * weather.state.gustScale;
     wind.shiftAmplitude = 0.19 * s.gustiness * 2.2;
     waves.setFromWind(wind.baseTws * s.seaScale, wind.baseTwd);
@@ -726,6 +734,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // And a blow already scheduled belongs to an ocean that no longer exists.
     sound.silencePending();
     sharks.reseed(current.seed);
+    // The stream is at its full run again: `hour` has just been put back to the
+    // start hour, which is what the tide is measured from. Set here as well as
+    // in the step below, because the sea is built from it three lines down and
+    // would otherwise be raised on whatever the last session's tide had reached.
+    streamNow.x = fullStream.x;
+    streamNow.y = fullStream.y;
     // A new session starts with the sea its weather implies, not the one the
     // last session left behind.
     // Seeded from the same relative wind the step uses, not from the breeze
@@ -821,7 +835,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
      * displacement the waves and the wake are carried by. Nothing here has a
      * clock of its own to leave running across a restart.
      */
-    currents.peak = scale(fullStream, tideRate(hour, current.startHour, current.tideHours));
+    const tide = tideRate(hour, current.startHour, current.tideHours);
+    streamNow.x = fullStream.x * tide;
+    streamNow.y = fullStream.y * tide;
     // Weather keeps world time, not wall-clock time: a front takes hours to
     // come through, and those are the same hours the sun is moving through.
     // Its transitions are eased in real seconds, though -- how fast a squall

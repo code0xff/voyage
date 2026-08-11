@@ -468,4 +468,22 @@ describe('engine', () => {
     expect(engine.snapshot.currents.peak.y).toBeCloseTo(first, 12);
     engine.dispose();
   });
+
+  /**
+   * Regression: the sea is built from the wind relative to the moving water,
+   * and `newSession` builds it before the first physics step. With the stream
+   * turning, `currents.peak` still held whatever the last session's tide had
+   * reached, so a restart could raise its sea on a stream that is not running.
+   */
+  it('starts a session on the stream the tide is actually at', () => {
+    const engine = sailing({ driftKnots: 4, setDeg: 0, startHour: 9, timeScale: 900 });
+    // Sail past the turn, so the stream is running the other way.
+    engine.advance((TIDE_PERIOD / 2) * 3600 / 900);
+    expect(engine.snapshot.currents.peak.y).toBeLessThan(-1.9);
+
+    engine.putToSea();
+    // Back to the start hour, so back to the full flood -- before any step.
+    expect(engine.snapshot.currents.peak.y).toBeGreaterThan(1.9);
+    engine.dispose();
+  });
 });
