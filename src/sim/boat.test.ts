@@ -219,21 +219,34 @@ describe('reversed flow', () => {
   });
 
   /**
-   * The blade's drag, on its own, in both directions. It used to come off the
-   * surge unconditionally -- `fx -= qR * cdr` -- so going astern it pointed the
-   * way she was already travelling. Folding the angle hides most of that by
-   * making the coefficient small, which is exactly why this is asserted on the
-   * sign rather than on anything she ends up doing.
+   * The blade's drag, in both directions, asserted on the surge it actually
+   * produces rather than on the diagnostic. It used to come off the surge
+   * unconditionally -- `fx -= qR * cdr` -- so going astern it pointed the way
+   * she was already travelling, and a test that only read `rudderDrag` would
+   * miss a version that reported one thing and applied another.
+   *
+   * Isolated by taking the keel and the hull out of the boat, because folding
+   * the angle makes the coefficient small and either of them would otherwise
+   * swamp it.
    */
-  it('always points the rudder drag against her way through the water', () => {
-    expect(drift({ u: 1.5 }, 0.1).d.rudderDrag).toBeLessThan(0);
+  it('always works the rudder drag against her way through the water', () => {
+    const bare = { ...CRUISER, keelArea: 0, wettedArea: 0, windageArea: 0 };
+    const surge = (u: number) => {
+      const s = initialState({ u, v: 0, r: 0, heel: 0, stowed: true });
+      const ctl: Controls = { rudder: 0, sheet: 0, twist: 0, autoTrim: false };
+      for (let i = 0; i < 120; i++) step(s, bare, still, ctl, DT);
+      return s.u - u;
+    };
+    expect(surge(1.5)).toBeLessThan(0); // going ahead, she slows
+    expect(surge(-1.5)).toBeGreaterThan(0); // going astern, she slows
     expect(drift({ u: -1.5 }, 0.1).d.rudderDrag).toBeGreaterThan(0);
   });
 
   /**
-   * The fabricated dynamic pressure. `uSafe` clamped |u| up to 0.3 m/s before
-   * squaring it, so a rudder lying still in the water was handed 54.8 N -- and
-   * that force, not the resistance law, was half of what set the drift lag.
+   * Nothing moving, nothing happening. The old code reached the same answer by
+   * a different route -- its outer gate was the hull's speed, so a boat at a
+   * dead stop skipped the rudder entirely -- which is why the floor's real cost
+   * is the test below this one rather than this one.
    */
   it('makes no rudder force at all with no water going past the blade', () => {
     const { d } = drift({ u: 0, v: 0 }, 0.1, 0.9);
@@ -242,11 +255,45 @@ describe('reversed flow', () => {
   });
 
   /**
+   * And the floor's other half, which the case above cannot see: with her
+   * barely moving the pressure has to follow the speed she is actually making.
+   * `uSafe` clamped |u| up to 0.3 before squaring it, so everything below that
+   * got the same force -- at 0.1 m/s, nine times the truth.
+   */
+  it('scales rudder force with the speed she is really making', () => {
+    const at = (u: number) =>
+      Math.abs(drift({ u, v: 0 }, 0.1, 0.9).d.rudderForce);
+    // Quadratic: twice the speed, four times the force.
+    expect(at(0.2)).toBeGreaterThan(at(0.1) * 3.5);
+    expect(at(0.2)).toBeLessThan(at(0.1) * 4.5);
+  });
+
+  /**
    * The helm works backwards going astern, which is what a boat does and what
    * the old model could not express: it took the angle from a clamped `uSafe`
    * whose sign was the sign of `s.u`, then applied the force the same way round
    * regardless.
    */
+  /**
+   * The keel's lift, isolated from the rudder and the weathervane so that only
+   * its direction is under test: she must be carried to leeward of her track,
+   * not to windward, whichever way she is going through the water.
+   */
+  it('resists the sideslip whichever way she is moving', () => {
+    const bare = { ...CRUISER, rudderArea: 0, weathervane: 0 };
+    const settled = (u: number) => {
+      const s = initialState({ u, v: 0.3, r: 0, heel: 0, heading: 0, stowed: true });
+      const ctl: Controls = { rudder: 0, sheet: 0, twist: 0, autoTrim: false };
+      for (let i = 0; i < 5 * 120; i++) step(s, bare, still, ctl, DT);
+      return s.v;
+    };
+    // The sideslip is damped, not driven, and never crosses to the other side.
+    expect(settled(1.5)).toBeGreaterThan(0);
+    expect(settled(1.5)).toBeLessThan(0.3);
+    expect(settled(-1.5)).toBeGreaterThan(0);
+    expect(settled(-1.5)).toBeLessThan(0.3);
+  });
+
   it('reverses the helm when she has sternway', () => {
     const ahead = drift({ u: 1.5, heading: 90 * DEG }, 4, 0.8).s.heading;
     const astern = drift({ u: -1.5, heading: 90 * DEG }, 4, 0.8).s.heading;

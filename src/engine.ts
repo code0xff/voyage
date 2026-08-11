@@ -857,7 +857,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // The pilot steers at the physics rate, from the wind where the boat is,
     // so in wind mode it follows the shift she is actually in.
     if (pilot.mode !== 'off') {
-      ctl.rudder = pilotRudder(pilot, state.heading, env.twd, state.r);
+      ctl.rudder = pilotRudder(pilot, state.heading, env.twd, state.r, state.u);
     }
 
     if (autoReefOn) autoReef(reefState, state.heelAvg, state.heel, PHYS_DT);

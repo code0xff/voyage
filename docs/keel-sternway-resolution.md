@@ -5,8 +5,10 @@ obvious correction made the boat accelerate backwards despite every measured
 force pointing forwards. This note resolves that contradiction, separates what
 is proven from what still needs foil data, and sets out the repair constraints.
 
-**Nothing in `src/` has been changed.** This is the diagnosis and proposed
-implementation, not the fix.
+**Written as a proposal, before the fix.** It shipped in the same commit as the
+implementation, so "nothing in `src/` has been changed" was true when this was
+written and is not now. What was actually done, and where it departs from the
+proposal below, is at the foot of `keel-sternway.md`.
 
 ---
 

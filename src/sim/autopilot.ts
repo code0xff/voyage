@@ -86,11 +86,19 @@ export function cyclePilot(p: PilotState, heading: number, twa: number): void {
  * @param twd the wind direction *where the boat is*, so that in wind mode she
  *            follows the shift she is actually in rather than the mean
  */
+/**
+ * @param surge her way through the water, m/s. Needed only for its sign: the
+ *   helm works backwards when she has sternway, because the water meets the
+ *   blade from behind, and a pilot that did not know it steered *away* from its
+ *   target -- measured, an error of 10 degrees grew to 11.4 in one second with
+ *   the helm hard over the wrong way. See `docs/keel-sternway.md`.
+ */
 export function pilotRudder(
   p: PilotState,
   heading: number,
   twd: number,
   yawRate: number,
+  surge = 1,
 ): number {
   if (p.mode === 'off') return 0;
   const want = p.mode === 'wind' ? wrap2Pi(twd - p.twa) : p.heading;
@@ -98,7 +106,11 @@ export function pilotRudder(
   // Positive rudder swings the bow to starboard, which increases the heading,
   // so a positive error calls for positive helm. The rate term opposes the
   // swing already happening, so it subtracts.
-  return clamp(KP * error - KD * yawRate, -MAX_HELM, MAX_HELM);
+  //
+  // Both are reversed going astern, and the rate term with them: it damps the
+  // swing, and a damping term applied through a reversed helm drives it.
+  const astern = surge < 0 ? -1 : 1;
+  return clamp(astern * (KP * error - KD * yawRate), -MAX_HELM, MAX_HELM);
 }
 
 /** What to show on the instrument: the number the pilot is steering to. */

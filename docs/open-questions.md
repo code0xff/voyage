@@ -7,11 +7,17 @@ find it out twice.
 
 ## Hull resistance is a single v² law, so the way comes off her slowly
 
-**Fixed and removed from this list:** the keel and the rudder were both being
+**The part that was a bug is fixed:** the keel and the rudder were both being
 given the broadside drag coefficient in sternway, because `leeway` reads 180
 degrees and `FOIL_CD` stops at 90; the rudder's drag was taken off the surge
 unconditionally; and its dynamic pressure came off a fabricated 0.3 m/s floor.
-Those were what set the drift lag, not the resistance law. See
+Those were what set the drift lag, not the resistance law.
+
+**What replaced it is an approximation, not measured physics.** The tables are
+forward-inflow data, and a blade meeting the water trailing edge first is a poor
+foil by an amount nobody here knows. Reverse flow now reads the same
+coefficients as forward flow, which is the right order of magnitude and no more.
+See
 [docs/keel-sternway.md](keel-sternway.md) and
 [docs/keel-sternway-resolution.md](keel-sternway-resolution.md).
 

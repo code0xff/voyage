@@ -17,13 +17,18 @@ export interface Table {
 }
 
 /**
- * How a symmetric foil sees a flow, given the flow in the foil's own frame.
+ * The angle to sample a foil's coefficients at, given the flow in its own frame.
  *
- * A keel or a rudder is symmetric about its chord, so the two directions along
- * that chord are the same to it: water running from the leading edge and water
- * running from the trailing edge both meet a blade edge-on. The coefficient
- * angle is therefore measured from the chord *axis* and lives in 0..90, where
- * zero is edge-on and ninety is broadside.
+ * Measured from the chord *axis* rather than from the chord *direction*, so it
+ * lives in 0..90: zero is edge-on, ninety is broadside, and water arriving from
+ * astern folds onto the same angle as water arriving from ahead.
+ *
+ * **That fold is an approximation and not a symmetry.** These tables are
+ * forward-inflow data. A section meeting the water trailing edge first is a
+ * poor foil -- less lift, more drag -- and how much is not known here. What is
+ * known is that treating it as *broadside* is far more wrong than treating it
+ * as edge-on: 1.32 against 0.01, a hundred and thirty times the drag, which is
+ * what the boat was doing. This buys the right order of magnitude and no more.
  *
  * This exists because indexing the tables with a track angle instead is a bug
  * this project shipped for a long time. `leeway` is `atan2(v, u)`, so a boat

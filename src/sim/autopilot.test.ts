@@ -27,7 +27,7 @@ function sail(
   const ctl: Controls = { rudder: 0, sheet: 0, twist: 0, autoTrim: true };
   const track: { heading: number; twa: number }[] = [];
   for (let i = 0; i < seconds / DT; i++) {
-    ctl.rudder = pilotRudder(p, s.heading, env.twd, s.r);
+    ctl.rudder = pilotRudder(p, s.heading, env.twd, s.r, s.u);
     step(s, CRUISER, env, ctl, DT);
     if (i % 120 === 0) track.push({ heading: s.heading, twa: wrapPi(env.twd - s.heading) });
   }
@@ -108,5 +108,36 @@ describe('autopilot', () => {
     expect(p.twa).toBeCloseTo(-0.9, 6);
     cyclePilot(p, 0, 0);
     expect(p.mode).toBe('off');
+  });
+
+  /**
+   * Regression: the helm works backwards when she has sternway -- the water
+   * meets the blade from behind -- and the pilot did not know it. Measured
+   * before the fix, a ten-degree error grew to 11.4 in one second with the helm
+   * hard over the wrong way, and it went on growing.
+   *
+   * Driven under bare poles in a calm so that only the rudder is steering her:
+   * with sail up she would sail out of the sternway before the point was made.
+   */
+  it('steers the right way when she is going astern', () => {
+    const p = initialPilot();
+    p.mode = 'compass';
+    p.heading = 10 * DEG;
+
+    const s: BoatState = initialState({ u: -1.5, v: 0, r: 0, heel: 0, heading: 0, stowed: true });
+    const env: Environment = { ...DEFAULT_ENV, tws: 0 };
+    const ctl: Controls = { rudder: 0, sheet: 0, twist: 0, autoTrim: false };
+    const error = () => Math.abs(wrapPi(p.heading - s.heading)) * RAD;
+    const before = error();
+
+    for (let i = 0; i < 2 / DT; i++) {
+      ctl.rudder = pilotRudder(p, s.heading, env.twd, s.r, s.u);
+      step(s, CRUISER, env, ctl, DT);
+    }
+
+    expect(before).toBeCloseTo(10, 6);
+    expect(error()).toBeLessThan(before);
+    // ...and she really was going astern the whole time, or this proves nothing.
+    expect(s.u).toBeLessThan(0);
   });
 });

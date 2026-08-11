@@ -226,16 +226,27 @@ Four changes, each pinned by a test that fails without it.
 1. **The keel's angle comes from the chord axis.** `foilAoA(u, v)` in
    `tables.ts` returns `atan2(|across|, |along|)`, which is 0..90 by
    construction: edge-on is zero whichever end the water arrives at. Identical
-   to `|leeway|` while `u > 0`.
+   to `|leeway|` while `u > 0`. It is an approximation and not a symmetry -- a
+   blade meeting the water trailing edge first is a poor foil, and how poor is
+   not known here; what is known is that broadside is a hundred and thirty times
+   further from the truth.
 2. **The rudder's angle is folded the same way** before it reaches the tables,
-   keeping the old signed `alphaR = rudder + atan2(vRud, u)` so that forward
-   flow is untouched. `wrapPi` turning the angle end for end *is* the reversal
+   keeping the old signed `alphaR = rudder + atan2(vRud, u)` so that ordinary
+   forward flow is untouched -- not every forward case, since removing the
+   pressure floor changes anything slower than 0.3 m/s, and a total helm angle
+   past 90 degrees now folds. `wrapPi` turning the angle end for end *is* the reversal
    of the helm in sternway, which a boat really does.
 3. **The rudder's drag opposes her way through the water** instead of always
    pointing aft. `fx -= qR * cdr` drove her when she was already going astern.
 4. **The rudder's dynamic pressure uses the real speed.** The `uSafe` floor
-   clamped `|u|` up to 0.3 m/s before squaring it, so a blade lying still in the
-   water was handed 54.8 N — half of the pair that made the false equilibrium.
+   clamped `|u|` up to 0.3 m/s before squaring it, so anything slower was
+   charged as though it were making 0.3 — 54.8 N at the drift equilibrium, half
+   of the pair that made it look like one.
+
+5. **The autopilot was told about sternway.** It assumes positive helm increases
+   the heading, which this change deliberately reverses, so it steered away from
+   its target: a ten-degree error grew to 11.4 in a second with the helm hard
+   over the wrong way. `pilotRudder` now takes her surge and flips its command.
 
 Two smaller things fell out of it. The weathervane moment took the full track
 angle, so exact sternway fed ±pi to a term derived for small forward sideslip
@@ -245,9 +256,13 @@ above happened for want of it.
 
 ### What moved
 
-The polar is **unchanged** and still matches the README table at all four wind
-speeds, which is the point: the fold is algebraically identical for `u > 0`, and
-every steady polar solution has forward way.
+The polar's **summary points are unchanged** -- best upwind angle, tacking
+angle and top speed, at all four wind speeds, still the README table. That is
+the test that mattered: the fold is algebraically identical for `u > 0` and
+every steady solution that is *sailing* has forward way.
+
+Individual rows inside the no-go zone did move, and had to: dead upwind she was
+blown astern at 0.61 kn and now goes at 2.3 kn, which is the fix working.
 
 The drift in a calm is now **80.0% of the tide at every stream speed** — 0.25,
 0.5, 1 and 2 m/s alike. It used to read 37%, 68%, 84% and 91%. Scale-free is

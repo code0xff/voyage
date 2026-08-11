@@ -612,14 +612,19 @@ export function step(
    */
   const vRud = s.v - s.r * cfg.rudderArm; // the stern swings sideways with yaw rate
   // Her speed past the blade, and no floor under it. The old `uSafe` clamped
-  // |u| up to 0.3 m/s before squaring it into the dynamic pressure, which gave
-  // a rudder standing still in the water 54.8 N of thrust -- half of the pair
-  // of errors that made the drift equilibrium look like one. `atan2` below
+  // |u| up to 0.3 m/s before squaring it into the dynamic pressure, so anything
+  // slower than that was charged as though it were making 0.3: at the drift
+  // equilibrium, where she slipped at 0.16 m/s, that was 54.8 N -- half of the
+  // pair of errors that made it look like an equilibrium at all. (At a dead
+  // stop the old outer gate skipped the block entirely, so the floor cost
+  // nothing there; it is the slow cases it invented force for.) `atan2` below
   // needs no guard against a small denominator.
   const rSpeed = Math.hypot(s.u, vRud);
   if (rSpeed > 0.05) {
-    // Kept as the old signed angle, so forward flow is untouched: the helm
-    // angle adds to the sideslip the stern actually feels.
+    // Kept as the old signed angle, so ordinary forward flow is untouched: the
+    // helm angle adds to the sideslip the stern actually feels. Not *every*
+    // forward case -- below 0.3 m/s the pressure now follows her real speed
+    // rather than the floor, and a total helm angle past 90 degrees folds.
     const alphaR = s.rudder + Math.atan2(vRud, s.u);
     const qR = 0.5 * env.rhoWater * rSpeed * rSpeed * cfg.rudderArea;
     // Folded onto the chord axis before it reaches the tables. Astern this read
@@ -635,11 +640,22 @@ export function step(
     // No `astern` factor here: `wrapPi` has already turned the angle end for
     // end, which is the reversal. Applying both cancels them and the helm goes
     // on working the same way round whichever way she is moving.
-    const astern = s.u < 0 ? -1 : 1;
+    // Ramped rather than a step at exactly zero surge. `sign(u)` is the same
+    // number everywhere it matters -- |u| here is 0.05 or more in any case that
+    // is moving -- but a boat lying dead sideways would otherwise flip 6 N of
+    // drag end for end every step as `u` crossed zero.
+    const astern = clamp(s.u / 0.05, -1, 1);
     rudderForce = -side(wrapPi(alphaR)) * qR * clr * Math.cos(s.heel);
-    // Drag opposes her way through the water rather than always pointing aft.
-    // Taken off the surge unconditionally, it pushed her astern when she was
-    // already going astern, and drove the runaway in `docs/keel-sternway.md`.
+    // Aft when she is going ahead and forward when she is going astern, which
+    // is the whole of the change: taken off the surge unconditionally, this
+    // pushed her astern while she was already going astern and drove the
+    // runaway in `docs/keel-sternway.md`.
+    //
+    // Still resolved onto the fore-and-aft axis alone rather than along the
+    // flow, so a boat moving dead sideways gets it pointing aft. That is the
+    // decomposition the boat was tuned around and it is left as it was; taking
+    // drag along the flow and lift across it is more correct and moves the
+    // polar, which is a separate piece of work.
     rudderDrag = -astern * qR * cdr;
     fx += rudderDrag;
     fy += rudderForce;

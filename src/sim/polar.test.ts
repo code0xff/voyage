@@ -26,9 +26,16 @@ describe('polar diagram', () => {
    * VMG is negative, which is the claim.
    */
   it('cannot sail into the no-go zone', () => {
+    // A sector rather than one angle: the claim is that nothing close enough to
+    // the wind makes ground to windward, and dead ahead alone cannot say it.
+    // Fifteen degrees with room to spare -- measured, the VMG turns positive
+    // between 20 and 25, where she is close-hauled and sailing badly rather
+    // than pinned.
+    const noGo = polar.points.filter((p) => p.twa * RAD <= 15);
+    expect(noGo.length).toBeGreaterThan(3);
+    for (const p of noGo) expect(msToKnots(p.vmg)).toBeLessThanOrEqual(0);
+    // ...and dead ahead she is going backwards to earn it, not lying still.
     const deadUpwind = polar.points.find((p) => p.twa * RAD === 0)!;
-    expect(msToKnots(deadUpwind.vmg)).toBeLessThanOrEqual(0);
-    // ...and she is going backwards to earn that, not lying still.
     expect(Math.abs(deadUpwind.leeway * RAD)).toBeGreaterThan(90);
   });
 
