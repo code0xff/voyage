@@ -40,8 +40,10 @@ describe('gulls', () => {
     expect(firstAt).toBeLessThanOrEqual(15.25);
     expect(Math.hypot(first.pos.x - boat.x, first.pos.y - boat.y)).toBeGreaterThanOrEqual(50);
     expect(Math.hypot(first.pos.x - boat.x, first.pos.y - boat.y)).toBeLessThanOrEqual(140);
-    expect(first.wingspan).toBeGreaterThanOrEqual(1.6);
-    expect(first.wingspan).toBeLessThanOrEqual(1.9);
+    for (const member of first.members) {
+      expect(member.wingspan).toBeGreaterThanOrEqual(1.6);
+      expect(member.wingspan).toBeLessThanOrEqual(1.9);
+    }
 
     const opacities = [first.opacity];
     while (wildlife.flocks.some((flock) => flock.id === first.id)) {
@@ -73,9 +75,14 @@ describe('gulls', () => {
       for (let t = 0; t < 600; t += step) {
         wildlife.update(step, at, land);
         for (const flock of wildlife.flocks) {
-          expect(flock.altitude).toBeGreaterThan(8);
-          expect(flock.altitude).toBeLessThan(28);
-          seen.push(`${flock.id}:${flock.pos.x}:${flock.pos.y}:${flock.altitude}:${flock.duration}`);
+          for (const member of flock.members) {
+            expect(member.altitude).toBeGreaterThan(8);
+            expect(member.altitude).toBeLessThan(28);
+          }
+          const shape = flock.members
+            .map((m) => `${m.offset.x}/${m.offset.y}/${m.altitude}/${m.yaw}/${m.phase}`)
+            .join(',');
+          seen.push(`${flock.id}:${flock.pos.x}:${flock.pos.y}:${shape}:${flock.duration}`);
         }
       }
       return seen;
@@ -110,9 +117,75 @@ describe('gulls', () => {
     const slowFlock = advance(slow, 0.25, 4);
     const fastFlock = advance(fast, 1 / 120, 4);
     if (!slowFlock || !fastFlock) throw new Error('the active flock ended before cadence comparison');
-    expect(fastFlock.altitude).toBeCloseTo(slowFlock.altitude, 8);
+    expect(fastFlock.members.length).toBe(slowFlock.members.length);
+    expect(fastFlock.members[0].altitude).toBeCloseTo(slowFlock.members[0].altitude, 8);
     expect(fastFlock.pos.x).toBeCloseTo(slowFlock.pos.x, 8);
     expect(fastFlock.pos.y).toBeCloseTo(slowFlock.pos.y, 8);
+  });
+
+  /**
+   * Reported from the game: the birds read as going somewhere rather than
+   * working a patch of sky.
+   *
+   * The asset is one baked circuit of four birds that carries them 28 m before
+   * it repeats, so a flock of exactly one copy is a formation on passage, and
+   * nothing about a single copy can be tuned out of that. A flock is now
+   * several copies, and what makes them a flock rather than a queue is that
+   * they are turned differently and started at different points in the loop.
+   *
+   * The bounds are written out rather than imported. They are the claim -- at
+   * least three groups, mixed, facing different ways -- and read from the
+   * constants they would assert that the flock has however many groups it has.
+   */
+  it('builds a flock from several groups that are mixed rather than in step', () => {
+    const land = new Terrain([island(0, 0)]);
+    const wildlife = new Wildlife(17);
+    const boat = { x: 350, y: 0 };
+    const seen: (typeof wildlife.flocks)[number][] = [];
+
+    for (let t = 0; t < 600; t += 0.25) {
+      wildlife.update(0.25, boat, land);
+      const flock = wildlife.flocks[0];
+      if (flock && seen.at(-1)?.id !== flock.id) seen.push(flock);
+    }
+    expect(seen.length).toBeGreaterThan(4);
+
+    for (const flock of seen) {
+      expect(flock.members.length).toBeGreaterThanOrEqual(3);
+
+      // Close enough that the circuits overlap and the birds mix. The authored
+      // loop is 28 m across, so groups further apart than that are separate
+      // sightings standing next to each other.
+      for (const member of flock.members) {
+        expect(Math.hypot(member.offset.x, member.offset.y)).toBeLessThanOrEqual(16);
+      }
+      // ...and not all in one place either, or there is nothing to mix.
+      const spread = Math.max(
+        ...flock.members.map((m) => Math.hypot(m.offset.x, m.offset.y)),
+      );
+      expect(spread).toBeGreaterThan(4);
+
+      // The two that stop it being one body moving. Both are angles and phases
+      // rather than positions, so a flock could satisfy the spread above and
+      // still fly in perfect formation without them.
+      //
+      // Distinctness rather than a threshold, and deliberately: "not in step"
+      // is exactly what it means for no two groups to share a value, and any
+      // implementation that gives them all one yaw or one phase -- which is
+      // what this replaced -- fails it outright rather than by a margin
+      // somebody has to pick.
+      expect(new Set(flock.members.map((m) => m.yaw)).size).toBe(flock.members.length);
+      expect(new Set(flock.members.map((m) => m.phase)).size).toBe(flock.members.length);
+    }
+
+    // Distinctness cannot tell 0.001 apart from a full turn, so the spread is
+    // checked once over every group in every flock, where there are enough
+    // samples for the bound to be nowhere near the edge.
+    const yaws = seen.flatMap((flock) => flock.members.map((m) => m.yaw));
+    const phases = seen.flatMap((flock) => flock.members.map((m) => m.phase));
+    expect(yaws.length).toBeGreaterThan(15);
+    expect(Math.max(...yaws) - Math.min(...yaws)).toBeGreaterThan(Math.PI);
+    expect(Math.max(...phases) - Math.min(...phases)).toBeGreaterThan(0.8);
   });
 
   it('replays exactly from a seed', () => {

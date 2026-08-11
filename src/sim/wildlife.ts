@@ -37,13 +37,53 @@ export interface WildlifeEvent {
   strength: number;
 }
 
+/**
+ * One authored group within a flock.
+ *
+ * The asset is four birds on a single baked circuit, so a sighting was four
+ * birds beating in step and showing the same silhouette at the same moment.
+ * Several copies, turned away from each other and started at different points
+ * in the loop, are four birds becoming twelve to twenty and no two of them
+ * doing the same thing -- which is what a flock looks like and one copy could
+ * not be tuned into.
+ *
+ * The yaw earns its place through the silhouette and not through the track.
+ * The circuit is closed -- measured through three's own mixer, net displacement
+ * over one loop is 0.000 m -- so it is a bird going round a ring 6 to 9 m
+ * across, not a bird going anywhere, and turning the ring cannot stop a drift
+ * there is none of. What it changes is that one group is banking away while
+ * another is head on, instead of sixteen birds presenting the same profile.
+ *
+ * Worth recording because the first version of this comment claimed the
+ * opposite: that the loop carried the birds 28 m before repeating and that
+ * spreading the yaws cancelled it. The 28 m was never displacement, and it was
+ * not even the path -- that is 12 to 20 m as drawn. A flock holding station
+ * while you sail 50 m past it is the whole of why one looks like it is moving,
+ * and that is parallax, which is correct and is not what this changes.
+ */
+export interface GullFlockMember {
+  /** Where this group sits relative to the flock centre, m. */
+  offset: Vec2;
+  altitude: number;
+  /**
+   * How far this group's circuit is turned, radians, in the compass convention
+   * the rest of the project uses -- `src/view/creature.ts` negates it for the
+   * scene. It is a spread and not a bearing: the asset's own idea of forward
+   * has never been established, so this says these groups face differently, and
+   * nothing about which way any of them faces.
+   */
+  yaw: number;
+  /** Where in the authored loop this group starts, 0..1. */
+  phase: number;
+  wingspan: number;
+}
+
 export interface GullFlockSighting {
   id: number;
   pos: Vec2;
-  altitude: number;
-  wingspan: number;
   duration: number;
   opacity: number;
+  members: readonly GullFlockMember[];
 }
 
 interface ActiveFlock extends GullFlockSighting {
@@ -60,6 +100,25 @@ const GULL_RANGE = 800;
  */
 export const FLOCK_DURATION_MIN = 14;
 export const FLOCK_DURATION_MAX = 18;
+
+/**
+ * How many copies of the authored group a flock is made of, and how far they
+ * are scattered.
+ *
+ * Three is the floor because two read as a pair rather than as a flock, and
+ * five the ceiling because the asset is four birds and twenty of them over one
+ * patch of water is a colony, not a sighting near a coast.
+ *
+ * `SPREAD` is a radius, so a flock is up to 32 m across at 50 to 140 m off.
+ * Chosen by looking rather than derived: the circuits themselves are only 6 to
+ * 9 m across, so at any spread worth having the groups are separate clumps
+ * rather than interleaved, and what decides the number is how much sky a flock
+ * should take up. Much tighter reads as one dense knot; much wider stops
+ * reading as one flock at all.
+ */
+const FLOCK_GROUPS_MIN = 3;
+const FLOCK_GROUPS_MAX = 5;
+const FLOCK_SPREAD = 16;
 
 export class Wildlife {
   /** Filled during update(), drained by whoever plays the sounds. */
@@ -153,14 +212,34 @@ export class Wildlife {
     const bearing = shoreBearing + (this.flockRand() - 0.5) * 1.8;
     const distance = 50 + this.flockRand() * 90;
     const offset = compassVec(bearing);
-    const baseAltitude = 10 + this.flockRand() * 16;
+    // Low enough that every group still clears the 8 m the test guards, and
+    // high enough that the highest is under 28 m -- birds stack, but a gull at
+    // masthead height and a gull at thirty metres are not the same flock.
+    const baseAltitude = 10 + this.flockRand() * 10;
+    const groups = FLOCK_GROUPS_MIN + Math.floor(this.flockRand() * (FLOCK_GROUPS_MAX - FLOCK_GROUPS_MIN + 1));
+    const members: GullFlockMember[] = [];
+    for (let i = 0; i < groups; i++) {
+      // A disc rather than a ring, so the groups do not come out evenly spaced
+      // on a circle -- which is a shape the eye picks out immediately.
+      const angle = this.flockRand() * TAU;
+      const radius = Math.sqrt(this.flockRand()) * FLOCK_SPREAD;
+      const at = compassVec(angle);
+      members.push({
+        offset: { x: at.x * radius, y: at.y * radius },
+        altitude: baseAltitude + this.flockRand() * 6,
+        // The full circle. A narrower spread leaves the drifts pointing broadly
+        // the same way, which is the thing being fixed.
+        yaw: this.flockRand() * TAU,
+        phase: this.flockRand(),
+        // Slightly larger than life at this distance: readability wins by less
+        // than half a metre, without turning the birds into aircraft.
+        wingspan: 1.6 + this.flockRand() * 0.3,
+      });
+    }
     const flock: ActiveFlock = {
       id: this.nextFlockId++,
       pos: { x: boat.x + offset.x * distance, y: boat.y + offset.y * distance },
-      altitude: baseAltitude,
-      // Slightly larger than life at this distance: readability wins by less
-      // than half a metre, without turning the birds into aircraft.
-      wingspan: 1.6 + this.flockRand() * 0.3,
+      members,
       age: 0,
       duration:
         FLOCK_DURATION_MIN + this.flockRand() * (FLOCK_DURATION_MAX - FLOCK_DURATION_MIN),

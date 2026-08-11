@@ -830,4 +830,14 @@ occasional authored flock now gives the same cue a body, holding its patch of
 sky for a quarter of a minute within sight and then gone. Long enough to look up
 at, which six seconds was not: it read as a glitch rather than as birds.
 
+The asset is four birds on one baked circuit, and a flock is three to five
+copies of it, turned away from each other and started at different points in
+the loop. One copy is four birds beating in step and showing the same
+silhouette at the same moment, which is a formation; several are twelve to
+twenty with no two doing the same thing, which is a flock. The circuit itself
+is closed — net displacement over a loop is zero, on a ring 6 to 9 m across —
+so the turning is what varies the profiles, not what stops the birds going
+anywhere. They never went anywhere. A flock holds station while you sail past
+it, and that parallax is why one can look like it is moving.
+
 The sound is still entirely procedural. There are no audio assets.

@@ -5,10 +5,15 @@ import type { GullFlockSighting } from '../sim/wildlife';
 import { CULL_MARGIN, creatureLoader, disposeGltfScene } from './creature';
 
 interface GullAsset { model: THREE.Group; animations: readonly THREE.AnimationClip[] }
-interface GullInstance {
-  root: THREE.Group;
+/** One copy of the authored group: its own skeleton, its own place in the loop. */
+interface GullGroup {
+  pivot: THREE.Group;
   model: THREE.Object3D;
   mixer: THREE.AnimationMixer | null;
+}
+interface GullInstance {
+  root: THREE.Group;
+  groups: GullGroup[];
   materials: THREE.Material[];
 }
 
@@ -27,6 +32,29 @@ function prepare(model: THREE.Group): THREE.Group {
   model.position.set(-centre.x * scale, -centre.y * scale, -centre.z * scale);
   model.traverse((object) => { if (object instanceof THREE.Mesh) { object.castShadow = false; object.receiveShadow = false; } });
   return model;
+}
+
+/**
+ * Put one group of the authored flock where the simulation says it is.
+ *
+ * Separated out and exported because the two lines in it are a convention and
+ * not a look, which is the one kind of renderer work this project asserts --
+ * see `creature.test.ts`. Both signs have a rule behind them and both are easy
+ * to write the other way round: the scene is right-handed with sim north at
+ * -Z, and its yaw therefore runs opposite to a compass, exactly as
+ * `layOnWater` negates a heading.
+ *
+ * The turn is on the pivot rather than the model so that it rotates the whole
+ * circuit the birds fly, not the birds within it. Rotating the model alone
+ * leaves every group drifting the same way and only their headings differ,
+ * which is the appearance this was written to fix.
+ */
+export function placeGroup(
+  pivot: THREE.Object3D,
+  member: { offset: Vec2; altitude: number; yaw: number },
+): void {
+  pivot.position.set(member.offset.x, member.altitude, -member.offset.y);
+  pivot.rotation.y = -member.yaw;
 }
 
 export interface GullView {
@@ -65,9 +93,11 @@ export function createGullView(): GullView {
 
   const remove = (id: number, instance: GullInstance) => {
     group.remove(instance.root);
-    instance.mixer?.stopAllAction();
-    instance.mixer?.uncacheRoot(instance.model);
-    instance.model.traverse((object) => { if (object instanceof THREE.SkinnedMesh) object.skeleton.dispose(); });
+    for (const member of instance.groups) {
+      member.mixer?.stopAllAction();
+      member.mixer?.uncacheRoot(member.model);
+      member.model.traverse((object) => { if (object instanceof THREE.SkinnedMesh) object.skeleton.dispose(); });
+    }
     for (const material of instance.materials) material.dispose();
     instances.delete(id);
   };
@@ -85,42 +115,64 @@ export function createGullView(): GullView {
         let instance = instances.get(flock.id);
         if (!instance) {
           const root = new THREE.Group();
-          const model = cloneSkeleton(asset.model);
           const materials: THREE.Material[] = [];
-          model.traverse((object) => {
-            if (!(object instanceof THREE.Mesh)) return;
-            const source = Array.isArray(object.material) ? object.material : [object.material];
-            const cloned = source.map((material) => {
-              const copy = material.clone();
-              copy.transparent = true;
-              copy.depthWrite = false;
-              materials.push(copy);
-              return copy;
+          const groups: GullGroup[] = [];
+          const clip = asset.animations[0] as THREE.AnimationClip | undefined;
+
+          for (const member of flock.members) {
+            const pivot = new THREE.Group();
+            const model = cloneSkeleton(asset.model);
+            model.traverse((object) => {
+              if (!(object instanceof THREE.Mesh)) return;
+              const source = Array.isArray(object.material) ? object.material : [object.material];
+              const cloned = source.map((material) => {
+                const copy = material.clone();
+                copy.transparent = true;
+                copy.depthWrite = false;
+                materials.push(copy);
+                return copy;
+              });
+              object.material = Array.isArray(object.material) ? cloned : cloned[0];
             });
-            object.material = Array.isArray(object.material) ? cloned : cloned[0];
-          });
-          model.scale.multiplyScalar(flock.wingspan);
-          model.position.multiplyScalar(flock.wingspan);
-          root.add(model);
-          const mixer = asset.animations.length > 0 ? new THREE.AnimationMixer(model) : null;
-          if (mixer) {
-            const action = mixer.clipAction(asset.animations[0]);
-            // Two circuits keep the old, leisurely flight speed while leaving
-            // enough time to watch. Stretching one circuit across the longer
-            // sighting makes the wingbeats and turns look unnaturally slow.
-            action.timeScale = asset.animations[0].duration / (flock.duration * 0.5);
-            action.play();
+            model.scale.multiplyScalar(member.wingspan);
+            model.position.multiplyScalar(member.wingspan);
+            pivot.add(model);
+            placeGroup(pivot, member);
+            root.add(pivot);
+
+            const mixer = clip ? new THREE.AnimationMixer(model) : null;
+            if (mixer && clip) {
+              const action = mixer.clipAction(clip);
+              // Two circuits keep the old, leisurely flight speed while leaving
+              // enough time to watch. Stretching one circuit across the longer
+              // sighting makes the wingbeats and turns look unnaturally slow.
+              action.timeScale = clip.duration / (flock.duration * 0.5);
+              action.play();
+              // Start each group somewhere else in the loop. Without this they
+              // beat in step however they are turned, which is the tell that
+              // there is one animation behind all of them.
+              //
+              // Set on the action, in clip time. `mixer.setTime` looks like the
+              // call for this and is not: it advances the mixer, so the action
+              // arrives at `phase * duration * timeScale`. The timeScale above
+              // runs 0.37 to 0.48 across the sighting lengths, so a full spread
+              // of phases would have come out as the first 1.2 to 1.6 seconds
+              // of a 3.3 second loop.
+              action.time = member.phase * clip.duration;
+            }
+            groups.push({ pivot, model, mixer });
           }
-          instance = { root, model, mixer, materials };
+
+          instance = { root, groups, materials };
           instances.set(flock.id, instance);
           group.add(root);
         }
-        instance.mixer?.update(dt);
+        for (const member of instance.groups) member.mixer?.update(dt);
         const distance = Math.hypot(flock.pos.x - boat.x, flock.pos.y - boat.y);
         instance.root.visible = distance < visibility * CULL_MARGIN;
         if (!instance.root.visible) continue;
         for (const material of instance.materials) material.opacity = flock.opacity;
-        instance.root.position.set(flock.pos.x, flock.altitude, -flock.pos.y);
+        instance.root.position.set(flock.pos.x, 0, -flock.pos.y);
       }
     },
     dispose() { disposed = true; for (const [id, instance] of instances) remove(id, instance); if (asset) disposeGltfScene(asset.model); asset = null; },
