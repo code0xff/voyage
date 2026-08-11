@@ -87,9 +87,12 @@ describe('current', () => {
    * She does not quite make the full rate, and that is not an error. Still air
    * with the boat moving through it is windage, and windage is a force -- the
    * boat settles where drag through the water balances it, a little under the
-   * drift, with a knot or so of water running past her keel. Measured at 80% of
-   * a 1 m/s set, and at 80% of every other set as well -- the ratio is
-   * scale-free, as a balance between two quadratic drags has to be.
+   * drift, with a knot or so of water running past her keel. Measured at 80.0% of the tide at every stream speed -- 0.25, 0.5, 1 and 2 m/s
+ * alike, once settled. That last word matters: the weaker the stream the
+ * weaker the force closing on the equilibrium, so a quarter-knot set still
+ * reads 104.9% at fifteen minutes and only reaches 80.0% by the hour.
+   *
+   * Scale-free is what a balance between two quadratic drags has to be.
    *
    * It did not used to be. It read 37% of a quarter-knot set and 91% of a
    * two-knot one, because the keel and the rudder were both being given the

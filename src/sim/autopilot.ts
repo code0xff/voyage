@@ -87,7 +87,9 @@ export function cyclePilot(p: PilotState, heading: number, twa: number): void {
  *            follows the shift she is actually in rather than the mean
  */
 /**
- * @param surge her way through the water, m/s. Needed only for its sign: the
+ * @param surge her way through the water, m/s. Required rather than defaulted:
+ *   a caller that forgot it would silently get the forward-only behaviour this
+ *   exists to correct. Needed only for its sign -- the
  *   helm works backwards when she has sternway, because the water meets the
  *   blade from behind, and a pilot that did not know it steered *away* from its
  *   target -- measured, an error of 10 degrees grew to 11.4 in one second with
@@ -98,7 +100,7 @@ export function pilotRudder(
   heading: number,
   twd: number,
   yawRate: number,
-  surge = 1,
+  surge: number,
 ): number {
   if (p.mode === 'off') return 0;
   const want = p.mode === 'wind' ? wrap2Pi(twd - p.twa) : p.heading;

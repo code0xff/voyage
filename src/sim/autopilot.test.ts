@@ -37,7 +37,7 @@ function sail(
 describe('autopilot', () => {
   it('does nothing at all when it is off', () => {
     const p = initialPilot();
-    expect(pilotRudder(p, 1.2, 0.4, 0.3)).toBe(0);
+    expect(pilotRudder(p, 1.2, 0.4, 0.3, 3)).toBe(0);
   });
 
   it('holds a compass heading it is given', () => {
@@ -94,8 +94,8 @@ describe('autopilot', () => {
     const p = initialPilot();
     engage(p, 'compass', 180 * DEG, 0);
     // The worst case: pointing exactly the wrong way, with the helm hard over.
-    expect(Math.abs(pilotRudder(p, 0, 0, 0))).toBeLessThanOrEqual(0.55);
-    expect(Math.abs(pilotRudder(p, 0, 0, 2))).toBeLessThanOrEqual(0.55);
+    expect(Math.abs(pilotRudder(p, 0, 0, 0, 3))).toBeLessThanOrEqual(0.55);
+    expect(Math.abs(pilotRudder(p, 0, 0, 2, 3))).toBeLessThanOrEqual(0.55);
   });
 
   it('cycles off -> compass -> wind -> off, engaging on the course being sailed', () => {

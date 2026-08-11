@@ -521,7 +521,8 @@ export function step(
 
   // --- 5. Keel and hull hydrodynamics --------------------------------------
   // A boat does not travel along its heading; it slips slightly sideways. That
-  // angle -- leeway -- is the keel's angle of attack, and the lift it produces
+  // angle -- leeway -- is what the keel's angle of attack is taken from (see
+  // `foilAoA`, which folds it onto the chord axis), and the lift it produces
   // is what balances the sail's side force. Without it the boat would just
   // slide downwind.
   //
@@ -628,8 +629,10 @@ export function step(
     const alphaR = s.rudder + Math.atan2(vRud, s.u);
     const qR = 0.5 * env.rhoWater * rSpeed * rSpeed * cfg.rudderArea;
     // Folded onto the chord axis before it reaches the tables. Astern this read
-    // 180 degrees and `sample` clamped it to broadside; a blade going backwards
-    // is edge-on, exactly as it is going forwards.
+    // 180 degrees and `sample` clamped it to broadside, where a blade going
+    // backwards is in fact edge-on. It is not the *same* as going forwards --
+    // trailing edge first is a poor foil -- but these tables have nothing to
+    // say about that, and edge-on is much the nearer of the two ends.
     const aoa = foilAoA(Math.cos(alphaR), Math.sin(alphaR));
     const clr = sample(FOIL_CL, aoa);
     const cdr = sample(FOIL_CD, aoa);
@@ -652,10 +655,11 @@ export function step(
     // runaway in `docs/keel-sternway.md`.
     //
     // Still resolved onto the fore-and-aft axis alone rather than along the
-    // flow, so a boat moving dead sideways gets it pointing aft. That is the
-    // decomposition the boat was tuned around and it is left as it was; taking
-    // drag along the flow and lift across it is more correct and moves the
-    // polar, which is a separate piece of work.
+    // flow, so a boat moving dead sideways gets none of it at all rather than
+    // the athwartships drag she is really feeling. That is the decomposition
+    // the boat was tuned around and it is left as it was; taking drag along the
+    // flow and lift across it is more correct and moves the polar, which is a
+    // separate piece of work.
     rudderDrag = -astern * qR * cdr;
     fx += rudderDrag;
     fy += rudderForce;
@@ -678,10 +682,24 @@ export function step(
   // the heading, so the bow should swing to starboard to line up. Flip this
   // sign and it accelerates the luff-up instead of damping it, and the boat
   // becomes unsteerable.
-  // The folded sideslip, not the track angle: exact sternway makes `leeway`
-  // read +/-pi, which handed a term derived for small forward sideslip a huge
-  // moment whose direction came from the sign of a numerical zero.
-  mz += cfg.weathervane * Math.atan2(s.v, Math.abs(s.u)) * speed * speed;
+  /*
+   * The folded sideslip, not the track angle: exact sternway makes `leeway`
+   * read +/-pi, which handed a term derived for small forward sideslip a huge
+   * moment whose direction came from the sign of a numerical zero.
+   *
+   * Turned round with her, too. Folding alone leaves the moment the same sign
+   * either way, and going astern the sway integrator's `-u*r` then adds to the
+   * sideslip instead of opposing it -- anti-damping. The boat does not actually
+   * diverge, because the keel is far stronger, but with the keel and hull taken
+   * out `v` grew from 0.3 to 1.5 m/s in forty seconds, and a term that only
+   * behaves because something else outweighs it is not one to leave.
+   *
+   * A hull really is directionally unstable going astern; that it is damped
+   * here instead is a deliberate simplification, and the alternative is a boat
+   * nobody can back.
+   */
+  const sternway = s.u < 0 ? -1 : 1;
+  mz += sternway * cfg.weathervane * Math.atan2(s.v, Math.abs(s.u)) * speed * speed;
   mz += -cfg.yawDamp * s.r * (0.6 + speed);
 
   // --- 8. Roll, pitch and heave --------------------------------------------

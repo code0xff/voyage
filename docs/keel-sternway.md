@@ -221,15 +221,18 @@ are in [keel-sternway-resolution.md](keel-sternway-resolution.md).
 
 ## What was done
 
-Four changes, each pinned by a test that fails without it.
+Seven changes, each pinned by a test that fails against a faithful restoration
+of the old code -- faithful meaning the whole old structure, gate and floor and
+all, rather than one line inside the new one. Getting that wrong the first time
+is why three of these needed a second pass.
 
 1. **The keel's angle comes from the chord axis.** `foilAoA(u, v)` in
    `tables.ts` returns `atan2(|across|, |along|)`, which is 0..90 by
    construction: edge-on is zero whichever end the water arrives at. Identical
    to `|leeway|` while `u > 0`. It is an approximation and not a symmetry -- a
    blade meeting the water trailing edge first is a poor foil, and how poor is
-   not known here; what is known is that broadside is a hundred and thirty times
-   further from the truth.
+   not known here; what is known is which end of `FOIL_CD` it is nearer, and it
+   is not the broadside end the boat was using.
 2. **The rudder's angle is folded the same way** before it reaches the tables,
    keeping the old signed `alphaR = rudder + atan2(vRud, u)` so that ordinary
    forward flow is untouched -- not every forward case, since removing the
@@ -248,6 +251,15 @@ Four changes, each pinned by a test that fails without it.
    its target: a ten-degree error grew to 11.4 in a second with the helm hard
    over the wrong way. `pilotRudder` now takes her surge and flips its command.
 
+6. **The weathervane moment turns round with her.** Folded but not reversed, it
+   has the same sign astern as ahead, and the sway integrator's `-u*r` then adds
+   to the sideslip rather than opposing it. The boat does not diverge — the keel
+   is far stronger — but with the keel and hull taken out `v` grew from 0.3 to
+   1.5 m/s in forty seconds.
+
+7. **The drag's sign is ramped through zero surge** rather than stepped, so a
+   boat lying dead sideways does not flip 6 N end for end every step.
+
 Two smaller things fell out of it. The weathervane moment took the full track
 angle, so exact sternway fed ±pi to a term derived for small forward sideslip
 and chose its direction from the sign of a numerical zero; it now takes the
@@ -265,7 +277,10 @@ Individual rows inside the no-go zone did move, and had to: dead upwind she was
 blown astern at 0.61 kn and now goes at 2.3 kn, which is the fix working.
 
 The drift in a calm is now **80.0% of the tide at every stream speed** — 0.25,
-0.5, 1 and 2 m/s alike. It used to read 37%, 68%, 84% and 91%. Scale-free is
+0.5, 1 and 2 m/s alike, *once settled*. That qualifier is load-bearing: the
+weaker the stream the weaker the force closing on the equilibrium, so a
+quarter-knot set still reads 104.9% at fifteen minutes and only reaches 80.0% by
+the hour. It used to read 37%, 68%, 84% and 91% at equilibrium. Scale-free is
 what a balance between two quadratic drags has to be, and the old spread was the
 clearest sign that something in it was not quadratic at all.
 

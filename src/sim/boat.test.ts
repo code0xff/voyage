@@ -294,6 +294,37 @@ describe('reversed flow', () => {
     expect(settled(-1.5)).toBeLessThan(0.3);
   });
 
+  /**
+   * The weathervane moment, with everything that would otherwise mask it taken
+   * out of the boat. Folded but not turned round with her, it has the same sign
+   * going astern as going ahead, and the sway integrator's `-u*r` then adds to
+   * the sideslip rather than opposing it: measured that way, `v` grew from 0.3
+   * to about 1.5 m/s in forty seconds. The real boat does not diverge because
+   * the keel is far stronger, which is exactly why this has to be isolated.
+   */
+  it('damps the sideslip with its weathervane going astern, not feeds it', () => {
+    const bare = { ...CRUISER, keelArea: 0, rudderArea: 0, wettedArea: 0, windageArea: 0 };
+    const s = initialState({ u: -1.5, v: 0.3, r: 0, heel: 0, stowed: true });
+    const ctl: Controls = { rudder: 0, sheet: 0, twist: 0, autoTrim: false };
+    for (let i = 0; i < 40 * 120; i++) step(s, bare, still, ctl, DT);
+    expect(s.v).toBeLessThan(0.3);
+    expect(s.v).toBeGreaterThan(-0.3);
+  });
+
+  /**
+   * The drag's sign is ramped rather than stepped, so a boat lying dead
+   * sideways does not flip it end for end every time `u` crosses zero. Taken
+   * from `sign(u)` it was 6 N one way at the smallest positive surge and 6 N
+   * the other at the smallest negative one.
+   */
+  it('does not flip the rudder drag end for end at zero surge', () => {
+    const at = (u: number) => drift({ u, v: 0.2 }, 0.1, 0).d.rudderDrag;
+    expect(Math.abs(at(1e-9))).toBeLessThan(0.05);
+    expect(Math.abs(at(-1e-9))).toBeLessThan(0.05);
+    // ...and it is a ramp rather than a hole: away from zero it is there.
+    expect(at(0.2)).toBeLessThan(-0.5);
+  });
+
   it('reverses the helm when she has sternway', () => {
     const ahead = drift({ u: 1.5, heading: 90 * DEG }, 4, 0.8).s.heading;
     const astern = drift({ u: -1.5, heading: 90 * DEG }, 4, 0.8).s.heading;
