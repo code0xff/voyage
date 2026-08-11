@@ -189,9 +189,10 @@ describe('engine', () => {
     const snapshot = engine.snapshot;
     expect(snapshot.diag).not.toBeNull();
     expect(snapshot.diag!.sog).toBeGreaterThan(0);
-    // Afloat, and the clearance under her agrees with the depth she is in.
-    expect(snapshot.depth).toBeGreaterThan(0);
-    expect(snapshot.clearance).toBeLessThan(snapshot.depth);
+    // Water under her keel, which is the claim. `clearance < depth` looks like
+    // a check and is not: it is `depth - draft` against `depth`, so it holds
+    // however aground she is.
+    expect(snapshot.clearance).toBeGreaterThan(0);
     // 0 = afloat, 1 = hard aground.
     expect(snapshot.diag!.aground).toBe(0);
     engine.dispose();
@@ -328,6 +329,37 @@ describe('engine', () => {
     expect(fast.snapshot.darkIn).toBeLessThan(slow.snapshot.darkIn - 3000);
     slow.dispose();
     fast.dispose();
+  });
+
+  /**
+   * The documented fallback, which only means anything on a restart.
+   *
+   * The animals run before `step()`, so on the first step of a world there is
+   * no course solved yet and they are given the boat's heading instead. That is
+   * true of a fresh engine whatever it does; the case that can go wrong is the
+   * second session, where the last passage's diagnostics are still in hand and
+   * would hand the animals the course *that* boat was making.
+   */
+  it('falls back to her heading on the first step of a world, not the last one course', () => {
+    const sharkSpy = vi.spyOn(SharkField.prototype, 'update');
+
+    // A stream on the beam, so the course she ends the first passage on is
+    // nowhere near any heading she could start the second one with.
+    const engine = sailing({ driftKnots: 4, setDeg: 0 });
+    engine.advance(60);
+    const stale = engine.snapshot.diag!.cog;
+
+    sharkSpy.mockClear();
+    engine.putToSea();
+    engine.advance(1 / 120);
+
+    const first = sharkSpy.mock.calls[0];
+    expect(first).toBeDefined();
+    const heading = first![3] as number;
+    const course = first![5] as number;
+    expect(course).toBe(heading);
+    expect(Math.abs(wrapPi(course - stale))).toBeGreaterThan(0.3);
+    engine.dispose();
   });
 
   /**

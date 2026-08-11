@@ -707,6 +707,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     whales.reseed(current.seed);
     // Ids restart with the world, so a stale one would silence the first blow.
     blownFor = 0;
+    // Nothing has been solved in this world yet, and the animals below read
+    // `diag.cog` before the first step of it. Left set, the first step of a
+    // restart handed them the course the *last* passage was making, which is
+    // the same carried-over-state mistake as the sea's clock and the wildlife
+    // generators before it. No sighting is ever open on step one -- they have
+    // just been reseeded -- so this fixes a wrong number rather than a wrong
+    // encounter, but it also makes the fallback below say what it means.
+    diag = null;
+    snapshot.diag = null;
     // And a blow already scheduled belongs to an ocean that no longer exists.
     sound.silencePending();
     sharks.reseed(current.seed);
