@@ -698,7 +698,11 @@ export function step(
    * here instead is a deliberate simplification, and the alternative is a boat
    * nobody can back.
    */
-  const sternway = s.u < 0 ? -1 : 1;
+  // Ramped through zero for the same reason the rudder's drag is: a step here
+  // would swing the moment end for end every time a boat lying sideways
+  // crossed zero surge. Above 0.05 m/s it is +/-1 and forward flow is exactly
+  // as it was.
+  const sternway = clamp(s.u / 0.05, -1, 1);
   mz += sternway * cfg.weathervane * Math.atan2(s.v, Math.abs(s.u)) * speed * speed;
   mz += -cfg.yawDamp * s.r * (0.6 + speed);
 

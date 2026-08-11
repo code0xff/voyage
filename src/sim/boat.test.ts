@@ -323,6 +323,17 @@ describe('reversed flow', () => {
     expect(Math.abs(at(-1e-9))).toBeLessThan(0.05);
     // ...and it is a ramp rather than a hole: away from zero it is there.
     expect(at(0.2)).toBeLessThan(-0.5);
+
+    // The weathervane moment is ramped through zero for the same reason, and
+    // would otherwise swing a boat lying sideways end for end at the crossing.
+    const yaw = (u: number) => {
+      const s = initialState({ u, v: 0.2, r: 0, heel: 0, stowed: true });
+      step(s, CRUISER, still, { rudder: 0, sheet: 0, twist: 0, autoTrim: false }, DT);
+      return s.r;
+    };
+    // Ramped it is 8e-13; stepped it is 4.1e-5, so the bound sits between them
+    // rather than at whichever side of the crossing happens to be tidier.
+    expect(Math.abs(yaw(1e-9) - yaw(-1e-9))).toBeLessThan(1e-8);
   });
 
   it('reverses the helm when she has sternway', () => {
