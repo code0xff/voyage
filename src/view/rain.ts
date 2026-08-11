@@ -13,8 +13,36 @@ import { compassVec } from '../sim/math';
  */
 
 const MAX_DROPS = 4000;
-const BOX = 90; // m, half-extent of the volume around the camera
-const HEIGHT = 55;
+/**
+ * The volume the drops are recycled through, as a half-extent around the
+ * camera, and the height they fall from.
+ *
+ * These are the whole reason rain was reported as arriving late. The sound and
+ * the streaks are driven by the same eased `weather.rain`, and the sound is if
+ * anything the slower of the two -- it has a 0.4 s smoothing the picture does
+ * not. What differed was how much of each you get for the same number. A
+ * broadband hiss at a sixth of full gain is plainly audible over a quiet sea;
+ * a sixth of the drops was not visible at all, and nor, it turned out, were
+ * all of them. At 90 m and 55 m the volume a drop recycles through was
+ * 180 x 180 x 61 -- the height plus the six metres it goes on falling below
+ * the surface before it is recycled -- which is 1.98 million cubic metres, so
+ * even a downpour was one metre-long, one-pixel, third-opaque streak per
+ * 494 m3. You heard rain that never appeared, so the sound always seemed to
+ * lead.
+ *
+ * The file's own opening line already said where this went wrong -- rain is
+ * only ever seen close up -- and 90 m is not close up. At 26 m the same 4000
+ * drops fall through an eighteenth of the volume, 27 m3 each, and the height
+ * comes down with the box because drops thirty metres overhead are spent on
+ * nothing.
+ *
+ * No boundary shows at the edge, because drops this close subtend the width of
+ * the frame; checked by looking, at the default field of view on an ordinary
+ * aspect, where rain covers everything out to the horizon. What lies beyond is
+ * `weather.visibility`, which is where distance closing in belongs.
+ */
+const BOX = 26;
+const HEIGHT = 34;
 
 export interface RainView {
   object: THREE.Object3D;
@@ -94,7 +122,10 @@ export function createRain(): RainView {
         const pz = cz + drops[o + 2];
 
         // Streak length follows the actual velocity, so hard wind slants it.
-        const len = 0.055;
+        // Read as an exposure: 85 ms of travel. That is 0.77 m of fall in the
+        // lightest rain and 1.38 m in the heaviest, and the wind lengthens it
+        // further -- 1.65 m in a squall. Much shorter and it reads as hail.
+        const len = 0.085;
         const v = i * 6;
         positions[v] = px;
         positions[v + 1] = py;
