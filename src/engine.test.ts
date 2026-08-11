@@ -89,17 +89,24 @@ import { wrapPi } from './sim/math';
  *
  * rAF is captured rather than run. A test that let the engine schedule its own
  * frames would be racing it; instead the callback is held and called with the
- * timestamps the test chooses, which is also the only way to advance world time
- * faster than real time.
+ * timestamps the test chooses. Most tests below do not use it at all --
+ * `advance()` runs the same physics without a frame in sight -- and only the
+ * one that is about the loop needs frames to happen.
  */
 let frames: FrameRequestCallback[] = [];
 const saved: Record<string, unknown> = {};
+const had: Record<string, true> = {};
 const GLOBALS = ['window', 'document', 'requestAnimationFrame', 'cancelAnimationFrame'];
 
 beforeEach(() => {
   frames = [];
   sceneCalls.render = 0;
-  for (const key of GLOBALS) saved[key] = (globalThis as Record<string, unknown>)[key];
+  for (const key of GLOBALS) {
+    if (key in globalThis) {
+      had[key] = true;
+      saved[key] = (globalThis as Record<string, unknown>)[key];
+    }
+  }
 
   (globalThis as Record<string, unknown>).window = {
     addEventListener: () => {},
@@ -123,7 +130,12 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  for (const key of GLOBALS) (globalThis as Record<string, unknown>)[key] = saved[key];
+  // Deleted rather than set to undefined where there was nothing before, so a
+  // later file's `'window' in globalThis` sees what it would have seen.
+  for (const key of GLOBALS) {
+    if (key in had) (globalThis as Record<string, unknown>)[key] = saved[key];
+    else delete (globalThis as Record<string, unknown>)[key];
+  }
 });
 
 const canvas = () =>
@@ -148,9 +160,17 @@ const settings = (over: Partial<Settings> = {}): Settings => ({
  * The callback is held rather than scheduled, so the test decides when each
  * frame happens. The engine caps catch-up, so time has to arrive in frames and
  * not in one enormous jump.
+ *
+ * The timestamps start from `performance.now()` and not from zero, because rAF
+ * and `performance.now()` share a clock in a browser and the engine takes its
+ * first `last` from the latter. Counting from zero makes the first delta hugely
+ * negative -- there is no lower clamp on it, only `MAX_CATCHUP` above -- and
+ * the accumulator then owes so much time that the physics does not run for
+ * thousands of frames. Which is not something the engine has to defend against;
+ * it is the test handing it a timestamp no browser would.
  */
 function frame(seconds: number, msPerFrame = 16): void {
-  let t = 0;
+  let t = performance.now();
   const steps = Math.round((seconds * 1000) / msPerFrame);
   for (let i = 0; i < steps; i++) {
     const cb = frames.shift();
@@ -253,11 +273,25 @@ describe('engine', () => {
     engine.advance(30);
     engine.dispose();
 
-    expect(whaleSpy.mock.invocationCallOrder[0]).toBeLessThan(
-      sharkSpy.mock.invocationCallOrder[0],
-    );
-    expect(whaleSpy.mock.calls.length).toBe(sharkSpy.mock.calls.length);
-    expect(Array.isArray(sharkSpy.mock.calls.at(-1)![4])).toBe(true);
+    const steps = whaleSpy.mock.calls.length;
+    expect(steps).toBeGreaterThan(1000);
+    expect(sharkSpy.mock.calls.length).toBe(steps);
+
+    // Every step, not just the first pair: the claim is that this ordering
+    // holds each time round, and a loop that got it right once would satisfy a
+    // single comparison.
+    for (let i = 0; i < steps; i++) {
+      expect(whaleSpy.mock.invocationCallOrder[i]).toBeLessThan(
+        sharkSpy.mock.invocationCallOrder[i],
+      );
+    }
+
+    // The array itself, by identity. `Array.isArray` was the first version of
+    // this and asserts nothing: a fresh `[]`, or last step's sightings, or any
+    // other array would satisfy it, and each of those is the bug this is here
+    // to catch -- a shark placed clear of whales that are not in the water.
+    const whaleField = whaleSpy.mock.contexts.at(-1) as WhaleField;
+    expect(sharkSpy.mock.calls.at(-1)![4]).toBe(whaleField.events);
   });
 
   /**
@@ -266,30 +300,33 @@ describe('engine', () => {
    * another seed must not.
    */
   /**
-   * A world is reproducible from its seed all the way through. Every model has
-   * its own test for that; this is the one that says the engine wires them up
-   * the same way twice, which is where a generator left unreseeded hides.
+   * A world is reproducible from its seed. Every model has its own test for
+   * that; this says the engine assembles them the same way twice.
+   *
+   * It does *not* catch a generator left unreseeded, and an earlier version of
+   * this comment claimed it did. Each run builds a fresh engine, so there is no
+   * previous session for anything to survive from -- that is the restart test
+   * below, and it is a different question.
    */
   it('sails the same passage twice from a seed, and a different one from another', () => {
     const sail = (seed: number) => {
       const engine = sailing({ seed });
       engine.advance(120);
       const s = engine.snapshot;
-      const out = [
-        s.state.pos.x,
-        s.state.pos.y,
-        s.state.heading,
-        s.diag!.sog,
-        s.depth,
-        s.weather.state.rain,
-        s.env.tws,
-      ].join(':');
+      const track = [s.state.pos.x, s.state.pos.y, s.state.heading, s.diag!.sog].join(':');
+      const world = [s.depth, s.weather.state.rain, s.env.tws].join(':');
       engine.dispose();
-      return out;
+      return { track, world };
     };
 
-    expect(sail(4711)).toBe(sail(4711));
-    expect(sail(4711)).not.toBe(sail(20260806));
+    const first = sail(4711);
+    expect(first).toEqual(sail(4711));
+
+    // The *track* has to differ, not merely the conditions. Comparing one
+    // string of everything at once lets a different sea satisfy the assertion
+    // while two seeds sail identical courses, which is the failure worth
+    // catching here.
+    expect(sail(20260806).track).not.toBe(first.track);
   });
 
   /**
@@ -375,11 +412,14 @@ describe('engine', () => {
     fresh.dispose();
 
     const reused = sailing({ seed: 4711 });
-    reused.advance(400); // a whole passage in another world first
-    reused.putToSea(); // ...and then the one that has to match
+    reused.advance(400); // a long passage first, in this same pinned world
+    const before = reused.snapshot.session;
+    reused.putToSea(); // ...and then the session that has to match
+    // `sailing()` has already put to sea once, and `createEngine` before that,
+    // so `session > 0` would have held without the restart above ever happening.
+    expect(reused.snapshot.session).toBe(before + 1);
     reused.advance(90);
     const actual = `${reused.snapshot.state.pos.x}:${reused.snapshot.state.heading}:${reused.snapshot.weather.state.rain}`;
-    expect(reused.snapshot.session).toBeGreaterThan(0);
     reused.dispose();
 
     expect(actual).toBe(expected);
