@@ -258,11 +258,15 @@ export interface Encounter {
 export function dominantEncounter(
   waves: WaveField,
   heading: number,
+  /** Fore-and-aft, relative to the wave pattern rather than to the ground. */
   u: number,
+  /** Athwartships, likewise. */
   v: number,
 ): Encounter {
-  // Boat velocity through the water, in world axes. Forward is the heading;
-  // starboard is ninety degrees clockwise of it, per the project's convention.
+  // Her velocity through the wave pattern, in world axes -- which is through
+  // the water only while the pattern is standing still, and it no longer is.
+  // The caller owes the difference; see `SoundEngine.update`. Forward is the
+  // heading; starboard is ninety degrees clockwise of it, per the convention.
   const fx = Math.sin(heading);
   const fy = Math.cos(heading);
   const vx = fx * u + fy * v;

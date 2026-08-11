@@ -138,12 +138,11 @@ describe('drift with the water', () => {
   };
 
   /**
-   * The property that says it is really the water carrying them, and the only
-   * one that cannot be satisfied by any other change: a point going along with
-   * the stream must see exactly the sea it would see in still water. Asserted
+   * The property that says the pattern is really being carried: a point moving
+   * at the set must see exactly the sea it would see in still water. Asserted
    * against the still-water field rather than against the formula.
    */
-  it('shows a point carried along with the water the still-water sea', () => {
+  it('shows a point moving at the set the still-water sea', () => {
     const still = new WaveField(8, 0);
     const tide = new WaveField(8, 0);
     const set = { x: 0.4, y: 2 };
