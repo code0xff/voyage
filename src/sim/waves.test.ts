@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_WAVES, WaveField, dominantEncounter, waveHitStrength } from './waves';
+import { RAD, wrapPi } from './math';
+import {
+  MAX_WAVES,
+  WaveField,
+  dominantEncounter,
+  seaBearing,
+  waveHitStrength,
+  windOverWater,
+} from './waves';
 
 /**
  * Wind from the north, so the waves travel south. Everything below is stated in
@@ -237,5 +245,59 @@ describe('drift with the water', () => {
     w.restart();
     const fresh = new WaveField(8, 0);
     expect(w.heightAt(50, -20)).toBeCloseTo(fresh.heightAt(50, -20), 12);
+  });
+});
+
+/**
+ * The wind that builds the sea, and the bearing it runs from.
+ *
+ * A sea is raised by wind over a surface that is itself moving, so both the
+ * height and the direction come off the wind *relative to the water*. The
+ * height half was already here; the bearing half was not, and the boat was
+ * given her head sea from the true wind instead -- so with a stream across the
+ * breeze she felt the waves coming from somewhere the water was not.
+ *
+ * What this does not cover, in the same sense `creature.test.ts` means it: the
+ * call site. Put `wind.baseTwd` back into `sea.dir` in `engine.ts` and every
+ * assertion here still passes. Reaching it needs an observable the boat's own
+ * response does not contaminate, and there is not one -- with the stream set
+ * two ways she also ends up on two headings, which moves the added resistance
+ * by more than the bearing does. What holds the two together is that
+ * `setFromWind` and `sea.dir` are handed the same variable.
+ */
+describe('wind over the water', () => {
+  const still = { x: 0, y: 0 };
+
+  it('is the true wind when the water is still', () => {
+    for (const twd of [0, 1.1, 3.0, -2.2]) {
+      expect(seaBearing(windOverWater(twd, 8, still))).toBeCloseTo(wrapPi(twd), 9);
+    }
+  });
+
+  /** Wind against tide is a bigger sea, wind with tide a smaller one. */
+  it('is stronger against the stream and weaker with it', () => {
+    // Wind from the north: it blows towards the south, so a stream setting
+    // south runs with it and one setting north runs against.
+    const withIt = windOverWater(0, 8, { x: 0, y: -2 });
+    const against = windOverWater(0, 8, { x: 0, y: 2 });
+    expect(Math.hypot(withIt.x, withIt.y)).toBeCloseTo(6, 9);
+    expect(Math.hypot(against.x, against.y)).toBeCloseTo(10, 9);
+  });
+
+  /**
+   * And a stream across it turns the sea, mirrored about the wind -- which is
+   * the part that was missing. Nineteen degrees for two knots across eight,
+   * which is a different sea to punch into and not a smaller one.
+   */
+  it('turns the sea when the stream runs across the wind', () => {
+    const east = seaBearing(windOverWater(0, 8, { x: 2, y: 0 })) * RAD;
+    const west = seaBearing(windOverWater(0, 8, { x: -2, y: 0 })) * RAD;
+    expect(east).toBeCloseTo(-west, 9);
+    expect(Math.abs(east)).toBeGreaterThan(10);
+    expect(Math.abs(east)).toBeLessThan(20);
+    // Same strength either way: only the bearing moved.
+    const e = windOverWater(0, 8, { x: 2, y: 0 });
+    const w = windOverWater(0, 8, { x: -2, y: 0 });
+    expect(Math.hypot(e.x, e.y)).toBeCloseTo(Math.hypot(w.x, w.y), 12);
   });
 });

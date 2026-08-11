@@ -493,4 +493,5 @@ describe('engine', () => {
     expect(engine.snapshot.currents.peak.y).toBeGreaterThan(1.9);
     engine.dispose();
   });
+
 });

@@ -24,6 +24,32 @@ export const MAX_WAVES = 4;
  * Tuned for fetch-limited coastal water rather than a fully developed ocean.
  * The polar solver uses the same function so the simulator and the polar agree.
  */
+/**
+ * The wind over the water, m/s, world frame -- the velocity that actually
+ * builds and turns a sea.
+ *
+ * A sea is raised by wind blowing over a surface that is itself moving, so what
+ * matters is the wind *relative to the water*: a stream running against the
+ * breeze makes a bigger sea and one running with it a smaller, which is what
+ * these places are known for and costs one subtraction rather than a model. A
+ * stream running across it turns the sea as well, which is the half that is
+ * easy to leave out -- and was, so the boat felt her head sea coming from
+ * where the wind was rather than from where the waves were.
+ *
+ * Both the height and the bearing come off this one vector, which is the point
+ * of it being a vector: they cannot disagree.
+ *
+ * @param twd where the wind blows from, compass rad
+ */
+export const windOverWater = (twd: number, tws: number, current: Vec2): Vec2 => ({
+  x: -Math.sin(twd) * tws - current.x,
+  y: -Math.cos(twd) * tws - current.y,
+});
+
+/** Where that sea runs *from*, compass rad -- what `setFromWind` wants. */
+export const seaBearing = (overWater: Vec2): number =>
+  Math.atan2(-overWater.x, -overWater.y);
+
 export const waveHeightFromWind = (tws: number): number => 0.013 * Math.max(tws, 0.5) ** 2;
 
 export interface WaveComponent {

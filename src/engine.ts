@@ -18,7 +18,7 @@ import { passageInfo, type PassageInfo, type PassageRecord } from './sim/passage
 import { anchorage, type Anchorage } from './sim/anchorage';
 import { PassageLog } from './sim/passage';
 import { logbook } from './logbook';
-import { WaveField, sampleHull, type HullWaveSample } from './sim/waves';
+import { WaveField, sampleHull, seaBearing, windOverWater, type HullWaveSample } from './sim/waves';
 import { MAX_REEF, autoReef, type ReefState } from './sim/sailplan';
 import { cyclePilot, initialPilot, pilotRudder, type PilotState } from './sim/autopilot';
 import {
@@ -26,7 +26,6 @@ import {
   RAD,
   approach,
   clamp,
-  compassAngle,
   compassVec,
   len,
   scale,
@@ -869,18 +868,18 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // exactly what these places are known for, and it costs one subtraction
     // rather than a model. Two and a half knots of foul stream under a
     // twenty-knot breeze is a twenty-two-knot sea.
-    const overWater = sub(scale(compassVec(wind.baseTwd), -wind.baseTws), currents.peak);
+    const overWater = windOverWater(wind.baseTwd, wind.baseTws, currents.peak);
     seaTws = approach(seaTws, len(overWater), SEA_BUILD_TAU, PHYS_DT * current.timeScale);
     // The direction goes with the speed. Taking the magnitude of the relative
     // wind and then building the sea on the *true* wind's bearing was half the
     // change: a stream running across the breeze turns the sea as well as
     // raising it, and the boat would have met waves from a direction nothing
-    // was blowing from. `compassAngle` of the travel direction, reversed, is
-    // the bearing it is coming from.
+    // was blowing from. `seaBearing` reverses the travel direction to give the
+    // bearing it is coming from.
     // Where the sea is coming from: the wind over the *water*, which a stream
     // turns as well as raising. Kept so the added resistance below is told the
     // same bearing the waves were built from.
-    seaTwd = compassAngle(scale(overWater, -1));
+    seaTwd = seaBearing(overWater);
     waves.setFromWind(seaTws * current.seaScale, seaTwd);
 
     wind.update(PHYS_DT);
