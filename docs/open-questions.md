@@ -74,16 +74,27 @@ together.
 
 ---
 
-## No layline advice when a tide is running
+## There is no layline advice at all
 
-The layline readout switches itself off with a stream running, and says so.
+**This entry described a readout that no longer exists.** The layline was part
+of the racing machinery and went with it in "feat: remove racing, which passage
+making has replaced". Nothing turns itself off with a tide except the polar
+card's live marker, and that one is right to: the curve is a still-water polar,
+so with a tide under her the gap between the marker and the curve stops meaning
+"how much you are leaving out there".
 
-A layline is where the *ground* track fetches the mark, and the number behind
-the readout is a still-water polar's best upwind angle, which cannot express
-where a tide has moved it to. Silence beats a confident lie.
+What is true, and is why nobody has rebuilt it: on a passage the useful number
+is already there. `courseToSteer` is the classic tidal calculation -- what to
+steer so the stream sets her *onto* the line rather than off it -- and it is
+computed with the tide rather than in spite of it.
 
-A tidal layline is a feature rather than a patch: it needs the polar solved for
-ground-referenced VMG in a given stream, which is a different solve.
+A tidal layline would still be a feature, and a real one: it needs the polar
+solved for ground-referenced VMG in a given stream, which is a different solve
+from the still-water one. It has no consumer today.
+
+Corrected on the way past: the "dead upwind" advice used a fixed 40 degrees for
+her closest approach to the wind, where the polar gives 45 in a breeze and 55
+at both ends of the range. It now asks the polar.
 
 ---
 

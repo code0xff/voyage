@@ -67,7 +67,12 @@ export function PassageBar() {
         bits.push(t(steerToHold(cts.toFixed(0))));
       }
     }
-    if (mustTack(p, 40 * DEG)) bits.push(t(PASSAGE.deadUpwind));
+    // Her own closest approach to the wind, from the polar, rather than a
+    // number written here: it runs from 45 degrees in a breeze to 55 at both
+    // ends of the range, so a fixed 40 said she could lay marks she cannot.
+    // The constant is only the fallback for a polar that has not solved yet.
+    const noGo = s.polar?.bestUpwind ? Math.abs(s.polar.bestUpwind.twa) : 40 * DEG;
+    if (mustTack(p, noGo)) bits.push(t(PASSAGE.deadUpwind));
     if (p.eta !== null && p.eta > s.darkIn) bits.push(t(PASSAGE.afterDark));
     return bits.join('  ·  ');
   });

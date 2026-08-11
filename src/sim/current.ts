@@ -33,9 +33,12 @@ import { knotsToMs } from './units';
 /**
  * Below this rate a tide is not worth mentioning, m/s.
  *
- * Shared, because two readouts turn themselves off when a tide is running --
- * the layline advice and the polar's live marker, both built on a still-water
- * polar -- and they have to agree about when that starts.
+ * Behind `running`, which is what the polar card's live marker turns itself off
+ * on: the curve is a still-water polar, so with a tide under her the gap
+ * between the marker and the curve stops meaning what it means.
+ *
+ * It used to say two readouts depended on this. The other was racing's layline
+ * advice, which went with the rest of the race machinery.
  */
 export const SLACK = 0.05;
 
