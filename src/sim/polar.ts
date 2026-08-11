@@ -161,3 +161,25 @@ export function formatPolar(polar: Polar, cfg: BoatConfig): string {
   lines.push(`Top speed         : ${msToKnots(polar.maxSpeed).toFixed(2)} kn`);
   return lines.join('\n');
 }
+
+/**
+ * The closest to the true wind she can still make ground, rad, or null when the
+ * polar cannot say.
+ *
+ * The first angle whose VMG is positive, which is what "inside the no-go zone"
+ * has to mean: not the angle she sails *best* at. Those are far apart -- at
+ * twelve knots she works to windward best at 45 degrees but is still gaining at
+ * 25 -- and using the optimum tells a helmsman to tack for a mark he can lay.
+ *
+ * It moves a great deal with the wind: 20 degrees in three knots, 25 through
+ * the middle of the range, 50 at thirty-five and 60 at forty, as she reefs and
+ * meets a head sea. A constant cannot stand in for it, which is what a fixed
+ * 40 degrees in `PassageBar` was doing.
+ */
+export function noGoAngle(polar: Polar): number | null {
+  let best: number | null = null;
+  for (const p of polar.points) {
+    if (p.vmg > 0 && (best === null || p.twa < best)) best = p.twa;
+  }
+  return best;
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CRUISER, DEFAULT_ENV } from './config';
-import { solvePolar } from './polar';
+import { noGoAngle, solvePolar } from './polar';
 import { knotsToMs, msToKnots } from './units';
 import { RAD } from './math';
 
@@ -90,5 +90,50 @@ describe('polar diagram', () => {
     const strong = solvePolar(CRUISER, { ...DEFAULT_ENV, tws: knotsToMs(30) }, 5);
     expect(strong.bestUpwind!.sailFraction).toBeLessThan(0.75);
     expect(polar.bestUpwind!.sailFraction).toBe(1);
+  });
+});
+
+/**
+ * What "inside the no-go zone" means, which is not what she sails best at.
+ *
+ * A fixed 40 degrees used to stand in for this in `PassageBar`, and the polar
+ * says it cannot: the boundary runs from 20 degrees in a drifter to 60 in a
+ * gale. `bestUpwind` cannot stand in for it either -- at twelve knots that is
+ * 45 while she is still gaining ground at 25 -- and using it tells a helmsman
+ * to tack for a mark he can lay.
+ */
+describe('the no-go boundary', () => {
+  const at = (kn: number) => {
+    const p = solvePolar(CRUISER, { ...DEFAULT_ENV, tws: knotsToMs(kn) });
+    return { polar: p, noGo: noGoAngle(p)! * RAD };
+  };
+
+  it('is where she stops making ground, not where she makes it best', () => {
+    const { polar, noGo } = at(12);
+    expect(noGo).toBeLessThan(polar.bestUpwind!.twa * RAD);
+    // Everything inside it loses ground, and the boundary itself gains.
+    for (const p of polar.points) {
+      if (p.twa * RAD < noGo) expect(p.vmg).toBeLessThanOrEqual(0);
+    }
+    expect(polar.points.find((p) => p.twa * RAD === noGo)!.vmg).toBeGreaterThan(0);
+  });
+
+  /**
+   * It widens with the wind, and hard at the top of the range: reefed sails and
+   * a head sea. Measured, 20 degrees in three knots, 25 through the middle, 60
+   * at forty -- which is the whole reason a constant will not do.
+   *
+   * Note it does *not* open up in light air, where `bestUpwind` does. The angle
+   * she works to windward best at and the angle she stops gaining at are two
+   * different curves, and only one of them is what "no-go" means.
+   */
+  it('widens with the wind, hardest in a gale', { timeout: 20000 }, () => {
+    const light = at(3).noGo;
+    const middle = at(12).noGo;
+    const heavy = at(40).noGo;
+    expect(light).toBeLessThanOrEqual(middle);
+    expect(middle).toBeLessThan(heavy);
+    expect(middle).toBeLessThan(30);
+    expect(heavy).toBeGreaterThan(45);
   });
 });

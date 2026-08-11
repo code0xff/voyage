@@ -775,8 +775,9 @@ meaning anything.
   tide has to decide what happens to a boat anchored over a bank, and the two
   belong together.
 - No wave orbital velocity acting on the hull, and no surfing.
-- No AI opponents, and nothing to chase: the passage ghost is designed and not
-  built. See [docs/open-questions.md](docs/open-questions.md).
+- No AI opponents, and nothing to chase. Racing's ghost — your own best run,
+  replayed alongside you — was put to the question again for passages and
+  turned down. See [docs/open-questions.md](docs/open-questions.md).
 - No boat-to-boat collision.
 - **The whales and sharks are sightings, not bodies.** They exert no force, they
   are not in the way, and losing one changes no outcome; what they do is happen

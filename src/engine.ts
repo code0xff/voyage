@@ -72,8 +72,9 @@ export interface Snapshot {
   env: Environment;
   wind: WindField;
   /**
-   * The tidal streams. Published whole rather than as a flag, because the two
-   * readouts that switch themselves off in a tide have to ask about the world
+   * The tidal streams. Published whole rather than as a flag, because the
+   * readout that switches itself off in a tide -- the polar marker; racing's
+   * layline was the other and went with racing -- has to ask about the world
    * and not about the water under the boat: `env.current` goes slack every time
    * she crosses into the shallows, and a polar marker blinking on and off as
    * she does would be worse than either answer.

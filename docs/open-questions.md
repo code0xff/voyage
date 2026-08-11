@@ -93,23 +93,35 @@ solved for ground-referenced VMG in a given stream, which is a different solve
 from the still-water one. It has no consumer today.
 
 Corrected on the way past: the "dead upwind" advice used a fixed 40 degrees for
-her closest approach to the wind, where the polar gives 45 in a breeze and 55
-at both ends of the range. It now asks the polar.
+her closest approach to the wind. The polar says the boundary -- the first angle
+whose VMG is positive -- runs from 20 degrees in a drifter through 25 in the
+middle of the range to 60 in a gale, so a constant called marks unlayable
+through most of the range and layable at the top of it. It asks the polar now,
+and says nothing at all while the polar has not solved: a wrong number here is
+advice to tack away from somewhere she could have laid.
+
+Not `bestUpwind` either, which was the first attempt. That is where she works to
+windward *best*, 45 degrees at twelve knots, while she is still gaining at 25 --
+two different curves, and only one of them is what no-go means.
 
 ---
 
-## The passage ghost
+## The passage ghost, which is not wanted
 
-Racing had a ghost — your own best run, replayed alongside you. It was deleted
-with the rest of the race machinery because it was built around a race clock.
+Racing had a ghost -- your own best run, replayed alongside you -- and it went
+with the rest of the race machinery. This entry used to argue that it belonged
+on a passage instead, and set out what it would need: a track recorded beside
+the passage record, somewhere to keep it, and a rule for which run to chase.
 
-It belongs on a passage, and is *better* there: a race course rotates with the
-wind, so two runs of it were never the same course, while A to B on a chart
-always is. The logbook already stores what would key it.
+**Asked, and the answer was no.** It is not being built, and this is a decision
+rather than a thing waiting for someone. It is recorded here so that the
+argument is not made a third time.
 
-What it needs: a track recorded alongside the passage record (the accumulator
-deliberately keeps only totals today), a store for it, and a rule for which run
-is the one worth chasing.
+The reason it is easy to keep making: the logbook already stores what would key
+it, so it *looks* cheap. It is not. It touches the track recording, the storage
+schema and its export version, the loop, the renderer and the panel -- and at
+the end of it the game has something to chase, which is the one thing
+`AGENTS.md` says this game does not have.
 
 ---
 

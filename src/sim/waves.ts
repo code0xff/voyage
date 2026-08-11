@@ -57,6 +57,7 @@ export class WaveField {
    */
   private driftX = 0;
   private driftY = 0;
+  private readonly driftOut: Vec2 = { x: 0, y: 0 };
   /** Significant wave height H1/3, m. Used by the HUD and added resistance. */
   sigWaveHeight = 0;
 
@@ -76,7 +77,11 @@ export class WaveField {
    * second integration of the same current that could drift away from it.
    */
   get drift(): Vec2 {
-    return { x: this.driftX, y: this.driftY };
+    // The same object every time. Read every frame by the wake, and a fresh
+    // one per frame is litter for a value nobody keeps; nobody writes to it.
+    this.driftOut.x = this.driftX;
+    this.driftOut.y = this.driftY;
+    return this.driftOut;
   }
 
   /**

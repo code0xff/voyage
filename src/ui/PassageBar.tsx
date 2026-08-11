@@ -1,7 +1,8 @@
 import { useRef } from 'react';
 import { Card } from '@/components/ui/card';
-import { DEG, RAD, wrapPi } from '@/sim/math';
+import { RAD, wrapPi } from '@/sim/math';
 import { mustTack } from '@/sim/passage';
+import { noGoAngle } from '@/sim/polar';
 import { formatDistance, formatDuration } from '@/sim/units';
 import { useReadout } from './engine-context';
 import { useT } from './i18n';
@@ -67,12 +68,14 @@ export function PassageBar() {
         bits.push(t(steerToHold(cts.toFixed(0))));
       }
     }
-    // Her own closest approach to the wind, from the polar, rather than a
-    // number written here: it runs from 45 degrees in a breeze to 55 at both
-    // ends of the range, so a fixed 40 said she could lay marks she cannot.
-    // The constant is only the fallback for a polar that has not solved yet.
-    const noGo = s.polar?.bestUpwind ? Math.abs(s.polar.bestUpwind.twa) : 40 * DEG;
-    if (mustTack(p, noGo)) bits.push(t(PASSAGE.deadUpwind));
+    // Her own closest approach, asked of the polar. It runs from 20 degrees in
+    // a drifter to 60 in a gale, so the fixed 40 that used to be here called
+    // marks unlayable through most of the range and layable at the top of it.
+    //
+    // Nothing said while the polar has not solved. A wrong number here is worse
+    // than none: it is advice to tack away from somewhere she could have laid.
+    const noGo = s.polar ? noGoAngle(s.polar) : null;
+    if (noGo !== null && mustTack(p, noGo)) bits.push(t(PASSAGE.deadUpwind));
     if (p.eta !== null && p.eta > s.darkIn) bits.push(t(PASSAGE.afterDark));
     return bits.join('  ·  ');
   });
