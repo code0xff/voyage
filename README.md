@@ -757,15 +757,16 @@ meaning anything.
   shear veers a degree or so over a rig this size, which no helmsman notices.
 - No spinnaker, so downwind is slower than reality.
 - Wind sea only: no swell.
-- Wind against tide *does* now raise the sea, and turn it: the wave field is
-  built from the wind relative to the moving water. What is still missing is
-  that the current moves the boat but not the sea around her. Waves are a function of
-  world position and time, and they stay that way with a tide running instead of
-  being carried along by it; the wake is a trail of ground positions rather than
-  something laid in the water and drifting with it. Physics and renderer agree
-  with each other here — both read the same wave field — so this is a
-  simplification and not the kind of divergence the water shader exists to
-  avoid.
+- Wind against tide raises the sea and turns it — the wave field is built from
+  the wind relative to the moving water — and the waves are now carried along
+  by the stream as well: their displacement is integrated and folded into each
+  component's phase, so a parcel of water sees the sea it would see in still
+  water while the ground does not. One vector for the whole field, taken from
+  the deep-water set, so in the shallows the sea drifts a little faster than
+  the water under it does. **The wake still does not drift**: it is a trail of
+  ground positions rather than something laid in the water. Physics and
+  renderer agree throughout — both read the same field, and the shader is
+  handed the drifted phase rather than recomputing it.
 - There is a current, but no **tide**. The stream varies with depth — it runs in
   the channel and gives up in the shallows — but it does not vary with *time*:
   no cycle, no turn of the tide mid-passage, no springs and neaps, no change of

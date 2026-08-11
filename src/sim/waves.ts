@@ -32,7 +32,16 @@ export interface WaveComponent {
   k: number; // wave number, 2pi/lambda
   omega: number; // angular frequency, sqrt(g*k)
   amp: number; // m (amplitude = half the wave height)
-  phase: number;
+  /**
+   * The phase the component was built with, before the water's drift.
+   *
+   * Named so that reading it is visibly not the same as asking for the phase.
+   * Anything drawing or floating on this sea wants `WaveField.phaseAt`, which
+   * carries the drift; the shader is handed that through `packUniform`, and the
+   * one time this field was copied straight into a uniform the water quietly
+   * stopped moving with the tide while the boat did.
+   */
+  basePhase: number;
 }
 
 export class WaveField {
@@ -79,10 +88,14 @@ export class WaveField {
   }
 
   /**
-   * @param drift the water's own velocity here, m/s. Its integral is what the
-   *   wave pattern is carried along by. One vector for the whole field, which
-   *   is what the shader can be given -- and what the stream mostly is, since
-   *   it only varies with depth.
+   * @param drift the water's own velocity, m/s. Its integral is what the wave
+   *   pattern is carried along by.
+   *
+   *   One vector for the whole field, which is what the shader can be given.
+   *   The engine passes the deep-water set rather than the stream under the
+   *   boat, so where the stream is throttled by depth the sea drifts a little
+   *   faster than the water it is in. The identity below is exact; this is the
+   *   approximation, and it is the price of the field being one number.
    */
   update(dt: number, drift?: { x: number; y: number }): void {
     this.t += dt;
@@ -134,7 +147,7 @@ export class WaveField {
         // H1/3 is roughly 4*sigma; split the components so their squares sum to
         // sigma^2.
         amp: (h13 / 4) * aw * 2,
-        phase: i * 1.7,
+        basePhase: i * 1.7,
       });
     }
   }
@@ -154,12 +167,13 @@ export class WaveField {
    * which is how that agreement usually has to be maintained and how it usually
    * eventually breaks.
    *
-   * Wrapped, because the drift grows without bound: two knots for an hour is
-   * 7 km, which is thousands of radians, and these end up in a float32 uniform.
+   * Wrapped, because the drift grows without bound: two metres a second for an
+   * hour is 7.2 km, which is thousands of radians, and these end up in a
+   * float32 uniform.
    */
   phaseAt(i: number): number {
     const c = this.comps[i];
-    return wrap2Pi(c.phase - c.k * (c.dirX * this.driftX + c.dirY * this.driftY));
+    return wrap2Pi(c.basePhase - c.k * (c.dirX * this.driftX + c.dirY * this.driftY));
   }
 
   /** Surface elevation at a point, in metres. */
@@ -172,14 +186,22 @@ export class WaveField {
     return h;
   }
 
-  /** Vertical velocity of the surface, m/s. Used for slam detection. */
-  verticalVelocityAt(x: number, y: number): number {
+  /**
+   * Vertical velocity of the surface at a point fixed to the ground, m/s.
+   *
+   * `omega` alone is the rate at a point fixed to the *water*. Fixed to the
+   * ground, the drift carries the pattern past as well, and the two rates add:
+   * differentiating `k(D.(P - Ut)) - wt + f` gives `-(w + k(D.U))`. In still
+   * water `U` is zero and this is what it always was.
+   */
+  verticalVelocityAt(x: number, y: number, drift?: { x: number; y: number }): number {
     let v = 0;
     for (let i = 0; i < this.comps.length; i++) {
       const c = this.comps[i];
+      const advect = drift ? c.k * (c.dirX * drift.x + c.dirY * drift.y) : 0;
       v +=
         -c.amp *
-        c.omega *
+        (c.omega + advect) *
         Math.cos(c.k * (c.dirX * x + c.dirY * y) - c.omega * this.t + this.phaseAt(i));
     }
     return v;

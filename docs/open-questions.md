@@ -54,8 +54,10 @@ It is not visible while sailing.
 **The waves now do.** The field is a function of world position, so with a tide
 running the pattern stayed pinned to the ground while the water it is made of
 moved through it. The water's displacement is integrated and folded into each
-component's phase, which is exact rather than an approximation: shifting the
-sample point by `O` is the same thing as shifting the phase by `-k(D.O)`.
+component's phase. The identity is exact -- shifting the sample point by `O` is
+the same thing as shifting the phase by `-k(D.O)` -- but the field is given one
+vector, the deep-water set, so where depth throttles the stream the sea drifts
+a little faster than the water it is in.
 
 That turned out cheaper than this entry expected. It anticipated "a matching
 uniform in the shader, which duplicates the wave formula"; in the event the

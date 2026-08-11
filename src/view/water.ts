@@ -652,6 +652,8 @@ export function createWater(): Water {
 
   const waveA: THREE.Vector4[] = [];
   const waveB: THREE.Vector2[] = [];
+  /** Reused every frame; `packUniform` fills it. */
+  const packed = new Float32Array(MAX_WAVES * 6);
   for (let i = 0; i < MAX_WAVES; i++) {
     waveA.push(new THREE.Vector4());
     waveB.push(new THREE.Vector2());
@@ -825,17 +827,16 @@ export function createWater(): Water {
       const from = compassVec(twd);
       uniforms.uDownwind.value.set(-from.x, -from.y);
 
+      // Through `packUniform` rather than reading the components field by
+      // field. It is the one path `waves.test.ts` checks the surface against,
+      // so what the shader is handed is what the test asserts floats the boat;
+      // copying `phase` here instead would drop the water's drift and nothing
+      // would have caught it.
+      waves.packUniform(packed);
       for (let i = 0; i < MAX_WAVES; i++) {
-        const c = waves.comps[i];
-        if (c) {
-          waveA[i].set(c.dirX, c.dirY, c.k, c.omega);
-          // `phaseAt`, not `c.phase`: it carries the water's drift, and this is
-          // the one place the shader and the physics have to agree about it.
-          waveB[i].set(c.amp, waves.phaseAt(i));
-        } else {
-          waveA[i].set(0, 0, 0, 0);
-          waveB[i].set(0, 0);
-        }
+        const o = i * 6;
+        waveA[i].set(packed[o], packed[o + 1], packed[o + 2], packed[o + 3]);
+        waveB[i].set(packed[o + 4], packed[o + 5]);
       }
 
       // Whitecaps start to appear around 12 knots.

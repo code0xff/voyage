@@ -196,6 +196,42 @@ describe('drift with the water', () => {
     }
   });
 
+  /**
+   * The surface's vertical rate at a point fixed to the ground, checked against
+   * the surface itself rather than against the formula: how much the height
+   * changed over a short step, divided by it. With the field drifting, `omega`
+   * alone is the rate a point *in the water* sees, and the two differ by the
+   * advection the drift adds.
+   */
+  it('reports how fast the surface is really rising at a fixed point', () => {
+    const set = { x: 0.9, y: -1.6 };
+    const w = new WaveField(9, 0.6);
+    run(w, 5, set);
+
+    const h0 = w.heightAt(30, -12);
+    const rate = w.verticalVelocityAt(30, -12, set);
+    w.update(1e-4, set);
+    const measured = (w.heightAt(30, -12) - h0) / 1e-4;
+    expect(rate).toBeCloseTo(measured, 3);
+
+    // ...and the still-water rate is a different number here, or the drift term
+    // could be anything.
+    expect(Math.abs(w.verticalVelocityAt(30, -12) - rate)).toBeGreaterThan(0.05);
+  });
+
+  /**
+   * The phase is wrapped because the drift grows without bound and these end up
+   * in a float32 uniform. Ten hours of two metres a second is 72 km.
+   */
+  it('keeps the phase wrapped however far the water has run', () => {
+    const w = new WaveField(9, 0);
+    w.update(10 * 3600, { x: 2, y: 0 });
+    for (let i = 0; i < w.comps.length; i++) {
+      expect(w.phaseAt(i)).toBeGreaterThanOrEqual(0);
+      expect(w.phaseAt(i)).toBeLessThan(2 * Math.PI + 1e-12);
+    }
+  });
+
   it('starts the drift again with the session', () => {
     const w = new WaveField(8, 0);
     run(w, 30, { x: 0, y: 2 });
