@@ -284,12 +284,18 @@ export class SoundEngine {
    * Per frame. Gains move with setTargetAtTime; assigning them directly clicks
    * on every frame boundary.
    */
+  /**
+   * @param fieldDrift the velocity the wave field itself is being carried at,
+   *   m/s. What sets the rate she meets crests is her speed *through the wave
+   *   pattern*, and the pattern is no longer standing still.
+   */
   update(
     state: BoatState,
     diag: Diagnostics,
     waves: WaveField,
     weather: WeatherState,
     dt: number,
+    fieldDrift: { x: number; y: number },
   ): void {
     const ctx = this.ctx;
     if (!ctx || !this.hull || !this.rig || !this.luff || !this.luffAm || !this.rain) return;
@@ -311,18 +317,29 @@ export class SoundEngine {
     // Driven from JS rather than an audio-rate oscillator, unlike the luff:
     // this is well under a hertz, so a 60 Hz update is far finer than the shape
     // it is drawing, and setTargetAtTime smooths what is left.
-    // Through the water, not over the ground. This used to be the ground track,
-    // and the comment here used to explain that the wave field was a function of
-    // world position and did not drift with a current, so what set the rate of
-    // meeting crests was how fast she crossed it. The field drifts now, so the
-    // waves are in the water and she meets them at her speed through it. A boat
-    // merely carried along by a stream meets them at their own period, which is
-    // what lying to a tide in a swell actually sounds like.
+    /*
+     * Her speed through the wave pattern, which is her ground track less the
+     * velocity that pattern is being carried at.
+     *
+     * This used to be the ground track alone, and the comment here used to
+     * explain why: the field was a function of world position and did not drift,
+     * so crossing it was the whole of it. The field drifts now. Through the
+     * *water* is nearly right and is what this said for one commit, but not
+     * quite: the field is carried at the deep-water set while the water under
+     * her is throttled by depth, so in the shallows the two differ. A boat
+     * merely carried along with the pattern meets the waves at their own period,
+     * which is what lying to a tide in a swell sounds like.
+     */
+    const offBow = diag.cog - state.heading;
+    const groundFwd = diag.sog * Math.cos(offBow);
+    const groundStb = diag.sog * Math.sin(offBow);
+    const driftFwd = fieldDrift.x * Math.sin(state.heading) + fieldDrift.y * Math.cos(state.heading);
+    const driftStb = fieldDrift.x * Math.cos(state.heading) - fieldDrift.y * Math.sin(state.heading);
     const enc = dominantEncounter(
       waves,
       state.heading,
-      state.u,
-      state.v,
+      groundFwd - driftFwd,
+      groundStb - driftStb,
     );
     this.wavePhase += enc.omega * dt;
     if (this.wavePhase >= TAU) {

@@ -760,10 +760,10 @@ meaning anything.
 - Wind against tide raises the sea and turns it — the wave field is built from
   the wind relative to the moving water — and the waves are now carried along
   by the stream as well: their displacement is integrated and folded into each
-  component's phase, so a parcel of water sees the sea it would see in still
-  water while the ground does not. One vector for the whole field, taken from
-  the deep-water set, so in the shallows the sea drifts a little faster than
-  the water under it does. **The wake still does not drift**: it is a trail of
+  component's phase. One vector for the whole field, the deep-water set, so
+  what the sea is carried along with is that set rather than the local stream —
+  the same thing in open water, and a little faster than the water itself where
+  depth throttles it. **The wake still does not drift**: it is a trail of
   ground positions rather than something laid in the water. Physics and
   renderer agree throughout — both read the same field, and the shader is
   handed the drifted phase rather than recomputing it.

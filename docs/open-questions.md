@@ -66,9 +66,9 @@ the view already copies it from the field. Both sides drift because they read
 the same number, which is a better kind of agreement than two transcriptions
 kept in step.
 
-Asserted by the property that no other change could satisfy: a point carried
-along with the stream sees exactly the sea it would see in still water, to nine
-decimals, while a point fixed to the ground does not.
+Asserted on the property rather than the formula: a point moving at the set
+sees exactly the sea it would see in still water, to nine decimals, while a
+point fixed to the ground does not.
 
 **The wake still does not.** It is a trail of ground positions rather than
 something laid in the water and drifting with it, and it is a view concern
