@@ -884,11 +884,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       const d = Math.hypot(ev.pos.x - state.pos.x, ev.pos.y - state.pos.y);
       sound.gullCall(d, ev.strength, weather.state.fog);
     }
-    // Last step's course over ground, because this step's is not solved until
-    // `step()` below. At 120 Hz that is 8 ms of lag on a number that changes
-    // over seconds, and the alternative -- reordering the loop so the animals
-    // run after the physics -- would put the whale a frame behind the boat it
-    // is giving way to, which is the error that actually shows.
+    // Last step's course over ground: the animals run before `step()`, so this
+    // step's is not solved yet. That is 8 ms of lag at 120 Hz on a quantity the
+    // give-way rule uses only to pick which beam to lean towards, and it is a
+    // lag rather than a reason -- running the animals after the physics would
+    // give them the current course just as well. Left alone because reordering
+    // shifts every seeded wildlife stream by a step for no gain.
+    //
+    // Before the first step there is no course at all, and `heading` is the
+    // same fallback `boat.ts` uses below 0.05 m/s.
     const course = diag ? diag.cog : state.heading;
     whales.update(PHYS_DT, state.pos, query, state.heading, course);
     for (const whale of whales.events) {

@@ -1,7 +1,7 @@
 import { clamp, compassAngle, compassVec, rotCW90, wrapPi, type Vec2 } from './math';
 
 /**
- * The rule by which an animal clears the track of an approaching boat.
+ * The rule by which an animal clears a boat's track.
  *
  * It lives here rather than in either species because both need it for the same
  * reason and neither may have its own copy. There is no collision anywhere in
@@ -18,7 +18,7 @@ import { clamp, compassAngle, compassVec, rotCW90, wrapPi, type Vec2 } from './m
  * holding a course the closest approach is the animal's perpendicular distance
  * from the track, so moving square off the track is what increases it; running
  * directly away is a stern chase the animal loses, because every animal here is
- * slower than the boat. The whale got away with fleeing radially only because it
+ * slower than the boat under way. The whale got away with fleeing radially only because it
  * opens 220 m off and the boat cannot reach it inside an encounter. The shark
  * opens at 45 m against a boat that covers 130 m, and radial flight does not
  * save it. Measured on the same constants at six knots, fleeing radially still
@@ -50,8 +50,17 @@ import { clamp, compassAngle, compassVec, rotCW90, wrapPi, type Vec2 } from './m
  * - **Rate-limited rather than assigned.** Set directly, the animal snaps round
  *   the instant the boat crosses `notice`, which reads as a thing reacting to a
  *   trigger rather than as an animal.
- * - **Only for a boat still coming.** One that has passed is not given way to,
- *   or the animal is shepherded along ahead of a hull going the other way.
+ * - **Only ahead of the boat.** One that has gone past is not given way to, or
+ *   the animal is shepherded along in front of a hull going the other way.
+ *
+ * It is given the boat's course and not its speed, so "ahead" is as much as it
+ * can know: an animal in front of a boat lying stopped gives way to it as
+ * though it were coming on. That is deliberate rather than overlooked. It costs
+ * almost nothing -- with the boat stationary the shark's worst approach over
+ * 4561 encounters moves from 40.5 m to 43.1 m and the median not at all,
+ * because at rest the geometry was already keeping them apart -- and buying the
+ * distinction would mean carrying a speed in here to suppress an effect of two
+ * and a half metres.
  *
  * Nothing here acts on the boat. The animal gives way and the helmsman feels
  * nothing, which is the whole reason this lives outside the physics.

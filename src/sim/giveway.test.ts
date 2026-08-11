@@ -141,7 +141,12 @@ describe('giveWay', () => {
     expect(clear).toBeLessThan(onTrack * 0.5);
   });
 
-  /** Exactly on the boat there is no bearing to work from. atan2(0, 0) is 0. */
+  /**
+   * Inside the hull every quantity the rule works from is measured off an
+   * offset of zero, so there is nothing to say. The bearing itself is fine --
+   * it comes from the track normal, not from the offset -- which is why the
+   * guard is about having nothing useful to advise rather than about atan2.
+   */
   it('holds course when the animal is exactly on the boat', () => {
     const heading = 1.1;
     expect(giveWay({ ...BOAT }, heading, SPEED, BOAT, COURSE, STEP, NOTICE, LANE, RATE)).toBe(
