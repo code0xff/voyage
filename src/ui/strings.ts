@@ -104,7 +104,9 @@ export const MENU: Record<string, Phrase> = {
     en: 'The sailing engine could not be loaded.',
     ko: '항해 엔진을 불러오지 못했습니다.',
   },
-  retryEngine: { en: 'Retry engine', ko: '엔진 다시 시도' },
+  // Says "reload", because that is what it does. A browser keeps a failed
+  // module fetch, so importing again cannot recover -- only a fresh page can.
+  retryEngine: { en: 'Reload the page', ko: '페이지 다시 불러오기' },
   changingWeather: { en: 'changing weather', ko: '변하는 날씨' },
   openSea: { en: 'open sea', ko: '먼바다' },
   guideLead: { en: 'Never sailed before?', ko: '항해가 처음이신가요?' },

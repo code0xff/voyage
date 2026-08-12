@@ -71,31 +71,34 @@ export function App() {
   // Preserve a click made during that short load instead of making the button
   // appear dead while the renderer chunk is arriving.
   const pendingStart = useRef(false);
-  const loadEngineRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let disposed = false;
     let disposeEngine: (() => void) | null = null;
     let loading: Promise<void> | null = null;
-    let attempts = 0;
+    /**
+     * Loaded once, and a failure is recovered by reloading the page rather
+     * than by importing again.
+     *
+     * This used to import `@/engine?retry=1..3` on successive clicks, on the
+     * reasoning that a query suffix is a distinct URL and so escapes the
+     * browser's cached rejection. The suffix does make a distinct URL, and it
+     * does not help: the engine chunk is a 9.7 kB shim whose static imports --
+     * the 704 kB renderer and the 432 kB app chunk -- keep their own URLs, and
+     * those are the ones a dropped connection actually loses.
+     *
+     * Measured, in Chromium, with three byte-identical parent modules over one
+     * dependency served 503 then 200: the dependency was requested **once**,
+     * all three parents failed, and reloading the page fetched it again and
+     * succeeded. An errored entry in the module map is reused by every later
+     * import of that URL, so no in-page retry of any spelling can work -- and
+     * the reload always could.
+     */
     const loadEngine = () => {
       if (disposed || disposeEngine || loading) return;
-      if (attempts >= 4) {
-        window.location.reload();
-        return;
-      }
-      const attempt = attempts++;
       setEngineLoading(true);
       setEngineError(false);
-      const engineModule =
-        attempt === 0
-          ? import("@/engine")
-          : attempt === 1
-            ? import("@/engine?retry=1")
-            : attempt === 2
-              ? import("@/engine?retry=2")
-              : import("@/engine?retry=3");
-      loading = engineModule
+      loading = import("@/engine")
         .then(({ createEngine }) => {
           if (disposed) return;
           const canvas = canvasRef.current;
@@ -229,12 +232,10 @@ export function App() {
           loading = null;
         });
     };
-    loadEngineRef.current = loadEngine;
     loadEngine();
 
     return () => {
       disposed = true;
-      loadEngineRef.current = null;
       disposeEngine?.();
     };
     // Intentionally runs once: the engine owns its own lifetime and is torn
@@ -286,7 +287,6 @@ export function App() {
     primeAudio();
     if (!engine) {
       pendingStart.current = true;
-      loadEngineRef.current?.();
       return;
     }
     engine.applySettings(settingsRef.current);
@@ -307,8 +307,9 @@ export function App() {
     engine?.retryRegion();
   }, [engine]);
 
+  // A reload, because it is the only thing that recovers -- see `loadEngine`.
   const retryEngine = useCallback(() => {
-    loadEngineRef.current?.();
+    window.location.reload();
   }, []);
 
   const onMenuOpenChange = useCallback(

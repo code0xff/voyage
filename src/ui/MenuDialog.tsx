@@ -445,11 +445,16 @@ export function MenuDialog({
                 anyone here wants, so it leads and it is the wide one. The one
                 below throws that session away, which is why it is not sitting
                 in the same row as it. */}
+            {/* Both are dead while the engine has failed to load, and saying so
+                is better than a button that does nothing: the notice below
+                carries the only thing that recovers, which is a reload. They
+                stay live while it is merely *loading*, because a click then is
+                held and honoured -- see `pendingStart` in App.tsx. */}
             {canResume && (
               <Button
                 className="mb-2 w-full justify-between"
                 onClick={() => onOpenChange(false)}
-                disabled={!regionReady}
+                disabled={!regionReady || engineError}
               >
                 <span className="flex items-center gap-2">
                   <Anchor /> {t(MENU.resume)}
@@ -462,7 +467,7 @@ export function MenuDialog({
                 variant={canResume ? "secondary" : "default"}
                 className="w-full justify-between"
                 onClick={onPutToSea}
-                disabled={!regionReady}
+                disabled={!regionReady || engineError}
               >
                 <span className="flex items-center gap-2">
                   <Compass /> {t(MENU.putToSea)}
