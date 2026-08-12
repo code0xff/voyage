@@ -29,6 +29,7 @@ import { Rich, useLang, useT } from "./i18n";
 import {
   CONTROLS_NOTE,
   KEYS,
+  LOG,
   MENU,
   islandCount,
   PANEL,
@@ -225,6 +226,7 @@ export function MenuDialog({
   logbook,
   logVersion,
   onLogChanged,
+  logbookError,
   regionStatus,
   onRetryRegion,
 }: {
@@ -239,6 +241,7 @@ export function MenuDialog({
   logVersion: number;
   /** Called when the log panel writes to the store, so `logVersion` can follow. */
   onLogChanged: () => void;
+  logbookError: boolean;
   regionStatus: RegionLoadStatus;
   onRetryRegion: () => void;
 }) {
@@ -280,10 +283,9 @@ export function MenuDialog({
    * `logVersion` -- bumped by whoever knows a passage was written -- rather than
    * polled, so it sleeps for the whole time the menu is shut.
    *
-   * A failure shows nothing rather than an error. The logbook screen is where a
-   * broken logbook is worth reporting, because that is where someone went to
-   * read it;
-   * on the way in it would be an alarm about a thing nobody asked for yet.
+   * A failed passage write is shown on the opening page because it is about the
+   * passage that just ended, not a problem someone has to discover by opening
+   * the logbook later.
    */
   /** What the header says: the screen, never the tab open inside it. */
   // Read only when `view` is not "play", which the title branch below enforces;
@@ -392,6 +394,14 @@ export function MenuDialog({
       </button>
 
       <div>
+        {logbookError && (
+          <div
+            role="alert"
+            className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-[11px] leading-relaxed text-destructive"
+          >
+            {t(LOG.writeFailed)}
+          </div>
+        )}
         {view === "play" && (
           <>
             {/* Going back to a session in progress is the likeliest thing

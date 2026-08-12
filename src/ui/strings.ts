@@ -417,6 +417,10 @@ export const LOG: Record<string, Phrase> = {
     en: 'That passage could not be removed.',
     ko: '항해 기록을 삭제하지 못했습니다.',
   },
+  writeFailed: {
+    en: 'The passage reached its destination, but could not be saved in this browser.',
+    ko: '항해가 목적지에 도착했지만 이 브라우저에 저장하지 못했습니다.',
+  },
 };
 
 /** The chart card: its controls, and the line that says what the mouse does. */

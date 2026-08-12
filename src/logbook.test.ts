@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fromExport, toExport } from './logbook';
+import { createLogStore, fromExport, toExport } from './logbook';
 import type { PassageRecord } from './sim/passage';
 
 const record = (over: Partial<PassageRecord> = {}): PassageRecord => ({
@@ -23,6 +23,10 @@ const record = (over: Partial<PassageRecord> = {}): PassageRecord => ({
  * possibly edited, truncated, or something else that happens to end in .json.
  */
 describe('logbook export', () => {
+  it('reports when the browser has no IndexedDB instead of pretending to save', async () => {
+    await expect(createLogStore().add(record())).rejects.toThrow('IndexedDB is unavailable');
+  });
+
   it('survives a round trip unchanged', () => {
     const passages = [record(), record({ id: 'p2', venue: '' })];
     const back = fromExport(JSON.stringify(toExport(passages, 123)));

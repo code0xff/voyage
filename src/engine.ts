@@ -178,6 +178,8 @@ export type EngineEvent =
   | { type: 'world'; seed: number }
   /** The surveyed region changed loading state. */
   | { type: 'region'; id: string; status: RegionLoadStatus }
+  /** A completed passage could not be persisted locally. */
+  | { type: 'logbookError'; operation: 'add' }
   /** `N` was pressed: the chart should step to its next range. */
   | { type: 'chartRange' }
   /** A passage was completed and written to the logbook. */
@@ -858,10 +860,16 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     );
     log = null;
     setDestination(null);
-    // Written without waiting: a failed write must not stall the physics loop,
-    // and a logbook that quietly lost one passage is better than a frame hitch.
-    void logbook.add(record).catch(() => undefined);
-    emit({ type: 'arrived', record });
+    // Written without waiting: a failed write must not stall the physics loop.
+    // The completion event follows the commit so the UI never reloads the list
+    // in the gap between a request succeeding and its transaction committing.
+    void logbook.add(record).then(
+      () => emit({ type: 'arrived', record }),
+      (err) => {
+        console.error('could not save the passage', err);
+        emit({ type: 'logbookError', operation: 'add' });
+      },
+    );
   }
 
   function putToSea(): void {

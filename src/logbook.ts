@@ -80,11 +80,14 @@ const run = <T>(
     tx.onerror = fail;
   });
 
+const unavailable = <T>(): Promise<T> =>
+  Promise.reject(new Error('IndexedDB is unavailable in this browser'));
+
 const NOTHING: LogStore = {
-  list: () => Promise.resolve([]),
-  add: () => Promise.resolve(),
-  remove: () => Promise.resolve(),
-  clear: () => Promise.resolve(),
+  list: () => unavailable<PassageRecord[]>(),
+  add: () => unavailable<void>(),
+  remove: () => unavailable<void>(),
+  clear: () => unavailable<void>(),
 };
 
 /**
@@ -94,13 +97,12 @@ const NOTHING: LogStore = {
  * browsing and some embedded webviews expose the object and then refuse to open
  * a database, throwing a SecurityError or failing on quota. So the fallback is
  * decided by the first `open()` rather than by feature detection, and once it
- * has failed the store stays a no-op instead of retrying on every write.
+ * has failed the store stays unavailable instead of retrying on every write.
  *
- * The line it draws: a refusal to *store at all* is silent, because a sailing
- * game must not fail over a logbook. A transaction that fails after the
- * database opened is reported, because that is a real error about a real
- * passage and the player should be told rather than shown a logbook that
- * quietly is not theirs.
+ * The line it draws: a refusal to *store at all* is still an error, because a
+ * player who is told they have a logbook must not be shown a promise that is
+ * actually a no-op. A transaction that fails after the database opened is
+ * reported for the same reason: it is a real error about a real passage.
  */
 export function createLogStore(): LogStore {
   if (typeof indexedDB === 'undefined') return NOTHING;
@@ -114,22 +116,24 @@ export function createLogStore(): LogStore {
     });
   };
 
-  const withDb = <T>(fallback: T, body: (db: IDBDatabase) => Promise<T>): Promise<T> =>
-    connect().then((db) => (db ? body(db) : fallback));
+  const withDb = <T>(body: (db: IDBDatabase) => Promise<T>): Promise<T> =>
+    connect().then((db) =>
+      db ? body(db) : Promise.reject<T>(new Error('IndexedDB is unavailable in this browser')),
+    );
 
   return {
     list: () =>
-      withDb<PassageRecord[]>([], (db) =>
+      withDb((db) =>
         run<PassageRecord[]>(db, 'readonly', (s) => s.getAll()).then((all) =>
           all.sort((a, b) => b.startedAt - a.startedAt),
         ),
       ),
     add: (record) =>
-      withDb(undefined, (db) => run(db, 'readwrite', (s) => s.put(record)).then(() => undefined)),
+      withDb((db) => run(db, 'readwrite', (s) => s.put(record)).then(() => undefined)),
     remove: (id) =>
-      withDb(undefined, (db) => run(db, 'readwrite', (s) => s.delete(id)).then(() => undefined)),
+      withDb((db) => run(db, 'readwrite', (s) => s.delete(id)).then(() => undefined)),
     clear: () =>
-      withDb(undefined, (db) => run(db, 'readwrite', (s) => s.clear()).then(() => undefined)),
+      withDb((db) => run(db, 'readwrite', (s) => s.clear()).then(() => undefined)),
   };
 }
 

@@ -57,6 +57,7 @@ export function App() {
    * one question the moment an import or a delete touched only one of them.
    */
   const [logVersion, setLogVersion] = useState(0);
+  const [logbookError, setLogbookError] = useState(false);
   const { compact, touch, height } = useViewport();
 
   // Keep the latest settings reachable from the engine callbacks without
@@ -108,7 +109,14 @@ export function App() {
               if (chartFullRef.current) setChartFull(false);
               else setMenuOpen((v) => !v);
             }
-            if (ev.type === "arrived") setLogVersion((v) => v + 1);
+            if (ev.type === "arrived") {
+              setLogbookError(false);
+              setLogVersion((v) => v + 1);
+            }
+            if (ev.type === "logbookError") {
+              setLogbookError(true);
+              setMenuOpen(true);
+            }
             if (ev.type === "region") {
               setRegionStatus(ev.status);
               if (ev.status === "error") setMenuOpen(true);
@@ -422,6 +430,7 @@ export function App() {
           logbook={logbook}
           logVersion={logVersion}
           onLogChanged={bumpLog}
+          logbookError={logbookError}
           regionStatus={regionStatus}
           onRetryRegion={retryRegion}
         />

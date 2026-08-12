@@ -143,11 +143,17 @@ export function Logbook({
     const blob = new Blob([JSON.stringify(toExport(passages ?? [], Date.now()), null, 1)], {
       type: 'application/json',
     });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    a.href = url;
     a.download = `voyage-logbook-${new Date().toISOString().slice(0, 10)}.json`;
+    // Keep the anchor in the document until the click has been dispatched. A
+    // URL revoked on the next line can cancel a download in browsers that have
+    // not consumed the Blob yet, so release it on the next task instead.
+    document.body.append(a);
     a.click();
-    URL.revokeObjectURL(a.href);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   const upload = (file: File) => {
