@@ -1,3 +1,4 @@
+import { assetUrl } from '../asset';
 import { useT } from './i18n';
 import { CREDITS } from './strings';
 
@@ -79,7 +80,7 @@ const YEAR = 2026;
  * from what is actually installed -- see `scripts/notices.ts` -- so it cannot
  * drift from the tree the way a hand-kept list would.
  */
-const NOTICES = { name: 'Open-source licences', href: '/third-party-notices.txt' };
+const NOTICES = { name: 'Open-source licences', href: assetUrl('/third-party-notices.txt') };
 
 /**
  * One line each, and the creator on every line.
@@ -96,21 +97,21 @@ const MODELS = [
     href: 'https://sketchfab.com/3d-models/humpback-whale-d3f5039a8c624e099724dd7bcd51a680',
     by: 'eelislay',
     byHref: 'https://sketchfab.com/eelislay',
-    notice: '/assets/whale/ATTRIBUTION.txt',
+    notice: assetUrl('/assets/whale/ATTRIBUTION.txt'),
   },
   {
     name: 'Shark',
     href: 'https://sketchfab.com/3d-models/shark-1b45eb40145a4cf981c601f5d9f168d3',
     by: 'eelislay',
     byHref: 'https://sketchfab.com/eelislay',
-    notice: '/assets/shark/ATTRIBUTION.txt',
+    notice: assetUrl('/assets/shark/ATTRIBUTION.txt'),
   },
   {
     name: 'Seagulls',
     href: 'https://sketchfab.com/3d-models/seagulls-animated-73aed843190a4dfda55f2b65cc0f8d63',
     by: 'vicente betoret ferrero',
     byHref: 'https://sketchfab.com/deathcow',
-    notice: '/assets/gull/ATTRIBUTION.txt',
+    notice: assetUrl('/assets/gull/ATTRIBUTION.txt'),
   },
 ];
 

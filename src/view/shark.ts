@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assetUrl } from '../asset';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import { smoothstep, type Vec2 } from '../sim/math';
 import type { SharkSighting } from '../sim/sharks';
@@ -13,7 +14,7 @@ import {
 } from './creature';
 import type { Water } from './water';
 
-const SHARK_ASSET_URL = '/assets/shark/shark.glb';
+const SHARK_ASSET_URL = assetUrl('/assets/shark/shark.glb');
 
 /**
  * Where the model's own waterline sits, as a fraction of its height from the

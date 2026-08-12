@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assetUrl } from '../asset';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import { smoothstep, type Vec2 } from '../sim/math';
 import { rng } from '../sim/rng';
@@ -15,7 +16,7 @@ import {
 } from './creature';
 import type { Water } from './water';
 
-const WHALE_ASSET_URL = '/assets/whale/humpback-whale.glb';
+const WHALE_ASSET_URL = assetUrl('/assets/whale/humpback-whale.glb');
 
 /**
  * Where the model's own waterline sits, as a fraction of its height from the

@@ -1,3 +1,4 @@
+import { assetUrl } from './asset';
 import { heightFieldFromBytes } from './sim/heightfield';
 import { RegionTerrain } from './sim/region-terrain';
 import { rasterBytes, type Region } from './sim/regions';
@@ -21,7 +22,9 @@ export function loadRegion(region: Region): Promise<RegionTerrain> {
   const hit = cache.get(region.id);
   if (hit) return hit;
 
-  const pending = fetch(region.raster)
+  // Through the deploy base, because `Region.raster` is a root-relative path
+  // and `src/sim` may not know where the app is served from.
+  const pending = fetch(assetUrl(region.raster))
     .then(async (res) => {
       if (!res.ok) throw new Error(`${region.raster}: HTTP ${res.status}`);
       const bytes = await res.arrayBuffer();

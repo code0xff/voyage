@@ -12,6 +12,18 @@ import react from '@vitejs/plugin-react';
 const PORT = 1852;
 
 export default defineConfig({
+  /*
+   * Where the app will be served from, with a trailing slash.
+   *
+   * A build variable rather than a constant because the answer differs by host
+   * and the wrong one is silent: served from the root, everything works and
+   * nothing says the paths are absolute; served from a subpath, every runtime
+   * fetch misses. Netlify, Cloudflare Pages and a plain bucket are all root, so
+   * that is the default; a GitHub project page is `/<repo>/`.
+   *
+   *     VOYAGE_BASE=/voyage/ npm run build
+   */
+  base: process.env.VOYAGE_BASE ?? '/',
   plugins: [react()],
   resolve: {
     alias: { '@': path.resolve(import.meta.dirname, './src') },

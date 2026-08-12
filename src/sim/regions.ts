@@ -45,7 +45,15 @@ export interface Region {
     unit: number;
   };
 
-  /** Where the raster is served from, relative to the site root. */
+  /**
+   * Where the raster lives, relative to the site root.
+   *
+   * Relative to the root and not to the deploy base, because `src/sim` is
+   * headless and must not read `import.meta.env` any more than it may fetch --
+   * and the two callers want different prefixes anyway: `terrain-load.ts` puts
+   * the base in front of it, the tests and the polar read `public${raster}` off
+   * disk. Whoever fetches this owns the prefix.
+   */
   raster: string;
 
   /** Who surveyed it, so the claim on screen can be checked. */

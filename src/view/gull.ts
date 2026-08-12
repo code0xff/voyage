@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assetUrl } from '../asset';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import type { Vec2 } from '../sim/math';
 import type { GullFlockSighting } from '../sim/wildlife';
@@ -75,7 +76,7 @@ export function createGullView(): GullView {
     if (asset || requested || disposed) return;
     requested = true;
     creatureLoader().load(
-      '/assets/gull/seagulls.glb',
+      assetUrl('/assets/gull/seagulls.glb'),
       (gltf) => {
         if (disposed) disposeGltfScene(gltf.scene);
         else asset = { model: prepare(gltf.scene), animations: gltf.animations };
