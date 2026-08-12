@@ -99,6 +99,12 @@ export const MENU: Record<string, Phrase> = {
   /** The back arrow carries no text, so this is the only name a screen reader gets. */
   back: { en: 'Back', ko: '뒤로' },
   close: { en: 'Close', ko: '닫기' },
+  engineLoading: { en: 'Loading the sailing engine…', ko: '항해 엔진을 불러오는 중…' },
+  engineLoadFailed: {
+    en: 'The sailing engine could not be loaded.',
+    ko: '항해 엔진을 불러오지 못했습니다.',
+  },
+  retryEngine: { en: 'Retry engine', ko: '엔진 다시 시도' },
   changingWeather: { en: 'changing weather', ko: '변하는 날씨' },
   openSea: { en: 'open sea', ko: '먼바다' },
   guideLead: { en: 'Never sailed before?', ko: '항해가 처음이신가요?' },

@@ -27,6 +27,8 @@ import { primeAudio } from "@/view/audio-context";
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [engine, setEngine] = useState<Engine | null>(null);
+  const [engineLoading, setEngineLoading] = useState(true);
+  const [engineError, setEngineError] = useState(false);
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [regionStatus, setRegionStatus] = useState<RegionLoadStatus>(() =>
     settings.region ? "loading" : "none",
@@ -76,10 +78,15 @@ export function App() {
     let disposeEngine: (() => void) | null = null;
     let loading: Promise<void> | null = null;
     let attempts = 0;
-
     const loadEngine = () => {
       if (disposed || disposeEngine || loading) return;
+      if (attempts >= 4) {
+        window.location.reload();
+        return;
+      }
       const attempt = attempts++;
+      setEngineLoading(true);
+      setEngineError(false);
       const engineModule =
         attempt === 0
           ? import("@/engine")
@@ -99,6 +106,8 @@ export function App() {
             return;
           }
           setEngine(e);
+          setEngineLoading(false);
+          setEngineError(false);
           setRegionStatus(e.snapshot.regionStatus);
 
           const offEvent = e.onEvent((ev) => {
@@ -209,7 +218,12 @@ export function App() {
           }
         })
         .catch((error: unknown) => {
-          if (!disposed) console.error("Failed to load the sailing engine", error);
+          if (!disposed) {
+            setEngineLoading(false);
+            setEngineError(true);
+            setMenuOpen(true);
+            console.error("Failed to load the sailing engine", error);
+          }
         })
         .finally(() => {
           loading = null;
@@ -292,6 +306,21 @@ export function App() {
   const retryRegion = useCallback(() => {
     engine?.retryRegion();
   }, [engine]);
+
+  const retryEngine = useCallback(() => {
+    loadEngineRef.current?.();
+  }, []);
+
+  const onMenuOpenChange = useCallback(
+    (open: boolean) => {
+      // Without the engine there is no HUD or keyboard shortcut left that can
+      // reopen this dialog. Keep the recovery button reachable until loading
+      // succeeds; otherwise a transient chunk failure becomes a dead screen.
+      if (!open && (!engine || engineLoading || engineError)) return;
+      setMenuOpen(open);
+    },
+    [engine, engineError, engineLoading],
+  );
 
   return (
     <LangProvider lang={settings.lang}>
@@ -422,7 +451,7 @@ export function App() {
 
         <MenuDialog
           open={menuOpen}
-          onOpenChange={setMenuOpen}
+          onOpenChange={onMenuOpenChange}
           settings={settings}
           onSettings={applySettings}
           onPutToSea={putToSea}
@@ -431,6 +460,9 @@ export function App() {
           logVersion={logVersion}
           onLogChanged={bumpLog}
           logbookError={logbookError}
+          engineLoading={engineLoading}
+          engineError={engineError}
+          onRetryEngine={retryEngine}
           regionStatus={regionStatus}
           onRetryRegion={retryRegion}
         />

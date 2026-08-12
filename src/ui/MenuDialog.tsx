@@ -216,6 +216,37 @@ function RegionLoadNotice({
   );
 }
 
+function EngineLoadNotice({
+  loading,
+  failed,
+  onRetry,
+}: {
+  loading: boolean;
+  failed: boolean;
+  onRetry: () => void;
+}) {
+  const t = useT();
+  if (!loading && !failed) return null;
+  return (
+    <div
+      role={failed ? "alert" : "status"}
+      aria-live="polite"
+      className={`mt-3 flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-[11px] leading-relaxed ${
+        failed
+          ? "border-warning/40 bg-warning/10 text-warning"
+          : "border-info/40 bg-info/10 text-info"
+      }`}
+    >
+      <span>{t(failed ? MENU.engineLoadFailed : MENU.engineLoading)}</span>
+      {failed && (
+        <Button variant="outline" size="sm" className="shrink-0" onClick={onRetry}>
+          {t(MENU.retryEngine)}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function MenuDialog({
   open,
   onOpenChange,
@@ -227,6 +258,9 @@ export function MenuDialog({
   logVersion,
   onLogChanged,
   logbookError,
+  engineLoading,
+  engineError,
+  onRetryEngine,
   regionStatus,
   onRetryRegion,
 }: {
@@ -242,6 +276,9 @@ export function MenuDialog({
   /** Called when the log panel writes to the store, so `logVersion` can follow. */
   onLogChanged: () => void;
   logbookError: boolean;
+  engineLoading: boolean;
+  engineError: boolean;
+  onRetryEngine: () => void;
   regionStatus: RegionLoadStatus;
   onRetryRegion: () => void;
 }) {
@@ -437,6 +474,11 @@ export function MenuDialog({
               {settings.region && (
                 <RegionLoadNotice status={regionStatus} onRetry={onRetryRegion} />
               )}
+              <EngineLoadNotice
+                loading={engineLoading}
+                failed={engineError}
+                onRetry={onRetryEngine}
+              />
             </div>
 
             {/* What you are about to sail in, in one glance. The knobs behind
