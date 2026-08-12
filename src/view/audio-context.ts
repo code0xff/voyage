@@ -9,7 +9,7 @@
 let context: AudioContext | null = null;
 
 export function getAudioContext(): AudioContext {
-  if (context?.state === "closed") context = null;
+  if (context?.state === 'closed') context = null;
   return (context ??= new AudioContext());
 }
 
