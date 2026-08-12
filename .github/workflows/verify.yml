@@ -39,5 +39,17 @@ jobs:
       - name: Build production bundle
         run: npm run build
 
+      # The root build is the normal artifact, but it cannot expose a runtime
+      # path that accidentally starts at `/`: at `/`, a broken asset URL looks
+      # correct. Build once at the project-page base as well, where the six
+      # surveyed rasters and the generated notices would otherwise all miss.
+      - name: Build production bundle at a subpath
+        run: npm run build
+        env:
+          VOYAGE_BASE: /voyage/
+
+      - name: Validate subpath asset URLs
+        run: npm run check:base -- dist /voyage/
+
       - name: Validate published polar points
         run: npm run polar -- 6 12 25 35
