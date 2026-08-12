@@ -17,7 +17,7 @@ import { loadRegion } from './terrain-load';
 import { passageInfo, type PassageInfo, type PassageRecord } from './sim/passage';
 import { anchorage, type Anchorage } from './sim/anchorage';
 import { PassageLog } from './sim/passage';
-import { logbook } from './logbook';
+import { LogStoreUnavailable, logbook } from './logbook';
 import { WaveField, sampleHull, seaBearing, windOverWater, type HullWaveSample } from './sim/waves';
 import { MAX_REEF, autoReef, type ReefState } from './sim/sailplan';
 import { cyclePilot, initialPilot, pilotRudder, type PilotState } from './sim/autopilot';
@@ -178,11 +178,29 @@ export type EngineEvent =
   | { type: 'world'; seed: number }
   /** The surveyed region changed loading state. */
   | { type: 'region'; id: string; status: RegionLoadStatus }
-  /** A completed passage could not be persisted locally. */
-  | { type: 'logbookError'; operation: 'add' }
+  /**
+   * A completed passage could not be persisted locally.
+   *
+   * `unavailable` is a standing condition -- the store never opened -- and is
+   * therefore true of every passage this session; `write` is about this one
+   * record. Carried on the event because only the engine holds the rejection,
+   * and the UI cannot ask the store afterwards which it was.
+   */
+  | { type: 'logbookError'; operation: 'add'; reason: 'unavailable' | 'write' }
+  /** The passage reached the store and its transaction committed. */
+  | { type: 'logbookSaved'; record: PassageRecord }
   /** `N` was pressed: the chart should step to its next range. */
   | { type: 'chartRange' }
-  /** A passage was completed and written to the logbook. */
+  /**
+   * She got there: the anchor is down within reach of where she was bound.
+   *
+   * A fact about the voyage and not about storage, which is why it is emitted
+   * before the write is attempted and fires whether or not the write succeeds.
+   * It used to follow the commit, and so did not happen at all in a browser
+   * that will not open IndexedDB -- a physical event that quietly depended on
+   * a database. Whoever wants to know the record is on disk wants
+   * `logbookSaved`.
+   */
   | { type: 'arrived'; record: PassageRecord };
 
 export interface Engine {
@@ -312,6 +330,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let anchored = false;
   /** The passage under way, or null when she is just out sailing. */
   let log: PassageLog | null = null;
+  /** Whether this session has already said the local logbook will not open. */
+  let reportedUnavailable = false;
   let current = settings;
   let disposed = false;
 
@@ -860,14 +880,26 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     );
     log = null;
     setDestination(null);
-    // Written without waiting: a failed write must not stall the physics loop.
-    // The completion event follows the commit so the UI never reloads the list
-    // in the gap between a request succeeding and its transaction committing.
+    // Arrival first, because she has arrived. Then the write, without waiting:
+    // a failed one must not stall the physics loop.
+    emit({ type: 'arrived', record });
+    // `logbookSaved` follows the commit rather than the request, and it is what
+    // the panels reload on. Reloading on arrival instead would let the read go
+    // out while the write transaction is still in flight and come back without
+    // it -- and nothing bumps a second time, so the last passage of a session
+    // would simply be missing until something else wrote.
     void logbook.add(record).then(
-      () => emit({ type: 'arrived', record }),
+      () => emit({ type: 'logbookSaved', record }),
       (err) => {
-        console.error('could not save the passage', err);
-        emit({ type: 'logbookError', operation: 'add' });
+        const unavailable = err instanceof LogStoreUnavailable;
+        // Said once. It is one standing fact about this session, and repeating
+        // it at the end of every passage is noise in the console for the same
+        // reason it was an interruption on screen.
+        if (!unavailable || !reportedUnavailable) {
+          console.error('could not save the passage', err);
+          reportedUnavailable ||= unavailable;
+        }
+        emit({ type: 'logbookError', operation: 'add', reason: unavailable ? 'unavailable' : 'write' });
       },
     );
   }

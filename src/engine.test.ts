@@ -23,6 +23,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sceneCalls: { render: number } = { render: 0 };
 const regionLoad = vi.hoisted(() => vi.fn());
+const logAdd = vi.hoisted(() => vi.fn<(record: unknown) => Promise<void>>());
+/**
+ * Let the boat anchor where she is, for the two tests about completing a
+ * passage.
+ *
+ * The real judgement runs and is only overridden when a test asks, because what
+ * makes an anchorage is `anchorage.test.ts`'s question and not this file's.
+ * Without it a passage cannot be completed here at all: anchoring is the only
+ * thing that finishes one, and the open ocean is deliberately too deep.
+ */
+const anchorAnywhere = vi.hoisted(() => ({ on: false }));
 
 vi.mock('./view/scene', () => ({
   createScene: () => ({
@@ -74,8 +85,22 @@ vi.mock('./view/telemetry', () => ({
 vi.mock('./terrain-load', () => ({ loadRegion: regionLoad }));
 
 /** IndexedDB. The passage log is asserted through the engine's own event. */
-vi.mock('./logbook', () => ({
-  logbook: { add: async () => undefined, all: async () => [], clear: async () => undefined },
+vi.mock('./sim/anchorage', async (importActual) => {
+  const actual = await importActual<typeof import('./sim/anchorage')>();
+  return {
+    ...actual,
+    anchorage: (...args: Parameters<typeof actual.anchorage>) => {
+      const real = actual.anchorage(...args);
+      return anchorAnywhere.on
+        ? { ...real, holding: 'good' as const, slowEnough: true, canAnchor: true }
+        : real;
+    },
+  };
+});
+
+vi.mock('./logbook', async (importActual) => ({
+  ...(await importActual<typeof import('./logbook')>()),
+  logbook: { add: logAdd, all: async () => [], clear: async () => undefined },
 }));
 
 import { createEngine } from './engine';
@@ -84,6 +109,8 @@ import { WhaleField } from './sim/whales';
 import { SharkField } from './sim/sharks';
 import { wrapPi } from './sim/math';
 import { TIDE_PERIOD } from './sim/current';
+import { LogStoreUnavailable } from './logbook';
+import type { EngineEvent } from './engine';
 import type { RegionTerrain } from './sim/region-terrain';
 
 /**
@@ -97,6 +124,14 @@ import type { RegionTerrain } from './sim/region-terrain';
  * one that is about the loop needs frames to happen.
  */
 let frames: FrameRequestCallback[] = [];
+/**
+ * Window listeners the engine registered, so a key can actually be pressed.
+ *
+ * The shim used to swallow them, which quietly put every keyboard-driven
+ * behaviour out of reach of this file -- anchoring among them, and anchoring is
+ * the only way a passage ever completes.
+ */
+let listeners = new Map<string, ((e: unknown) => void)[]>();
 const saved: Record<string, unknown> = {};
 const had: Record<string, true> = {};
 const GLOBALS = ['window', 'document', 'requestAnimationFrame', 'cancelAnimationFrame'];
@@ -105,6 +140,9 @@ beforeEach(() => {
   frames = [];
   sceneCalls.render = 0;
   regionLoad.mockReset();
+  logAdd.mockReset();
+  logAdd.mockResolvedValue(undefined);
+  anchorAnywhere.on = false;
   for (const key of GLOBALS) {
     if (key in globalThis) {
       had[key] = true;
@@ -112,9 +150,16 @@ beforeEach(() => {
     }
   }
 
+  listeners = new Map();
   (globalThis as Record<string, unknown>).window = {
-    addEventListener: () => {},
-    removeEventListener: () => {},
+    addEventListener: (type: string, fn: (e: unknown) => void) => {
+      const same = listeners.get(type) ?? [];
+      same.push(fn);
+      listeners.set(type, same);
+    },
+    removeEventListener: (type: string, fn: (e: unknown) => void) => {
+      listeners.set(type, (listeners.get(type) ?? []).filter((f) => f !== fn));
+    },
     setTimeout: () => 0,
     clearTimeout: () => {},
     devicePixelRatio: 1,
@@ -173,6 +218,12 @@ const settings = (over: Partial<Settings> = {}): Settings => ({
  * thousands of frames. Which is not something the engine has to defend against;
  * it is the test handing it a timestamp no browser would.
  */
+/** Press and release a key, the way `Input` expects to hear about it. */
+function press(key: string): void {
+  for (const fn of listeners.get('keydown') ?? []) fn({ key, repeat: false, preventDefault: () => {} });
+  for (const fn of listeners.get('keyup') ?? []) fn({ key, preventDefault: () => {} });
+}
+
 function frame(seconds: number, msPerFrame = 16): void {
   let t = performance.now();
   const steps = Math.round((seconds * 1000) / msPerFrame);
@@ -203,6 +254,85 @@ function deferred<T>(): {
 }
 
 describe('engine', () => {
+  /**
+   * Sail somewhere and anchor there, which is the only way a passage completes.
+   * Returns every event the engine emitted, in order.
+   */
+  async function makePassage(): Promise<EngineEvent['type'][]> {
+    anchorAnywhere.on = true;
+    const engine = sailing();
+    const seen: EngineEvent['type'][] = [];
+    engine.onEvent((e) => seen.push(e.type));
+    engine.setDestination({ ...engine.snapshot.state.pos });
+    press('a');
+    frame(0.1);
+    // The write is a promise; let it settle.
+    await Promise.resolve();
+    await Promise.resolve();
+    engine.dispose();
+    return seen;
+  }
+
+  /**
+   * Regression: arriving used to be reported only if the record was stored.
+   *
+   * The write's outcome was the arrival's outcome -- one `then` with two
+   * branches -- so in a browser that will not open IndexedDB the boat anchored
+   * at her destination and the engine said nothing at all. Anchoring where you
+   * were bound is a fact about the voyage; whether a database took the row is
+   * a different fact, and hanging the first on the second means anything later
+   * built on arrival silently needs storage to work.
+   */
+  it('reports the arrival even when the passage cannot be saved', async () => {
+    logAdd.mockRejectedValue(new LogStoreUnavailable());
+    const seen = await makePassage();
+    expect(seen).toContain('arrived');
+    expect(seen).toContain('logbookError');
+    expect(seen).not.toContain('logbookSaved');
+  });
+
+  /**
+   * And the panels reload on the commit, not on the arrival.
+   *
+   * `logbookSaved` exists so the logbook is re-read after the transaction has
+   * committed. Re-reading on `arrived` -- which now fires before the write is
+   * even requested -- can return a list without the passage in it, and nothing
+   * bumps a second time, so the last voyage of a session would simply be
+   * missing.
+   */
+  it('confirms the write separately, and after the arrival', async () => {
+    const seen = await makePassage();
+    expect(seen).toContain('logbookSaved');
+    expect(seen.indexOf('arrived')).toBeLessThan(seen.indexOf('logbookSaved'));
+  });
+
+  /**
+   * A store that never opened is a standing condition, not this passage's
+   * failure, and the UI needs to tell them apart to stop interrupting the end
+   * of every voyage with it. Classified from the error's type rather than its
+   * wording -- see `LogStoreUnavailable`.
+   */
+  it('says whether the logbook is unavailable or the write failed', async () => {
+    anchorAnywhere.on = true;
+    for (const [error, reason] of [
+      [new LogStoreUnavailable(), 'unavailable'],
+      [new Error('QuotaExceededError'), 'write'],
+    ] as const) {
+      logAdd.mockRejectedValue(error);
+      const engine = sailing();
+      let seen: EngineEvent | null = null;
+      engine.onEvent((e) => { if (e.type === 'logbookError') seen = e; });
+      engine.setDestination({ ...engine.snapshot.state.pos });
+      press('a');
+      frame(0.1);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(seen).not.toBeNull();
+      expect(seen!).toMatchObject({ operation: 'add', reason });
+      engine.dispose();
+    }
+  });
+
   it('waits for a surveyed region before allowing a new session', async () => {
     const pending = deferred<RegionTerrain>();
     regionLoad.mockReturnValue(pending.promise);
