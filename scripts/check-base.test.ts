@@ -31,6 +31,21 @@ describe('wrappedInAssetUrl', () => {
    * last word before the quote said yes to this, which is a guard that can be
    * satisfied by a coincidence of spelling.
    */
+  /**
+   * A URL is not a comment. `Credits.tsx` puts a Sketchfab link beside every
+   * `assetUrl()` call, so a `//` sharing the line with a wrapped call is the
+   * normal case here and not a contrived one.
+   */
+  it('accepts a call sharing its line with a string containing //', () => {
+    expect(
+      wrappedInAssetUrl(upTo("const site = 'https://sketchfab.com/x'; const u = assetUrl('/assets/shark/shark.glb');")),
+    ).toBe(true);
+  });
+
+  it('accepts a call with a line comment between the paren and the path', () => {
+    expect(wrappedInAssetUrl(upTo("const u = assetUrl( // wherever this is deployed\n  '/assets/shark/shark.glb',\n);"))).toBe(true);
+  });
+
   it('rejects something else that merely ends in the same name', () => {
     expect(wrappedInAssetUrl(upTo("window.assetUrl('/assets/shark/shark.glb')"))).toBe(false);
     expect(wrappedInAssetUrl(upTo("notAssetUrl('/assets/shark/shark.glb')"))).toBe(false);

@@ -53,6 +53,34 @@ import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
+ * The last line with any `//` comment on it cut away.
+ *
+ * A scan rather than `/\/\/[^\n]*$/`, which was the first attempt and cut at
+ * the `//` in `https://`. This file's own neighbourhood is full of them --
+ * `Credits.tsx` puts a Sketchfab URL beside every `assetUrl()` call -- and a
+ * wrapped call sharing a line with one was reported as unwrapped. That fails
+ * closed rather than open, so it was noise and not a hole, but it is noise
+ * aimed squarely at correct code.
+ */
+function withoutLineComment(head: string): string {
+  const start = head.lastIndexOf('\n') + 1;
+  const line = head.slice(start);
+  let quote: string | null = null;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (quote) {
+      if (char === '\\') i++;
+      else if (char === quote) quote = null;
+    } else if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+    } else if (char === '/' && line[i + 1] === '/') {
+      return head.slice(0, start + i);
+    }
+  }
+  return head;
+}
+
+/**
  * Is this string literal the direct argument of `assetUrl(`?
  *
  * @param before everything in the file up to the literal's opening quote.
@@ -68,7 +96,7 @@ export function wrappedInAssetUrl(before: string): boolean {
   // Comments sit between the paren and the path exactly where this project
   // tends to put them, so they are stepped over rather than tripped on.
   for (;;) {
-    const stripped = head.replace(/\/\*[^]*?\*\/$/, '').replace(/\/\/[^\n]*$/, '').trimEnd();
+    const stripped = withoutLineComment(head).replace(/\/\*[^]*?\*\/$/, '').trimEnd();
     if (stripped === head) break;
     head = stripped;
   }
