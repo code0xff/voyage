@@ -80,8 +80,28 @@ const run = <T>(
     tx.onerror = fail;
   });
 
-const unavailable = <T>(): Promise<T> =>
-  Promise.reject(new Error('IndexedDB is unavailable in this browser'));
+/**
+ * The store cannot be opened at all, as opposed to a write that failed.
+ *
+ * A class rather than a message, because the caller has to tell the two apart
+ * and matching on prose is a test that breaks when someone rewords an error.
+ * The distinction is the whole of the difference between "say so once, quietly"
+ * and "tell them, this passage did not get saved": one is a fact about the
+ * browser and the other is about a voyage they just made.
+ *
+ * "Unavailable" is per store instance and not a verdict on the browser. The
+ * latch below stops retrying after one refusal, so an open that failed for a
+ * passing reason stays failed for this session -- which is why nothing built on
+ * this should tell the player their browser cannot do it.
+ */
+export class LogStoreUnavailable extends Error {
+  constructor() {
+    super('the local logbook is unavailable');
+    this.name = 'LogStoreUnavailable';
+  }
+}
+
+const unavailable = <T>(): Promise<T> => Promise.reject(new LogStoreUnavailable());
 
 const NOTHING: LogStore = {
   list: () => unavailable<PassageRecord[]>(),
@@ -103,6 +123,11 @@ const NOTHING: LogStore = {
  * player who is told they have a logbook must not be shown a promise that is
  * actually a no-op. A transaction that fails after the database opened is
  * reported for the same reason: it is a real error about a real passage.
+ *
+ * They are not the same error, though, and `LogStoreUnavailable` is how they
+ * are told apart. Reported identically, the first one -- which is a standing
+ * condition, true for every passage of the session -- arrives with the urgency
+ * of the second and repeats at the end of every voyage.
  */
 export function createLogStore(): LogStore {
   if (typeof indexedDB === 'undefined') return NOTHING;
@@ -118,7 +143,7 @@ export function createLogStore(): LogStore {
 
   const withDb = <T>(body: (db: IDBDatabase) => Promise<T>): Promise<T> =>
     connect().then((db) =>
-      db ? body(db) : Promise.reject<T>(new Error('IndexedDB is unavailable in this browser')),
+      db ? body(db) : Promise.reject<T>(new LogStoreUnavailable()),
     );
 
   return {

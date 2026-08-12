@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createLogStore, fromExport, toExport } from './logbook';
+import { LogStoreUnavailable, createLogStore, fromExport, toExport } from './logbook';
 import type { PassageRecord } from './sim/passage';
 
 const record = (over: Partial<PassageRecord> = {}): PassageRecord => ({
@@ -23,8 +23,14 @@ const record = (over: Partial<PassageRecord> = {}): PassageRecord => ({
  * possibly edited, truncated, or something else that happens to end in .json.
  */
 describe('logbook export', () => {
-  it('reports when the browser has no IndexedDB instead of pretending to save', async () => {
-    await expect(createLogStore().add(record())).rejects.toThrow('IndexedDB is unavailable');
+  /**
+   * The type and not the wording. The caller has to tell "the store never
+   * opened" from "this write failed" -- the two get very different treatment in
+   * the UI -- and a rule matched on prose is one someone breaks by rewording an
+   * error message, which is what happened here.
+   */
+  it('rejects as unavailable, not silently, when the browser has no IndexedDB', async () => {
+    await expect(createLogStore().add(record())).rejects.toBeInstanceOf(LogStoreUnavailable);
   });
 
   it('survives a round trip unchanged', () => {
