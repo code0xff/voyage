@@ -412,6 +412,7 @@ export function MenuDialog({
               <Button
                 className="mb-2 w-full justify-between"
                 onClick={() => onOpenChange(false)}
+                disabled={!regionReady}
               >
                 <span className="flex items-center gap-2">
                   <Anchor /> {t(MENU.resume)}
