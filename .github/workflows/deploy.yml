@@ -14,9 +14,9 @@ on:
   workflow_dispatch:
     inputs:
       base:
-        description: 'Path the app is served from, with both slashes. "/" for a bucket or Netlify, "/voyage/" for a GitHub project page.'
+        description: 'Path the app is served from, with both slashes. Leave empty to let the target decide: "/" for an artifact, the project path for Pages.'
         required: false
-        default: '/'
+        default: ''
       publish:
         description: 'Where the build goes.'
         required: false
@@ -35,7 +35,7 @@ concurrency:
 
 jobs:
   build:
-    name: build for ${{ inputs.base }}
+    name: build and check
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -52,13 +52,42 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Empty by default rather than `/`, because `/` is right for an artifact
+      # and wrong for a project page -- and a default that is silently wrong for
+      # one of only two targets is the worst kind: selecting Pages and taking
+      # the default produced root-relative bundle URLs and a dead deployment,
+      # with nothing at any stage saying so.
+      #
+      # A user or organisation page is served at the root and is the repository
+      # named `<owner>.github.io`; everything else is a project page under
+      # `/<repo>/`. Read through the environment rather than interpolated into
+      # the script, so a hand-typed base is data and never shell.
+      - name: Decide the base
+        id: base
+        env:
+          GIVEN: ${{ inputs.base }}
+          PUBLISH: ${{ inputs.publish }}
+          REPO: ${{ github.event.repository.name }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          base="$GIVEN"
+          if [ -z "$base" ]; then
+            if [ "$PUBLISH" = 'github-pages' ] && [ "$(printf '%s' "$REPO" | tr '[:upper:]' '[:lower:]')" != "$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]').github.io" ]; then
+              base="/$REPO/"
+            else
+              base='/'
+            fi
+          fi
+          echo "Building for '$base'"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+
       - name: Verify source
         run: npm run verify
 
       - name: Build production bundle
         run: npm run build
         env:
-          VOYAGE_BASE: ${{ inputs.base }}
+          VOYAGE_BASE: ${{ steps.base.outputs.base }}
 
       # The failure this guards is silent and only appears at a subpath: the
       # models, the attribution notices and the six surveyed rasters are fetched
@@ -66,7 +95,7 @@ jobs:
       # Written absolute they resolve against the origin, and every one of them
       # comes back as the index page. See `src/asset.ts`.
       - name: Check every runtime path carries the base
-        run: npm run check:base -- dist "${{ inputs.base }}"
+        run: npm run check:base -- dist "${{ steps.base.outputs.base }}"
 
       - name: Upload the built site
         uses: actions/upload-artifact@v4
