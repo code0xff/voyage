@@ -53,6 +53,7 @@ import { Credits } from "./Credits";
 import type { LogStore } from "@/logbook";
 import type { PassageRecord } from "@/sim/passage";
 import { formatDistance, formatDuration, formatWhen } from "@/sim/units";
+import type { RegionLoadStatus } from "@/engine";
 
 /** A labelled range control. Sliders read better than numeric inputs for conditions. */
 function Slider({
@@ -184,6 +185,36 @@ function LastPassage({ p, onOpen }: { p: PassageRecord; onOpen: () => void }) {
   );
 }
 
+function RegionLoadNotice({
+  status,
+  onRetry,
+}: {
+  status: RegionLoadStatus;
+  onRetry: () => void;
+}) {
+  const t = useT();
+  if (status === "none" || status === "ready") return null;
+  const failed = status === "error";
+  return (
+    <div
+      role={failed ? "alert" : "status"}
+      aria-live="polite"
+      className={`mt-3 flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-[11px] leading-relaxed ${
+        failed
+          ? "border-warning/40 bg-warning/10 text-warning"
+          : "border-info/40 bg-info/10 text-info"
+      }`}
+    >
+      <span>{t(failed ? WORLD.regionLoadFailed : WORLD.regionLoading)}</span>
+      {failed && (
+        <Button variant="outline" size="sm" className="shrink-0" onClick={onRetry}>
+          {t(WORLD.retryRegion)}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function MenuDialog({
   open,
   onOpenChange,
@@ -194,6 +225,8 @@ export function MenuDialog({
   logbook,
   logVersion,
   onLogChanged,
+  regionStatus,
+  onRetryRegion,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -206,6 +239,8 @@ export function MenuDialog({
   logVersion: number;
   /** Called when the log panel writes to the store, so `logVersion` can follow. */
   onLogChanged: () => void;
+  regionStatus: RegionLoadStatus;
+  onRetryRegion: () => void;
 }) {
   const [tab, setTab] = useState("world");
   const [helpTab, setHelpTab] = useState("sailing");
@@ -233,6 +268,7 @@ export function MenuDialog({
   const [view, setView] = useState<View>("play");
   const t = useT();
   const lang = useLang();
+  const regionReady = !settings.region || regionStatus === "ready";
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) =>
     onSettings({ ...settings, [k]: v });
 
@@ -378,6 +414,7 @@ export function MenuDialog({
                 variant={canResume ? "secondary" : "default"}
                 className="w-full justify-between"
                 onClick={onPutToSea}
+                disabled={!regionReady}
               >
                 <span className="flex items-center gap-2">
                   <Compass /> {t(MENU.putToSea)}
@@ -386,6 +423,9 @@ export function MenuDialog({
                   {t(MENU.putToSeaHint)}
                 </span>
               </Button>
+              {settings.region && (
+                <RegionLoadNotice status={regionStatus} onRetry={onRetryRegion} />
+              )}
             </div>
 
             {/* What you are about to sail in, in one glance. The knobs behind
@@ -595,18 +635,21 @@ export function MenuDialog({
               </Select>
             </div>
             {settings.region ? (
-              <p className="text-[10px] leading-relaxed text-muted-foreground">
-                {REGION_BRIEF[settings.region]
-                  ? t(REGION_BRIEF[settings.region])
-                  : regionById(settings.region)?.brief}
-                <br />
-                <span className="text-success">
-                  {t(WORLD.surveyedLead)}
-                </span>{" "}
-                {t(WORLD.surveyedBody)}{" "}
-                {regionById(settings.region)?.source}
-                {t(WORLD.surveyedCaveat)}
-              </p>
+              <>
+                <p className="text-[10px] leading-relaxed text-muted-foreground">
+                  {REGION_BRIEF[settings.region]
+                    ? t(REGION_BRIEF[settings.region])
+                    : regionById(settings.region)?.brief}
+                  <br />
+                  <span className="text-success">
+                    {t(WORLD.surveyedLead)}
+                  </span>{" "}
+                  {t(WORLD.surveyedBody)}{" "}
+                  {regionById(settings.region)?.source}
+                  {t(WORLD.surveyedCaveat)}
+                </p>
+                <RegionLoadNotice status={regionStatus} onRetry={onRetryRegion} />
+              </>
             ) : settings.venue ? (
               <p className="text-[10px] leading-relaxed text-muted-foreground">
                 {venueById(settings.venue)?.brief}

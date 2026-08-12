@@ -22,6 +22,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const sceneCalls: { render: number } = { render: 0 };
+const regionLoad = vi.hoisted(() => vi.fn());
 
 vi.mock('./view/scene', () => ({
   createScene: () => ({
@@ -70,7 +71,7 @@ vi.mock('./view/telemetry', () => ({
 }));
 
 /** Region rasters are fetched over the network; no test here sails one. */
-vi.mock('./terrain-load', () => ({ loadRegion: async () => null }));
+vi.mock('./terrain-load', () => ({ loadRegion: regionLoad }));
 
 /** IndexedDB. The passage log is asserted through the engine's own event. */
 vi.mock('./logbook', () => ({
@@ -83,6 +84,7 @@ import { WhaleField } from './sim/whales';
 import { SharkField } from './sim/sharks';
 import { wrapPi } from './sim/math';
 import { TIDE_PERIOD } from './sim/current';
+import type { RegionTerrain } from './sim/region-terrain';
 
 /**
  * Enough of a browser for the engine to start: it listens for a gesture to
@@ -102,6 +104,7 @@ const GLOBALS = ['window', 'document', 'requestAnimationFrame', 'cancelAnimation
 beforeEach(() => {
   frames = [];
   sceneCalls.render = 0;
+  regionLoad.mockReset();
   for (const key of GLOBALS) {
     if (key in globalThis) {
       had[key] = true;
@@ -188,7 +191,77 @@ function sailing(over: Partial<Settings> = {}) {
   return engine;
 }
 
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 describe('engine', () => {
+  it('waits for a surveyed region before allowing a new session', async () => {
+    const pending = deferred<RegionTerrain>();
+    regionLoad.mockReturnValue(pending.promise);
+
+    const engine = createEngine(
+      canvas(),
+      settings({ region: 'sf-bay', venue: '' }),
+    );
+    const initialSession = engine.snapshot.session;
+
+    expect(engine.snapshot.regionStatus).toBe('loading');
+    engine.putToSea();
+    expect(engine.snapshot.session).toBe(initialSession);
+
+    pending.resolve({ region: { id: 'sf-bay' } } as RegionTerrain);
+    await pending.promise;
+    await Promise.resolve();
+
+    expect(engine.snapshot.regionStatus).toBe('ready');
+    expect(engine.snapshot.region).not.toBeNull();
+    engine.putToSea();
+    expect(engine.snapshot.session).toBe(initialSession + 1);
+    expect(regionLoad).toHaveBeenCalledTimes(1);
+    engine.dispose();
+  });
+
+  it('exposes a failed region load and retries it', async () => {
+    const pending = deferred<RegionTerrain>();
+    regionLoad
+      .mockRejectedValueOnce(new Error('test raster failure'))
+      .mockReturnValueOnce(pending.promise);
+
+    const engine = createEngine(
+      canvas(),
+      settings({ region: 'sf-bay', venue: '' }),
+    );
+    const statuses: string[] = [];
+    engine.onEvent((event) => {
+      if (event.type === 'region') statuses.push(event.status);
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(engine.snapshot.regionStatus).toBe('error');
+    expect(statuses).toContain('error');
+    expect(engine.snapshot.region).toBeNull();
+
+    engine.retryRegion();
+    expect(engine.snapshot.regionStatus).toBe('loading');
+    expect(regionLoad).toHaveBeenCalledTimes(2);
+
+    pending.resolve({ region: { id: 'sf-bay' } } as RegionTerrain);
+    await pending.promise;
+    await Promise.resolve();
+    expect(engine.snapshot.regionStatus).toBe('ready');
+    expect(engine.snapshot.region).not.toBeNull();
+    engine.dispose();
+  });
+
   /**
    * The loop itself, driven through rAF rather than through `advance()`, since
    * this is the one thing `advance()` does not do: it steps the physics only.

@@ -11,7 +11,7 @@ import { solvePolar, type Polar } from './sim/polar';
 import { WindField } from './sim/wind';
 import { CurrentField, DEFAULT_FULL_DEPTH, tideRate } from './sim/current';
 import { venueById } from './sim/venues';
-import { regionById } from './sim/regions';
+import { regionById, type Region } from './sim/regions';
 import type { RegionTerrain } from './sim/region-terrain';
 import { loadRegion } from './terrain-load';
 import { passageInfo, type PassageInfo, type PassageRecord } from './sim/passage';
@@ -65,6 +65,8 @@ import { Telemetry } from './view/telemetry';
  * rarely -- menus and settings.
  */
 
+export type RegionLoadStatus = 'none' | 'loading' | 'ready' | 'error';
+
 export interface Snapshot {
   state: BoatState;
   diag: Diagnostics | null;
@@ -104,6 +106,8 @@ export interface Snapshot {
    * that only `Terrain` has. When a region is loaded, `terrain` is empty.
    */
   region: RegionTerrain | null;
+  /** Whether the selected surveyed region is ready to sail. */
+  regionStatus: RegionLoadStatus;
   sky: SkyState;
   weather: Weather;
   polar: Polar | null;
@@ -172,6 +176,8 @@ export type EngineEvent =
   | { type: 'photo'; blob: Blob }
   /** A fresh world was rolled. The settings hold the seed so it can be sailed again. */
   | { type: 'world'; seed: number }
+  /** The surveyed region changed loading state. */
+  | { type: 'region'; id: string; status: RegionLoadStatus }
   /** `N` was pressed: the chart should step to its next range. */
   | { type: 'chartRange' }
   /** A passage was completed and written to the logbook. */
@@ -185,6 +191,8 @@ export interface Engine {
   startAudio(): void;
   /** Start a fresh session: a new world, and the boat put to sea in it. */
   putToSea(): void;
+  /** Retry loading the selected surveyed region after a failed request. */
+  retryRegion(): void;
   /** Point her at somewhere, or pass null to just go sailing. */
   setDestination(pos: Vec2 | null): void;
   setPaused(paused: boolean): void;
@@ -303,6 +311,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   /** The passage under way, or null when she is just out sailing. */
   let log: PassageLog | null = null;
   let current = settings;
+  let disposed = false;
 
   const view: SceneView = createScene(canvas, cfg);
   const input = new Input();
@@ -333,6 +342,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     terrain: EMPTY_TERRAIN,
     chart: EMPTY_TERRAIN,
     region: null,
+    regionStatus: 'none',
     sky: skyState(hour),
     weather,
     polar: null,
@@ -400,6 +410,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    */
   let regionTerrain: RegionTerrain | null = null;
   let wantedRegion = '';
+  /** Prevent a rebuild during one request from starting a second fetch. */
+  let loadingRegion = '';
   /**
    * What the physics actually asks. Whichever of the region and the island
    * terrain is in force, so that no query site has to know which world it is
@@ -447,34 +459,23 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
     // A surveyed region is the third kind of world, and the only one that has
     // to be fetched. It is installed when it arrives; until then the session
-    // runs on whatever the other two paths set, which is open water.
+    // stays paused and the menu explains why it cannot yet be sailed.
     const region = regionById(current.region);
     wantedRegion = region ? region.id : '';
     if (!region) {
       regionTerrain = null;
-    } else if (regionTerrain?.region.id !== region.id) {
-      regionTerrain = null;
-      void loadRegion(region).then(
-        (loaded) => {
-          // Dropped unless it is still the region wanted: a megabyte in flight
-          // is long enough for the player to have changed their mind, and the
-          // late arrival would otherwise overwrite the choice they made second.
-          if (wantedRegion !== loaded.region.id) return;
-          regionTerrain = loaded;
-          published = false;
-        },
-        (err) => {
-          // A region that will not load leaves open water rather than a broken
-          // world, and says so where a developer will see it. There is nothing
-          // the player can do about it and nothing worth stopping the sail for.
-          console.error('could not load the region', err);
-        },
-      );
+      loadingRegion = '';
+      publishRegionStatus('', 'none');
+    } else if (regionTerrain?.region.id === region.id) {
+      loadingRegion = '';
+      publishRegionStatus(region.id, 'ready');
+    } else {
+      requestRegion(region);
     }
 
     const up = compassVec(wind.baseTwd);
     field =
-      !venue && current.islandCount > 0
+      !venue && !current.region && current.islandCount > 0
         ? new IslandField({
             seed: current.seed,
             // The slider is 0..10 islands' worth of thickness, not a count: in
@@ -496,6 +497,46 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     published = false;
     streamedFrom = { x: Infinity, y: Infinity };
     streamWorld(state.pos.x, state.pos.y);
+  }
+
+  function publishRegionStatus(id: string, status: RegionLoadStatus): void {
+    if (wantedRegion !== id) return;
+    snapshot.regionStatus = status;
+    emit({ type: 'region', id, status });
+  }
+
+  function requestRegion(region: Region): void {
+    if (loadingRegion === region.id && snapshot.regionStatus === 'loading') return;
+
+    loadingRegion = region.id;
+    regionTerrain = null;
+    published = false;
+    publishRegionStatus(region.id, 'loading');
+
+    void loadRegion(region).then(
+      (loaded) => {
+        // Dropped unless it is still the region wanted: a megabyte in flight
+        // is long enough for the player to have changed their mind, and the
+        // late arrival would otherwise overwrite the choice they made second.
+        if (disposed || wantedRegion !== loaded.region.id) return;
+        loadingRegion = '';
+        regionTerrain = loaded;
+        published = false;
+        // Install it before announcing readiness. Closing the menu in response
+        // to the event must never reveal one frame of the placeholder ocean.
+        streamWorld(state.pos.x, state.pos.y);
+        publishRegionStatus(region.id, 'ready');
+      },
+      (err) => {
+        if (disposed || wantedRegion !== region.id) return;
+        loadingRegion = '';
+        regionTerrain = null;
+        published = false;
+        streamWorld(state.pos.x, state.pos.y);
+        console.error('could not load the region', err);
+        publishRegionStatus(region.id, 'error');
+      },
+    );
   }
 
   /**
@@ -577,6 +618,14 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     snapshot.region = null;
     view.setRegion(null);
     view.setTerrain(terrain, new Terrain(visible));
+  }
+
+  function retryRegion(): void {
+    const region = regionById(current.region);
+    if (!region) return;
+    wantedRegion = region.id;
+    requestRegion(region);
+    streamWorld(state.pos.x, state.pos.y);
   }
 
   const ctl: Controls = { rudder: 0, sheet: 0, twist: 0, autoTrim: true };
@@ -816,6 +865,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   function putToSea(): void {
+    if (current.region && snapshot.regionStatus !== 'ready') return;
     newSession();
     placeAtStart();
   }
@@ -1194,7 +1244,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
   applySettings(settings);
   rebuildWorld();
-  putToSea();
+  // Build the initial paused scene even when a surveyed raster is still in
+  // flight. The public `putToSea` path remains guarded so a click cannot turn
+  // that placeholder into a playable world.
+  newSession();
+  placeAtStart();
   // Prime the diagnostics with a single step. The game opens with the menu up,
   // which pauses the physics -- without this the scene has nothing to draw and
   // the player is greeted by a black canvas behind the dialog.
@@ -1216,6 +1270,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       void sound.start();
     },
     putToSea,
+    retryRegion,
     setDestination,
     setPaused(p) {
       paused = p;
@@ -1249,6 +1304,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     recomputePolar: () => schedulePolar(0),
     resize: () => view.resize(),
     dispose() {
+      disposed = true;
       cancelAnimationFrame(raf);
       input.dispose();
       sound.dispose();

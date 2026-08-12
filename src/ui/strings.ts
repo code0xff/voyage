@@ -471,6 +471,15 @@ export const WORLD: Record<string, Phrase> = {
     en: '. Still a simulator and not a chart: 25 m between soundings, and no tide height.',
     ko: '. 그래도 해도가 아니라 시뮬레이터입니다. 수심점 간격이 25 m이고, 조위는 반영되지 않습니다.',
   },
+  regionLoading: {
+    en: 'Loading the surveyed coast before you sail it…',
+    ko: '출항하기 전에 실측 해안을 불러오는 중입니다…',
+  },
+  regionLoadFailed: {
+    en: 'The surveyed coast could not be loaded. Try again before sailing.',
+    ko: '실측 해안을 불러오지 못했습니다. 출항하기 전에 다시 시도하세요.',
+  },
+  retryRegion: { en: 'Retry', ko: '다시 시도' },
   sketchWarning: {
     en: 'Approximate, and not for navigation.',
     ko: '근사값이며, 실제 항해에 쓸 수 없습니다.',

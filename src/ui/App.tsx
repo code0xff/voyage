@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Engine } from "@/engine";
+import type { Engine, RegionLoadStatus } from "@/engine";
 import { loadSettings, saveSettings, type Settings } from "@/settings";
 import { regionById } from "@/sim/regions";
 import { venueById } from "@/sim/venues";
@@ -28,6 +28,9 @@ export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [engine, setEngine] = useState<Engine | null>(null);
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
+  const [regionStatus, setRegionStatus] = useState<RegionLoadStatus>(() =>
+    settings.region ? "loading" : "none",
+  );
   const [menuOpen, setMenuOpen] = useState(true);
   /**
    * Whether the chart has the whole screen.
@@ -95,6 +98,7 @@ export function App() {
             return;
           }
           setEngine(e);
+          setRegionStatus(e.snapshot.regionStatus);
 
           const offEvent = e.onEvent((ev) => {
             // Escape backs out of whatever is in front: the chart first, the world
@@ -105,6 +109,10 @@ export function App() {
               else setMenuOpen((v) => !v);
             }
             if (ev.type === "arrived") setLogVersion((v) => v + 1);
+            if (ev.type === "region") {
+              setRegionStatus(ev.status);
+              if (ev.status === "error") setMenuOpen(true);
+            }
             // The engine rolls the world, so the seed shown in the menu has to follow
             // it -- otherwise the field would name a sea the player is not sailing in.
             if (ev.type === "world") {
@@ -179,6 +187,14 @@ export function App() {
             pendingStart.current = false;
             e.startAudio();
             e.applySettings(settingsRef.current);
+            if (
+              settingsRef.current.region &&
+              e.snapshot.regionStatus !== "ready"
+            ) {
+              setRegionStatus(e.snapshot.regionStatus);
+              setMenuOpen(true);
+              return;
+            }
             e.putToSea();
             setMenuOpen(false);
             setStarted(true);
@@ -204,10 +220,14 @@ export function App() {
   }, []);
 
   // The world stops while the menu is open. Fiddling with settings should not
-  // leave the boat somewhere unexpected when the dialog closes.
+  // leave the boat somewhere unexpected when the dialog closes. A surveyed
+  // region is another pause boundary: until its raster is installed, the
+  // placeholder open water is not the world the player selected.
   useEffect(() => {
-    engine?.setPaused(menuOpen);
-  }, [engine, menuOpen]);
+    const regionWaiting =
+      Boolean(settings.region) && regionStatus !== "ready";
+    engine?.setPaused(menuOpen || regionWaiting);
+  }, [engine, menuOpen, regionStatus, settings.region]);
 
   /**
    * One signal that the logbook changed, for every panel that reads it.
@@ -223,6 +243,7 @@ export function App() {
     (next: Settings) => {
       setSettings(next);
       saveSettings(next);
+      if (!engine) setRegionStatus(next.region ? "loading" : "none");
       engine?.applySettings(next);
     },
     [engine],
@@ -246,10 +267,22 @@ export function App() {
       loadEngineRef.current?.();
       return;
     }
-    engine?.applySettings(settingsRef.current);
-    engine?.putToSea();
+    engine.applySettings(settingsRef.current);
+    if (
+      settingsRef.current.region &&
+      engine.snapshot.regionStatus !== "ready"
+    ) {
+      setRegionStatus(engine.snapshot.regionStatus);
+      setMenuOpen(true);
+      return;
+    }
+    engine.putToSea();
     setMenuOpen(false);
     setStarted(true);
+  }, [engine]);
+
+  const retryRegion = useCallback(() => {
+    engine?.retryRegion();
   }, [engine]);
 
   return (
@@ -389,6 +422,8 @@ export function App() {
           logbook={logbook}
           logVersion={logVersion}
           onLogChanged={bumpLog}
+          regionStatus={regionStatus}
+          onRetryRegion={retryRegion}
         />
       </div>
     </LangProvider>
