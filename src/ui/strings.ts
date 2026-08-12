@@ -415,6 +415,18 @@ export const LOG: Record<string, Phrase> = {
    * of them renders unless something has already failed.
    */
   readFailed: { en: 'The logbook could not be read.', ko: '항해일지를 읽을 수 없습니다.' },
+  /**
+   * Said once a session, quietly, and never as an interruption.
+   *
+   * Worded about this session rather than about the browser, because a refusal
+   * to open is latched after one attempt and may have had a passing cause --
+   * see `LogStoreUnavailable`. Telling someone their browser cannot keep a
+   * logbook would be a claim this does not have the evidence for.
+   */
+  unavailable: {
+    en: 'Passages are not being saved this session: the local logbook would not open.',
+    ko: '이번 세션의 항해는 저장되지 않습니다: 로컬 항해일지를 열지 못했습니다.',
+  },
   notALogbook: {
     en: 'That is not a voyage logbook, or it is a version this cannot read.',
     ko: '항해일지 파일이 아니거나, 이 버전에서 읽을 수 없는 형식입니다.',

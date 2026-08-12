@@ -258,6 +258,7 @@ export function MenuDialog({
   logVersion,
   onLogChanged,
   logbookError,
+  logbookUnavailable,
   engineLoading,
   engineError,
   onRetryEngine,
@@ -276,6 +277,8 @@ export function MenuDialog({
   /** Called when the log panel writes to the store, so `logVersion` can follow. */
   onLogChanged: () => void;
   logbookError: boolean;
+  /** The store never opened. A standing fact, said once and quietly. */
+  logbookUnavailable: boolean;
   engineLoading: boolean;
   engineError: boolean;
   onRetryEngine: () => void;
@@ -431,6 +434,14 @@ export function MenuDialog({
       </button>
 
       <div>
+        {logbookUnavailable && !logbookError && (
+          <div
+            role="status"
+            className="mb-3 rounded-md border border-muted bg-muted/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground"
+          >
+            {t(LOG.unavailable)}
+          </div>
+        )}
         {logbookError && (
           <div
             role="alert"

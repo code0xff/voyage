@@ -52,7 +52,10 @@ export function App() {
   chartFullRef.current = chartFull;
   const [started, setStarted] = useState(false);
   /**
-   * Bumped when a passage is written, so the logbook reloads on it.
+   * Bumped when a passage's write has *committed*, so the logbook reloads on it.
+   *
+   * Committed and not merely requested: a read that goes out beside the write
+   * can come back without it, and nothing bumps a second time.
    *
    * A counter rather than the records themselves: they live in IndexedDB behind
    * an async store, and holding a second copy in React would be two answers to
@@ -60,6 +63,15 @@ export function App() {
    */
   const [logVersion, setLogVersion] = useState(0);
   const [logbookError, setLogbookError] = useState(false);
+  /**
+   * The local logbook will not open at all, as opposed to one write failing.
+   *
+   * Separate state and never opens the menu: it is one standing fact about this
+   * session -- true of every passage, and nothing the player can act on -- and
+   * reported through the write-failure channel it interrupted the end of every
+   * voyage with the same alarm as a passage that really was lost.
+   */
+  const [logbookUnavailable, setLogbookUnavailable] = useState(false);
   const { compact, touch, height } = useViewport();
 
   // Keep the latest settings reachable from the engine callbacks without
@@ -121,13 +133,19 @@ export function App() {
               if (chartFullRef.current) setChartFull(false);
               else setMenuOpen((v) => !v);
             }
-            if (ev.type === "arrived") {
+            // Not on "arrived": that is the anchor going down, and the record
+            // is not in the store until its transaction commits. Reloading the
+            // list any earlier can read straight past it.
+            if (ev.type === "logbookSaved") {
               setLogbookError(false);
               setLogVersion((v) => v + 1);
             }
             if (ev.type === "logbookError") {
-              setLogbookError(true);
-              setMenuOpen(true);
+              if (ev.reason === "unavailable") setLogbookUnavailable(true);
+              else {
+                setLogbookError(true);
+                setMenuOpen(true);
+              }
             }
             if (ev.type === "region") {
               setRegionStatus(ev.status);
@@ -461,6 +479,7 @@ export function App() {
           logVersion={logVersion}
           onLogChanged={bumpLog}
           logbookError={logbookError}
+          logbookUnavailable={logbookUnavailable}
           engineLoading={engineLoading}
           engineError={engineError}
           onRetryEngine={retryEngine}
