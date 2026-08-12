@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit && vite build",
+    "check:base": "tsx scripts/check-base.ts",
     "dev": "vite",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

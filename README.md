@@ -19,6 +19,19 @@ npm run build
 
 Press `Esc` for the menu and settings.
 
+The build is a static site and needs nothing behind it. It assumes it is served
+from the root; to serve it from a subpath, name the subpath at build time:
+
+```bash
+VOYAGE_BASE=/voyage/ npm run build
+npm run check:base -- dist /voyage/    # nothing still points at the root
+```
+
+The check is worth running because that mistake is invisible at the root, which
+is where everyone develops: the models, the attribution notices and the
+surveyed rasters are fetched at runtime, so the bundler never sees those paths
+and cannot correct them. `.github/workflows/deploy.yml` does both on request.
+
 Contributing? Read [AGENTS.md](AGENTS.md) first. Known limitations and designs
 for what is not built yet are in [docs/](docs/).
 

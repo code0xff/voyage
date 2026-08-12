@@ -1,0 +1,105 @@
+name: deploy
+
+# Manual only, and deliberately.
+#
+# There is no deployment yet -- the game gets shown to people over a Cloudflare
+# quick tunnel, which is why `vite.config.ts` allows one. Firing this on every
+# push to `dev` would either publish continuously to somewhere that does not
+# exist, or sit red. Run it when there is something to hand over.
+#
+# It builds the same tree twice over from `verify`, which is the point: this
+# asserts that the *deployed* build works at the base it will be served from,
+# and `verify` asserts nothing about the base at all.
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: 'Path the app is served from, with both slashes. "/" for a bucket or Netlify, "/voyage/" for a GitHub project page.'
+        required: false
+        default: '/'
+      publish:
+        description: 'Where the build goes.'
+        required: false
+        default: artifact
+        type: choice
+        options:
+          - artifact
+          - github-pages
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build for ${{ inputs.base }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify source
+        run: npm run verify
+
+      - name: Build production bundle
+        run: npm run build
+        env:
+          VOYAGE_BASE: ${{ inputs.base }}
+
+      # The failure this guards is silent and only appears at a subpath: the
+      # models, the attribution notices and the six surveyed rasters are fetched
+      # at runtime, so Vite never sees those strings and cannot rewrite them.
+      # Written absolute they resolve against the origin, and every one of them
+      # comes back as the index page. See `src/asset.ts`.
+      - name: Check every runtime path carries the base
+        run: npm run check:base -- dist "${{ inputs.base }}"
+
+      - name: Upload the built site
+        uses: actions/upload-artifact@v4
+        with:
+          name: voyage-dist
+          path: dist
+          if-no-files-found: error
+
+      - name: Upload for Pages
+        if: inputs.publish == 'github-pages'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  # Split out because deploying needs write permissions the build has no use
+  # for, and a job that only ever runs on request should not be the one holding
+  # them for the build as well.
+  pages:
+    name: publish to GitHub Pages
+    if: inputs.publish == 'github-pages'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - name: Deploy
+        id: deploy
+        uses: actions/deploy-pages@v4
