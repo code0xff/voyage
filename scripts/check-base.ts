@@ -95,8 +95,15 @@ export function wrappedInAssetUrl(before: string): boolean {
   let head = before.trimEnd();
   // Comments sit between the paren and the path exactly where this project
   // tends to put them, so they are stepped over rather than tripped on.
+  //
+  // Block first, and that order is the whole of it. The other way round,
+  // `/* assetUrl( // note */ '/assets/x'` had its line-comment cut taken inside
+  // the block comment, which left the comment's own `assetUrl(` standing as the
+  // caller -- so the guard passed a raw path on the strength of a mention in
+  // prose. Stripping the block first also disposes of an apostrophe inside one,
+  // which would otherwise put the quote scan into a string it never leaves.
   for (;;) {
-    const stripped = withoutLineComment(head).replace(/\/\*[^]*?\*\/$/, '').trimEnd();
+    const stripped = withoutLineComment(head.replace(/\/\*[^]*?\*\/$/, '')).trimEnd();
     if (stripped === head) break;
     head = stripped;
   }

@@ -46,6 +46,22 @@ describe('wrappedInAssetUrl', () => {
     expect(wrappedInAssetUrl(upTo("const u = assetUrl( // wherever this is deployed\n  '/assets/shark/shark.glb',\n);"))).toBe(true);
   });
 
+  /**
+   * A mention of the call inside a comment is not the call. This one failed
+   * *open* -- the raw path went unreported -- because the line-comment cut was
+   * taken inside the block comment and left its `assetUrl(` looking like the
+   * caller. Contrived as an input, and exactly the class of hole this script
+   * exists to not have.
+   */
+  it('rejects a path whose only assetUrl is inside a comment', () => {
+    expect(wrappedInAssetUrl(upTo("const u = /* assetUrl( // note */ '/assets/shark/shark.glb';"))).toBe(false);
+  });
+
+  /** An apostrophe in a comment must not put the quote scan into a string. */
+  it("rejects a bare path after a comment containing an apostrophe", () => {
+    expect(wrappedInAssetUrl(upTo("const u = /* don't wrap it */ '/assets/shark/shark.glb';"))).toBe(false);
+  });
+
   it('rejects something else that merely ends in the same name', () => {
     expect(wrappedInAssetUrl(upTo("window.assetUrl('/assets/shark/shark.glb')"))).toBe(false);
     expect(wrappedInAssetUrl(upTo("notAssetUrl('/assets/shark/shark.glb')"))).toBe(false);
