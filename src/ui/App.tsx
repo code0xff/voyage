@@ -133,9 +133,9 @@ export function App() {
               if (chartFullRef.current) setChartFull(false);
               else setMenuOpen((v) => !v);
             }
-            // Not on "arrived": that is the anchor going down, and the record
-            // is not in the store until its transaction commits. Reloading the
-            // list any earlier can read straight past it.
+            // On the commit and not on the anchor going down: the record is
+            // not in the store until its transaction lands, and a read that
+            // goes out any earlier can come back straight past it.
             if (ev.type === "logbookSaved") {
               setLogbookError(false);
               setLogVersion((v) => v + 1);

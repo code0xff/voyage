@@ -274,36 +274,29 @@ describe('engine', () => {
   }
 
   /**
-   * Regression: arriving used to be reported only if the record was stored.
-   *
-   * The write's outcome was the arrival's outcome -- one `then` with two
-   * branches -- so in a browser that will not open IndexedDB the boat anchored
-   * at her destination and the engine said nothing at all. Anchoring where you
-   * were bound is a fact about the voyage; whether a database took the row is
-   * a different fact, and hanging the first on the second means anything later
-   * built on arrival silently needs storage to work.
+   * A passage that could not be stored says so, and does not also claim it was
+   * stored. The two used to be one `then` with two branches over an event named
+   * for arriving, which meant the engine reported reaching your destination
+   * only if a database had taken the row.
    */
-  it('reports the arrival even when the passage cannot be saved', async () => {
+  it('does not confirm a write that failed', async () => {
     logAdd.mockRejectedValue(new LogStoreUnavailable());
     const seen = await makePassage();
-    expect(seen).toContain('arrived');
     expect(seen).toContain('logbookError');
     expect(seen).not.toContain('logbookSaved');
   });
 
   /**
-   * And the panels reload on the commit, not on the arrival.
-   *
-   * `logbookSaved` exists so the logbook is re-read after the transaction has
-   * committed. Re-reading on `arrived` -- which now fires before the write is
-   * even requested -- can return a list without the passage in it, and nothing
-   * bumps a second time, so the last voyage of a session would simply be
-   * missing.
+   * And a write that succeeded is confirmed once, which is what the logbook
+   * panels reload on. It follows the commit rather than the request: a read
+   * that goes out beside the write can come back without the record, and
+   * nothing bumps a second time, so the last voyage of a session would simply
+   * be missing.
    */
-  it('confirms the write separately, and after the arrival', async () => {
+  it('confirms a write that committed', async () => {
     const seen = await makePassage();
-    expect(seen).toContain('logbookSaved');
-    expect(seen.indexOf('arrived')).toBeLessThan(seen.indexOf('logbookSaved'));
+    expect(seen.filter((type) => type === 'logbookSaved')).toHaveLength(1);
+    expect(seen).not.toContain('logbookError');
   });
 
   /**

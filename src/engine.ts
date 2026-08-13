@@ -190,18 +190,7 @@ export type EngineEvent =
   /** The passage reached the store and its transaction committed. */
   | { type: 'logbookSaved'; record: PassageRecord }
   /** `N` was pressed: the chart should step to its next range. */
-  | { type: 'chartRange' }
-  /**
-   * She got there: the anchor is down within reach of where she was bound.
-   *
-   * A fact about the voyage and not about storage, which is why it is emitted
-   * before the write is attempted and fires whether or not the write succeeds.
-   * It used to follow the commit, and so did not happen at all in a browser
-   * that will not open IndexedDB -- a physical event that quietly depended on
-   * a database. Whoever wants to know the record is on disk wants
-   * `logbookSaved`.
-   */
-  | { type: 'arrived'; record: PassageRecord };
+  | { type: 'chartRange' };
 
 export interface Engine {
   readonly snapshot: Snapshot;
@@ -880,14 +869,13 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     );
     log = null;
     setDestination(null);
-    // Arrival first, because she has arrived. Then the write, without waiting:
-    // a failed one must not stall the physics loop.
-    emit({ type: 'arrived', record });
+    // Written without waiting: a failed write must not stall the physics loop.
+    //
     // `logbookSaved` follows the commit rather than the request, and it is what
-    // the panels reload on. Reloading on arrival instead would let the read go
-    // out while the write transaction is still in flight and come back without
-    // it -- and nothing bumps a second time, so the last passage of a session
-    // would simply be missing until something else wrote.
+    // the panels reload on. Announcing it any earlier -- when the record is
+    // handed over rather than when the transaction lands -- would let the read
+    // go out beside the write and come back without it, and nothing bumps a
+    // second time, so the last passage of a session would simply be missing.
     void logbook.add(record).then(
       () => emit({ type: 'logbookSaved', record }),
       (err) => {
