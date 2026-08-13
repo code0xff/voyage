@@ -434,14 +434,6 @@ export function MenuDialog({
       </button>
 
       <div>
-        {logbookUnavailable && !logbookError && (
-          <div
-            role="status"
-            className="mb-3 rounded-md border border-muted bg-muted/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground"
-          >
-            {t(LOG.unavailable)}
-          </div>
-        )}
         {logbookError && (
           <div
             role="alert"
@@ -586,6 +578,28 @@ export function MenuDialog({
                 {t(MENU.logbookLead)}{" "}
                 <span className="text-foreground">{t(MENU.logbook)}</span>
               </button>
+            )}
+
+            {/* Here rather than at the top of the dialog, where it started.
+                Up there it sat above "Put to sea" -- the most prominent slot in
+                the menu given to the quietest message in it, and a message
+                about the passage just finished parked above the button that
+                starts the next one.
+
+                Down here it lands on the line it contradicts. Whichever of the
+                two above is showing says the same thing: every passage you
+                finish is written down. That is currently false, and a
+                correction reads as a correction when it is next to the promise.
+
+                Only the quiet one moved. A lost passage is urgent and about one
+                voyage, so it keeps the top. */}
+            {logbookUnavailable && !logbookError && (
+              <p
+                role="status"
+                className="mt-2 rounded-md border border-muted bg-muted/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground"
+              >
+                {t(LOG.unavailable)}
+              </p>
             )}
 
             {/* The four keys worth knowing, and a way to the rest of them.
