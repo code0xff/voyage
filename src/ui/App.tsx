@@ -137,7 +137,10 @@ export function App() {
             // not in the store until its transaction lands, and a read that
             // goes out any earlier can come back straight past it.
             if (ev.type === "logbookSaved") {
-              setLogbookError(false);
+              // Deliberately does not clear `logbookError`. That message says a
+              // passage was lost, which stays true however many save after it:
+              // clearing it here let a later success quietly retract a warning
+              // about a voyage that is still not in the book.
               setLogVersion((v) => v + 1);
             }
             if (ev.type === "logbookError") {
