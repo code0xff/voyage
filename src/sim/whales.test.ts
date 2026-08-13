@@ -270,12 +270,24 @@ describe('whales', () => {
    * through anyway. Measured before the guard, 0.3 an hour with the slider at
    * zero.
    */
-  it('shows none at all when the spacing is infinite', { timeout: 10_000 }, () => {
+  it('shows none at all when the spacing is infinite', () => {
     const whales = new WhaleField(17);
     whales.spacing = Infinity;
+    // Counted and asserted once, rather than asserted inside the loop. An hour
+    // at 120 Hz is 432,000 steps and `expect` is not free: the per-step version
+    // spent four seconds of its ten-second budget on the assertion rather than
+    // on the simulation, and timed out on CI while passing here. The first
+    // offending step is kept so a failure still says when, which is the only
+    // thing the per-step form gave that this does not.
+    let sightings = 0;
+    let firstAt = -1;
     for (let step = 0; step < 120 * 3600; step++) {
       whales.update(1 / 120, { x: 0, y: 0 }, EMPTY_TERRAIN, 0);
-      expect(whales.events).toHaveLength(0);
+      if (whales.events.length > 0) {
+        sightings += whales.events.length;
+        if (firstAt < 0) firstAt = step;
+      }
     }
+    expect({ sightings, firstAt }).toEqual({ sightings: 0, firstAt: -1 });
   });
 });
