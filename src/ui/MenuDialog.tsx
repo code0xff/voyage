@@ -315,6 +315,11 @@ export function MenuDialog({
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) =>
     onSettings({ ...settings, [k]: v });
 
+  /** What the header says: the screen, never the tab open inside it. */
+  // Read only when `view` is not "play", which the title branch below enforces;
+  // the map has no entry for it and needs none.
+  const heading = view === "play" ? MENU.settings : SCREEN_TITLE[view];
+
   /**
    * The newest passage, or null while the store has not answered and whenever
    * it cannot.
@@ -327,11 +332,6 @@ export function MenuDialog({
    * passage that just ended, not a problem someone has to discover by opening
    * the logbook later.
    */
-  /** What the header says: the screen, never the tab open inside it. */
-  // Read only when `view` is not "play", which the title branch below enforces;
-  // the map has no entry for it and needs none.
-  const heading = view === "play" ? MENU.settings : SCREEN_TITLE[view];
-
   const [last, setLast] = useState<PassageRecord | null>(null);
   useEffect(() => {
     // The store is async and `logVersion` can bump twice in quick succession,

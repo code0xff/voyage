@@ -20,11 +20,6 @@ const G = 9.81;
 export const MAX_WAVES = 4;
 
 /**
- * Significant wave height from wind speed, in metres.
- * Tuned for fetch-limited coastal water rather than a fully developed ocean.
- * The polar solver uses the same function so the simulator and the polar agree.
- */
-/**
  * The wind over the water, m/s, world frame -- the velocity that actually
  * builds and turns a sea.
  *
@@ -50,6 +45,11 @@ export const windOverWater = (twd: number, tws: number, current: Vec2): Vec2 => 
 export const seaBearing = (overWater: Vec2): number =>
   Math.atan2(-overWater.x, -overWater.y);
 
+/**
+ * Significant wave height from wind speed, in metres.
+ * Tuned for fetch-limited coastal water rather than a fully developed ocean.
+ * The polar solver uses the same function so the simulator and the polar agree.
+ */
 export const waveHeightFromWind = (tws: number): number => 0.013 * Math.max(tws, 0.5) ** 2;
 
 export interface WaveComponent {
@@ -265,15 +265,6 @@ export class WaveField {
   }
 }
 
-/**
- * What the hull feels. Four points on the hull are sampled and a plane fitted
- * through them.
- *
- * Sampling only the centre of gravity is wrong: waves shorter than the boat
- * should be bridged by the hull, but a single sample makes the boat ride up and
- * over every one of them. Measuring bow and stern separately gives that
- * attenuation for free.
- */
 /** The dominant wave train, as the boat meets it. */
 export interface Encounter {
   /** rad/s, how often she meets it. Never negative. */
@@ -355,6 +346,15 @@ export interface HullWaveSample {
   rollSlope: number; // rad, athwartships slope (positive = starboard up)
 }
 
+/**
+ * What the hull feels. Four points on the hull are sampled and a plane fitted
+ * through them.
+ *
+ * Sampling only the centre of gravity is wrong: waves shorter than the boat
+ * should be bridged by the hull, but a single sample makes the boat ride up and
+ * over every one of them. Measuring bow and stern separately gives that
+ * attenuation for free.
+ */
 export function sampleHull(
   waves: WaveField,
   px: number,

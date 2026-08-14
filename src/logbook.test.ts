@@ -120,12 +120,6 @@ describe('logbook export', () => {
     expect(p.sightings).toEqual({ whales: 2, sharks: 1 });
   });
 
-  /**
-   * A sighting is a thing that happened or did not. Every other number in a
-   * record is a measurement and may legitimately be fractional, so the existing
-   * guard lets 2.5 through -- which would put two and a half whales in a
-   * logbook.
-   */
   it('carries when it was and what it was like through a round trip', () => {
     const [p] = fromExport(JSON.stringify(toExport([record()], 0)))!;
     expect(p.startHour).toBe(5.2);
@@ -155,11 +149,6 @@ describe('logbook export', () => {
   });
 
   /**
-   * Checked against the list and not merely for being a string, because this
-   * one is read back as a key: `WEATHER['drizzle']` is undefined, and handing
-   * that to the translator renders nothing at all with no clue why.
-   */
-  /**
    * The one place absent and zero must not be conflated on the way in. A record
    * that predates the fields does not know how rough it was; one that carries a
    * zero is saying it was not rough at all, and filling the first in with the
@@ -182,6 +171,11 @@ describe('logbook export', () => {
     expect(fromExport(raw({}))![0].maxSea).toBe(2.4);
   });
 
+  /**
+   * Checked against the list and not merely for being a string, because this
+   * one is read back as a key: `WEATHER['drizzle']` is undefined, and handing
+   * that to the translator renders nothing at all with no clue why.
+   */
   it('drops a weather this program has never heard of', () => {
     const raw = JSON.stringify({
       format: 'voyage-logbook',
@@ -192,6 +186,12 @@ describe('logbook export', () => {
     expect(fromExport(raw)![0].weather).toBeUndefined();
   });
 
+  /**
+   * A sighting is a thing that happened or did not. Every other number in a
+   * record is a measurement and may legitimately be fractional, so the existing
+   * guard lets 2.5 through -- which would put two and a half whales in a
+   * logbook.
+   */
   it('rounds a count of animals down to whole animals, and drops a malformed one', () => {
     const raw = JSON.stringify({
       format: 'voyage-logbook',

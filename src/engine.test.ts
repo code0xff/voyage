@@ -213,6 +213,12 @@ const settings = (over: Partial<Settings> = {}): Settings => ({
   ...over,
 });
 
+/** Press and release a key, the way `Input` expects to hear about it. */
+function press(key: string): void {
+  for (const fn of listeners.get('keydown') ?? []) fn({ key, repeat: false, preventDefault: () => {} });
+  for (const fn of listeners.get('keyup') ?? []) fn({ key, preventDefault: () => {} });
+}
+
 /**
  * Hand the engine frames the way a browser would.
  *
@@ -228,12 +234,6 @@ const settings = (over: Partial<Settings> = {}): Settings => ({
  * thousands of frames. Which is not something the engine has to defend against;
  * it is the test handing it a timestamp no browser would.
  */
-/** Press and release a key, the way `Input` expects to hear about it. */
-function press(key: string): void {
-  for (const fn of listeners.get('keydown') ?? []) fn({ key, repeat: false, preventDefault: () => {} });
-  for (const fn of listeners.get('keyup') ?? []) fn({ key, preventDefault: () => {} });
-}
-
 function frame(seconds: number, msPerFrame = 16): void {
   let t = performance.now();
   const steps = Math.round((seconds * 1000) / msPerFrame);
@@ -611,11 +611,6 @@ describe('engine', () => {
     expect(sharkSpy.mock.calls.at(-1)![4]).toBe(whaleField.events);
   });
 
-  /**
-   * A world is reproducible from its seed all the way through. Two engines on
-   * one seed given the same frames must sail the same passage; a third on
-   * another seed must not.
-   */
   /**
    * A world is reproducible from its seed. Every model has its own test for
    * that; this says the engine assembles them the same way twice.

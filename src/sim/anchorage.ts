@@ -74,7 +74,6 @@ export function anchorage(
   return { depth, holding, shelter, slowEnough, canAnchor: holding === 'good' && slowEnough };
 }
 
-/** What is stopping her anchoring here, or null when nothing is. */
 /**
  * Why she cannot lie here, as a reason and not a sentence.
  *
@@ -85,6 +84,7 @@ export function anchorage(
  */
 export type AnchorProblem = 'aground' | 'shoal' | 'deep' | 'way';
 
+/** What is stopping her anchoring here, or null when nothing is. */
 export function anchorProblem(a: Anchorage): AnchorProblem | null {
   if (a.holding === 'aground') return 'aground';
   if (a.holding === 'shoal') return 'shoal';

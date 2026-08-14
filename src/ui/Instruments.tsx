@@ -266,7 +266,6 @@ function Helm() {
   );
 }
 
-/** Auto-mode chips. These change rarely, so plain React state via a re-render is fine. */
 /**
  * Five numbers, on a grid that cannot move.
  *
@@ -309,6 +308,15 @@ function CompactInstruments() {
   );
 }
 
+/**
+ * The chips that say what is steering and what is trimming itself.
+ *
+ * Written straight into the DOM per frame like every other readout, and not
+ * through React. An older comment on this said the opposite -- that these
+ * change rarely enough for plain state and a re-render -- and it had been left
+ * behind by the conversion. The pilot's chip is why the conversion happened: it
+ * carries the heading being steered, which moves continuously.
+ */
 function Modes() {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);

@@ -269,12 +269,6 @@ describe('reversed flow', () => {
   });
 
   /**
-   * The helm works backwards going astern, which is what a boat does and what
-   * the old model could not express: it took the angle from a clamped `uSafe`
-   * whose sign was the sign of `s.u`, then applied the force the same way round
-   * regardless.
-   */
-  /**
    * The keel's lift, isolated from the rudder and the weathervane so that only
    * its direction is under test: she must be carried to leeward of her track,
    * not to windward, whichever way she is going through the water.
@@ -340,6 +334,12 @@ describe('reversed flow', () => {
     expect(Math.abs(yaw(1e-9) - yaw(-1e-9))).toBeLessThan(1e-8);
   });
 
+  /**
+   * The helm works backwards going astern, which is what a boat does and what
+   * the old model could not express: it took the angle from a clamped `uSafe`
+   * whose sign was the sign of `s.u`, then applied the force the same way round
+   * regardless.
+   */
   it('reverses the helm when she has sternway', () => {
     const ahead = drift({ u: 1.5, heading: 90 * DEG }, 4, 0.8).s.heading;
     const astern = drift({ u: -1.5, heading: 90 * DEG }, 4, 0.8).s.heading;

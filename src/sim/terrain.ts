@@ -380,8 +380,11 @@ const CELL = 820;
  * would show as a seam.
  */
 const QUERY_REACH = 650;
-/** The largest island the field will generate. The bounds below depend on it. */
-/** Exported so the chart can work out how far a coast reaches past its centre. */
+/**
+ * The largest island the field will generate. The bounds below depend on it.
+ *
+ * Exported so the chart can work out how far a coast reaches past its centre.
+ */
 export const MAX_ISLAND_RADIUS = 250;
 /**
  * How far from an island's centre its influence can possibly reach, m.

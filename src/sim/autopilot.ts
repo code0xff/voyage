@@ -85,8 +85,6 @@ export function cyclePilot(p: PilotState, heading: number, twa: number): void {
  *
  * @param twd the wind direction *where the boat is*, so that in wind mode she
  *            follows the shift she is actually in rather than the mean
- */
-/**
  * @param surge her way through the water, m/s. Required rather than defaulted:
  *   a caller that forgot it would silently get the forward-only behaviour this
  *   exists to correct. Needed only for its sign -- the

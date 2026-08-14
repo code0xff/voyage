@@ -30,9 +30,8 @@ import { token } from '../ui/tokens';
  * tack, and the one thing a chart has to be is still.
  */
 
-/** Ranges the chart cycles through, m from the centre to the edge. */
 /**
- * Chart ranges, m.
+ * The ranges the chart cycles through, m from the centre to the edge.
  *
  * The first three are pilotage scales -- what is close enough to hit. The last
  * two arrived with the surveyed regions and are passage scales: a 20 km bay

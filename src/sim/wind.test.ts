@@ -6,12 +6,6 @@ import { knotsToMs } from './units';
 
 describe('wind field', () => {
   /**
-   * The renderer draws the puffs the player steers by, using the same function
-   * the physics samples. If it were not a pure function of position and time,
-   * the visible puff and the felt puff would drift apart and the tactical layer
-   * of the game would be a lie.
-   */
-  /**
    * The advection used to be `baseTws * ADVECTION * elapsed`, which applies the
    * wind speed of this instant to the entire history. While the mean wind never
    * moved that was the same answer; once the weather started turning inside a
@@ -33,6 +27,12 @@ describe('wind field', () => {
     expect(Math.abs(after - before)).toBeLessThan(0.01);
   });
 
+  /**
+   * The renderer draws the puffs the player steers by, using the same function
+   * the physics samples. If it were not a pure function of position and time,
+   * the visible puff and the felt puff would drift apart and the tactical layer
+   * of the game would be a lie.
+   */
   it('is a deterministic function of position and time', () => {
     const a = new WindField(knotsToMs(14), 0, 0.5, 0.2, 99);
     const b = new WindField(knotsToMs(14), 0, 0.5, 0.2, 99);

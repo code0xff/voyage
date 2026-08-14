@@ -387,12 +387,6 @@ describe('the tide turning', () => {
   });
 
   /**
-   * The world clock is unwrapped and counts on past midnight, so the tide has
-   * to as well -- and a period small enough to overflow the quotient would hand
-   * `Math.cos` an Infinity and poison the engine with a NaN. The slider cannot
-   * produce one; a hand-edited setting can.
-   */
-  /**
    * The guard is against a period small enough to overflow the phase quotient,
    * not against short ones. Half an hour is the smallest the slider offers and
    * it has to turn; a guard set there would silently make it steady.
@@ -402,6 +396,12 @@ describe('the tide turning', () => {
     expect(tideRate(0.5, 0, 0.5)).toBeCloseTo(1, 12);
   });
 
+  /**
+   * The world clock is unwrapped and counts on past midnight, so the tide has
+   * to as well -- and a period small enough to overflow the quotient would hand
+   * `Math.cos` an Infinity and poison the engine with a NaN. The slider cannot
+   * produce one; a hand-edited setting can.
+   */
   it('stays a number at any hour and any cycle', () => {
     for (const h of [-40, 0, 27.5, 1e5]) {
       for (const period of [0, -3, 1e-320, 0.5, TIDE_PERIOD, 24]) {

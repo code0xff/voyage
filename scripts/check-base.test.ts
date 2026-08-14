@@ -27,11 +27,6 @@ describe('wrappedInAssetUrl', () => {
   });
 
   /**
-   * The name has to be the function and not merely end with it. Reading the
-   * last word before the quote said yes to this, which is a guard that can be
-   * satisfied by a coincidence of spelling.
-   */
-  /**
    * A URL is not a comment. `Credits.tsx` puts a Sketchfab link beside every
    * `assetUrl()` call, so a `//` sharing the line with a wrapped call is the
    * normal case here and not a contrived one.
@@ -62,6 +57,11 @@ describe('wrappedInAssetUrl', () => {
     expect(wrappedInAssetUrl(upTo("const u = /* don't wrap it */ '/assets/shark/shark.glb';"))).toBe(false);
   });
 
+  /**
+   * The name has to be the function and not merely end with it. Reading the
+   * last word before the quote said yes to this, which is a guard that can be
+   * satisfied by a coincidence of spelling.
+   */
   it('rejects something else that merely ends in the same name', () => {
     expect(wrappedInAssetUrl(upTo("window.assetUrl('/assets/shark/shark.glb')"))).toBe(false);
     expect(wrappedInAssetUrl(upTo("notAssetUrl('/assets/shark/shark.glb')"))).toBe(false);

@@ -284,8 +284,7 @@ export class SoundEngine {
   /**
    * Per frame. Gains move with setTargetAtTime; assigning them directly clicks
    * on every frame boundary.
-   */
-  /**
+   *
    * @param fieldDrift the velocity the wave field itself is being carried at,
    *   m/s. What sets the rate she meets crests is her speed *through the wave
    *   pattern*, and the pattern is no longer standing still.
