@@ -166,6 +166,20 @@ export const GLOSSARY: { term: string; meaning: Phrase }[] = [
     },
   },
   {
+    term: 'TGT',
+    meaning: {
+      en: 'Target speed: what this boat can make at this angle in this wind, from her own polar. Trim until BSP closes on it.',
+      ko: '목표 속도. 이 배가 이 바람, 이 각도에서 낼 수 있는 속도로, 폴라에서 나옵니다. BSP가 여기 붙도록 조절하세요.',
+    },
+  },
+  {
+    term: 'POL',
+    meaning: {
+      en: 'Boat speed as a share of the target. 100 is on the pace, and a gust genuinely pushes past it. Says nothing in the no-go zone or in a tide, where the number would mislead.',
+      ko: '목표 대비 선속. 100이면 폴라 그대로이고, 돌풍에서는 실제로 넘어섭니다. 노고존과 조류에서는 숫자가 오해를 부르므로 아무것도 표시하지 않습니다.',
+    },
+  },
+  {
     term: 'AWS',
     meaning: {
       en: 'Apparent wind speed — what the boat feels, wind plus her own motion. Always more than TWS on a beat, less on a run.',
@@ -182,8 +196,8 @@ export const GLOSSARY: { term: string; meaning: Phrase }[] = [
   {
     term: 'Heel',
     meaning: {
-      en: 'How far she is leaning. Her best speed on the wind comes at about 27°; heel harder than that and she goes slower, not faster.',
-      ko: '배가 기운 정도. 맞바람에서 최고 속도는 약 27°에서 나오며, 그보다 더 기울면 빨라지는 게 아니라 느려집니다.',
+      en: 'How far she is leaning. Pressed hard on a beat she is quickest in the high twenties of degrees; past that she goes slower, not faster. In light air she never gets near it, and less heel just means less wind.',
+      ko: '배가 기운 정도. 센 바람의 맞바람에서는 20도대 후반에서 가장 빠르고, 그보다 더 기울면 느려집니다. 약한 바람에서는 그 근처까지 가지도 않으며, 힐이 작다는 건 그저 바람이 약하다는 뜻입니다.',
     },
   },
   {
