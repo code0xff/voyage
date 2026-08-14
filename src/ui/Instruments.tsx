@@ -330,11 +330,17 @@ function Helm() {
 }
 
 /**
- * Five numbers, on a grid that cannot move.
+ * Six numbers, on a grid that cannot move.
  *
  * Chosen for what you cannot see by looking: speed, where the wind is, how hard
  * she is pressed, and what is under the keel. Heading is there because a
- * compass is the one thing the view genuinely cannot show you.
+ * compass is the one thing the view genuinely cannot show you, and POL took
+ * the grid's last slot because on a phone there is no polar card -- it is the
+ * one place the panel can still say whether she is being sailed well.
+ *
+ * Only BSP carries emphasis here, where the full panel emphasises five. Not an
+ * oversight: on a card this size one headline is a hierarchy and three is
+ * noise, and every number on it already earned its place by being steered by.
  *
  * **A fixed grid and a fixed width, not `flex-wrap`.** Wrapping reflowed on the
  * data: `-96°` is wider than `-9°` and `100°` than `9°`, so the strip jumped
@@ -363,6 +369,21 @@ function CompactInstruments() {
           <Gauge label="HDG" read={(s) => deg(wrap2Pi(s.state.heading) * RAD)} />
           <Gauge label="Heel" read={(s) => `${(s.state.heel * RAD).toFixed(0)}°`} />
           <Gauge label="Depth" unit="m" read={(s) => (s.clearance > 90 ? '--' : s.depth.toFixed(0))} />
+          {/*
+            The verdict number takes the grid's last free slot: on a phone
+            there is no polar card and no room for TGT, so this is the one
+            place the panel can still say whether she is being sailed well.
+            It shows the same refusals as the full panel -- nothing in the
+            no-go zone or a tide -- for the same reasons.
+          */}
+          <Gauge
+            label="POL"
+            unit="%"
+            read={(s) => {
+              const p = paceNow(s);
+              return p ? (p.fraction * 100).toFixed(0) : '--';
+            }}
+          />
         </div>
       ) : (
         <Gauge label="BSP" unit="kn" emphasis read={speed} />
@@ -416,7 +437,7 @@ function Modes() {
  *
  * Compact is not the same panel scaled down -- at 390 px wide the full one
  * squeezed to 156 and ran its values into its labels. It is a different
- * selection: the five readings you steer by, and nothing you can look out of
+ * selection: the six readings you steer by, and nothing you can look out of
  * the window for. Everything cut is still on the full panel the moment there
  * is room, and all of it is explained in the guide either way.
  */
@@ -474,6 +495,7 @@ export function Instruments({ compact = false }: { compact?: boolean }) {
         <Gauge
           label="TGT"
           unit="kn"
+          emphasis
           read={(s) => {
             const p = paceNow(s);
             return p ? msToKnots(p.target).toFixed(2) : '--';
@@ -482,6 +504,7 @@ export function Instruments({ compact = false }: { compact?: boolean }) {
         <Gauge
           label="POL"
           unit="%"
+          emphasis
           read={(s) => {
             const p = paceNow(s);
             return p ? (p.fraction * 100).toFixed(0) : '--';
@@ -501,7 +524,15 @@ export function Instruments({ compact = false }: { compact?: boolean }) {
           unit="kn"
           read={(s) => (s.diag ? msToKnots(s.diag.awsMast).toFixed(1) : '--')}
         />
-        <Gauge label="Heel" read={(s) => `${(s.state.heel * RAD).toFixed(1)}°`} />
+        {/*
+          The third emphasised pair-and-a-half, with BSP/VMG and TGT/POL: the
+          five numbers a helmsman actually sails by. Heel is the odd one out of
+          the five in that it is the *limit* rather than the goal -- pressed
+          hard on a beat her best speed comes in the high twenties of degrees
+          and past that she is slower, not faster -- which is exactly why it
+          earns the same weight as the numbers being chased.
+        */}
+        <Gauge label="Heel" emphasis read={(s) => `${(s.state.heel * RAD).toFixed(1)}°`} />
         <Gauge label="Leeway" read={(s) => (s.diag ? `${(s.diag.leeway * RAD).toFixed(1)}°` : '--')} />
         <Gauge label="Sheet" read={(s) => deg(s.state.sheet * RAD)} />
         <Gauge label="AoA" read={(s) => (s.diag ? deg(s.diag.sailAoA * RAD) : '--')} />
