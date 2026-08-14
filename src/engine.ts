@@ -7,7 +7,7 @@ import {
   type Diagnostics,
   type SeaState,
 } from './sim/boat';
-import type { Polar } from './sim/polar';
+import { polarStale, type Polar } from './sim/polar';
 import { createPolarSolver } from './polar-solver';
 import { WindField } from './sim/wind';
 import { CurrentField, DEFAULT_FULL_DEPTH, tideRate } from './sim/current';
@@ -947,6 +947,20 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // only when a setting changes.
     wind.baseTws = windMs(current) * weather.state.windScale;
     wind.gustiness = current.gustiness * weather.state.gustScale;
+
+    // And the polar has to follow it too, for the same reason and by the same
+    // argument as the sea below. It was solved for one wind speed and only ever
+    // re-solved when a setting moved, so a front coming through left the curve
+    // -- and the card's header, which quotes the wind it was solved at -- drawn
+    // for a breeze that was no longer blowing.
+    //
+    // Only when nothing is already on its way. `schedulePolar` restarts its own
+    // debounce, so calling it every step would push the timer out for ever and
+    // the solve would never start at all. This is affordable now and was not
+    // before: it costs a second of a worker rather than a second of the frame.
+    if (snapshot.polar && !snapshot.polarBusy && polarStale(snapshot.polar, wind.baseTws)) {
+      schedulePolar();
+    }
 
     // ...and the sea has to follow the wind that is now blowing over it. The
     // wave field was only rebuilt when a setting moved, so once the weather

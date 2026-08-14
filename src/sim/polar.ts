@@ -176,6 +176,33 @@ export function formatPolar(polar: Polar, cfg: BoatConfig): string {
  * meets a head sea. A constant cannot stand in for it, which is what a fixed
  * 40 degrees in `PassageBar` was doing.
  */
+/**
+ * How far the mean wind may drift from the one a polar was solved for before
+ * the polar stops describing the boat.
+ *
+ * Five per cent, chosen from what is built on top: a target speed the helmsman
+ * steers to within a point or two. A baseline several per cent adrift makes
+ * that number meaningless while still looking precise, which is the worst way
+ * for an instrument to be wrong.
+ */
+export const POLAR_TOLERANCE = 0.05;
+
+/**
+ * Whether a polar still describes the boat she is sailing.
+ *
+ * A polar is solved for one wind speed, and the weather does not hold still:
+ * `windScale` runs from 0.55 in fog to 1.75 in a squall, so a polar left alone
+ * ends up drawn for a breeze that is not blowing. Nothing said so, and the
+ * card's own header went on quoting the wind it was solved at as though it were
+ * the wind outside.
+ *
+ * Compared against the *mean* wind, which is what a polar is: gusts are
+ * deliberately excluded from `baseTws` and re-solving for each one would be
+ * both wrong and endless.
+ */
+export const polarStale = (polar: Polar, tws: number): boolean =>
+  Math.abs(tws - polar.tws) > POLAR_TOLERANCE * polar.tws;
+
 export function noGoAngle(polar: Polar): number | null {
   let best: number | null = null;
   for (const p of polar.points) {

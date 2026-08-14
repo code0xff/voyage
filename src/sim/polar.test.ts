@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CRUISER, DEFAULT_ENV } from './config';
-import { noGoAngle, solvePolar } from './polar';
+import { POLAR_TOLERANCE, noGoAngle, polarStale, solvePolar } from './polar';
 import { knotsToMs, msToKnots } from './units';
 import { RAD } from './math';
 
@@ -135,5 +135,57 @@ describe('the no-go boundary', () => {
     expect(middle).toBeLessThan(heavy);
     expect(middle).toBeLessThan(30);
     expect(heavy).toBeGreaterThan(45);
+  });
+});
+
+/**
+ * A polar goes out of date on its own, because the weather moves the mean wind
+ * underneath it. Nothing said so until this existed: the curve, and the header
+ * quoting the wind it was solved at, went on being drawn for a breeze that had
+ * stopped blowing.
+ */
+describe('a stale polar', () => {
+  const solvedFor = (tws: number) => ({ tws, points: [], bestUpwind: null, bestDownwind: null, maxSpeed: 0 });
+
+  it('is not stale in the wind it was solved for', () => {
+    expect(polarStale(solvedFor(6), 6)).toBe(false);
+  });
+
+  /**
+   * Derived from the tolerance rather than written out, so retuning it does not
+   * quietly turn these into assertions about nothing.
+   */
+  it('tolerates a drift inside the tolerance and not one outside it', () => {
+    expect(polarStale(solvedFor(6), 6 * (1 + POLAR_TOLERANCE * 0.8))).toBe(false);
+    expect(polarStale(solvedFor(6), 6 * (1 + POLAR_TOLERANCE * 1.2))).toBe(true);
+  });
+
+  /**
+   * Both ways. The wind dropping leaves a polar exactly as wrong as the wind
+   * rising, and an unsigned comparison would have said a boat becalmed under a
+   * gale's polar was fine.
+   */
+  it('is stale whichever way the wind went', () => {
+    const up = 6 * (1 + POLAR_TOLERANCE * 2);
+    const down = 6 * (1 - POLAR_TOLERANCE * 2);
+    expect(polarStale(solvedFor(6), up)).toBe(true);
+    expect(polarStale(solvedFor(6), down)).toBe(true);
+  });
+
+  /**
+   * The claim, and so written out rather than derived: the tolerance has to be
+   * tight enough to notice a real change in the weather. `windScale` runs from
+   * 0.55 in fog to 1.75 in a squall, and its smallest single step -- fair to
+   * overcast, 1.0 to 1.1 -- is ten per cent. A tolerance that slept through
+   * that would leave the polar wrong for most of a session in `auto` weather,
+   * which is the default.
+   */
+  it('notices the smallest step the weather can take', () => {
+    const fair = 6;
+    const overcast = fair * 1.1;
+    expect(polarStale(solvedFor(fair), overcast)).toBe(true);
+    // And the whole range, which is where it stops being a detail: a polar for
+    // fog describes nothing at all about a boat in a squall.
+    expect(polarStale(solvedFor(6 * 0.55), 6 * 1.75)).toBe(true);
   });
 });
