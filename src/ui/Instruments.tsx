@@ -8,6 +8,7 @@ import { RAD, clamp, wrap2Pi } from '@/sim/math';
 import { CRUISER } from '@/sim/config';
 import { msToKnots } from '@/sim/units';
 import { phaseName, formatClock } from '@/sim/sky';
+import { pace } from '@/sim/polar';
 import { useT } from './i18n';
 import { ALERT, DAY_PHASE, PANEL, WEATHER, lull, puff, shift, shoal } from './strings';
 import type { Snapshot } from '@/engine';
@@ -45,6 +46,23 @@ function Gauge({
 }
 
 const deg = (v: number) => `${v.toFixed(0)}°`;
+
+/**
+ * How she is going against her own polar, or null where saying would mislead.
+ *
+ * The two readouts built on it share this rather than each deciding, because
+ * they must be silent together: a target with no percentage beside it, or the
+ * reverse, reads as a broken instrument rather than as a refusal to answer.
+ *
+ * Silent while a tide runs, and that is the same decision `view/polarplot.ts`
+ * makes about its live marker, for the reason set out at length there: the
+ * curve is a still-water polar, the apparent wind at a given boat speed is not
+ * what still water would give once she is being carried, and the gap stops
+ * meaning "how much you are leaving out there". Two places, one rule -- change
+ * your mind about it and both have to move.
+ */
+const paceNow = (s: Snapshot) =>
+  s.polar && s.diag && !s.currents.running ? pace(s.polar, s.diag.twa, s.diag.speed) : null;
 
 /** Warnings, gusts and shifts. Empty most of the time, loud when it matters. */
 function Alerts() {
@@ -369,6 +387,35 @@ export function Instruments({ compact = false }: { compact?: boolean }) {
         <Gauge label="TWS" unit="kn" read={(s) => msToKnots(s.env.tws).toFixed(1)} />
         <Gauge label="TWA" read={(s) => (s.diag ? deg(s.diag.twa * RAD) : '--')} />
         <Gauge label="TWD" read={(s) => deg(wrap2Pi(s.env.twd) * RAD)} />
+        {/*
+          What she should be making here, and what she is making as a fraction
+          of it. Directly under TWA and TWS on purpose: those are the two
+          numbers this one is worked out from, so it reads as "given that wind
+          at that angle, this".
+
+          Boat speed alone cannot say whether five and a half knots was well
+          sailed, because it says nothing about what was on offer. This is the
+          number that turns a trim into a verdict -- ease a little and watch it
+          climb -- and it is honest in a way a score is not: the target comes
+          out of the same solver, the same CRUISER and the same physics she is
+          being sailed by.
+        */}
+        <Gauge
+          label="TGT"
+          unit="kn"
+          read={(s) => {
+            const p = paceNow(s);
+            return p ? msToKnots(p.target).toFixed(2) : '--';
+          }}
+        />
+        <Gauge
+          label="POL"
+          unit="%"
+          read={(s) => {
+            const p = paceNow(s);
+            return p ? (p.fraction * 100).toFixed(0) : '--';
+          }}
+        />
         {/*
           From the masthead, not from the sail's centre of effort, because that
           is where a boat's wind sensor is -- and because the vane drawn on the

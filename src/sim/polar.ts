@@ -1,4 +1,4 @@
-import { DEG, RAD } from './math';
+import { DEG, RAD, lerp } from './math';
 import { initialState, step, type Controls, type SeaState } from './boat';
 import { autoReef, type ReefState } from './sailplan';
 import type { BoatConfig, Environment } from './config';
@@ -176,6 +176,77 @@ export function formatPolar(polar: Polar, cfg: BoatConfig): string {
  * meets a head sea. A constant cannot stand in for it, which is what a fixed
  * 40 degrees in `PassageBar` was doing.
  */
+/**
+ * The speed the polar says she should make at a true wind angle, m/s.
+ *
+ * Linear between the solved angles, which are five degrees apart by default --
+ * far finer than the curve's own curvature, so the straight line between two of
+ * them is not a source of error worth a spline.
+ *
+ * Unsigned in the angle: the boat is symmetrical and the polar is solved for
+ * one side only, so port and starboard read from the same half. Null only when
+ * there is nothing to read from.
+ */
+export function targetSpeed(polar: Polar, twa: number): number | null {
+  const points = polar.points;
+  if (points.length === 0) return null;
+
+  const angle = Math.abs(twa);
+  // Off either end, take the end. The solved range is 0 to 180 and a true wind
+  // angle cannot leave it, so this is a guard rather than a case.
+  if (angle <= points[0].twa) return points[0].speed;
+
+  for (let i = 1; i < points.length; i++) {
+    if (angle > points[i].twa) continue;
+    const lo = points[i - 1];
+    const hi = points[i];
+    const span = hi.twa - lo.twa;
+    // Two points at one angle would divide by nothing and poison the readout
+    // with a NaN. `solvePolar` cannot produce them; a hand-built polar can.
+    return span > 0 ? lerp(lo.speed, hi.speed, (angle - lo.twa) / span) : lo.speed;
+  }
+  return points[points.length - 1].speed;
+}
+
+/** How she is going, against what this boat can do here. */
+export interface Pace {
+  /** What the polar says is available at this angle, m/s. */
+  target: number;
+  /** What she is making as a fraction of it. 1 is on the pace. */
+  fraction: number;
+}
+
+/**
+ * The one number that turns a trim into a verdict, or null where it would lie.
+ *
+ * Boat speed alone cannot tell a helmsman whether five and a half knots was
+ * well sailed, because it says nothing about what was available. This does, and
+ * it is honest here in a way a score never is: the target comes out of the same
+ * solver, the same `CRUISER` and the same physics the boat is being sailed by.
+ *
+ * Null inside the no-go zone, and that is the important refusal. The ratio is
+ * still arithmetically true in there -- ninety-odd per cent of a target of one
+ * knot -- but it reads as "well sailed" at the exact moment the boat is pinched
+ * and going nowhere, which is the worst thing an instrument can do. Outside it
+ * the number is worth trusting, so inside it there must be no number at all.
+ *
+ * Null everywhere, too, for a polar that makes no ground to windward at any
+ * angle: there is then no boundary to be inside or outside of, and a curve that
+ * cannot get her upwind at all is not one to be quoting percentages off. Not
+ * reachable from the settings -- the wind tops out at 40 knots and she still
+ * works to windward at 60 degrees there -- but `pace` is given a polar rather
+ * than making one, and a degenerate one has to have an answer.
+ *
+ * @param speed her speed *through the water*, since that is what a polar is.
+ */
+export function pace(polar: Polar, twa: number, speed: number): Pace | null {
+  const noGo = noGoAngle(polar);
+  if (noGo === null || Math.abs(twa) < noGo) return null;
+  const target = targetSpeed(polar, twa);
+  if (target === null || target <= 0) return null;
+  return { target, fraction: speed / target };
+}
+
 /**
  * How far the mean wind may drift from the one a polar was solved for before
  * the polar stops describing the boat.

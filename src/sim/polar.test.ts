@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { CRUISER, DEFAULT_ENV } from './config';
-import { POLAR_TOLERANCE, noGoAngle, polarStale, solvePolar } from './polar';
+import { POLAR_TOLERANCE, noGoAngle, pace, polarStale, solvePolar, targetSpeed } from './polar';
 import { knotsToMs, msToKnots } from './units';
-import { RAD } from './math';
+import { DEG, RAD } from './math';
 
 /**
  * The polar diagram is the only objective yardstick for "is the physics right".
@@ -187,5 +187,105 @@ describe('a stale polar', () => {
     // And the whole range, which is where it stops being a detail: a polar for
     // fog describes nothing at all about a boat in a squall.
     expect(polarStale(solvedFor(6 * 0.55), 6 * 1.75)).toBe(true);
+  });
+});
+
+/**
+ * The target, and the pace against it.
+ *
+ * Boat speed on its own cannot tell a helmsman whether five and a half knots
+ * was well sailed: it says nothing about what was available. These are what
+ * turn a trim into a verdict, so they have to be right about the easy cases as
+ * well as the hard ones.
+ */
+describe('target speed', () => {
+  const polar = solvePolar(CRUISER, { ...DEFAULT_ENV, tws: knotsToMs(12) });
+
+  it('returns the solved speed at an angle that was solved', () => {
+    const at90 = polar.points.find((p) => Math.round(p.twa * RAD) === 90)!;
+    expect(targetSpeed(polar, at90.twa)).toBeCloseTo(at90.speed, 9);
+  });
+
+  it('interpolates between two solved angles', () => {
+    const lo = polar.points.find((p) => Math.round(p.twa * RAD) === 90)!;
+    const hi = polar.points.find((p) => Math.round(p.twa * RAD) === 95)!;
+    const middle = targetSpeed(polar, (lo.twa + hi.twa) / 2)!;
+    expect(middle).toBeCloseTo((lo.speed + hi.speed) / 2, 6);
+    // And it really is between them, which a botched index would not be.
+    expect(middle).toBeGreaterThan(Math.min(lo.speed, hi.speed) - 1e-9);
+    expect(middle).toBeLessThan(Math.max(lo.speed, hi.speed) + 1e-9);
+  });
+
+  /**
+   * The boat is symmetrical and the polar is solved for one side, so both
+   * tacks read from the same half. Signed angles are where this project makes
+   * its mistakes, and an unsigned lookup would have returned the light-air end
+   * of the curve for every port tack.
+   */
+  it('reads a port tack the same as a starboard one', () => {
+    for (const deg of [35, 60, 90, 140, 175]) {
+      expect(targetSpeed(polar, -deg * DEG)).toBe(targetSpeed(polar, deg * DEG));
+    }
+  });
+
+  it('has nothing to say about a polar with no points in it', () => {
+    expect(targetSpeed({ ...polar, points: [] }, 90 * DEG)).toBeNull();
+  });
+
+  /** A hand-edited polar can repeat an angle; `solvePolar` cannot. */
+  it('does not divide by two points at the same angle', () => {
+    const twin = polar.points[10];
+    const target = targetSpeed({ ...polar, points: [twin, { ...twin }] }, twin.twa)!;
+    expect(Number.isFinite(target)).toBe(true);
+  });
+});
+
+describe('pace against the polar', () => {
+  const polar = solvePolar(CRUISER, { ...DEFAULT_ENV, tws: knotsToMs(12) });
+  const reach = 90 * DEG;
+
+  it('is one when she is doing exactly what the polar says', () => {
+    const target = targetSpeed(polar, reach)!;
+    expect(pace(polar, reach, target)!.fraction).toBeCloseTo(1, 9);
+  });
+
+  it('falls below one when she is slow and rises above it when she is not', () => {
+    const target = targetSpeed(polar, reach)!;
+    expect(pace(polar, reach, target * 0.9)!.fraction).toBeCloseTo(0.9, 6);
+    // Above one is a real reading and not an error: the polar is solved for the
+    // mean wind, so a gust genuinely puts her over it. An instrument that
+    // clamped at 100% would be hiding the most useful moment of the day.
+    expect(pace(polar, reach, target * 1.1)!.fraction).toBeCloseTo(1.1, 6);
+  });
+
+  /**
+   * The refusal that matters. In the no-go zone the ratio stays arithmetically
+   * true -- ninety-odd per cent of a target of about a knot -- while reading as
+   * "well sailed" at the exact moment the boat is pinched and going nowhere.
+   */
+  it('says nothing at all inside the no-go zone', () => {
+    const noGo = noGoAngle(polar)!;
+    const pinched = noGo * 0.5;
+    // Not because there is no target there: there is, and it is what makes the
+    // ratio so misleading.
+    expect(targetSpeed(polar, pinched)).toBeGreaterThan(0);
+    expect(pace(polar, pinched, targetSpeed(polar, pinched)! * 0.95)).toBeNull();
+    // And it starts speaking again the moment she is sailing.
+    expect(pace(polar, noGo * 1.2, 2)).not.toBeNull();
+  });
+
+  it('reads a port tack the same as a starboard one', () => {
+    expect(pace(polar, -reach, 3)!.fraction).toBeCloseTo(pace(polar, reach, 3)!.fraction, 9);
+  });
+
+  /**
+   * A polar that makes no ground to windward anywhere has no boundary to be
+   * inside or outside of, so there is nowhere it can be quoted from. Not
+   * reachable from the settings, but `pace` is handed a polar rather than
+   * making one and the branch has to mean something.
+   */
+  it('has nothing to say about a polar that cannot get her to windward at all', () => {
+    const becalmed = { ...polar, points: polar.points.map((p) => ({ ...p, vmg: -1 })) };
+    expect(pace(becalmed, reach, 3)).toBeNull();
   });
 });
