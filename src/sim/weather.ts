@@ -254,14 +254,4 @@ export class Weather {
   }
 }
 
-export const WEATHER_LABEL: Record<WeatherKind, string> = {
-  clear: 'Clear',
-  fair: 'Fair',
-  overcast: 'Overcast',
-  rain: 'Rain',
-  squall: 'Squall',
-  shower: 'Shower',
-  fog: 'Fog',
-};
-
 export const WEATHER_KINDS = Object.keys(PROFILES) as WeatherKind[];
