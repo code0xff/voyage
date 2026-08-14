@@ -278,11 +278,30 @@ export const withoutRegion = (s: Settings): Settings => ({ ...s, region: '' });
 
 /**
  * The gap between sightings the fields want, as a multiple of their tuned
- * spacing: `Infinity` for none at all, 10 at the default, 5 at the top.
+ * spacing: `Infinity` for none at all, 10 at the default, 2 at the top.
  *
  * Here rather than in either animal because both take the same number and the
  * player sets one slider, and a mapping that lived in one of them would be the
  * other one's to copy.
+ *
+ * Two arms, one per direction the slider leaves the default in, meeting at the
+ * default so moving it does not jump. Below, the old hyperbola spreads the
+ * sightings out, unchanged. Above, it compresses much harder than the
+ * hyperbola did: the top used to map to a spacing of 5, measured at one whale
+ * per four minutes of real time in ideal deep water -- and the conditions are
+ * never ideal. The whale's spawn wants 18 m of depth 120 m off any shore in
+ * the bow's forward arc (the shark asks less of the water, and rides the same
+ * multiplier at its own far slower cadence -- four an hour at the new top),
+ * attempts that find none are simply lost, and the fields run on the physics
+ * clock, so speeding the world up does not help. Through all that
+ * the old top *felt* like hardly more than the default, and the top of a
+ * rarity slider means "I want to see them this session", not "slightly less
+ * rare". Measured at the new top: one per two minutes ideal, before the water
+ * has its say. The default's feel is pinned; only the upper half moved.
  */
 export const wildlifeSpacing = (s: Settings): number =>
-  s.wildlife <= 0 ? Infinity : 50 / s.wildlife;
+  s.wildlife <= 0
+    ? Infinity
+    : s.wildlife <= 5
+      ? 50 / s.wildlife
+      : 10 / (1 + (s.wildlife - 5) * 0.8);

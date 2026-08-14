@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, currentVec, loadSettings } from './settings';
+import { DEFAULT_SETTINGS, currentVec, loadSettings, wildlifeSpacing } from './settings';
 import { MAX_MAGNIFY, MIN_MAGNIFY } from './view/orbit';
 
 /**
@@ -101,5 +101,51 @@ describe('binocular power', () => {
   it('defaults inside the range', () => {
     expect(DEFAULT_SETTINGS.binocularPower).toBeGreaterThanOrEqual(MIN_MAGNIFY);
     expect(DEFAULT_SETTINGS.binocularPower).toBeLessThanOrEqual(MAX_MAGNIFY);
+  });
+});
+
+/**
+ * The wildlife slider's meaning, pinned at its three anchors.
+ *
+ * The mapping is two arms meeting at the default, and each anchor is a claim
+ * about the player's intent rather than a restatement of the formula: zero
+ * means none, the default means the tuned rarity the game shipped with, and
+ * the top means "I want to see them this session" -- which the old single
+ * hyperbola did not deliver, its top measuring one whale per four minutes in
+ * water that is never that ideal.
+ */
+describe('wildlife spacing', () => {
+  const at = (wildlife: number) => wildlifeSpacing({ ...DEFAULT_SETTINGS, wildlife });
+
+  /**
+   * Off for every *future* sighting, that is. An animal already in the water
+   * when the slider hits zero finishes its half-minute and goes -- the fields
+   * check the spacing before spawning, not mid-encounter -- which is the right
+   * behaviour for a slider and not a leak.
+   */
+  it('is off at zero, exactly', () => {
+    expect(at(0)).toBe(Infinity);
+  });
+
+  it('leaves the default feel exactly where it shipped', () => {
+    expect(at(DEFAULT_SETTINGS.wildlife)).toBe(10);
+  });
+
+  it('means minutes at the top, not slightly-less-rare', () => {
+    expect(at(10)).toBe(2);
+  });
+
+  /**
+   * More slider is never less wildlife. Sampled at the slider's own integer
+   * stops, and that is the whole domain rather than a shortcut: `loadSettings`
+   * rounds the value and the control steps by one, so nothing between the
+   * stops is reachable and a seam only a fraction could feel is a seam nobody
+   * can. A review pointed out this loop cannot prove continuity between the
+   * arms -- true, and between these inputs there is no between.
+   */
+  it('tightens monotonically from one end of the slider to the other', () => {
+    for (let w = 1; w < 10; w++) {
+      expect(at(w + 1)).toBeLessThan(at(w));
+    }
   });
 });
