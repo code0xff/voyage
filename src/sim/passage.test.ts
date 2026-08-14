@@ -260,3 +260,54 @@ describe('passage sightings', () => {
     expect(r.sightings?.whales).toBe(1);
   });
 });
+
+/** When it was and what it was like, as against how long it took. */
+describe('passage weather and clock', () => {
+  const from = { x: 0, y: 0 };
+  const to = { x: 0, y: 1000 };
+
+  /**
+   * `startedAt` is when the player sat down and has never been anything else.
+   * At the default time scale of sixty, twenty minutes at the keyboard is most
+   * of a day at sea, so the two clocks are barely related and only one of them
+   * is about the voyage.
+   */
+  it('remembers the world clock, and leaves the wall clock alone', () => {
+    const log = new PassageLog(from, to, 1_700_000_000_000);
+    for (let i = 0; i <= 360; i++) log.conditions('fair', 5 + i / 60, 1); // 05:00 to 11:00
+    const r = log.finish('a', to, '');
+    expect(r.startHour).toBeCloseTo(5, 6);
+    expect(r.endHour).toBeCloseTo(11, 6);
+    expect(r.startedAt).toBe(1_700_000_000_000);
+  });
+
+  it('brings a passage that ran past midnight back into the day', () => {
+    const log = new PassageLog(from, to, 0);
+    log.conditions('clear', 22, 1);
+    log.conditions('clear', 27.5, 1);
+    const r = log.finish('a', to, '');
+    expect(r.startHour).toBeCloseTo(22, 6);
+    // Not 27.5, which is not a time of day. `duration` is what says the passage
+    // crossed a midnight; these two say when it was.
+    expect(r.endHour).toBeCloseTo(3.5, 6);
+  });
+
+  /**
+   * The weather it is remembered for, which is the one it spent the passage in.
+   * Taking whatever was blowing at the end would let a day of fog be filed as a
+   * clear passage on the strength of the last two minutes of it.
+   */
+  it('reports the weather it spent longest in, not the one it arrived in', () => {
+    const log = new PassageLog(from, to, 0);
+    for (let i = 0; i < 600; i++) log.conditions('fog', 9, 1);
+    for (let i = 0; i < 60; i++) log.conditions('clear', 9, 1);
+    expect(log.finish('a', to, '').weather).toBe('fog');
+  });
+
+  it('knows nothing of a world it was never told about', () => {
+    const r = new PassageLog(from, to, 0).finish('a', to, '');
+    expect(r.startHour).toBeUndefined();
+    expect(r.endHour).toBeUndefined();
+    expect(r.weather).toBeUndefined();
+  });
+});

@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Download, Trash2, Upload } from 'lucide-react';
 import { fromExport, toExport, type LogStore } from '@/logbook';
 import { useLang, useT } from './i18n';
-import { LOG } from './strings';
+import { DAY_PHASE, LOG, WEATHER, sharkCount, whaleCount } from './strings';
+import { phaseName, skyState } from '@/sim/sky';
 import { formatDistance, formatDuration, formatWhen, msToKnots } from '@/sim/units';
 import { venueById } from '@/sim/venues';
 import { placeName } from '@/sim/regions';
@@ -23,27 +24,40 @@ import type { Phrase } from '@/i18n';
  */
 
 /**
- * The two counts, in the order they are worth reading, with the words for one
- * and for more than one.
+ * The counts, in the order they are worth reading.
  *
- * A table rather than a branch so that adding a kind is adding a row. Korean
- * repeats itself here on purpose -- see the note in `strings.ts`.
+ * A table rather than a branch, so that adding a kind is adding a row.
  */
-const SIGHTINGS: { key: SightingKind; one: Phrase; many: Phrase }[] = [
-  { key: 'whales', one: LOG.whale, many: LOG.whales },
-  { key: 'sharks', one: LOG.shark, many: LOG.sharks },
+const SIGHTINGS: { key: SightingKind; count: (n: number) => Phrase }[] = [
+  { key: 'whales', count: whaleCount },
+  { key: 'sharks', count: sharkCount },
 ];
 
 function Entry({ p, onRemove }: { p: PassageRecord; onRemove: () => void }) {
   const t = useT();
   const lang = useLang();
+  // What the passage was like, as against how well it was sailed: when in the
+  // day she went, what was blowing, and what she met.
+  const like: string[] = [];
+  if (p.startHour !== undefined && p.endHour !== undefined) {
+    // The sky's own reading of the hour, not a second opinion about it. A
+    // passage that set out at 05:12 set out at dawn because that is what the
+    // renderer was drawing, and `phaseName` is what decided that.
+    const first = phaseName(skyState(p.startHour));
+    const last = phaseName(skyState(p.endHour));
+    // One word when both ends fall in the same part of the day. "Dawn → Dawn"
+    // says nothing the single word does not, and says it twice.
+    like.push(first === last ? t(DAY_PHASE[first]) : `${t(DAY_PHASE[first])} → ${t(DAY_PHASE[last])}`);
+  }
+  if (p.weather) like.push(t(WEATHER[p.weather]));
   // Absent and zero mean different things -- a record from before any of this
   // was counted, against a passage that really did see nothing -- but they print
   // the same, which is nothing, so one filter serves both and the distinction
   // stays where it matters, in the record.
-  const seen = SIGHTINGS.map(({ key, one, many }) => ({ n: p.sightings?.[key] ?? 0, one, many }))
-    .filter(({ n }) => n > 0)
-    .map(({ n, one, many }) => `${n} ${t(n === 1 ? one : many)}`);
+  for (const { key, count } of SIGHTINGS) {
+    const n = p.sightings?.[key] ?? 0;
+    if (n > 0) like.push(t(count(n)));
+  }
   return (
     <div className="group grid grid-cols-[1fr_auto] items-start gap-2 border-b border-border/60 py-2 last:border-0">
       <div>
@@ -83,8 +97,8 @@ function Entry({ p, onRemove }: { p: PassageRecord; onRemove: () => void }) {
           same tabular column as the top speed it would read as another score,
           which is the one thing this panel is careful not to be.
         */}
-        {seen.length > 0 && (
-          <div className="text-[10px] text-muted-foreground">{seen.join(' · ')}</div>
+        {like.length > 0 && (
+          <div className="text-[10px] text-muted-foreground">{like.join(' · ')}</div>
         )}
       </div>
       <Button

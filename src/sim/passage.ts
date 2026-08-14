@@ -1,4 +1,10 @@
 import { compassAngle, compassVec, dot, len, rotCW90, sub, wrap2Pi, wrapPi, type Vec2 } from './math';
+// The sky's, not a copy of it. It is the same clock: the engine's hour counts
+// on monotonically so the sun and the tide never see it jump, and both that
+// module and this one want it brought back into the day before anyone reads it
+// as a time.
+import { wrapHour } from './sky';
+import type { WeatherKind } from './weather';
 
 /**
  * Passage making: going somewhere, rather than round something.
@@ -162,6 +168,28 @@ export interface PassageRecord {
    * made to say it saw nothing. New records always carry it, zeros included.
    */
   sightings?: Sightings;
+  /**
+   * The world clock she set out on and arrived on, hours, 0 to 24.
+   *
+   * The world's own time and not `startedAt`, which is when the player sat
+   * down. They are barely related: the clock runs at `timeScale`, sixty by
+   * default, so twenty minutes at the keyboard is most of a day at sea and a
+   * passage begun at dawn very often ends after dark. That is the part worth
+   * remembering, and none of it was recoverable from a wall-clock stamp.
+   *
+   * Wrapped into the day, so a passage that ran past midnight has an `endHour`
+   * lower than its `startHour`. `duration` is what says how long it took;
+   * these two say when it was, and an unwrapped 27.5 is not a time of day.
+   */
+  startHour?: number;
+  endHour?: number;
+  /**
+   * The weather that took up most of the passage, by the clock.
+   *
+   * The one it is remembered for rather than the one it ended in: arriving in
+   * a clearing sky does not make a day of fog a clear passage.
+   */
+  weather?: WeatherKind;
 }
 
 /**
@@ -183,6 +211,10 @@ export class PassageLog {
   private windIntegral = 0;
   private readonly counted = new Set<string>();
   private readonly sightings: Sightings = { whales: 0, sharks: 0 };
+  /** Null until the first step is reported, which is how "never told" is said. */
+  private firstHour: number | null = null;
+  private lastHour = 0;
+  private readonly weatherSeconds = new Map<WeatherKind, number>();
 
   constructor(
     readonly from: Vec2,
@@ -225,6 +257,46 @@ export class PassageLog {
   }
 
   /**
+   * What the world was like this step, whether or not she was sailing through it.
+   *
+   * Ungated, unlike `advance`, and for the same reason `sight` is. Those
+   * seconds measure how the miles were made and an anchored boat makes none;
+   * these say what the passage was like, and the weather she anchored to sit
+   * out is exactly the weather it is remembered for. Gating them would also
+   * stop the clock, so a passage that ended at anchor would report arriving at
+   * the hour she stopped rather than the hour she got there.
+   *
+   * @param dt real seconds, the same currency as `duration`. World seconds
+   *   would give the same answer while `timeScale` holds still and a different
+   *   one across a change of it, for no gain: what is wanted is which weather
+   *   the player spent the passage in.
+   */
+  conditions(kind: WeatherKind, hour: number, dt: number): void {
+    if (this.firstHour === null) this.firstHour = hour;
+    this.lastHour = hour;
+    this.weatherSeconds.set(kind, (this.weatherSeconds.get(kind) ?? 0) + dt);
+  }
+
+  /**
+   * The kind with the most seconds against it, or nothing if never told.
+   *
+   * Iterated in insertion order, so a dead tie falls to whichever was met
+   * first. Two kinds landing on the same float is not a case worth a rule, but
+   * it is worth being deterministic about.
+   */
+  private dominantWeather(): WeatherKind | undefined {
+    let best: WeatherKind | undefined;
+    let most = -1;
+    for (const [kind, seconds] of this.weatherSeconds) {
+      if (seconds > most) {
+        most = seconds;
+        best = kind;
+      }
+    }
+    return best;
+  }
+
+  /**
    * The record, given an id and where she ended up.
    *
    * `to` is passed in rather than taken from the constructor because a passage
@@ -250,6 +322,12 @@ export class PassageLog {
       // Copied for the same reason the endpoints are: the record is finished
       // and a sighting after it must not reach back into it.
       sightings: { ...this.sightings },
+      // All three absent together when the log was never told about a step. A
+      // record that knows nothing about the world it crossed should say so
+      // rather than report midnight in weather it never saw.
+      startHour: this.firstHour === null ? undefined : wrapHour(this.firstHour),
+      endHour: this.firstHour === null ? undefined : wrapHour(this.lastHour),
+      weather: this.dominantWeather(),
     };
   }
 }

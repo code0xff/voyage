@@ -1056,17 +1056,18 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // already in the water this step.
     sharks.update(PHYS_DT, state.pos, query, state.heading, whales.events, course);
 
-    // What she saw on the way. Beside the animals rather than down with the
-    // passage's other totals for no better reason than that this is where the
-    // lists are filled -- they stand until the next step, so counting them
-    // after `step()` would work just as well.
+    // What the passage was like this step, as against how far it got. Beside
+    // the animals rather than down with the passage's other totals for no
+    // better reason than that this is where the lists are filled -- they stand
+    // until the next step, so counting them after `step()` would work as well.
     //
-    // Not gated on `anchored`, which the distance and the seconds under way
-    // both are. Those measure how the miles were made and lying to an anchor
-    // makes none of them; this measures what happened, and a whale that
+    // None of it is gated on `anchored`, which the distance and the seconds
+    // under way both are. Those measure how the miles were made and lying to an
+    // anchor makes none of them; these say what happened, and a whale that
     // surfaced while she waited out a squall halfway to somewhere was still
-    // seen on that passage.
+    // seen on that passage -- as was the squall.
     if (log) {
+      log.conditions(weather.state.kind, hour, PHYS_DT);
       for (const whale of whales.events) log.sight('whales', whale.id);
       for (const shark of sharks.events) log.sight('sharks', shark.id);
     }

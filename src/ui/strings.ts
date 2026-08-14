@@ -72,6 +72,24 @@ export const islandCount = (n: number): Phrase => ({
   ko: `섬 ${n}개`,
 });
 
+/**
+ * What a passage met, one function per animal for the reason `islandCount` is
+ * one: Korean puts the counter after the noun and takes no plural, so there is
+ * no order both languages can share and no rule to derive one from.
+ *
+ * Only ever called with a count of one or more -- nothing seen prints nothing
+ * at all -- so there is no zero form and it would read badly if there were.
+ */
+export const whaleCount = (n: number): Phrase => ({
+  en: n === 1 ? '1 whale' : `${n} whales`,
+  ko: `고래 ${n}마리`,
+});
+
+export const sharkCount = (n: number): Phrase => ({
+  en: n === 1 ? '1 shark' : `${n} sharks`,
+  ko: `상어 ${n}마리`,
+});
+
 export const MENU: Record<string, Phrase> = {
   tagline: {
     en: 'A sailing simulator that computes apparent wind, sail lift, keel side force and wave-making resistance. Wind differs from place to place, weather turns, and land steals your breeze.',
@@ -404,15 +422,6 @@ export const LOG: Record<string, Phrase> = {
   wind: { en: 'kn wind', ko: 'kn 바람' },
   /** Track over straight line: 1.4 is a beat, 1 is a fetch. */
   straightLine: { en: '× the straight line', ko: '× 직선거리' },
-  /**
-   * What was seen. Both English forms are carried because it has two and the
-   * count decides which; Korean has no plural, so the same word answers both
-   * and the table says so rather than a rule pretending otherwise.
-   */
-  whale: { en: 'whale', ko: '고래' },
-  whales: { en: 'whales', ko: '고래' },
-  shark: { en: 'shark', ko: '상어' },
-  sharks: { en: 'sharks', ko: '상어' },
   remove: { en: 'Remove', ko: '삭제' },
   /** Shown while the store has not answered, which is distinct from an empty log. */
   reading: { en: 'Reading the logbook…', ko: '항해일지를 읽는 중…' },

@@ -15,6 +15,9 @@ const record = (over: Partial<PassageRecord> = {}): PassageRecord => ({
   venue: 'sf',
   windKnots: 18.4,
   sightings: { whales: 2, sharks: 1 },
+  startHour: 5.2,
+  endHour: 19.75,
+  weather: 'fog',
   ...over,
 });
 
@@ -117,6 +120,49 @@ describe('logbook export', () => {
    * guard lets 2.5 through -- which would put two and a half whales in a
    * logbook.
    */
+  it('carries when it was and what it was like through a round trip', () => {
+    const [p] = fromExport(JSON.stringify(toExport([record()], 0)))!;
+    expect(p.startHour).toBe(5.2);
+    expect(p.endHour).toBe(19.75);
+    expect(p.weather).toBe('fog');
+  });
+
+  /**
+   * Dropped rather than repaired, which is the opposite of what the distances
+   * get. A negative distance has an honest correction and 30 o'clock does not
+   * -- it is neither 24 nor 6 -- so a record that cannot say when it happened
+   * says nothing instead of naming an hour nobody sailed in.
+   */
+  it('drops an hour that is not a time of day rather than bending it into one', () => {
+    const raw = JSON.stringify({
+      format: 'voyage-logbook',
+      version: 3,
+      exportedAt: 0,
+      passages: [record({ startHour: 30, endHour: -2 })],
+    });
+    const [p] = fromExport(raw)!;
+    expect(p.startHour).toBeUndefined();
+    expect(p.endHour).toBeUndefined();
+    // 24:00 is tomorrow's midnight, and the day is half open at that end.
+    expect(fromExport(JSON.stringify({ ...JSON.parse(raw), passages: [record({ startHour: 24 })] }))![0].startHour).toBeUndefined();
+    expect(fromExport(JSON.stringify({ ...JSON.parse(raw), passages: [record({ startHour: 0 })] }))![0].startHour).toBe(0);
+  });
+
+  /**
+   * Checked against the list and not merely for being a string, because this
+   * one is read back as a key: `WEATHER['drizzle']` is undefined, and handing
+   * that to the translator renders nothing at all with no clue why.
+   */
+  it('drops a weather this program has never heard of', () => {
+    const raw = JSON.stringify({
+      format: 'voyage-logbook',
+      version: 3,
+      exportedAt: 0,
+      passages: [record({ weather: 'drizzle' as never })],
+    });
+    expect(fromExport(raw)![0].weather).toBeUndefined();
+  });
+
   it('refuses a count of animals that is not a whole number of animals', () => {
     const raw = JSON.stringify({
       format: 'voyage-logbook',

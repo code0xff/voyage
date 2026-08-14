@@ -1,4 +1,5 @@
 import type { PassageRecord } from './sim/passage';
+import { WEATHER_KINDS, type WeatherKind } from './sim/weather';
 
 /**
  * The logbook: every passage she has made.
@@ -176,11 +177,12 @@ export const logbook: LogStore = createLogStore();
 /**
  * Version stamp on an exported file, so a future format can recognise this one.
  *
- * 2 added `sightings`. Bump this whenever a field is added, even though the
- * addition is optional and readable either way: it is what lets a later program
- * tell a file that saw nothing from one written before the counting existed.
+ * 3 added `startHour`, `endHour` and `weather`; 2 added `sightings`. Bumped on
+ * every added field even though the additions are optional and read either way,
+ * because that is what lets a later program tell a record that saw nothing from
+ * one written before there was any counting.
  */
-export const EXPORT_VERSION = 2;
+export const EXPORT_VERSION = 3;
 
 export interface LogExport {
   format: 'voyage-logbook';
@@ -241,6 +243,17 @@ export function fromExport(raw: string): PassageRecord[] | null {
       const s = v as { whales?: unknown; sharks?: unknown };
       return { whales: count(s.whales), sharks: count(s.sharks) };
     };
+    // A time of day, or nothing. Dropped rather than repaired when it is out of
+    // the day: unlike a negative distance there is no honest correction -- 30
+    // o'clock is neither 24 nor 6 -- and a record that cannot say when it
+    // happened should say that instead of naming an hour nobody sailed in.
+    const hour = (v: unknown) =>
+      typeof v === 'number' && Number.isFinite(v) && v >= 0 && v < 24 ? v : undefined;
+    // Checked against the list rather than merely for being a string, because
+    // this one is read back as a key: an unknown kind would reach a lookup that
+    // has no row for it.
+    const weather = (v: unknown) =>
+      WEATHER_KINDS.includes(v as WeatherKind) ? (v as WeatherKind) : undefined;
     // One record per id within a file. Sequential `put`s would otherwise let a
     // duplicate silently overwrite the one before it, so the import would
     // report more passages than it stored.
@@ -261,6 +274,9 @@ export function fromExport(raw: string): PassageRecord[] | null {
         venue: typeof p.venue === 'string' ? p.venue : '',
         windKnots: size(p.windKnots),
         sightings: sightings(p.sightings),
+        startHour: hour(p.startHour),
+        endHour: hour(p.endHour),
+        weather: weather(p.weather),
       }));
   } catch {
     return null;
