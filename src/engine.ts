@@ -7,7 +7,8 @@ import {
   type Diagnostics,
   type SeaState,
 } from './sim/boat';
-import { solvePolar, type Polar } from './sim/polar';
+import type { Polar } from './sim/polar';
+import { createPolarSolver } from './polar-solver';
 import { WindField } from './sim/wind';
 import { CurrentField, DEFAULT_FULL_DEPTH, tideRate } from './sim/current';
 import { venueById } from './sim/venues';
@@ -390,15 +391,27 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   sound.enabled = settings.sound;
 
   // --- Polar ----------------------------------------------------------------
+  //
+  // Solved on a worker. It takes about 1.2 seconds, measured, and used to take
+  // that on this thread -- which is 1.2 seconds of frozen frames every time a
+  // setting moved. Null where the platform has no worker, and then there is
+  // simply no polar, which every readout already copes with.
+  const polarSolver = createPolarSolver((polar) => {
+    snapshot.polar = polar;
+    snapshot.polarBusy = false;
+  });
+  // The debounce stays, and is now the only thing it ever really was: a slider
+  // being dragged asks for a polar per pixel, and there is no sense starting a
+  // solve for a wind speed the player is still moving through.
   let polarTimer: number | null = null;
   function schedulePolar(delay = 400): void {
+    if (!polarSolver) return;
     if (polarTimer !== null) clearTimeout(polarTimer);
     snapshot.polarBusy = true;
     polarTimer = window.setTimeout(() => {
       polarTimer = null;
       // A polar must be based on the mean wind, not the instantaneous gust.
-      snapshot.polar = solvePolar(cfg, wind.meanEnv(DEFAULT_ENV));
-      snapshot.polarBusy = false;
+      polarSolver.solve(cfg, wind.meanEnv(DEFAULT_ENV));
     }, delay);
   }
 
@@ -1379,6 +1392,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       sound.dispose();
       view.dispose();
       if (polarTimer !== null) clearTimeout(polarTimer);
+      // The thread as well as the timer. A solve already running would
+      // otherwise finish against a session that has gone, and it is more than a
+      // second of CPU that nothing is waiting for.
+      polarSolver?.dispose();
     },
     advance(seconds, rudder = 0) {
       const saved = ctl.rudder;
