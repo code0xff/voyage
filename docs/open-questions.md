@@ -93,10 +93,36 @@ decision before it is code.
 
 **This entry described a readout that no longer exists.** The layline was part
 of the racing machinery and went with it in "feat: remove racing, which passage
-making has replaced". Nothing turns itself off with a tide except the polar
-card's live marker, and that one is right to: the curve is a still-water polar,
-so with a tide under her the gap between the marker and the curve stops meaning
-"how much you are leaving out there".
+making has replaced".
+
+**Three readouts turn themselves off with a tide, and all three are right to.**
+The polar card's live marker, and now `TGT` and `POL` -- the speed the polar
+says is available at this angle, and what she is making as a fraction of it.
+The curve is a still-water polar: `solveOne` drops the current on purpose,
+because a polar is a still-water measurement by definition. Apparent wind is
+worked from her velocity over the *ground*, so with a stream under her the
+apparent wind at a given boat speed is not what still water would give, and she
+is legitimately off her polar by an amount no trimming closes. A percentage
+there would read as sailing badly when nothing is wrong.
+
+The gate is `currents.running` -- whether the world's tide is running, not
+whether the water under the boat is moving -- so the readouts stay off even in
+shallows that throttle the local stream to nothing. Deliberate, and the same
+choice the marker made first: `env.current` goes slack every time she crosses a
+bank, and an instrument that blinked on and off with the depth would be worse
+than either steady answer.
+
+**What it costs, and it is not small.** `TGT` and `POL` are what turn a trim
+into a verdict, and the surveyed regions -- which is most of the interesting
+sailing here -- are places with a stream. Anyone who turns the tide on loses the
+one instrument that says whether they are sailing well.
+
+**What it would take.** The polar solved *with* the stream, which is a different
+solve: it becomes a function of wind speed, stream speed and the angle between
+them rather than of wind speed alone. That is a much larger table to cache and
+a much larger one to keep fresh — the boat's angle to the stream changes every
+time she turns, where today only the weather moves the wind. Worth doing only
+alongside a tidal layline, below, which needs the same solve.
 
 What is true, and is why nobody has rebuilt it: on a passage the useful number
 is already there. `courseToSteer` is the classic tidal calculation -- what to
