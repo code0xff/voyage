@@ -102,6 +102,12 @@ export const seaOf = (metres: string): Phrase => ({
   ko: `파고 ${metres} m`,
 });
 
+/** How many times she was stopped for. Never called with none. */
+export const photographCount = (n: number): Phrase => ({
+  en: n === 1 ? '1 photograph' : `${n} photographs`,
+  ko: `사진 ${n}장`,
+});
+
 export const MENU: Record<string, Phrase> = {
   tagline: {
     en: 'A sailing simulator that computes apparent wind, sail lift, keel side force and wave-making resistance. Wind differs from place to place, weather turns, and land steals your breeze.',

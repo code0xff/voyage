@@ -348,6 +348,25 @@ describe('passage weather and clock', () => {
     expect(port.finish('a', to, '').maxHeel).toBe(starboard.finish('b', to, '').maxHeel);
   });
 
+  /**
+   * Counted against the log even when nothing was ever reported to it, unlike
+   * the four fields above. A photograph is the player pressing a key, not the
+   * world being described, so the two cannot be tied together.
+   */
+  it('counts photographs whether or not it was ever told about the world', () => {
+    const told = new PassageLog(from, to, 0);
+    told.conditions(FLAT, 1);
+    told.photographed();
+    told.photographed();
+    expect(told.finish('a', to, '').photographs).toBe(2);
+
+    const silent = new PassageLog(from, to, 0);
+    silent.photographed();
+    const r = silent.finish('b', to, '');
+    expect(r.photographs).toBe(1);
+    expect(r.weather).toBeUndefined();
+  });
+
   it('records a passage that was never rough as never rough, which is a fact', () => {
     const log = new PassageLog(from, to, 0);
     log.conditions({ weather: 'clear', hour: 9, heel: 0, seaHeight: 0 }, 1);

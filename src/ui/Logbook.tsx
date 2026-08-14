@@ -3,7 +3,16 @@ import { Button } from '@/components/ui/button';
 import { Download, Trash2, Upload } from 'lucide-react';
 import { fromExport, toExport, type LogStore } from '@/logbook';
 import { useLang, useT } from './i18n';
-import { DAY_PHASE, LOG, WEATHER, heeledTo, seaOf, sharkCount, whaleCount } from './strings';
+import {
+  DAY_PHASE,
+  LOG,
+  WEATHER,
+  heeledTo,
+  photographCount,
+  seaOf,
+  sharkCount,
+  whaleCount,
+} from './strings';
 import { phaseName, skyState } from '@/sim/sky';
 import { DEG, RAD } from '@/sim/math';
 import { formatDistance, formatDuration, formatWhen, msToKnots } from '@/sim/units';
@@ -69,6 +78,8 @@ function Entry({ p, onRemove }: { p: PassageRecord; onRemove: () => void }) {
     const n = p.sightings?.[key] ?? 0;
     if (n > 0) like.push(t(count(n)));
   }
+  // Last, because it is the one thing here she did rather than met.
+  if (p.photographs) like.push(t(photographCount(p.photographs)));
   return (
     <div className="group grid grid-cols-[1fr_auto] items-start gap-2 border-b border-border/60 py-2 last:border-0">
       <div>

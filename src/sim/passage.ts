@@ -228,6 +228,18 @@ export interface PassageRecord {
    */
   maxHeel?: number;
   maxSea?: number;
+  /**
+   * How many photographs were taken on it.
+   *
+   * A count and not a list of files, deliberately. The picture leaves the
+   * browser the moment it is taken -- `a.download` asks for a name and does not
+   * get to insist on one, since the browser renames on a collision and the
+   * player may move the file or throw it away -- so a stored filename would be
+   * a claim this record cannot check and will eventually be wrong about. That
+   * she stopped three times to photograph something is a fact about the
+   * passage, and it is the part worth keeping anyway.
+   */
+  photographs?: number;
 }
 
 /**
@@ -255,6 +267,7 @@ export class PassageLog {
   private readonly weatherSeconds = new Map<WeatherKind, number>();
   private maxHeel = 0;
   private maxSea = 0;
+  private photographs = 0;
 
   constructor(
     readonly from: Vec2,
@@ -311,6 +324,18 @@ export class PassageLog {
    *   one across a change of it, for no gain: what is wanted is which weather
    *   the player spent the passage in.
    */
+  /**
+   * One taken and kept.
+   *
+   * Counted when the picture actually exists, not when the shutter was asked
+   * for: the capture resolves a frame later and can come back with nothing at
+   * all, and a passage that reports a photograph the player has not got is
+   * exactly the kind of small lie a logbook cannot afford.
+   */
+  photographed(): void {
+    this.photographs++;
+  }
+
   conditions(now: Conditions, dt: number): void {
     if (this.firstHour === null) this.firstHour = now.hour;
     this.lastHour = now.hour;
@@ -380,6 +405,10 @@ export class PassageLog {
       weather: this.dominantWeather(),
       maxHeel: told === null ? undefined : this.maxHeel,
       maxSea: told === null ? undefined : this.maxSea,
+      // Not tied to `told`, unlike the four above: this one is counted by the
+      // player pressing a key rather than by the world being reported, so a log
+      // that was never given a step can still have had a photograph taken on it.
+      photographs: this.photographs,
     };
   }
 }

@@ -34,6 +34,14 @@ const logAdd = vi.hoisted(() => vi.fn<(record: unknown) => Promise<void>>());
  * thing that finishes one, and the open ocean is deliberately too deep.
  */
 const anchorAnywhere = vi.hoisted(() => ({ on: false }));
+/**
+ * What the renderer hands back for a screenshot.
+ *
+ * Settable because the difference between a picture and no picture is the whole
+ * of what the logbook is being asked to record, and the mock returned `null`
+ * unconditionally -- so the successful half of this had no coverage at all.
+ */
+const capture = vi.hoisted(() => ({ blob: null as Blob | null }));
 
 vi.mock('./view/scene', () => ({
   createScene: () => ({
@@ -43,7 +51,7 @@ vi.mock('./view/scene', () => ({
     setTerrain: () => {},
     setRegion: () => {},
     toggleCamera: () => {},
-    capture: async () => null,
+    capture: async () => capture.blob,
     setBinocularPower: () => {},
     binocularPower: () => 5,
     resize: () => {},
@@ -111,6 +119,7 @@ import { wrapPi } from './sim/math';
 import { TIDE_PERIOD } from './sim/current';
 import { LogStoreUnavailable } from './logbook';
 import type { EngineEvent } from './engine';
+import type { PassageRecord } from './sim/passage';
 import type { RegionTerrain } from './sim/region-terrain';
 
 /**
@@ -143,6 +152,7 @@ beforeEach(() => {
   logAdd.mockReset();
   logAdd.mockResolvedValue(undefined);
   anchorAnywhere.on = false;
+  capture.blob = null;
   for (const key of GLOBALS) {
     if (key in globalThis) {
       had[key] = true;
@@ -258,12 +268,16 @@ describe('engine', () => {
    * Sail somewhere and anchor there, which is the only way a passage completes.
    * Returns every event the engine emitted, in order.
    */
-  async function makePassage(): Promise<EngineEvent['type'][]> {
+  async function makePassage(
+    /** Anything to do between setting out and letting go the anchor. */
+    onTheWay?: () => Promise<void> | void,
+  ): Promise<EngineEvent['type'][]> {
     anchorAnywhere.on = true;
     const engine = sailing();
     const seen: EngineEvent['type'][] = [];
     engine.onEvent((e) => seen.push(e.type));
     engine.setDestination({ ...engine.snapshot.state.pos });
+    await onTheWay?.();
     press('a');
     frame(0.1);
     // The write is a promise; let it settle.
@@ -272,6 +286,9 @@ describe('engine', () => {
     engine.dispose();
     return seen;
   }
+
+  /** The record the passage was filed under, which is what the store was handed. */
+  const filed = (): PassageRecord => logAdd.mock.calls[0][0] as PassageRecord;
 
   /**
    * A passage that could not be stored says so, and does not also claim it was
@@ -297,6 +314,40 @@ describe('engine', () => {
     const seen = await makePassage();
     expect(seen.filter((type) => type === 'logbookSaved')).toHaveLength(1);
     expect(seen).not.toContain('logbookError');
+  });
+
+  /**
+   * The wiring between the shutter and the logbook, which is the half of this
+   * no unit test can reach: the count lives on `PassageLog` and the key that
+   * fills it is handled three files away.
+   */
+  it('files a photograph taken on a passage against that passage', async () => {
+    capture.blob = new Blob(['png']);
+    await makePassage(async () => {
+      press('k');
+      frame(0.1);
+      // The capture resolves a frame later, by design -- see `SceneView.capture`.
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(filed().photographs).toBe(1);
+  });
+
+  /**
+   * And a shutter that came back with nothing is not a photograph. The encoder
+   * is allowed to refuse and does so silently, so a record that counted the
+   * press rather than the picture would promise the player a file they have not
+   * got -- which is the reason the count is not a list of filenames either.
+   */
+  it('does not file a photograph the encoder refused to make', async () => {
+    capture.blob = null;
+    await makePassage(async () => {
+      press('k');
+      frame(0.1);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(filed().photographs).toBe(0);
   });
 
   /**

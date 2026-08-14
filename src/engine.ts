@@ -1199,8 +1199,16 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // there is nothing the player could do about it and nothing worth stopping
     // a passage for.
     if (input.wasPressed('k')) {
+      // The passage as it stands now, and not as it stands when the capture
+      // comes back a frame later: a picture taken on this passage belongs to it
+      // even if she anchors in the meantime. Counting a log that has since been
+      // finished is inert -- `finish` read the number out into a plain record --
+      // so the reference costs nothing and the race is closed either way.
+      const onPassage = log;
       void view.capture().then((blob) => {
-        if (blob) emit({ type: 'photo', blob });
+        if (!blob) return;
+        onPassage?.photographed();
+        emit({ type: 'photo', blob });
       });
     }
     if (input.wasPressed('b')) {
