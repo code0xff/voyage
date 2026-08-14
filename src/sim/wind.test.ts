@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { WindField } from './wind';
+import { ADVECTION, WindField } from './wind';
 import { sailPlan } from './sailplan';
 import { CRUISER } from './config';
 import { knotsToMs } from './units';
+import { DEG } from './math';
 
 describe('wind field', () => {
   /**
@@ -139,5 +140,72 @@ describe('the seed places the pattern', () => {
     w.reseed(777);
     w.update(30);
     expect(w.sample({ x: 100, y: 100 }).gust).not.toBe(before);
+  });
+});
+
+/**
+ * Reading the water ahead, which is the thing a helmsman actually does and the
+ * whole reason the puff pattern is a fixed field rather than noise in time.
+ */
+describe('the wind that is coming', () => {
+  const field = () => new WindField(knotsToMs(14), 40 * DEG, 0.6, 0.2, 20260814);
+
+  it('is the wind here now, when asked for no lead at all', () => {
+    const wind = field();
+    const at = { x: 210, y: -140 };
+    expect(wind.sample(at, 0)).toEqual(wind.sample(at));
+  });
+
+  /**
+   * The property that makes it a forecast rather than a guess: what it says
+   * will arrive is exactly what does arrive. Driven by running the field
+   * forward and asking again, so the assertion is against the simulation and
+   * not against a second copy of the formula.
+   *
+   * Both channels, because they are carried at different rates -- the shift
+   * pattern at 0.55 of the gust pattern's -- and a lead applied at one rate to
+   * both would forecast two different moments.
+   */
+  it('says what will actually arrive, gust and shift alike', () => {
+    const wind = field();
+    const at = { x: -80, y: 260 };
+    const seconds = 12;
+    const forecast = wind.sample(at, seconds);
+    for (let i = 0; i < seconds * 120; i++) wind.update(1 / 120);
+    const arrived = wind.sample(at);
+    expect(arrived.gust).toBeCloseTo(forecast.gust, 9);
+    expect(arrived.shift).toBeCloseTo(forecast.shift, 9);
+  });
+
+  /**
+   * It looks upwind and not down. Getting this backwards would report the wind
+   * that has already gone past, which is worse than no forecast: it would be
+   * consistently wrong in a way that still looked like information.
+   */
+  it('looks upwind, so a forecast is not a memory', () => {
+    const wind = field();
+    const at = { x: 0, y: 0 };
+    const seconds = 15;
+    const forecast = wind.sample(at, seconds);
+    // Where the air arriving in 15 s is now: upwind, by what the pattern
+    // covers in that time. Written out rather than taken from the field, so
+    // this is a claim about direction and not a restatement of the code.
+    const carried = knotsToMs(14) * ADVECTION * seconds;
+    const upwind = { x: at.x + Math.sin(40 * DEG) * carried, y: at.y + Math.cos(40 * DEG) * carried };
+    expect(wind.sample(upwind).gust).toBeCloseTo(forecast.gust, 9);
+
+    const downwind = { x: at.x - Math.sin(40 * DEG) * carried, y: at.y - Math.cos(40 * DEG) * carried };
+    expect(wind.sample(downwind).gust).not.toBeCloseTo(forecast.gust, 3);
+  });
+
+  /**
+   * The land shadow is a fact about where the boat is, not about where the air
+   * came from, and the field has no idea where she will have sailed to. So a
+   * forecast keeps the exposure it was asked at.
+   */
+  it('does not pretend to know where she will be, so the lee is not led', () => {
+    const wind = field();
+    const at = { x: 40, y: 40 };
+    expect(wind.sample(at, 20).exposure).toBe(wind.sample(at).exposure);
   });
 });

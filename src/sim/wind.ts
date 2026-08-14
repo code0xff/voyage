@@ -111,24 +111,64 @@ export class WindField {
   }
 
   /**
-   * The wind at a point. The renderer calls the very same function.
-   * If the puff drawn on the water and the puff the boat actually hits were to
-   * diverge, the player could not trust what they see, and the whole tactical
-   * layer would collapse.
+   * The wind at a point, read through the same formulas the renderer's batch
+   * path (`sampleInto`) uses for the streaks on the water. If the puff drawn
+   * and the puff the boat actually hits were to diverge, the player could not
+   * trust what they see, and the whole tactical layer would collapse.
+   *
+   * @param leadSeconds look ahead: the wind that will have *arrived* here by
+   *   then, rather than the wind here now.
+   *
+   * One extra field sample per reading is all a forecast costs, and that it is
+   * possible at all is the whole reason the pattern is a fixed field rather
+   * than noise in time. The air that reaches a point in ten seconds is upwind
+   * of it right now by however far the pattern travels in ten seconds, so the
+   * forecast is the present field read at a shifted coordinate. Reading the
+   * water ahead is what a helmsman actually does, and until this existed the
+   * readouts could only report a puff once it had already arrived.
+   *
+   * Right while the field's own knobs hold still, which is not quite always.
+   * The lead is worked from `baseTws` and `baseTwd` as they are now; the
+   * weather moves the speed and the gustiness, and the direction moves only by
+   * the player's hand. A speed change in flight carries the pattern a little
+   * further or less far than assumed -- a few metres out of fifty over ten
+   * seconds against the weather's 22-second ease -- and a gustiness change
+   * rescales the puff that does arrive. It degrades the way a real forecast
+   * does, and integrating a future drift it cannot know would not fix it.
+   *
+   * `exposure` is not led -- a land shadow is a fact about where the boat is,
+   * not about where the air has come from, and the wind field has no idea
+   * where she will have sailed to. Which means `tws`, being the product of the
+   * led gust and the present exposure, is a hybrid under a lead and not a
+   * forecast of anything. Callers that want the forecast want `gust` and
+   * `shift`, and the one caller that asks ahead reads exactly those.
    */
-  sample(pos: Vec2): WindSample {
+  sample(pos: Vec2, leadSeconds = 0): WindSample {
     // The noise field is fixed; rewinding the sample coordinate upwind is what
     // makes the whole pattern drift downwind.
     const driftX = this.driftX;
     const driftY = this.driftY;
+    // Upwind by exactly what the drift will have added by then, which is what
+    // makes this the future field and not a guess at it. Skipped entirely at
+    // no lead, so the physics' 120 Hz call keeps its exact old arithmetic.
+    let leadX = 0;
+    let leadY = 0;
+    if (leadSeconds !== 0) {
+      const up = compassVec(this.baseTwd);
+      leadX = up.x * this.baseTws * ADVECTION * leadSeconds;
+      leadY = up.y * this.baseTws * ADVECTION * leadSeconds;
+    }
 
-    const gx = (pos.x - driftX) / GUST_SCALE;
-    const gy = (pos.y - driftY) / GUST_SCALE;
+    const gx = (pos.x + leadX - driftX) / GUST_SCALE;
+    const gy = (pos.y + leadY - driftY) / GUST_SCALE;
     // 0..1 -> -1..1
     const g = fbm2(gx, gy, this.seed, 3) * 2 - 1;
 
-    const sx = (pos.x - driftX * 0.55) / SHIFT_SCALE;
-    const sy = (pos.y - driftY * 0.55) / SHIFT_SCALE;
+    // The shift pattern is carried at 0.55 of the gust pattern's rate, so its
+    // lead has to be scaled by the same 0.55 or the two would be forecasts of
+    // different moments -- the puff right and the shift somewhere past it.
+    const sx = (pos.x + leadX * 0.55 - driftX * 0.55) / SHIFT_SCALE;
+    const sy = (pos.y + leadY * 0.55 - driftY * 0.55) / SHIFT_SCALE;
     const s = fbm2(sx, sy, this.seed + 4111, 2) * 2 - 1;
 
     // Real wind gusts harder than it lulls, so the response is asymmetric.

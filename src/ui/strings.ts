@@ -400,18 +400,33 @@ export const shoal = (under: string): Phrase => ({
   en: `SHOAL — ${under} m under keel`,
   ko: `여울 — 용골 아래 ${under} m`,
 });
-export const puff = (pct: number): Phrase => ({
-  en: `PUFF +${pct}%`,
-  ko: `돌풍 +${pct}%`,
-});
-export const lull = (pct: number): Phrase => ({
-  en: `LULL ${pct}%`,
-  ko: `약풍 ${pct}%`,
-});
-export const shift = (right: boolean, deg: string): Phrase => ({
-  en: `${right ? 'RIGHT' : 'LEFT'} SHIFT ${deg}°`,
-  ko: `${right ? '우' : '좌'}로 풍향 변화 ${deg}°`,
-});
+/**
+ * A change in the wind, with `seconds` when it is still coming and nothing when
+ * it has arrived.
+ *
+ * The two states are one string apiece rather than two, because they are the
+ * same fact twice -- said before it happens and again while it is happening --
+ * and a reader has to see that they match. English trails the lead and Korean
+ * leads with it, which is why these are built per language rather than
+ * assembled from parts.
+ */
+const coming = (seconds: number | null, en: string, ko: string): Phrase =>
+  // No lead and a lead of nothing are the same claim: it is here. Nobody
+  // passes 0 today, but "in 0s" is what this would print for whoever does.
+  seconds === null || seconds <= 0
+    ? { en, ko }
+    : { en: `${en} in ${seconds}s`, ko: `${seconds}초 뒤 ${ko}` };
+
+export const puff = (pct: number, seconds: number | null = null): Phrase =>
+  coming(seconds, `PUFF +${pct}%`, `돌풍 +${pct}%`);
+export const lull = (pct: number, seconds: number | null = null): Phrase =>
+  coming(seconds, `LULL ${pct}%`, `약풍 ${pct}%`);
+export const shift = (right: boolean, deg: string, seconds: number | null = null): Phrase =>
+  coming(
+    seconds,
+    `${right ? 'RIGHT' : 'LEFT'} SHIFT ${deg}°`,
+    `${right ? '우' : '좌'}로 풍향 변화 ${deg}°`,
+  );
 
 /** The touch controls. Short, because they sit under a finger on a phone. */
 export const TOUCH: Record<string, Phrase> = {

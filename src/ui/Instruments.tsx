@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { RAD, clamp, wrap2Pi } from '@/sim/math';
+import { RAD, clamp, compassVec, wrap2Pi } from '@/sim/math';
 import { CRUISER } from '@/sim/config';
 import { msToKnots } from '@/sim/units';
 import { phaseName, formatClock } from '@/sim/sky';
@@ -64,6 +64,20 @@ const deg = (v: number) => `${v.toFixed(0)}°`;
 const paceNow = (s: Snapshot) =>
   s.polar && s.diag && !s.currents.running ? pace(s.polar, s.diag.twa, s.diag.speed) : null;
 
+/**
+ * How far ahead the wind is read, in seconds.
+ *
+ * A judgement about how much warning is useful rather than a derived number,
+ * and it is bounded on both sides. Shorter and there is no time to ease a sheet
+ * and bear away before it lands; longer and it stops being about now -- a puff
+ * is 130 m across and the pattern carries at four fifths of the wind, so ten
+ * seconds is roughly a third of a puff at a working breeze. It scales itself at
+ * the ends, too: a drifter carries the pattern slowly and so warns of very
+ * little, and a gale carries it a whole puff-length, which is exactly the
+ * weather in which more warning is wanted.
+ */
+const LOOK_AHEAD = 10;
+
 /** Warnings, gusts and shifts. Empty most of the time, loud when it matters. */
 function Alerts() {
   const t = useT();
@@ -73,18 +87,57 @@ function Alerts() {
     if (!el || !s.diag) return;
     const msgs: { text: string; tone: 'warn' | 'bad' | 'info' }[] = [];
     const w = s.wind.sample(s.state.pos);
+    // Where she will be, not where she is. Ten seconds is twenty-five metres
+    // at five knots -- a fifth of a puff's hundred and thirty -- so forecasting
+    // at the present position would be answering about a patch of water she is
+    // partly leaving. Straight-line from the present course over the ground,
+    // which is wrong for a boat mid-turn and right for one being sailed -- and
+    // a helmsman mid-tack is not reading the water anyway.
+    const run = s.diag.sog * LOOK_AHEAD;
+    const track = compassVec(s.diag.cog);
+    const soon = s.wind.sample(
+      { x: s.state.pos.x + track.x * run, y: s.state.pos.y + track.y * run },
+      LOOK_AHEAD,
+    );
 
     if (s.clearance < 0) msgs.push({ text: t(ALERT.aground), tone: 'bad' });
     else if (s.clearance < 3)
       msgs.push({ text: t(shoal(s.clearance.toFixed(1))), tone: 'bad' });
 
     if (w.exposure < 0.75) msgs.push({ text: t(ALERT.windShadow), tone: 'warn' });
-    if (w.gust > 1.12) msgs.push({ text: t(puff(Math.round((w.gust - 1) * 100))), tone: 'info' });
-    else if (w.gust < 0.9)
-      msgs.push({ text: t(lull(Math.round((w.gust - 1) * 100))), tone: 'info' });
-    if (Math.abs(w.shift) * RAD > 5) {
+
+    // What is here now if it is here, and otherwise what is on its way. Both
+    // are the same reading of the same field, one of them ahead of the boat --
+    // so a puff announced and then a puff arriving is the instrument being
+    // proved right, which is what makes it worth believing the next time.
+    //
+    // The form follows the boat's own reading every frame, with no hysteresis,
+    // and that is a decision: a lull that has eased to just inside the
+    // threshold while a deeper one stands ten seconds out really has become
+    // "LULL in 10s" again, and holding the old form to look steadier would be
+    // the instrument smoothing over a fact. The cost is a single frame of
+    // churn at the exact crossing, which the value ticking through -10, -11,
+    // -12 makes invisible in practice.
+    const blowingNow = w.gust > 1.12 || w.gust < 0.9;
+    const gust = blowingNow ? w : soon;
+    const gustLead = blowingNow ? null : LOOK_AHEAD;
+    if (gust.gust > 1.12) {
+      msgs.push({ text: t(puff(Math.round((gust.gust - 1) * 100), gustLead)), tone: 'info' });
+    } else if (gust.gust < 0.9) {
+      msgs.push({ text: t(lull(Math.round((gust.gust - 1) * 100), gustLead)), tone: 'info' });
+    }
+
+    const veeringNow = Math.abs(w.shift) * RAD > 5;
+    const veer = veeringNow ? w : soon;
+    if (Math.abs(veer.shift) * RAD > 5) {
       msgs.push({
-        text: t(shift(w.shift > 0, Math.abs(w.shift * RAD).toFixed(0))),
+        text: t(
+          shift(
+            veer.shift > 0,
+            Math.abs(veer.shift * RAD).toFixed(0),
+            veeringNow ? null : LOOK_AHEAD,
+          ),
+        ),
         tone: 'info',
       });
     }
