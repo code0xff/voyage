@@ -177,12 +177,13 @@ export const logbook: LogStore = createLogStore();
 /**
  * Version stamp on an exported file, so a future format can recognise this one.
  *
- * 3 added `startHour`, `endHour` and `weather`; 2 added `sightings`. Bumped on
- * every added field even though the additions are optional and read either way,
- * because that is what lets a later program tell a record that saw nothing from
- * one written before there was any counting.
+ * 4 added `maxHeel` and `maxSea`; 3 added `startHour`, `endHour` and
+ * `weather`; 2 added `sightings`. Bumped on every added field even though the
+ * additions are optional and read either way, because that is what lets a later
+ * program tell a record that saw nothing from one written before there was any
+ * counting.
  */
-export const EXPORT_VERSION = 3;
+export const EXPORT_VERSION = 4;
 
 export interface LogExport {
   format: 'voyage-logbook';
@@ -277,6 +278,11 @@ export function fromExport(raw: string): PassageRecord[] | null {
         startHour: hour(p.startHour),
         endHour: hour(p.endHour),
         weather: weather(p.weather),
+        // Absent stays absent, so an old record is not made to claim flat
+        // calm; present is clamped non-negative like every other magnitude,
+        // since neither a heel nor a wave height can be less than none.
+        maxHeel: p.maxHeel === undefined ? undefined : size(p.maxHeel),
+        maxSea: p.maxSea === undefined ? undefined : size(p.maxSea),
       }));
   } catch {
     return null;

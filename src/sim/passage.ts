@@ -132,6 +132,30 @@ export interface Sightings {
 export type SightingKind = keyof Sightings;
 
 /**
+ * The world around her this step, as a passage remembers it.
+ *
+ * An object rather than four positional arguments, because two of them are
+ * physical quantities with conventions attached and a call site reading
+ * `conditions(kind, hour, heel, h13, dt)` gives a reader no way to check either
+ * of them. Signs and units are the thing this project gets wrong most often.
+ */
+export interface Conditions {
+  weather: WeatherKind;
+  /** The world clock, hours, unwrapped -- it is brought into the day at the end. */
+  hour: number;
+  /**
+   * rad, signed the way everything here is: positive means heeled to starboard.
+   *
+   * Only the magnitude is kept. A knockdown to port and one to starboard are
+   * the same fact about how rough it was, and which tack she happened to be on
+   * is not what the record is asking.
+   */
+  heel: number;
+  /** Significant wave height where she is, m, after the land has sheltered it. */
+  seaHeight: number;
+}
+
+/**
  * What a completed passage was, once she has arrived.
  *
  * A plain serialisable row on purpose. The logbook lives in the browser today
@@ -190,6 +214,20 @@ export interface PassageRecord {
    * a clearing sky does not make a day of fog a clear passage.
    */
   weather?: WeatherKind;
+  /**
+   * The worst of it: the steepest she was laid over, rad, and the biggest
+   * significant wave height she was in, m.
+   *
+   * Unsigned heel, because which side she went over on is not what is being
+   * asked. Both are maxima and not averages, for the same reason `maxSog` is
+   * one -- a mean over a long passage buries the ten minutes that were the
+   * whole of it, and those ten minutes are what gets remembered.
+   *
+   * Absent together, and only on a record from before they existed. A passage
+   * that was never rough records zero, which is a fact and not a silence.
+   */
+  maxHeel?: number;
+  maxSea?: number;
 }
 
 /**
@@ -215,6 +253,8 @@ export class PassageLog {
   private firstHour: number | null = null;
   private lastHour = 0;
   private readonly weatherSeconds = new Map<WeatherKind, number>();
+  private maxHeel = 0;
+  private maxSea = 0;
 
   constructor(
     readonly from: Vec2,
@@ -271,10 +311,15 @@ export class PassageLog {
    *   one across a change of it, for no gain: what is wanted is which weather
    *   the player spent the passage in.
    */
-  conditions(kind: WeatherKind, hour: number, dt: number): void {
-    if (this.firstHour === null) this.firstHour = hour;
-    this.lastHour = hour;
-    this.weatherSeconds.set(kind, (this.weatherSeconds.get(kind) ?? 0) + dt);
+  conditions(now: Conditions, dt: number): void {
+    if (this.firstHour === null) this.firstHour = now.hour;
+    this.lastHour = now.hour;
+    this.weatherSeconds.set(now.weather, (this.weatherSeconds.get(now.weather) ?? 0) + dt);
+    // Magnitude, per the note on the field: which side she went over on is not
+    // a fact about the passage.
+    const heel = Math.abs(now.heel);
+    if (heel > this.maxHeel) this.maxHeel = heel;
+    if (now.seaHeight > this.maxSea) this.maxSea = now.seaHeight;
   }
 
   /**
@@ -307,6 +352,9 @@ export class PassageLog {
     // Time-weighted, so lying becalmed for an hour drags the average down as it
     // should. Guarded because a passage can be ended the instant it is begun.
     const avgSog = this.duration > 0 ? this.sogIntegral / this.duration : 0;
+    // The first hour reported, or null if none ever was. Read out here so that
+    // the narrowing holds across every field that depends on it below.
+    const told = this.firstHour;
     return {
       id,
       startedAt: this.startedAt,
@@ -322,12 +370,16 @@ export class PassageLog {
       // Copied for the same reason the endpoints are: the record is finished
       // and a sighting after it must not reach back into it.
       sightings: { ...this.sightings },
-      // All three absent together when the log was never told about a step. A
-      // record that knows nothing about the world it crossed should say so
-      // rather than report midnight in weather it never saw.
-      startHour: this.firstHour === null ? undefined : wrapHour(this.firstHour),
-      endHour: this.firstHour === null ? undefined : wrapHour(this.lastHour),
+      // Everything `conditions` feeds is absent together, because it is all
+      // told together: a log never given a single step knows nothing about the
+      // world it crossed, and saying so beats reporting midnight in flat calm.
+      // `dominantWeather` answers the same way of its own accord, its map being
+      // empty for exactly the same reason.
+      startHour: told === null ? undefined : wrapHour(told),
+      endHour: told === null ? undefined : wrapHour(this.lastHour),
       weather: this.dominantWeather(),
+      maxHeel: told === null ? undefined : this.maxHeel,
+      maxSea: told === null ? undefined : this.maxSea,
     };
   }
 }

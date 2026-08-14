@@ -3,8 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Download, Trash2, Upload } from 'lucide-react';
 import { fromExport, toExport, type LogStore } from '@/logbook';
 import { useLang, useT } from './i18n';
-import { DAY_PHASE, LOG, WEATHER, sharkCount, whaleCount } from './strings';
+import { DAY_PHASE, LOG, WEATHER, heeledTo, seaOf, sharkCount, whaleCount } from './strings';
 import { phaseName, skyState } from '@/sim/sky';
+import { DEG, RAD } from '@/sim/math';
 import { formatDistance, formatDuration, formatWhen, msToKnots } from '@/sim/units';
 import { venueById } from '@/sim/venues';
 import { placeName } from '@/sim/regions';
@@ -50,6 +51,16 @@ function Entry({ p, onRemove }: { p: PassageRecord; onRemove: () => void }) {
     like.push(first === last ? t(DAY_PHASE[first]) : `${t(DAY_PHASE[first])} → ${t(DAY_PHASE[last])}`);
   }
   if (p.weather) like.push(t(WEATHER[p.weather]));
+  // Only when it was actually rough. Printing the heel of every millpond
+  // crossing turns this panel back into telemetry, which is the thing it is
+  // built not to be -- and both thresholds come off the boat rather than out of
+  // the air. She is quickest on the wind at 27 degrees and slower beyond it, so
+  // past 25 she was being pressed rather than sailed; and a metre and a half of
+  // sea is where the water starts doing the steering.
+  if (p.maxHeel !== undefined && p.maxHeel > 25 * DEG) {
+    like.push(t(heeledTo(Math.round(p.maxHeel * RAD))));
+  }
+  if (p.maxSea !== undefined && p.maxSea > 1.5) like.push(t(seaOf(p.maxSea.toFixed(1))));
   // Absent and zero mean different things -- a record from before any of this
   // was counted, against a passage that really did see nothing -- but they print
   // the same, which is nothing, so one filter serves both and the distinction

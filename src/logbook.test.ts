@@ -18,6 +18,8 @@ const record = (over: Partial<PassageRecord> = {}): PassageRecord => ({
   startHour: 5.2,
   endHour: 19.75,
   weather: 'fog',
+  maxHeel: 0.48,
+  maxSea: 2.4,
   ...over,
 });
 
@@ -153,6 +155,29 @@ describe('logbook export', () => {
    * one is read back as a key: `WEATHER['drizzle']` is undefined, and handing
    * that to the translator renders nothing at all with no clue why.
    */
+  /**
+   * The one place absent and zero must not be conflated on the way in. A record
+   * that predates the fields does not know how rough it was; one that carries a
+   * zero is saying it was not rough at all, and filling the first in with the
+   * second would invent a flat calm nobody sailed.
+   */
+  it('leaves an unrecorded roughness unrecorded, and clamps a recorded one', () => {
+    const raw = (over: object) =>
+      JSON.stringify({
+        format: 'voyage-logbook',
+        version: 4,
+        exportedAt: 0,
+        passages: [record(over)],
+      });
+    const absent = fromExport(raw({ maxHeel: undefined, maxSea: undefined }))![0];
+    expect(absent.maxHeel).toBeUndefined();
+    expect(absent.maxSea).toBeUndefined();
+    const bent = fromExport(raw({ maxHeel: -1, maxSea: -3 }))![0];
+    expect(bent.maxHeel).toBe(0);
+    expect(bent.maxSea).toBe(0);
+    expect(fromExport(raw({}))![0].maxSea).toBe(2.4);
+  });
+
   it('drops a weather this program has never heard of', () => {
     const raw = JSON.stringify({
       format: 'voyage-logbook',

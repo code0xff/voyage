@@ -1067,7 +1067,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // surfaced while she waited out a squall halfway to somewhere was still
     // seen on that passage -- as was the squall.
     if (log) {
-      log.conditions(weather.state.kind, hour, PHYS_DT);
+      // `state.heel` is last step's, since `step()` has not run yet. On a
+      // running maximum that shifts which step each sample belongs to and
+      // nothing else, and the only sample it can lose is the final one -- which
+      // would need the roughest instant of the whole passage to be the instant
+      // the anchor went down, 8 ms of it at 120 Hz.
+      log.conditions(
+        { weather: weather.state.kind, hour, heel: state.heel, seaHeight: sea.h13 },
+        PHYS_DT,
+      );
       for (const whale of whales.events) log.sight('whales', whale.id);
       for (const shark of sharks.events) log.sight('sharks', shark.id);
     }

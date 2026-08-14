@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEG, RAD, add, compassVec, scale, wrapPi, type Vec2 } from './math';
-import { PassageLog, mustTack, passageInfo } from './passage';
+import { PassageLog, mustTack, passageInfo, type Conditions } from './passage';
 
 const HERE: Vec2 = { x: 0, y: 0 };
 const NO_TIDE: Vec2 = { x: 0, y: 0 };
@@ -265,6 +265,8 @@ describe('passage sightings', () => {
 describe('passage weather and clock', () => {
   const from = { x: 0, y: 0 };
   const to = { x: 0, y: 1000 };
+  /** A calm forenoon, for the tests that are about one field and not the rest. */
+  const FLAT: Conditions = { weather: 'fair', hour: 9, heel: 0, seaHeight: 0 };
 
   /**
    * `startedAt` is when the player sat down and has never been anything else.
@@ -274,7 +276,8 @@ describe('passage weather and clock', () => {
    */
   it('remembers the world clock, and leaves the wall clock alone', () => {
     const log = new PassageLog(from, to, 1_700_000_000_000);
-    for (let i = 0; i <= 360; i++) log.conditions('fair', 5 + i / 60, 1); // 05:00 to 11:00
+    // 05:00 to 11:00.
+    for (let i = 0; i <= 360; i++) log.conditions({ ...FLAT, hour: 5 + i / 60 }, 1);
     const r = log.finish('a', to, '');
     expect(r.startHour).toBeCloseTo(5, 6);
     expect(r.endHour).toBeCloseTo(11, 6);
@@ -283,8 +286,8 @@ describe('passage weather and clock', () => {
 
   it('brings a passage that ran past midnight back into the day', () => {
     const log = new PassageLog(from, to, 0);
-    log.conditions('clear', 22, 1);
-    log.conditions('clear', 27.5, 1);
+    log.conditions({ ...FLAT, weather: 'clear', hour: 22 }, 1);
+    log.conditions({ ...FLAT, weather: 'clear', hour: 27.5 }, 1);
     const r = log.finish('a', to, '');
     expect(r.startHour).toBeCloseTo(22, 6);
     // Not 27.5, which is not a time of day. `duration` is what says the passage
@@ -299,8 +302,8 @@ describe('passage weather and clock', () => {
    */
   it('reports the weather it spent longest in, not the one it arrived in', () => {
     const log = new PassageLog(from, to, 0);
-    for (let i = 0; i < 600; i++) log.conditions('fog', 9, 1);
-    for (let i = 0; i < 60; i++) log.conditions('clear', 9, 1);
+    for (let i = 0; i < 600; i++) log.conditions({ ...FLAT, weather: 'fog' }, 1);
+    for (let i = 0; i < 60; i++) log.conditions({ ...FLAT, weather: 'clear' }, 1);
     expect(log.finish('a', to, '').weather).toBe('fog');
   });
 
@@ -309,5 +312,47 @@ describe('passage weather and clock', () => {
     expect(r.startHour).toBeUndefined();
     expect(r.endHour).toBeUndefined();
     expect(r.weather).toBeUndefined();
+    expect(r.maxHeel).toBeUndefined();
+    expect(r.maxSea).toBeUndefined();
+  });
+
+  /**
+   * Maxima, for the reason `maxSog` is one: a mean over a long passage buries
+   * the ten minutes that were the whole of it, and those ten minutes are what
+   * gets remembered.
+   */
+  it('keeps the worst of it, not the average of it', () => {
+    const log = new PassageLog(from, to, 0);
+    const calm = { weather: 'fair' as const, hour: 9, heel: 4 * DEG, seaHeight: 0.3 };
+    for (let i = 0; i < 3000; i++) log.conditions(calm, 1);
+    log.conditions({ ...calm, heel: 31 * DEG, seaHeight: 2.4 }, 1);
+    for (let i = 0; i < 3000; i++) log.conditions(calm, 1);
+    const r = log.finish('a', to, '');
+    expect(r.maxHeel).toBeCloseTo(31 * DEG, 6);
+    expect(r.maxSea).toBeCloseTo(2.4, 6);
+  });
+
+  /**
+   * Heel is signed -- positive to starboard, like every angle in this project
+   * -- and a knockdown to port is exactly as rough as one to starboard. Left
+   * signed, a passage laid over on port tack would report its worst moment as
+   * a smaller number than a calm one, because the running maximum would never
+   * rise above the zero it started at.
+   */
+  it('measures a knockdown the same on either tack', () => {
+    const port = new PassageLog(from, to, 0);
+    port.conditions({ weather: 'squall', hour: 9, heel: -38 * DEG, seaHeight: 0 }, 1);
+    const starboard = new PassageLog(from, to, 0);
+    starboard.conditions({ weather: 'squall', hour: 9, heel: 38 * DEG, seaHeight: 0 }, 1);
+    expect(port.finish('a', to, '').maxHeel).toBeCloseTo(38 * DEG, 6);
+    expect(port.finish('a', to, '').maxHeel).toBe(starboard.finish('b', to, '').maxHeel);
+  });
+
+  it('records a passage that was never rough as never rough, which is a fact', () => {
+    const log = new PassageLog(from, to, 0);
+    log.conditions({ weather: 'clear', hour: 9, heel: 0, seaHeight: 0 }, 1);
+    const r = log.finish('a', to, '');
+    expect(r.maxHeel).toBe(0);
+    expect(r.maxSea).toBe(0);
   });
 });

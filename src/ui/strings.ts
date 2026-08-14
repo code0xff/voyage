@@ -90,6 +90,18 @@ export const sharkCount = (n: number): Phrase => ({
   ko: `상어 ${n}마리`,
 });
 
+/** How hard she was pressed, when it was hard enough to be worth saying. */
+export const heeledTo = (deg: number): Phrase => ({
+  en: `heeled to ${deg}°`,
+  ko: `힐 ${deg}°`,
+});
+
+/** The biggest sea she was in, likewise. */
+export const seaOf = (metres: string): Phrase => ({
+  en: `${metres} m sea`,
+  ko: `파고 ${metres} m`,
+});
+
 export const MENU: Record<string, Phrase> = {
   tagline: {
     en: 'A sailing simulator that computes apparent wind, sail lift, keel side force and wave-making resistance. Wind differs from place to place, weather turns, and land steals your breeze.',
