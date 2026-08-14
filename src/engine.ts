@@ -1056,30 +1056,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // already in the water this step.
     sharks.update(PHYS_DT, state.pos, query, state.heading, whales.events, course);
 
-    // What the passage was like this step, as against how far it got. Beside
-    // the animals rather than down with the passage's other totals for no
-    // better reason than that this is where the lists are filled -- they stand
-    // until the next step, so counting them after `step()` would work as well.
-    //
-    // None of it is gated on `anchored`, which the distance and the seconds
-    // under way both are. Those measure how the miles were made and lying to an
-    // anchor makes none of them; these say what happened, and a whale that
-    // surfaced while she waited out a squall halfway to somewhere was still
-    // seen on that passage -- as was the squall.
-    if (log) {
-      // `state.heel` is last step's, since `step()` has not run yet. On a
-      // running maximum that shifts which step each sample belongs to and
-      // nothing else, and the only sample it can lose is the final one -- which
-      // would need the roughest instant of the whole passage to be the instant
-      // the anchor went down, 8 ms of it at 120 Hz.
-      log.conditions(
-        { weather: weather.state.kind, hour, heel: state.heel, seaHeight: sea.h13 },
-        PHYS_DT,
-      );
-      for (const whale of whales.events) log.sight('whales', whale.id);
-      for (const shark of sharks.events) log.sight('sharks', shark.id);
-    }
-
     diag = step(state, cfg, env, ctl, PHYS_DT, { sea, anchored });
     snapshot.diag = diag;
 
@@ -1090,6 +1066,29 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // and the time scale is a convenience for watching the sun rather than a
     // claim about how long the boat was at sea.
     if (log && !anchored) log.advance(diag.sog, msToKnots(env.tws), PHYS_DT);
+
+    // What the passage was like, as against how far it got.
+    //
+    // After `step()` rather than up with the animals that fill the sighting
+    // lists, and that is not tidiness: `state.heel` is only this step's heel
+    // once `step()` has written it, and read before it the running maximum
+    // would sample every step one late and drop the last one altogether. The
+    // event lists stand until the next `update()`, so they are just as readable
+    // from here.
+    //
+    // None of it is gated on `anchored`, which the line above is. Distance and
+    // seconds measure how the miles were made and lying to an anchor makes none
+    // of them; these say what happened, and a whale that surfaced while she
+    // waited out a squall halfway to somewhere was still seen on that passage
+    // -- as was the squall.
+    if (log) {
+      log.conditions(
+        { weather: weather.state.kind, hour, heel: state.heel, seaHeight: sea.h13 },
+        PHYS_DT,
+      );
+      for (const whale of whales.events) log.sight('whales', whale.id);
+      for (const shark of sharks.events) log.sight('sharks', shark.id);
+    }
 
     // Worked from what the boat is actually doing over the ground, so it costs
     // one call a step rather than being recomputed by every readout that wants
