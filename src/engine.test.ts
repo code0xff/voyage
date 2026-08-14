@@ -115,10 +115,11 @@ import { createEngine } from './engine';
 import { DEFAULT_SETTINGS, type Settings } from './settings';
 import { WhaleField } from './sim/whales';
 import { SharkField } from './sim/sharks';
-import { wrapPi } from './sim/math';
+import { DEG, wrapPi } from './sim/math';
 import { TIDE_PERIOD } from './sim/current';
 import { LogStoreUnavailable } from './logbook';
 import type { EngineEvent } from './engine';
+import { ManeuverTracker, type Maneuver } from './sim/maneuver';
 import type { PassageRecord } from './sim/passage';
 import type { RegionTerrain } from './sim/region-terrain';
 
@@ -417,6 +418,134 @@ describe('engine', () => {
     // same `handleKeys` and `arrive()` runs before the encoder answers.
     await makePassage(() => press('k'));
     expect(filed().photographs).toBe(0);
+  });
+
+  /**
+   * A tack driven through the real physics reaches the snapshot as a report.
+   *
+   * The tracker's own judgement is tested next door with synthetic traces;
+   * this is the wiring, which is the half a unit test cannot see and the half
+   * that has actually gone missing in this codebase before. The boat opens on
+   * a beam reach with the wind over her port side, so the tack is a turn to
+   * port through the wind onto the mirror angle -- mirrored rather than
+   * close-hauled, because recovery is measured against the speed she carried
+   * in and a reach-to-beat turn legitimately never gets it back.
+   */
+  it('answers a tack sailed through the real physics', () => {
+    const engine = sailing();
+    engine.advance(40); // settle on the opening reach
+    expect(engine.snapshot.maneuver).toBeNull();
+    const before = engine.snapshot.diag!.twa;
+    expect(before).toBeLessThan(0); // wind over port, per placeAtStart
+
+    // Helm to port until she is through the wind and well onto starboard.
+    for (let i = 0; i < 120 && engine.snapshot.diag!.twa < 60 * DEG; i++) {
+      engine.advance(0.5, -0.6);
+    }
+    expect(engine.snapshot.diag!.twa).toBeGreaterThan(60 * DEG);
+
+    // Sail on until the report lands, sampling as we go: the report only
+    // stays up a few seconds, so a single long advance could sail clean
+    // through its lifetime and read null off a tack that was counted.
+    let seen: Maneuver | null = null;
+    for (let i = 0; i < 90 && !seen; i++) {
+      engine.advance(1);
+      seen = engine.snapshot.maneuver;
+    }
+    expect(seen?.kind).toBe('tack');
+    expect(seen!.entrySpeed).toBeGreaterThan(1);
+    expect(seen!.lost).toBeGreaterThanOrEqual(0);
+    expect(seen!.seconds).toBeGreaterThan(0);
+
+    // And it comes down on its own: the strip must not carry a ten-minute-old
+    // turn.
+    engine.advance(10);
+    expect(engine.snapshot.maneuver).toBeNull();
+    engine.dispose();
+  });
+
+  /**
+   * The tracker is fed the angle to the mean wind, and not the panel's TWA.
+   *
+   * The distinction is the fix for a real failure pair a review demonstrated:
+   * the local shift can swing the sign of TWA across the bow of a boat holding
+   * her course, which armed turns nobody made and read a real tack as an abort
+   * when the shift swung back. A maneuver is a thing the boat does, so it is
+   * measured in the frame that does not move under her. The two angles differ
+   * whenever the local shift is nonzero, which at this seed and position it is
+   * -- asserted, so this test cannot silently compare two equal numbers.
+   */
+  it('measures a maneuver against the mean wind, not the shifting local one', () => {
+    const spy = vi.spyOn(ManeuverTracker.prototype, 'update');
+    const engine = sailing();
+    engine.advance(5);
+    const fed = spy.mock.calls.at(-1)![0];
+    const s = engine.snapshot;
+    expect(fed).toBeCloseTo(wrapPi(s.wind.baseTwd - s.state.heading), 9);
+    expect(Math.abs(fed - s.diag!.twa)).toBeGreaterThan(0.001);
+    engine.dispose();
+  });
+
+  /**
+   * A settings change can replace the world under a boat that is never
+   * teleported -- resume, not put to sea -- and the new world's wind can stand
+   * on the other side of an unmoved bow. That jump is a replaced world, not a
+   * turn, and it goes through `rebuildWorld` without `placeAtStart`, so the
+   * teleport reset alone does not cover it.
+   */
+  it('does not read a rebuilt world as a maneuver', () => {
+    const engine = sailing();
+    engine.advance(40);
+    // Newport's prevailing wind stands at 195 degrees; the procedural ocean's
+    // at zero. Across an unmoved bow the mean-wind angle jumps from about -100
+    // to about +95 -- a sign change through the stern that no gybe made, in
+    // the settling band with the speed already recovered, so without the reset
+    // it reports as a phantom gybe almost at once. The raster load is left
+    // pending on purpose: the boat sails on while it waits, which is exactly
+    // the resumed-session path this covers.
+    regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
+    engine.applySettings(settings({ region: 'newport', venue: '' }));
+    for (let i = 0; i < 30; i++) {
+      engine.advance(1);
+      expect(engine.snapshot.maneuver).toBeNull();
+    }
+    engine.dispose();
+  });
+
+  /**
+   * Putting to sea teleports her, and the swing of the wind angle across that
+   * jump must not be read as a turn. The boat has to be got onto the *other*
+   * tack first, because the spawn is deterministic: a restart from the opening
+   * tack lands on the same side, the angle never flips, and the test passes
+   * with the reset deleted -- which is exactly how its first version passed.
+   */
+  it('does not report the teleport of a restart as a gybe', () => {
+    const engine = sailing();
+    engine.advance(40);
+    // Onto starboard, so the restart's port-side spawn is a sign change. The
+    // preconditions are asserted, not assumed: if the turn never got through,
+    // or the real tack never reported, the restart lands on the original side
+    // and the silence below would prove nothing -- which is how the first
+    // version of this test passed with the reset deleted.
+    for (let i = 0; i < 120 && engine.snapshot.diag!.twa < 60 * DEG; i++) {
+      engine.advance(0.5, -0.6);
+    }
+    expect(engine.snapshot.diag!.twa).toBeGreaterThan(60 * DEG);
+    let reported: Maneuver | null = null;
+    for (let i = 0; i < 90 && !reported; i++) {
+      engine.advance(1);
+      reported = engine.snapshot.maneuver;
+    }
+    expect(reported?.kind).toBe('tack');
+    for (let i = 0; i < 20 && engine.snapshot.maneuver; i++) engine.advance(1);
+    expect(engine.snapshot.maneuver).toBeNull();
+
+    engine.putToSea();
+    for (let i = 0; i < 30; i++) {
+      engine.advance(1);
+      expect(engine.snapshot.maneuver).toBeNull();
+    }
+    engine.dispose();
   });
 
   /**

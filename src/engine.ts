@@ -17,6 +17,7 @@ import type { RegionTerrain } from './sim/region-terrain';
 import { loadRegion } from './terrain-load';
 import { passageInfo, type PassageInfo, type PassageRecord } from './sim/passage';
 import { anchorage, type Anchorage } from './sim/anchorage';
+import { ManeuverTracker, type Maneuver } from './sim/maneuver';
 import { PassageLog } from './sim/passage';
 import { LogStoreUnavailable, logbook } from './logbook';
 import { WaveField, sampleHull, seaBearing, windOverWater, type HullWaveSample } from './sim/waves';
@@ -154,6 +155,13 @@ export interface Snapshot {
    * readouts hide themselves rather than showing zeroes.
    */
   passage: PassageInfo | null;
+  /**
+   * The last completed tack or gybe, held for a few seconds so the alert strip
+   * can answer the turn -- then null again. The engine owns the clock on it,
+   * because the strip is stateless by design and redraws from this snapshot
+   * every frame.
+   */
+  maneuver: Maneuver | null;
 }
 
 export type EngineEvent =
@@ -285,6 +293,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    */
   let blownFor = 0;
   const sharks = new SharkField(settings.seed);
+  const maneuvers = new ManeuverTracker();
+  /** Real seconds the last maneuver report stays on screen. */
+  const MANEUVER_SHOWN = 8;
+  let maneuverTtl = 0;
 
   // Reused every physics step; allocating per step would keep the GC busy at 120 Hz.
   const hullWave: HullWaveSample = { heave: 0, pitchSlope: 0, rollSlope: 0 };
@@ -347,6 +359,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     darkIn: Infinity,
     destination: null,
     passage: null,
+    maneuver: null,
     env,
     wind,
     currents,
@@ -473,6 +486,13 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // left the new world held fast by the old ground.
     anchored = false;
     snapshot.anchored = false;
+    // A half-made tack dies with the world too. This path runs on a settings
+    // change *without* `placeAtStart` behind it -- resume, not put to sea --
+    // and a new venue's wind can stand on the other side of an unmoved bow,
+    // which must read as a replaced world and not as a turn. A Codex round
+    // caught this route around the teleport reset.
+    maneuvers.reset();
+    snapshot.maneuver = null;
 
     // A venue brings its own land, fixed and known, so there is nothing to
     // stream: the whole place is always loaded. The procedural field is the
@@ -741,6 +761,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // bar cheerfully reporting that she was at anchor.
     anchored = false;
     snapshot.anchored = false;
+    // A teleport swings the wind angle however it lands, and the tracker must
+    // not read that jump as the bow going through the wind.
+    maneuvers.reset();
+    snapshot.maneuver = null;
 
     const up = compassVec(wind.baseTwd);
     state = initialState({
@@ -1090,6 +1114,32 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
     diag = step(state, cfg, env, ctl, PHYS_DT, { sea, anchored });
     snapshot.diag = diag;
+
+    // Was that a tack, and what did it cost? Fed after `step()` for the same
+    // reason the passage's conditions are: this step's angle and speed exist
+    // only once the step has written them. The report is held on the snapshot
+    // for a few seconds because the alert strip is stateless and redraws from
+    // it every frame -- the engine is the only place with a clock.
+    //
+    // The angle to the *mean* wind, deliberately not `diag.twa`. The panel's
+    // TWA is read off the local wind, and the local shift can swing that sign
+    // across the bow of a boat holding her course -- a Codex round showed a
+    // pinched boat in shifty air arming phantom turns, and a real tack being
+    // read as an abort when the shift swung back mid-turn. A maneuver is a
+    // thing the boat does, so it is measured against the frame that does not
+    // move under her.
+    const finished = maneuvers.update(
+      wrapPi(wind.baseTwd - state.heading),
+      diag.speed,
+      PHYS_DT,
+    );
+    if (finished) {
+      snapshot.maneuver = finished;
+      maneuverTtl = MANEUVER_SHOWN;
+    } else if (snapshot.maneuver !== null) {
+      maneuverTtl -= PHYS_DT;
+      if (maneuverTtl <= 0) snapshot.maneuver = null;
+    }
 
     // Judged where she is, every step, because the answer is what the player is
     // reading while deciding whether to round up here or carry on a bit further.

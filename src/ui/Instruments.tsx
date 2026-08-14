@@ -10,7 +10,7 @@ import { msToKnots } from '@/sim/units';
 import { phaseName, formatClock } from '@/sim/sky';
 import { pace } from '@/sim/polar';
 import { useT } from './i18n';
-import { ALERT, DAY_PHASE, PANEL, WEATHER, lull, puff, shift, shoal } from './strings';
+import { ALERT, DAY_PHASE, PANEL, WEATHER, lull, maneuverReport, puff, shift, shoal } from './strings';
 import type { Snapshot } from '@/engine';
 import { useEngineFrame, useReadout } from './engine-context';
 import { TelemetryCard } from './TelemetryCard';
@@ -103,6 +103,16 @@ function Alerts() {
     if (s.clearance < 0) msgs.push({ text: t(ALERT.aground), tone: 'bad' });
     else if (s.clearance < 3)
       msgs.push({ text: t(shoal(s.clearance.toFixed(1))), tone: 'bad' });
+
+    // The answer to the player's own last action goes above the weather's
+    // running commentary: for the few seconds it is up, it is the one line
+    // here they are actually looking for.
+    if (s.maneuver) {
+      msgs.push({
+        text: t(maneuverReport(s.maneuver.kind, s.maneuver.seconds, msToKnots(s.maneuver.lost))),
+        tone: 'info',
+      });
+    }
 
     if (w.exposure < 0.75) msgs.push({ text: t(ALERT.windShadow), tone: 'warn' });
 

@@ -428,6 +428,23 @@ export const shift = (right: boolean, deg: string, seconds: number | null = null
     `${right ? '우' : '좌'}로 풍향 변화 ${deg}°`,
   );
 
+/**
+ * The answer to a turn: how long the boat was out of her stride and what it
+ * cost her. A loss too small to state is said as clean rather than as a zero,
+ * because "lost 0.0 kn" reads as a measurement and "clean" is the verdict the
+ * measurement earns.
+ */
+export const maneuverReport = (kind: 'tack' | 'gybe', seconds: number, lostKn: number): Phrase => {
+  const name = { tack: { en: 'TACK', ko: '택' }, gybe: { en: 'GYBE', ko: '자이브' } }[kind];
+  const s = Math.round(seconds);
+  return lostKn < 0.05
+    ? { en: `${name.en} ${s}s · clean`, ko: `${name.ko} ${s}초 · 손실 없음` }
+    : {
+        en: `${name.en} ${s}s · lost ${lostKn.toFixed(1)} kn`,
+        ko: `${name.ko} ${s}초 · ${lostKn.toFixed(1)} kn 손실`,
+      };
+};
+
 /** The touch controls. Short, because they sit under a finger on a phone. */
 export const TOUCH: Record<string, Phrase> = {
   helm: { en: 'Helm', ko: '조타' },
