@@ -404,6 +404,15 @@ export const LOG: Record<string, Phrase> = {
   wind: { en: 'kn wind', ko: 'kn 바람' },
   /** Track over straight line: 1.4 is a beat, 1 is a fetch. */
   straightLine: { en: '× the straight line', ko: '× 직선거리' },
+  /**
+   * What was seen. Both English forms are carried because it has two and the
+   * count decides which; Korean has no plural, so the same word answers both
+   * and the table says so rather than a rule pretending otherwise.
+   */
+  whale: { en: 'whale', ko: '고래' },
+  whales: { en: 'whales', ko: '고래' },
+  shark: { en: 'shark', ko: '상어' },
+  sharks: { en: 'sharks', ko: '상어' },
   remove: { en: 'Remove', ko: '삭제' },
   /** Shown while the store has not answered, which is distinct from an empty log. */
   reading: { en: 'Reading the logbook…', ko: '항해일지를 읽는 중…' },

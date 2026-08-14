@@ -7,7 +7,7 @@ import { LOG } from './strings';
 import { formatDistance, formatDuration, formatWhen, msToKnots } from '@/sim/units';
 import { venueById } from '@/sim/venues';
 import { placeName } from '@/sim/regions';
-import type { PassageRecord } from '@/sim/passage';
+import type { PassageRecord, SightingKind } from '@/sim/passage';
 import type { Phrase } from '@/i18n';
 
 /**
@@ -22,9 +22,28 @@ import type { Phrase } from '@/i18n';
  * which is nothing like every frame.
  */
 
+/**
+ * The two counts, in the order they are worth reading, with the words for one
+ * and for more than one.
+ *
+ * A table rather than a branch so that adding a kind is adding a row. Korean
+ * repeats itself here on purpose -- see the note in `strings.ts`.
+ */
+const SIGHTINGS: { key: SightingKind; one: Phrase; many: Phrase }[] = [
+  { key: 'whales', one: LOG.whale, many: LOG.whales },
+  { key: 'sharks', one: LOG.shark, many: LOG.sharks },
+];
+
 function Entry({ p, onRemove }: { p: PassageRecord; onRemove: () => void }) {
   const t = useT();
   const lang = useLang();
+  // Absent and zero mean different things -- a record from before any of this
+  // was counted, against a passage that really did see nothing -- but they print
+  // the same, which is nothing, so one filter serves both and the distinction
+  // stays where it matters, in the record.
+  const seen = SIGHTINGS.map(({ key, one, many }) => ({ n: p.sightings?.[key] ?? 0, one, many }))
+    .filter(({ n }) => n > 0)
+    .map(({ n, one, many }) => `${n} ${t(n === 1 ? one : many)}`);
   return (
     <div className="group grid grid-cols-[1fr_auto] items-start gap-2 border-b border-border/60 py-2 last:border-0">
       <div>
@@ -58,6 +77,15 @@ function Entry({ p, onRemove }: { p: PassageRecord; onRemove: () => void }) {
             </>
           )}
         </div>
+        {/*
+          Its own line, and not the monospace one above. Everything up there is
+          how well the passage was sailed, and a whale is not that -- set in the
+          same tabular column as the top speed it would read as another score,
+          which is the one thing this panel is careful not to be.
+        */}
+        {seen.length > 0 && (
+          <div className="text-[10px] text-muted-foreground">{seen.join(' · ')}</div>
+        )}
       </div>
       <Button
         variant="ghost"

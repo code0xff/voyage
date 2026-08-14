@@ -201,3 +201,62 @@ describe('passage log', () => {
     expect(r.from.x).toBe(5);
   });
 });
+
+/**
+ * What was seen, rather than how fast it was got through.
+ *
+ * The animal fields publish what is in sight this step and refill the list on
+ * the next, so the log is told about one whale a few hundred times over an
+ * encounter. Every test here is about that: the thing being counted is the
+ * animal, not the call.
+ */
+describe('passage sightings', () => {
+  const from = { x: 0, y: 0 };
+  const to = { x: 0, y: 1000 };
+
+  it('counts one encounter once, however long it stayed in sight', () => {
+    const log = new PassageLog(from, to, 0);
+    // A whale encounter runs about half a minute at 120 Hz.
+    for (let i = 0; i < 3600; i++) log.sight('whales', 7);
+    expect(log.finish('a', to, '').sightings).toEqual({ whales: 1, sharks: 0 });
+  });
+
+  it('counts a second animal as a second animal', () => {
+    const log = new PassageLog(from, to, 0);
+    for (let i = 0; i < 100; i++) log.sight('whales', 1);
+    for (let i = 0; i < 100; i++) log.sight('whales', 2);
+    expect(log.finish('a', to, '').sightings?.whales).toBe(2);
+  });
+
+  /**
+   * The fields number themselves independently, so the first whale and the
+   * first shark of a passage are both id 1. Keyed on the id alone, the shark
+   * would be swallowed by the whale already counted -- and silently, since the
+   * total would still look plausible.
+   */
+  it('keeps the kinds apart, because both fields start their ids at one', () => {
+    const log = new PassageLog(from, to, 0);
+    log.sight('whales', 1);
+    log.sight('sharks', 1);
+    expect(log.finish('a', to, '').sightings).toEqual({ whales: 1, sharks: 1 });
+  });
+
+  /**
+   * Nothing seen is a fact about the passage and is written down as one. Only a
+   * record from before the field existed may be silent about it, and that is
+   * what the optional type is for.
+   */
+  it('says nothing was seen, rather than saying nothing', () => {
+    const log = new PassageLog(from, to, 0);
+    for (let i = 0; i < 600; i++) log.advance(3, 12, 1);
+    expect(log.finish('a', to, '').sightings).toEqual({ whales: 0, sharks: 0 });
+  });
+
+  it('copies the counts, so a later sighting cannot rewrite a finished record', () => {
+    const log = new PassageLog(from, to, 0);
+    log.sight('whales', 1);
+    const r = log.finish('a', to, '');
+    log.sight('whales', 2);
+    expect(r.sightings?.whales).toBe(1);
+  });
+});

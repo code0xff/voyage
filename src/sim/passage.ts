@@ -101,6 +101,31 @@ export const mustTack = (info: PassageInfo, noGo: number): boolean =>
   Math.abs(info.twaDirect) < noGo;
 
 /**
+ * What was seen on the way.
+ *
+ * Whales and sharks, and not gulls. That is a judgement about what a record is
+ * for rather than an oversight, and it does not rest on today's tuning: the
+ * whales and the sharks are spaced by the wildlife setting and open minutes
+ * apart, while a gull flock has no spacing at all and is tried for every few
+ * seconds the whole length of a coast. Turn the setting to either end and the
+ * two stay on their own sides of the line. One is an encounter and the other is
+ * the weather, and a logbook reading "47 gull flocks" would be measuring how
+ * long the passage was, in a field that claims to say what happened on it.
+ */
+export interface Sightings {
+  whales: number;
+  sharks: number;
+}
+
+/**
+ * Which count an encounter goes towards.
+ *
+ * Derived from `Sightings` rather than written out again beside it, so a kind
+ * added there cannot be forgotten here.
+ */
+export type SightingKind = keyof Sightings;
+
+/**
  * What a completed passage was, once she has arrived.
  *
  * A plain serialisable row on purpose. The logbook lives in the browser today
@@ -129,6 +154,14 @@ export interface PassageRecord {
   venue: string;
   /** Mean true wind while under way, knots. */
   windKnots: number;
+  /**
+   * What was seen, counted in encounters rather than in steps.
+   *
+   * Optional because every record already in a logbook was written before this
+   * field existed, and a passage that does not know what it saw must not be
+   * made to say it saw nothing. New records always carry it, zeros included.
+   */
+  sightings?: Sightings;
 }
 
 /**
@@ -136,7 +169,7 @@ export interface PassageRecord {
  *
  * An accumulator rather than a track: the logbook wants what the passage *was*,
  * and keeping every position to work that out afterwards would store megabytes
- * to answer questions that are four running totals.
+ * to answer questions that are a handful of running totals.
  *
  * Pure, and holds no clock of its own -- the caller supplies dt, because the
  * only two things here that must not drift are what "under way" means and which
@@ -148,6 +181,8 @@ export class PassageLog {
   maxSog = 0;
   private sogIntegral = 0;
   private windIntegral = 0;
+  private readonly counted = new Set<string>();
+  private readonly sightings: Sightings = { whales: 0, sharks: 0 };
 
   constructor(
     readonly from: Vec2,
@@ -166,6 +201,27 @@ export class PassageLog {
     this.sogIntegral += sog * dt;
     this.windIntegral += twsKn * dt;
     if (sog > this.maxSog) this.maxSog = sog;
+  }
+
+  /**
+   * Note an animal in sight, which is very probably the same one as last step.
+   *
+   * The fields publish what is in sight *now* and refill the list every step,
+   * so one encounter arrives here a few hundred times. Counting by id rather
+   * than by call is what turns that back into one whale.
+   *
+   * Ids restart when a field is reseeded, which would let a second animal be
+   * mistaken for one already counted -- except that a reseed always ends the
+   * passage, because `rebuildWorld` clears the destination and that abandons
+   * the log. Within one passage an id is one animal and cannot be reissued.
+   * Keyed by kind as well, since the fields number themselves independently and
+   * whale 1 and shark 1 are both the first of their kind.
+   */
+  sight(kind: SightingKind, id: number): void {
+    const key = `${kind}:${id}`;
+    if (this.counted.has(key)) return;
+    this.counted.add(key);
+    this.sightings[kind]++;
   }
 
   /**
@@ -191,6 +247,9 @@ export class PassageLog {
       maxSog: this.maxSog,
       venue,
       windKnots: this.duration > 0 ? this.windIntegral / this.duration : 0,
+      // Copied for the same reason the endpoints are: the record is finished
+      // and a sighting after it must not reach back into it.
+      sightings: { ...this.sightings },
     };
   }
 }

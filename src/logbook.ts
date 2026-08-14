@@ -173,8 +173,14 @@ export function createLogStore(): LogStore {
  */
 export const logbook: LogStore = createLogStore();
 
-/** Version stamp on an exported file, so a future format can recognise this one. */
-export const EXPORT_VERSION = 1;
+/**
+ * Version stamp on an exported file, so a future format can recognise this one.
+ *
+ * 2 added `sightings`. Bump this whenever a field is added, even though the
+ * addition is optional and readable either way: it is what lets a later program
+ * tell a file that saw nothing from one written before the counting existed.
+ */
+export const EXPORT_VERSION = 2;
 
 export interface LogExport {
   format: 'voyage-logbook';
@@ -203,9 +209,15 @@ export function fromExport(raw: string): PassageRecord[] | null {
     const o = JSON.parse(raw) as Partial<LogExport>;
     if (o.format !== 'voyage-logbook' || !Array.isArray(o.passages)) return null;
     // The version is stamped on the way out, so it has to be read on the way
-    // in. Accepting a version this code has never seen would mean guessing at
-    // the shape of a format written by a later one.
-    if (o.version !== EXPORT_VERSION) return null;
+    // in -- but only a *later* one is unreadable, and that was worth separating
+    // out. A later format may have changed what a field this code thinks it
+    // knows means, and there is no guessing at that. An older one has only ever
+    // added optional fields, so a version 1 file is a current file that is
+    // silent about what it saw, which is precisely what those fields are
+    // optional in order to say. Refusing it on an equality check -- which is
+    // what this was until the version first moved -- would throw away a
+    // player's own exported logbook the day the format grew.
+    if (typeof o.version !== 'number' || o.version < 1 || o.version > EXPORT_VERSION) return null;
 
     const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
     // Durations, distances and speeds cannot be negative -- no passage produces
@@ -216,6 +228,18 @@ export function fromExport(raw: string): PassageRecord[] | null {
     const vec = (v: unknown) => {
       const p = v as { x?: unknown; y?: unknown };
       return { x: num(p?.x), y: num(p?.y) };
+    };
+    // Whole animals. Everything else here is a measurement and may be
+    // fractional; a sighting is a thing that happened or did not, so 2.5 whales
+    // is a hand-edited file and not a fact.
+    const count = (v: unknown) => Math.floor(size(v));
+    // Absent from every record written before the field existed. Left absent
+    // rather than filled with zeros, because "saw nothing" and "does not say"
+    // are different claims and only one of them is true of an old record.
+    const sightings = (v: unknown) => {
+      if (!v || typeof v !== 'object') return undefined;
+      const s = v as { whales?: unknown; sharks?: unknown };
+      return { whales: count(s.whales), sharks: count(s.sharks) };
     };
     // One record per id within a file. Sequential `put`s would otherwise let a
     // duplicate silently overwrite the one before it, so the import would
@@ -236,6 +260,7 @@ export function fromExport(raw: string): PassageRecord[] | null {
         maxSog: size(p.maxSog),
         venue: typeof p.venue === 'string' ? p.venue : '',
         windKnots: size(p.windKnots),
+        sightings: sightings(p.sightings),
       }));
   } catch {
     return null;

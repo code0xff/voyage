@@ -14,6 +14,7 @@ const record = (over: Partial<PassageRecord> = {}): PassageRecord => ({
   maxSog: 4.2,
   venue: 'sf',
   windKnots: 18.4,
+  sightings: { whales: 2, sharks: 1 },
   ...over,
 });
 
@@ -83,6 +84,48 @@ describe('logbook export', () => {
     expect(fromExport(JSON.stringify(good))).toHaveLength(1);
     expect(fromExport(JSON.stringify({ ...good, version: 99 }))).toBeNull();
     expect(fromExport(JSON.stringify({ ...good, version: undefined }))).toBeNull();
+    expect(fromExport(JSON.stringify({ ...good, version: 0 }))).toBeNull();
+  });
+
+  /**
+   * The other half of the version rule, and the half that costs a player
+   * something if it is got wrong: a file exported before `sightings` existed is
+   * still their logbook. Refusing it -- which an equality check on the version
+   * does the moment the version moves -- throws it away.
+   */
+  it('still reads a file exported by an older version of itself', () => {
+    const old = {
+      format: 'voyage-logbook',
+      version: 1,
+      exportedAt: 0,
+      passages: [record({ sightings: undefined })],
+    };
+    const [p] = fromExport(JSON.stringify(old))!;
+    expect(p.distance).toBe(1840);
+    // And is not made to claim it saw nothing, which it never said.
+    expect(p.sightings).toBeUndefined();
+  });
+
+  it('carries what was sighted through a round trip', () => {
+    const [p] = fromExport(JSON.stringify(toExport([record()], 0)))!;
+    expect(p.sightings).toEqual({ whales: 2, sharks: 1 });
+  });
+
+  /**
+   * A sighting is a thing that happened or did not. Every other number in a
+   * record is a measurement and may legitimately be fractional, so the existing
+   * guard lets 2.5 through -- which would put two and a half whales in a
+   * logbook.
+   */
+  it('refuses a count of animals that is not a whole number of animals', () => {
+    const raw = JSON.stringify({
+      format: 'voyage-logbook',
+      version: 2,
+      exportedAt: 0,
+      passages: [record({ sightings: { whales: 2.5, sharks: -3 } as never })],
+    });
+    const [p] = fromExport(raw)!;
+    expect(p.sightings).toEqual({ whales: 2, sharks: 0 });
   });
 
   it('keeps one record per id, so a duplicate cannot overwrite its neighbour', () => {
