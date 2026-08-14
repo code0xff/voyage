@@ -317,6 +317,51 @@ describe('engine', () => {
   });
 
   /**
+   * That the engine tells the passage about the world at all.
+   *
+   * `PassageLog` is tested directly and thoroughly next door, and every one of
+   * those tests passed with the engine's entire `log.conditions` and `log.sight`
+   * block deleted -- which a Codex review found and I had not. A unit test of an
+   * accumulator says nothing about whether anything fills it.
+   */
+  it('records the world the passage was sailed through', async () => {
+    await makePassage(() => frame(0.5));
+    const r = filed();
+    // The world clock, which is the session's start hour plus however much of
+    // it half a second of frames has moved at the default time scale.
+    expect(r.startHour).toBeCloseTo(DEFAULT_SETTINGS.startHour, 1);
+    expect(r.endHour).toBeCloseTo(DEFAULT_SETTINGS.startHour, 1);
+    expect(r.weather).toBeDefined();
+    // Under way in a working breeze, so she is leaning on it.
+    expect(r.maxHeel).toBeGreaterThan(0);
+  });
+
+  /**
+   * And that a sighting reaches the record. Driven by making the field show one
+   * whale on every step rather than by waiting for a real encounter, which is
+   * eighty seconds of frames away at the default spacing -- and showing the same
+   * whale repeatedly is the more useful shape anyway, because the list says what
+   * is in sight *now* and the record has to come out at one.
+   */
+  it('files an animal seen on the way against the passage', async () => {
+    const whale = {
+      id: 7,
+      pos: { x: 0, y: 0 },
+      heading: 0,
+      size: 15,
+      phase: 'blow',
+      phaseT: 0,
+      seed: 1,
+    } as const;
+    vi.spyOn(WhaleField.prototype, 'update').mockImplementation(function (this: WhaleField) {
+      this.events.length = 0;
+      this.events.push({ ...whale });
+    });
+    await makePassage(() => frame(0.5));
+    expect(filed().sightings).toEqual({ whales: 1, sharks: 0 });
+  });
+
+  /**
    * The wiring between the shutter and the logbook, which is the half of this
    * no unit test can reach: the count lives on `PassageLog` and the key that
    * fills it is handled three files away.
@@ -347,6 +392,30 @@ describe('engine', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
+    expect(filed().photographs).toBe(0);
+  });
+
+  /**
+   * Anchoring in the same frame as photographing loses the photograph, and that
+   * is the right way round rather than an oversight.
+   *
+   * The capture resolves a frame later; `arrive()` is synchronous and closes the
+   * record first, so the count arrives at a log that has already been read out.
+   * Closing the race the other way -- counting the press and rolling back on a
+   * refusal -- swaps an incomplete record for a false one, and this project's
+   * whole claim is that its records are true. A logbook that says two when three
+   * were taken is missing something; one that says three when two exist is
+   * wrong, and the player finds out by going to look for a file.
+   *
+   * Written down because it is a real edge -- photographing an anchorage and
+   * then letting go is an ordinary thing to do -- and a behaviour nobody has
+   * pinned is a behaviour the next change breaks silently.
+   */
+  it('does not file a photograph whose picture arrived after the anchor went down', async () => {
+    capture.blob = new Blob(['png']);
+    // No frame and no settling between the two, so both keys are read by the
+    // same `handleKeys` and `arrive()` runs before the encoder answers.
+    await makePassage(() => press('k'));
     expect(filed().photographs).toBe(0);
   });
 
