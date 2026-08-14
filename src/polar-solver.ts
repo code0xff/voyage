@@ -11,6 +11,16 @@ import type { Polar } from './sim/polar';
 import type { PolarReply, PolarRequest } from './polar-worker';
 
 export interface PolarSolver {
+  /**
+   * False once the worker has failed and nothing more will ever come back.
+   *
+   * Worth asking before scheduling: the caller marks itself busy when it asks
+   * and clears that when an answer arrives, so a solver that has quietly
+   * stopped answering would leave it busy for the rest of the session -- and
+   * "busy" is what stops it asking again. The polar would then freeze at
+   * whatever it last held, with nothing anywhere saying why.
+   */
+  readonly alive: boolean;
   /** Ask for a polar. A later request supersedes any still in flight. */
   solve(cfg: BoatConfig, env: Environment): void;
   dispose(): void;
@@ -29,22 +39,43 @@ export interface PolarSolver {
  * matching the old behaviour there exactly, since the test's `window` shim
  * stubs `setTimeout` to a no-op and the polar was never solved either.
  */
-export function createPolarSolver(onSolved: (polar: Polar) => void): PolarSolver | null {
+export function createPolarSolver(onSettled: (polar: Polar | null) => void): PolarSolver | null {
   if (typeof Worker === 'undefined') return null;
 
   const worker = new Worker(new URL('./polar-worker.ts', import.meta.url), { type: 'module' });
   let latest = 0;
+  let alive = true;
 
   worker.onmessage = (event: MessageEvent<PolarReply>) => {
     // Only the newest. Requests can overlap -- a solve is slow and the wind can
     // turn twice inside one -- and replies are not promised in order, so an
     // older answer arriving late would install a polar for a wind that has
     // already gone.
-    if (event.data.id === latest) onSolved(event.data.polar);
+    if (event.data.id === latest) onSettled(event.data.polar);
   };
 
+  /**
+   * A worker that has thrown, or an answer that could not be read.
+   *
+   * Both are unrecoverable in the same way -- nothing further is coming -- and
+   * both have to be *said*, not merely survived. A caller that marks itself
+   * busy on the way out and clears it on the way back would otherwise sit busy
+   * for the rest of the session, and busy is what stops it asking again. The
+   * failure mode is not a crash: it is a polar that silently stops moving.
+   */
+  const died = () => {
+    alive = false;
+    onSettled(null);
+  };
+  worker.onerror = died;
+  worker.onmessageerror = died;
+
   return {
+    get alive() {
+      return alive;
+    },
     solve(cfg, env) {
+      if (!alive) return;
       const request: PolarRequest = { id: ++latest, cfg, env };
       worker.postMessage(request);
     },
@@ -52,6 +83,7 @@ export function createPolarSolver(onSolved: (polar: Polar) => void): PolarSolver
       // Terminated rather than left to be collected: a solve in flight would
       // otherwise run to completion against a session that has gone, and it is
       // more than a second of somebody's CPU.
+      alive = false;
       worker.terminate();
     },
   };

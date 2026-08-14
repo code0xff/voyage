@@ -397,7 +397,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   // setting moved. Null where the platform has no worker, and then there is
   // simply no polar, which every readout already copes with.
   const polarSolver = createPolarSolver((polar) => {
-    snapshot.polar = polar;
+    // Null means that solve is not coming. Keep whatever curve is already up --
+    // a stale polar beats none, and it is what would have been shown anyway --
+    // and above all stop being busy, because busy is what stops us asking.
+    if (polar) snapshot.polar = polar;
     snapshot.polarBusy = false;
   });
   // The debounce stays, and is now the only thing it ever really was: a slider
@@ -405,7 +408,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   // solve for a wind speed the player is still moving through.
   let polarTimer: number | null = null;
   function schedulePolar(delay = 400): void {
-    if (!polarSolver) return;
+    // `alive` and not just existence: a worker that has died answers nothing,
+    // and asking anyway would set `polarBusy` on a promise no one can keep.
+    if (!polarSolver?.alive) return;
     if (polarTimer !== null) clearTimeout(polarTimer);
     snapshot.polarBusy = true;
     polarTimer = window.setTimeout(() => {

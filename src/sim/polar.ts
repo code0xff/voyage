@@ -163,20 +163,6 @@ export function formatPolar(polar: Polar, cfg: BoatConfig): string {
 }
 
 /**
- * The closest to the true wind she can still make ground, rad, or null when the
- * polar cannot say.
- *
- * The first angle whose VMG is positive, which is what "inside the no-go zone"
- * has to mean: not the angle she sails *best* at. Those are far apart -- at
- * twelve knots she works to windward best at 45 degrees but is still gaining at
- * 25 -- and using the optimum tells a helmsman to tack for a mark he can lay.
- *
- * It moves a great deal with the wind: 20 degrees in three knots, 25 through
- * the middle of the range, 50 at thirty-five and 60 at forty, as she reefs and
- * meets a head sea. A constant cannot stand in for it, which is what a fixed
- * 40 degrees in `PassageBar` was doing.
- */
-/**
  * The speed the polar says she should make at a true wind angle, m/s.
  *
  * Linear between the solved angles, which are five degrees apart by default --
@@ -200,10 +186,16 @@ export function targetSpeed(polar: Polar, twa: number): number | null {
     if (angle > points[i].twa) continue;
     const lo = points[i - 1];
     const hi = points[i];
-    const span = hi.twa - lo.twa;
-    // Two points at one angle would divide by nothing and poison the readout
-    // with a NaN. `solvePolar` cannot produce them; a hand-built polar can.
-    return span > 0 ? lerp(lo.speed, hi.speed, (angle - lo.twa) / span) : lo.speed;
+    // No divide-by-nothing guard, because for a real angle the span cannot be
+    // zero: this is the first point at or past it, so `lo` is strictly before
+    // and `hi` at or past, and two points sharing an angle both fail that test
+    // or both pass it and never pair up. One was written anyway, and two
+    // rounds of review found first that its test could not reach it and then
+    // that only a NaN angle can -- and a NaN angle, from a caller that has
+    // already lost the plot, is better answered with a NaN than with a
+    // plausible-looking speed. A branch that only garbage reaches is worse than
+    // none: it reads as a hazard someone has handled.
+    return lerp(lo.speed, hi.speed, (angle - lo.twa) / (hi.twa - lo.twa));
   }
   return points[points.length - 1].speed;
 }
@@ -274,6 +266,25 @@ export const POLAR_TOLERANCE = 0.05;
 export const polarStale = (polar: Polar, tws: number): boolean =>
   Math.abs(tws - polar.tws) > POLAR_TOLERANCE * polar.tws;
 
+/**
+ * The closest to the true wind she can still make ground, rad, or null when the
+ * polar cannot say.
+ *
+ * The first angle whose VMG is positive, which is what "inside the no-go zone"
+ * has to mean: not the angle she sails *best* at. Those are far apart -- at
+ * twelve knots she works to windward best at 45 degrees but is still gaining at
+ * 25 -- and using the optimum tells a helmsman to tack for a mark he can lay.
+ *
+ * It moves a great deal with the wind: 20 degrees in three knots, 25 through
+ * the middle of the range, 50 at thirty-five and 60 at forty, as she reefs and
+ * meets a head sea. A constant cannot stand in for it, which is what a fixed
+ * 40 degrees in `PassageBar` was doing.
+ *
+ * Sampled, so it is the first *solved* angle that gains -- the true crossing is
+ * somewhere in the five degrees below it. Everything that reads this treats it
+ * the same way, so they agree with each other, which matters more here than
+ * agreeing with a boundary none of them can see.
+ */
 export function noGoAngle(polar: Polar): number | null {
   let best: number | null = null;
   for (const p of polar.points) {

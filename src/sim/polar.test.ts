@@ -232,11 +232,18 @@ describe('target speed', () => {
     expect(targetSpeed({ ...polar, points: [] }, 90 * DEG)).toBeNull();
   });
 
-  /** A hand-edited polar can repeat an angle; `solvePolar` cannot. */
-  it('does not divide by two points at the same angle', () => {
-    const twin = polar.points[10];
-    const target = targetSpeed({ ...polar, points: [twin, { ...twin }] }, twin.twa)!;
-    expect(Number.isFinite(target)).toBe(true);
+  /**
+   * The ends, which is where an interpolation between neighbours has no
+   * neighbour on one side.
+   */
+  it('answers at both ends of the curve', () => {
+    const first = polar.points[0];
+    const last = polar.points[polar.points.length - 1];
+    expect(targetSpeed(polar, first.twa)).toBeCloseTo(first.speed, 9);
+    expect(targetSpeed(polar, last.twa)).toBeCloseTo(last.speed, 9);
+    // Dead astern is the last solved angle and a true wind angle cannot pass
+    // it, but the lookup answers rather than falling off the end if one does.
+    expect(targetSpeed(polar, 200 * DEG)).toBeCloseTo(last.speed, 9);
   });
 });
 
