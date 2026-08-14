@@ -220,7 +220,13 @@ export function fromExport(raw: string): PassageRecord[] | null {
     // optional in order to say. Refusing it on an equality check -- which is
     // what this was until the version first moved -- would throw away a
     // player's own exported logbook the day the format grew.
-    if (typeof o.version !== 'number' || o.version < 1 || o.version > EXPORT_VERSION) return null;
+    // An integer in range, because that is the only thing this program has ever
+    // written. A range test alone let 5.5 through as "not newer than 5", which
+    // is a version no program has ever stamped and so says nothing at all about
+    // the shape underneath it.
+    if (!Number.isInteger(o.version) || (o.version as number) < 1 || (o.version as number) > EXPORT_VERSION) {
+      return null;
+    }
 
     const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
     // Durations, distances and speeds cannot be negative -- no passage produces
@@ -240,7 +246,12 @@ export function fromExport(raw: string): PassageRecord[] | null {
     // rather than filled with zeros, because "saw nothing" and "does not say"
     // are different claims and only one of them is true of an old record.
     const sightings = (v: unknown) => {
-      if (!v || typeof v !== 'object') return undefined;
+      // An array is not this shape, and `typeof [] === 'object'` would have let
+      // one through as a sighting of nothing. That matters here more than it
+      // does for `vec` above, which has no absence to protect: the whole point
+      // of this field being optional is that "saw nothing" and "does not say"
+      // are different claims, and a malformed value is the second.
+      if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
       const s = v as { whales?: unknown; sharks?: unknown };
       return { whales: count(s.whales), sharks: count(s.sharks) };
     };

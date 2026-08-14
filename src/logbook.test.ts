@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LogStoreUnavailable, createLogStore, fromExport, toExport } from './logbook';
+import { EXPORT_VERSION, LogStoreUnavailable, createLogStore, fromExport, toExport } from './logbook';
 import type { PassageRecord } from './sim/passage';
 
 const record = (over: Partial<PassageRecord> = {}): PassageRecord => ({
@@ -90,6 +90,10 @@ describe('logbook export', () => {
     expect(fromExport(JSON.stringify({ ...good, version: 99 }))).toBeNull();
     expect(fromExport(JSON.stringify({ ...good, version: undefined }))).toBeNull();
     expect(fromExport(JSON.stringify({ ...good, version: 0 }))).toBeNull();
+    // And a version between two real ones is not a version. A range test alone
+    // read this as "not newer than the current", when in fact no program has
+    // ever stamped it and it says nothing about the shape underneath.
+    expect(fromExport(JSON.stringify({ ...good, version: EXPORT_VERSION - 0.5 }))).toBeNull();
   });
 
   /**
@@ -188,7 +192,7 @@ describe('logbook export', () => {
     expect(fromExport(raw)![0].weather).toBeUndefined();
   });
 
-  it('refuses a count of animals that is not a whole number of animals', () => {
+  it('rounds a count of animals down to whole animals, and drops a malformed one', () => {
     const raw = JSON.stringify({
       format: 'voyage-logbook',
       version: 2,
@@ -196,7 +200,18 @@ describe('logbook export', () => {
       passages: [record({ sightings: { whales: 2.5, sharks: -3 } as never })],
     });
     const [p] = fromExport(raw)!;
+    // Coerced rather than refused, which is this function's standing rule for a
+    // number that is the wrong shape -- the same rule that turns a negative
+    // distance into zero rather than throwing the record away.
     expect(p.sightings).toEqual({ whales: 2, sharks: 0 });
+    // An object of the wrong *kind* is a different matter, and gets the answer
+    // that keeps "saw nothing" and "does not say" apart. `typeof [] === 'object'`
+    // let this through as a sighting of nothing.
+    const asArray = JSON.stringify({
+      ...JSON.parse(raw),
+      passages: [record({ sightings: [] as never })],
+    });
+    expect(fromExport(asArray)![0].sightings).toBeUndefined();
   });
 
   it('keeps one record per id, so a duplicate cannot overwrite its neighbour', () => {
