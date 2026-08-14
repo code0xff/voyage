@@ -324,18 +324,6 @@ export class PassageLog {
    *   one across a change of it, for no gain: what is wanted is which weather
    *   the player spent the passage in.
    */
-  /**
-   * One taken and kept.
-   *
-   * Counted when the picture actually exists, not when the shutter was asked
-   * for: the capture resolves a frame later and can come back with nothing at
-   * all, and a passage that reports a photograph the player has not got is
-   * exactly the kind of small lie a logbook cannot afford.
-   */
-  photographed(): void {
-    this.photographs++;
-  }
-
   conditions(now: Conditions, dt: number): void {
     if (this.firstHour === null) this.firstHour = now.hour;
     this.lastHour = now.hour;
@@ -345,6 +333,21 @@ export class PassageLog {
     const heel = Math.abs(now.heel);
     if (heel > this.maxHeel) this.maxHeel = heel;
     if (now.seaHeight > this.maxSea) this.maxSea = now.seaHeight;
+  }
+
+  /**
+   * One taken and kept.
+   *
+   * Counted when the picture actually exists, not when the shutter was asked
+   * for: the capture resolves a frame later and can come back with nothing at
+   * all, and a passage that reports a photograph the player has not got is
+   * exactly the kind of small lie a logbook cannot afford. The cost of that
+   * choice is that a picture still being encoded when the anchor goes down is
+   * not counted -- see the note at the call site in `engine.ts`, which is where
+   * the race lives.
+   */
+  photographed(): void {
+    this.photographs++;
   }
 
   /**

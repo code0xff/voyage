@@ -1200,9 +1200,19 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (input.wasPressed('k')) {
       // The passage as it stands now, and not as it stands when the capture
       // comes back a frame later: a picture taken on this passage belongs to it
-      // even if she anchors in the meantime. Counting a log that has since been
-      // finished is inert -- `finish` read the number out into a plain record --
-      // so the reference costs nothing and the race is closed either way.
+      // even if the destination is cleared in the meantime.
+      //
+      // It does not close the race, and that is deliberate. `arrive()` is
+      // synchronous and the encoder is not, so anchoring in the same frame as
+      // photographing -- which is an ordinary thing to do at the end of a
+      // passage -- finishes the record before the count lands, and the count
+      // then reaches a log already read out into a plain row. The photograph is
+      // lost. Closing it the other way, by counting the press and rolling back
+      // on a refusal, trades an incomplete record for a false one: a logbook
+      // saying two when three were taken is missing something, while one saying
+      // three when two exist is wrong, and the player finds out by going to look
+      // for a file. Under-counting is the right direction to fail in, and
+      // `engine.test.ts` pins it so the next change cannot flip it by accident.
       const onPassage = log;
       void view.capture().then((blob) => {
         if (!blob) return;
