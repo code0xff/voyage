@@ -111,6 +111,24 @@ vi.mock('./logbook', async (importActual) => ({
   logbook: { add: logAdd, all: async () => [], clear: async () => undefined },
 }));
 
+/**
+ * The hand of calls, real by default and dealt from the test's fingers when a
+ * test needs the boat already standing at one -- sailing a real kilometre to a
+ * real cove is minutes of wall clock this file does not have. The spy wrapper
+ * is what lets the salt be asserted: the fresh-hand-per-completion rule lives
+ * entirely in which arguments the engine passes.
+ */
+const callsOverride = vi.hoisted(() => ({ hand: null as { x: number; y: number }[] | null }));
+vi.mock('./sim/calls', async (importActual) => {
+  const actual = await importActual<typeof import('./sim/calls')>();
+  return {
+    ...actual,
+    offerCalls: vi.fn((...args: Parameters<typeof actual.offerCalls>) =>
+      callsOverride.hand ?? actual.offerCalls(...args),
+    ),
+  };
+});
+
 import { createEngine } from './engine';
 import { DEFAULT_SETTINGS, type Settings } from './settings';
 import { WhaleField } from './sim/whales';
@@ -120,6 +138,9 @@ import { TIDE_PERIOD } from './sim/current';
 import { LogStoreUnavailable } from './logbook';
 import type { EngineEvent } from './engine';
 import { ManeuverTracker, type Maneuver } from './sim/maneuver';
+import { offerCalls } from './sim/calls';
+import { anchorage } from './sim/anchorage';
+import { CRUISER } from './sim/config';
 import type { PassageRecord } from './sim/passage';
 import type { RegionTerrain } from './sim/region-terrain';
 
@@ -154,6 +175,8 @@ beforeEach(() => {
   logAdd.mockResolvedValue(undefined);
   anchorAnywhere.on = false;
   capture.blob = null;
+  callsOverride.hand = null;
+  (offerCalls as ReturnType<typeof vi.fn>).mockClear();
   for (const key of GLOBALS) {
     if (key in globalThis) {
       had[key] = true;
@@ -619,6 +642,157 @@ describe('engine', () => {
     // provenance string, so the two shores can be told apart by name.
     expect(rolled.snapshot.region?.region.source).not.toBe(first?.region.source);
     rolled.dispose();
+  });
+
+  /**
+   * The cruise, end to end at the engine's level: a hand dealt where the
+   * world is, a click near a call meaning the call, the anchor completing it,
+   * and the next hand dealt from a fresh salt. The hand itself is judged in
+   * `calls.test.ts`; everything here is the wiring.
+   */
+  it('deals a real hand on a coast the moment the cruise begins', () => {
+    const engine = createEngine(
+      canvas(),
+      settings({ region: 'coast', cruise: true, randomWorld: false, seed: 546 }),
+    );
+    const hand = engine.snapshot.calls;
+    expect(hand.length).toBeGreaterThan(0);
+    // Every offered place passes the same judge the anchor will face.
+    for (const call of hand) {
+      expect(anchorage(engine.snapshot.region!, CRUISER, call, 0, 0).canAnchor).toBe(true);
+    }
+    expect(engine.snapshot.callsMade).toBe(0);
+    engine.dispose();
+  });
+
+  it('reads a click near a call as the call itself', () => {
+    const engine = createEngine(
+      canvas(),
+      settings({ region: 'coast', cruise: true, randomWorld: false, seed: 546 }),
+    );
+    const call = engine.snapshot.calls[0];
+    engine.setDestination({ x: call.x + 180, y: call.y - 120 });
+    expect(engine.snapshot.destination).toEqual({ x: call.x, y: call.y });
+    // And a click nowhere near one stays a plain destination: the cruise must
+    // not swallow ordinary passage-making.
+    engine.setDestination({ x: call.x + 2000, y: call.y + 2000 });
+    expect(engine.snapshot.destination).toEqual({ x: call.x + 2000, y: call.y + 2000 });
+    engine.dispose();
+  });
+
+  it('counts the call when the anchor goes down at it, and deals afresh', () => {
+    const engine = sailing({ cruise: true });
+    // The hand is dealt into the test's palm: one call exactly where she is,
+    // because sailing a real kilometre is minutes this file does not have.
+    callsOverride.hand = [{ ...engine.snapshot.state.pos }];
+    engine.applySettings(settings({ cruise: false }));
+    engine.applySettings(settings({ cruise: true }));
+    const call = engine.snapshot.calls[0];
+    engine.setDestination({ x: call.x + 100, y: call.y });
+    expect(engine.snapshot.destination).toEqual(call);
+
+    anchorAnywhere.on = true;
+    // A step first, so the anchorage readout the keypress consults has been
+    // judged since the override went on -- the key reads the snapshot, and the
+    // snapshot is only written by a step.
+    engine.advance(0.1);
+    const spy = offerCalls as ReturnType<typeof vi.fn>;
+    const dealsBefore = spy.mock.calls.length;
+    press('a');
+    frame(0.1);
+    expect(engine.snapshot.callsMade).toBe(1);
+    // The anchor itself dealt the next hand -- exactly one, and with the salt
+    // moved on. Counting from before the keypress is what pins the deal to the
+    // completion; a review showed the salt sequence alone is satisfiable with
+    // the post-arrival deal deleted outright.
+    expect(spy.mock.calls.length).toBe(dealsBefore + 1);
+    const salts = spy.mock.calls.map((c) => c[5]);
+    expect(salts.at(-1)).toBe((salts.at(-2) as number) + 1);
+    engine.dispose();
+  });
+
+  it('clears the hand when the cruise is switched off, and re-deals when it returns', () => {
+    const engine = createEngine(
+      canvas(),
+      settings({ region: 'coast', cruise: true, randomWorld: false, seed: 546 }),
+    );
+    expect(engine.snapshot.calls.length).toBeGreaterThan(0);
+    engine.applySettings(settings({ region: 'coast', cruise: false, randomWorld: false, seed: 546 }));
+    expect(engine.snapshot.calls).toEqual([]);
+    engine.applySettings(settings({ region: 'coast', cruise: true, randomWorld: false, seed: 546 }));
+    expect(engine.snapshot.calls.length).toBeGreaterThan(0);
+    engine.dispose();
+  });
+
+  /**
+   * A restart is a new cruise: the tally returns to nothing and the salt to
+   * zero, so a pinned world's first hand is always the same first hand.
+   */
+  it('starts the tally and the deal over with the session', () => {
+    const engine = sailing({ cruise: true });
+    callsOverride.hand = [{ ...engine.snapshot.state.pos }];
+    engine.applySettings(settings({ cruise: false }));
+    engine.applySettings(settings({ cruise: true }));
+    anchorAnywhere.on = true;
+    engine.setDestination(engine.snapshot.calls[0]);
+    engine.advance(0.1);
+    press('a');
+    frame(0.1);
+    expect(engine.snapshot.callsMade).toBe(1);
+
+    engine.putToSea();
+    expect(engine.snapshot.callsMade).toBe(0);
+    const salts = (offerCalls as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[5]);
+    expect(salts.at(-1)).toBe(0);
+    engine.dispose();
+  });
+
+  /**
+   * On the procedural ocean the hand is judged against the chart window, and
+   * this seed is the witness for why. The felt window stops at ACTIVE_RANGE
+   * and the hand reaches past it, and judged against the window, seed 260
+   * offered a call on the unloaded flank of an island -- 4.8 m of water by
+   * the window's answer, dry land once the boat sailed near enough to load
+   * it. Every offered place must survive the widest window's judgement.
+   */
+  it('never offers a port the wider chart knows is dry', () => {
+    const engine = createEngine(
+      canvas(),
+      settings({ islandCount: 4, seed: 260, randomWorld: false, cruise: true }),
+    );
+    const hand = engine.snapshot.calls;
+    expect(hand.length).toBeGreaterThan(0);
+    for (const call of hand) {
+      expect(anchorage(engine.snapshot.chart, CRUISER, call, 0, 0).canAnchor).toBe(true);
+    }
+    engine.dispose();
+  });
+
+  /**
+   * A hand dealt while a surveyed region was still loading was judged against
+   * the placeholder ocean, and nothing ever dealt again -- a review traced
+   * every resume-into-a-loaded-region path arriving with an empty hand. The
+   * install handler deals now, and the proof is in the arguments: the deal
+   * after the install is judged against the region itself.
+   */
+  it('re-deals the hand once a surveyed region finishes loading', async () => {
+    const pending = deferred<RegionTerrain>();
+    regionLoad.mockReturnValue(pending.promise);
+    callsOverride.hand = [{ x: 5, y: -95 }];
+    const engine = createEngine(
+      canvas(),
+      settings({ region: 'sf-bay', venue: '', cruise: true }),
+    );
+    const spy = offerCalls as ReturnType<typeof vi.fn>;
+    const before = spy.mock.calls.length;
+
+    pending.resolve({ region: { id: 'sf-bay' } } as RegionTerrain);
+    await pending.promise;
+    await Promise.resolve();
+
+    expect(spy.mock.calls.length).toBeGreaterThan(before);
+    expect(spy.mock.calls.at(-1)![0]).toBe(engine.snapshot.region);
+    engine.dispose();
   });
 
   it('waits for a surveyed region before allowing a new session', async () => {

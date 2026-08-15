@@ -19,6 +19,7 @@ import { passageInfo, type PassageInfo, type PassageRecord } from './sim/passage
 import { anchorage, type Anchorage } from './sim/anchorage';
 import { COAST_ID, coastHeightField } from './sim/coast';
 import { ManeuverTracker, type Maneuver } from './sim/maneuver';
+import { offerCalls } from './sim/calls';
 import { PassageLog } from './sim/passage';
 import { LogStoreUnavailable, logbook } from './logbook';
 import { WaveField, sampleHull, seaBearing, windOverWater, type HullWaveSample } from './sim/waves';
@@ -163,6 +164,15 @@ export interface Snapshot {
    * every frame.
    */
   maneuver: Maneuver | null;
+  /**
+   * The hand of ports of call on offer, or empty -- because cruising mode is
+   * off, or because there is honestly nowhere: open water with no islands has
+   * no anchorable ground anywhere. The chart draws them; clicking near one
+   * makes it the destination; anchoring there completes it and deals afresh.
+   */
+  calls: readonly Vec2[];
+  /** Ports called at this session, which is the cruise's whole tally. */
+  callsMade: number;
 }
 
 export type EngineEvent =
@@ -298,6 +308,38 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   /** Real seconds the last maneuver report stays on screen. */
   const MANEUVER_SHOWN = 8;
   let maneuverTtl = 0;
+  /**
+   * Which deal of the session the next hand of calls is. Folded into the
+   * offer's salt so completing a call turns a fresh hand, while re-opening a
+   * pinned world at its start deals the very same one.
+   */
+  let callSalt = 0;
+  /**
+   * m, how close a chart click must land to an offered call to mean it. Judged
+   * here rather than in the chart, so the one rule serves every chart scale --
+   * at the passage ranges a fingertip is hundreds of metres wide.
+   */
+  const CALL_SNAP = 400;
+
+  /**
+   * Deal (or clear) the hand from wherever she is now.
+   *
+   * Judged against the *chart* window on the procedural ocean, not the felt
+   * one. The active window stops at ACTIVE_RANGE (~2.2 km) and the hand
+   * reaches 4.2, and the gap was not hypothetical: a review found seed 260
+   * offering a call on the unloaded flank of an island -- 4.8 m of water by
+   * the window, dry land once the boat sailed near -- which is precisely the
+   * un-completable-goal bug the anchorage oracle exists to prevent. The chart
+   * window exists to undo the windowing (its own docblock's words) and
+   * reaches 8.3 km. A region or a venue is never windowed, so `query` is
+   * already the whole place there.
+   */
+  function dealCalls(): void {
+    const world = field ? snapshot.chart : query;
+    snapshot.calls = current.cruise
+      ? offerCalls(world, CRUISER, state.pos, wind.baseTwd, current.seed, callSalt++)
+      : [];
+  }
 
   // Reused every physics step; allocating per step would keep the GC busy at 120 Hz.
   const hullWave: HullWaveSample = { heave: 0, pitchSlope: 0, rollSlope: 0 };
@@ -361,6 +403,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     destination: null,
     passage: null,
     maneuver: null,
+    calls: [],
+    callsMade: 0,
     env,
     wind,
     currents,
@@ -602,6 +646,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
         // Install it before announcing readiness. Closing the menu in response
         // to the event must never reveal one frame of the placeholder ocean.
         streamWorld(state.pos.x, state.pos.y);
+        // And the cruise's hand with it. The deal that ran when this load
+        // began was judged against the placeholder ocean -- a review traced
+        // every path that resumes into a freshly loaded region arriving with
+        // an empty hand that nothing ever re-dealt.
+        dealCalls();
         publishRegionStatus(region.id, 'ready');
       },
       (err) => {
@@ -722,6 +771,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       venueChanged ||
       s.region !== current.region ||
       s.seed !== current.seed;
+    const cruiseChanged = s.cruise !== current.cruise;
     current = s;
     /*
      * Pushed only when the stored power has actually moved, never on every
@@ -772,6 +822,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     sound.setEnabled(s.sound);
     snapshot.soundOn = s.sound;
     if (worldChanged) rebuildWorld();
+    // Toggled mid-session, the hand appears or goes without a restart. After a
+    // rebuild the world under the old hand is gone, so it is dealt again too --
+    // `placeAtStart` does the same for the paths that come through it, and a
+    // settings-only rebuild (resume, not put to sea) does not.
+    if (cruiseChanged || worldChanged) dealCalls();
     schedulePolar();
   }
 
@@ -816,6 +871,14 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // The boat has just teleported. Load the sea it landed in before the next
     // frame draws the one it came from.
     streamWorld(state.pos.x, state.pos.y);
+    // And the cruise starts over with it: the tally is a session's, and the
+    // salt returns to zero so a pinned world's first hand is always the same
+    // hand. Dealt only now, after the world above is installed -- an offer
+    // judged against the previous world's water would be judged against
+    // nothing.
+    callSalt = 0;
+    snapshot.callsMade = 0;
+    dealCalls();
   }
 
   /**
@@ -898,6 +961,23 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   function setDestination(pos: Vec2 | null): void {
+    // A click near an offered call means the call, exactly. Judged here rather
+    // than in the chart so one rule serves every chart scale, and snapped to
+    // the call's own coordinates because completion is judged by them: a
+    // destination a fingertip's width off would sail the passage and then not
+    // count it.
+    if (pos && current.cruise) {
+      let nearest: Vec2 | null = null;
+      let best = CALL_SNAP;
+      for (const call of snapshot.calls) {
+        const d = Math.hypot(call.x - pos.x, call.y - pos.y);
+        if (d < best) {
+          best = d;
+          nearest = call;
+        }
+      }
+      if (nearest) pos = { ...nearest };
+    }
     // A passage begins the moment she is pointed at somewhere, and is abandoned
     // rather than recorded if the destination is cleared or moved. Half a
     // passage to somewhere the player changed their mind about is not a passage,
@@ -938,7 +1018,21 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       current.region || current.venue,
     );
     log = null;
+    // Was that a port of call? Judged before the destination is cleared, on
+    // the coordinates the click snapped to -- the tolerance here is for float
+    // copies, not for nearness, which the snap already settled.
+    const called = current.cruise
+      ? snapshot.calls.some(
+          (c) => Math.hypot(c.x - destination!.x, c.y - destination!.y) < 1,
+        )
+      : false;
     setDestination(null);
+    if (called) {
+      snapshot.callsMade += 1;
+      // A fresh hand from where she now lies, so the cruise walks the coast
+      // rather than orbiting the first anchorage.
+      dealCalls();
+    }
     // Written without waiting: a failed write must not stall the physics loop.
     //
     // `logbookSaved` follows the commit rather than the request, and it is what

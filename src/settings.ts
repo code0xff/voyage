@@ -90,6 +90,12 @@ export interface Settings {
    * collapsing them into one field would make the honest label impossible.
    */
   region: string;
+  /**
+   * Cruising mode: a hand of ports of call stands on the chart, anchoring at
+   * one completes it and deals the next. Off is the plain open sailing every
+   * session was before the mode existed.
+   */
+  cruise: boolean;
   /** Seed for islands and weather, so a session can be reproduced. */
   seed: number;
   /** Roll a new seed every time you put to sea. Off pins the world to `seed`. */
@@ -139,6 +145,7 @@ export const DEFAULT_SETTINGS: Settings = {
   islandCount: 4,
   venue: '',
   region: '',
+  cruise: false,
   seed: 20260806,
   randomWorld: true,
   // Overwritten by `loadSettings` on a first run, which asks the browser.
@@ -187,6 +194,7 @@ export function loadSettings(): Settings {
         typeof o.region === 'string' && (regionById(o.region) || o.region === COAST_ID)
           ? o.region
           : DEFAULT_SETTINGS.region,
+      cruise: typeof o.cruise === 'boolean' ? o.cruise : DEFAULT_SETTINGS.cruise,
       seed: Math.round(num(o.seed, DEFAULT_SETTINGS.seed, 1, 2 ** 31)),
       randomWorld:
         typeof o.randomWorld === 'boolean' ? o.randomWorld : DEFAULT_SETTINGS.randomWorld,
