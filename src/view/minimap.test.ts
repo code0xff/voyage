@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { coastHeightField } from '../sim/coast';
+import { RegionTerrain } from '../sim/region-terrain';
 import {
   ISLAND_DRAW_REACH,
   RANGES,
   chartCentre,
   chartPinch,
+  chartRasterKey,
   clampChartCentre,
   maxChartOffset,
 } from './minimap';
@@ -245,5 +248,40 @@ describe('pinching the chart', () => {
     expect(spread.steps).toBe(0);
     const closed = gesture(1 / 1.9, 20, spread.acc);
     expect(closed.steps).toBe(1);
+  });
+});
+
+/**
+ * The chart raster cache, keyed on the land as well as the view.
+ *
+ * Regression: the key held only centre, range, draft and canvas size, so any
+ * change to the *terrain* under an unchanged view served the old raster --
+ * roll a generated coast's seed and the previous shore stayed drawn until
+ * the boat had moved a quantisation step; slide the coast's window and the
+ * chart lagged a session behind. Driven through the real key builder.
+ */
+describe('the chart raster key', () => {
+  const view = [0, 0, 1200, 1.9, 416, 6] as const;
+
+  it('is stable while nothing changed', () => {
+    const { region, height } = coastHeightField(13);
+    const t = new RegionTerrain(region, height);
+    expect(chartRasterKey(t, ...view)).toBe(chartRasterKey(t, ...view));
+  });
+
+  it('changes with the seed under the same view', () => {
+    const a = coastHeightField(13);
+    const b = coastHeightField(14);
+    expect(chartRasterKey(new RegionTerrain(a.region, a.height), ...view)).not.toBe(
+      chartRasterKey(new RegionTerrain(b.region, b.height), ...view),
+    );
+  });
+
+  it('changes when the window slides under the same view', () => {
+    const a = coastHeightField(13);
+    const b = coastHeightField(13, { x: 3000, y: 0 });
+    expect(chartRasterKey(new RegionTerrain(a.region, a.height), ...view)).not.toBe(
+      chartRasterKey(new RegionTerrain(b.region, b.height), ...view),
+    );
   });
 });

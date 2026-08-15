@@ -293,6 +293,37 @@ interface ChartCache {
   key: string;
 }
 
+/**
+ * What has to match for a cached region raster to be reused.
+ *
+ * The view half -- centre quantised to a device pixel of travel, range,
+ * draft, canvas size -- and the *land* half, which the key silently omitted:
+ * which region, and where its window sits. Roll the seed of a generated
+ * coast without moving the chart and the old shore stayed on screen until
+ * the boat had drifted a quantisation step; slide the coast's window and the
+ * raster was likewise a session behind. `region.source` carries the seed for
+ * a generated coast and is fixed for a surveyed one, whose raster genuinely
+ * never changes; the origin is the sliding window's identity.
+ *
+ * Pure and exported because the failure is silent -- a stale chart looks
+ * exactly like a chart -- so which ingredients the key holds is asserted
+ * rather than remembered.
+ */
+export function chartRasterKey(
+  region: RegionTerrain,
+  centreX: number,
+  centreY: number,
+  range: number,
+  draft: number,
+  px: number,
+  step: number,
+): string {
+  return (
+    `${Math.round(centreX / step)},${Math.round(centreY / step)},${range},${draft},${px},` +
+    `${region.region.source},${region.height.originX},${region.height.originY}`
+  );
+}
+
 function drawRegion(
   cache: ChartCache,
   ctx: CanvasRenderingContext2D,
@@ -315,7 +346,7 @@ function drawRegion(
   // moved. Redrawing costs a few milliseconds and is cached; stepping is a
   // chart that looks broken.
   const step = Math.max(1, (range * 2) / px);
-  const key = `${Math.round(centreX / step)},${Math.round(centreY / step)},${range},${draft},${px}`;
+  const key = chartRasterKey(region, centreX, centreY, range, draft, px, step);
   if (!cache.canvas) {
     cache.canvas = document.createElement('canvas');
   }
