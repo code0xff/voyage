@@ -222,7 +222,8 @@ export function autoReef(rs: ReefState, heelAvg: number, heel: number, dt: numbe
   const emergency = inst > 45 * DEG;
   if (rs.timer < (emergency ? 1.2 : DWELL)) return;
   if (emergency) {
-    if (rs.jibFurl < rs.reef / MAX_REEF) rs.jibFurl = clamp(rs.jibFurl + 0.25, 0, 0.75);
+    // Same ladder, same 0.75 cap in the condition -- see the note below.
+    if (rs.jibFurl < Math.min(rs.reef / MAX_REEF, 0.75)) rs.jibFurl = clamp(rs.jibFurl + 0.25, 0, 0.75);
     else if (rs.reef < MAX_REEF) rs.reef++;
     else rs.jibFurl = clamp(rs.jibFurl + 0.25, 0, 0.9);
     rs.timer = 0;
@@ -231,8 +232,13 @@ export function autoReef(rs: ReefState, heelAvg: number, heel: number, dt: numbe
 
   if (h > REEF_UP) {
     // Alternate between main and jib so the centre of effort does not run away
-    // to one end of the boat.
-    if (rs.jibFurl < rs.reef / MAX_REEF) rs.jibFurl = clamp(rs.jibFurl + 0.25, 0, 0.75);
+    // to one end of the boat. The jib's turn is capped at 0.75 while the main
+    // still has reefs to come -- and the cap has to be in the *condition*, not
+    // only in the clamp: with the main fully reefed, `jibFurl < reef/MAX_REEF`
+    // stayed true at 0.75 forever, so this branch kept clamping to a no-op and
+    // the 0.9 storm setting below was unreachable. Found when the departure
+    // settle at 70 knots kept 25% of the jib flying at 40 degrees of heel.
+    if (rs.jibFurl < Math.min(rs.reef / MAX_REEF, 0.75)) rs.jibFurl = clamp(rs.jibFurl + 0.25, 0, 0.75);
     else if (rs.reef < MAX_REEF) rs.reef++;
     else rs.jibFurl = clamp(rs.jibFurl + 0.25, 0, 0.9);
     rs.timer = 0;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEG } from './math';
-import { autoReef, type ReefState } from './sailplan';
+import { MAX_REEF, autoReef, type ReefState } from './sailplan';
 
 const DT = 1 / 120;
 
@@ -66,5 +66,19 @@ describe('auto-reef', () => {
     const stb = hold(fresh(), 35, 35, 30);
     const port = hold(fresh(), -35, -35, 30);
     expect(shortened(port)).toBe(shortened(stb));
+  });
+
+  it('still overpowered with the main fully reefed, it rolls the jib to storm size', () => {
+    // Regression: with the main at MAX_REEF the jib's-turn condition stayed
+    // true at 0.75 forever, so the ladder clamped a no-op every dwell and the
+    // 0.9 rung was unreachable -- in a 70 kn squall the settle kept a quarter
+    // of the jib flying at 40 degrees of sustained heel. Enough time here for
+    // the dwell however the ladder is retuned; the claim is the rung, so 0.9
+    // is written out rather than imported.
+    // MAX_REEF imported because a fully-reefed main is the *precondition*
+    // this test needs in order to look at the jib; 0.9 written out because
+    // the rung itself is the claim.
+    const rs = hold(fresh({ reef: MAX_REEF, jibFurl: 0.75 }), 35, 35, 30);
+    expect(rs.jibFurl).toBeCloseTo(0.9, 10);
   });
 });
