@@ -185,12 +185,18 @@ export function createRegionView(): RegionView {
       // false positive only costs one mesh that comes out flat.
       const halfW = next.height.halfWidth;
       const halfH = next.height.halfHeight;
+      // The tile lattice lives where the field lives -- a re-windowed coast
+      // hands over the same class with a moved origin, and tiles laid about
+      // the world origin instead would sample the field's edge clamp and
+      // build 20 km of flat ghost coast where the boat no longer is.
+      const ox = next.height.originX;
+      const oy = next.height.originY;
       const nx = Math.ceil((halfW * 2) / TILE);
       const ny = Math.ceil((halfH * 2) / TILE);
       for (let ty = 0; ty < ny; ty++) {
         for (let tx = 0; tx < nx; tx++) {
-          const cx = -halfW + (tx + 0.5) * TILE;
-          const cy = -halfH + (ty + 0.5) * TILE;
+          const cx = ox - halfW + (tx + 0.5) * TILE;
+          const cy = oy - halfH + (ty + 0.5) * TILE;
           let highest = -Infinity;
           for (let j = 0; j <= 8 && highest < LAND_THRESHOLD; j++) {
             for (let i = 0; i <= 8; i++) {

@@ -108,9 +108,9 @@ export class RegionTerrain {
     const { w, h, cell } = this;
     const land = new Uint8Array(w * h);
     for (let row = 0; row < h; row++) {
-      const y = this.halfHeight - (row + 0.5) * cell;
+      const y = this.height.originY + this.halfHeight - (row + 0.5) * cell;
       for (let col = 0; col < w; col++) {
-        const x = -this.halfWidth + (col + 0.5) * cell;
+        const x = this.height.originX - this.halfWidth + (col + 0.5) * cell;
         const dry = this.height.elevationAt(x, y) > 0;
         land[row * w + col] = dry ? 1 : 0;
         if (dry) found.land = true;
@@ -249,8 +249,8 @@ export class RegionTerrain {
   }
 
   private sampleShore(x: number, y: number): number {
-    const gx = (x + this.halfWidth) / this.cell - 0.5;
-    const gy = (this.halfHeight - y) / this.cell - 0.5;
+    const gx = (x - this.height.originX + this.halfWidth) / this.cell - 0.5;
+    const gy = (this.halfHeight - (y - this.height.originY)) / this.cell - 0.5;
     const x0 = Math.floor(gx);
     const y0 = Math.floor(gy);
     const fx = gx - x0;

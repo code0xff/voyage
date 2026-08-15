@@ -1245,3 +1245,87 @@ describe('putting to sea prepared', () => {
     engine.dispose();
   });
 });
+
+/**
+ * The coast's sliding window, driven the only honest way: by sailing there.
+ * The sim tests prove any two windows agree; what only the engine can prove
+ * is that the window actually moves -- that a boat following the shore never
+ * reaches the place where the mainland used to dissolve into the edge fade.
+ */
+describe('the coast window follows the boat', () => {
+  it('re-bakes the window a few kilometres down the shore, seamlessly', { timeout: 120_000 }, () => {
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const first = engine.snapshot.region;
+    expect(first?.height.originX).toBe(0);
+    // 199 degrees runs alongshore for this seed, clear of the headland that
+    // stands a kilometre east of the spawn -- found by sailing it, the same
+    // way the witness seeds were found by scanning. The claim under test is
+    // not the bearing; it is the window that follows whoever holds one.
+    const course = (199 * Math.PI) / 180;
+    engine.advance(0.1);
+    for (let i = 0; i < 240 && Math.abs(wrapPi(engine.snapshot.state.heading - course)) > 0.06; i++) {
+      engine.advance(0.5, Math.sign(wrapPi(course - engine.snapshot.state.heading)) * 0.6);
+    }
+    engine.press('h'); // the autopilot holds it from here
+    let sailed = 0;
+    while (sailed < 1800 && engine.snapshot.region === first) {
+      engine.advance(30);
+      sailed += 30;
+    }
+    const slid = engine.snapshot.region;
+    expect(slid).not.toBe(first);
+    expect(slid?.region.id).toBe('coast');
+    // The new window is centred where she is, give or take the re-bake's
+    // head start -- not back at the origin, and not at some stale corner.
+    const pos = engine.snapshot.state.pos;
+    const away = Math.max(
+      Math.abs(pos.x - (slid?.height.originX ?? 0)),
+      Math.abs(pos.y - (slid?.height.originY ?? 0)),
+    );
+    expect(away).toBeLessThan(600);
+    // Seamless underfoot: the boat is still in sailable water, reading a
+    // finite depth from the new window, and the world did not move -- the
+    // session and her position carried straight across the swap.
+    expect(engine.snapshot.depth).toBeGreaterThan(0);
+    expect(Number.isFinite(engine.snapshot.depth)).toBe(true);
+    engine.dispose();
+  });
+
+  it('a restart mid-fill does not install the window the last session ordered', { timeout: 120_000 }, () => {
+    // The stale-pending case a review constructed: cross the re-window
+    // trigger, and put to sea again while the few seconds of incremental
+    // fill are still running. The teleport home lands the boat about 2.9 km
+    // from the pending centre -- same side, inside a naive distance test --
+    // and an orphaned fill would install a window centred down the coast of
+    // a session that no longer exists.
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const course = (199 * Math.PI) / 180;
+    engine.advance(0.1);
+    for (let i = 0; i < 240 && Math.abs(wrapPi(engine.snapshot.state.heading - course)) > 0.06; i++) {
+      engine.advance(0.5, Math.sign(wrapPi(course - engine.snapshot.state.heading)) * 0.6);
+    }
+    engine.press('h');
+    // Sail up to the trigger in 0.2 s bites and stop within a boat-length of
+    // crossing it: at three metres a second the fill is two hundred steps --
+    // 1.7 s -- from done, so the restart below reliably lands mid-fill. A
+    // coarser probe here raced the fill and sometimes tested a window that
+    // had already, legitimately, been installed.
+    const past = () => {
+      const p = engine.snapshot.state.pos;
+      return Math.max(Math.abs(p.x), Math.abs(p.y)) > 3001;
+    };
+    for (let t = 0; t < 1800 && !past(); t += 0.2) engine.advance(0.2);
+    expect(past()).toBe(true);
+    engine.putToSea();
+    engine.advance(3); // long enough for any orphaned fill to have installed
+    const region = engine.snapshot.region;
+    const away = Math.max(
+      Math.abs(region?.height.originX ?? 0),
+      Math.abs(region?.height.originY ?? 0),
+    );
+    // The session starts at the origin, and so must its window.
+    expect(away).toBeLessThan(200);
+    expect(engine.snapshot.depth).toBeGreaterThan(10);
+    engine.dispose();
+  });
+});

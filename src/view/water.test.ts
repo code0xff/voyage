@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { HeightField } from '../sim/heightfield';
 import { RegionTerrain } from '../sim/region-terrain';
 import { regionById } from '../sim/regions';
-import { FIELD_DEPTH, SEG, SIZE, createWater, ringGeometry } from './water';
+import { FIELD_DEPTH, SEG, SIZE, createWater, fieldGlsl, ringGeometry } from './water';
 
 /**
  * The ring the far sea is cut from.
@@ -227,5 +227,77 @@ describe('the surveyed water texture', () => {
     }
 
     water.dispose();
+  });
+});
+
+/**
+ * The origin the sliding coast window introduces, at the texture boundary.
+ *
+ * The GLSL side subtracts uRegionOrigin before mapping into the texture; what
+ * can be asserted headless is the other half of the bargain: that the baked
+ * texels come from the field's own world position, and that the uniform the
+ * shader will subtract is exactly the origin the field reports. A bake still
+ * looping about the world origin would fill the texture from the field's edge
+ * clamp -- 20 km of ghost coast -- the moment the window first slides.
+ */
+describe('the water texture of a moved window', () => {
+  it('bakes the field where the window sits, and says so in the uniform', () => {
+    const source = regionById('sf-bay');
+    if (!source) throw new Error('sf-bay region is missing');
+    const region = {
+      ...source,
+      id: 'water-origin-test',
+      grid: { ...source.grid, width: 8, height: 8, unit: 1 },
+    };
+    const origin = { x: 4000, y: -2600 };
+    const samples = new Int16Array(64).fill(-20);
+    for (let col = 0; col < 8; col++) {
+      samples[col] = -8;
+      samples[7 * 8 + col] = -32;
+    }
+    const terrain = new RegionTerrain(region, new HeightField(samples, region, origin));
+    const water = createWater();
+    water.setRegion(terrain);
+
+    const material = water.mesh.material as THREE.ShaderMaterial;
+    const o = material.uniforms.uRegionOrigin.value as THREE.Vector2;
+    expect(o.x).toBe(origin.x);
+    expect(o.y).toBe(origin.y);
+
+    const field = material.uniforms.uField.value as THREE.DataTexture;
+    const data = field.image.data as Uint8Array;
+    const { cell } = region.grid;
+    const halfW = terrain.height.halfWidth;
+    const halfH = terrain.height.halfHeight;
+    const greenAt = (row: number, col: number) => (data[(row * 8 + col) * 4 + 1] / 255) * FIELD_DEPTH;
+    // The 8 m row and the 32 m row, read back at their *world* positions.
+    for (const [row, expected] of [
+      [0, 8],
+      [7, 32],
+    ] as const) {
+      const worldY = origin.y + halfH - (row + 0.5) * cell;
+      expect(Math.abs(terrain.depthAt(origin.x - halfW + 0.5 * cell, worldY) - expected)).toBeLessThan(1e-6);
+      expect(Math.abs(greenAt(row, 0) - expected)).toBeLessThanOrEqual(FIELD_DEPTH / 255);
+    }
+    water.dispose();
+  });
+});
+
+/**
+ * A tripwire, and honestly no more than that: no GLSL runs in this file, so
+ * the shader's use of the origin cannot be mutation-tested the way the TS
+ * side is -- a review demonstrated that deleting the subtraction passed every
+ * test here. What a string assertion can hold is that both field helpers
+ * still subtract the origin before they map; the *correctness* of that
+ * subtraction is the twin-formula argument in the fieldGlsl comment, kept
+ * true by review and by looking.
+ */
+describe('the shader origin tripwire', () => {
+  it('both field helpers subtract uRegionOrigin', () => {
+    const helpers = fieldGlsl.split('float regionFade');
+    expect(helpers).toHaveLength(2);
+    for (const half of helpers) {
+      expect(half).toContain('p - uRegionOrigin');
+    }
   });
 });

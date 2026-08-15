@@ -102,10 +102,18 @@ const rippleGlsl = /* glsl */ `
  * has bitten this file before: the v axis runs the other way from the raster's
  * rows, and getting it wrong mirrors a bay about its own middle.
  */
-const fieldGlsl = /* glsl */ `
+// Exported for the tripwire in water.test.ts -- the one consumer besides the
+// two shaders that inline it.
+export const fieldGlsl = /* glsl */ `
   uniform vec4 uIslands[${MAX_ISLANDS}]; // x, y, radius, landmass id + 1
   uniform sampler2D uField;              // r = wave shelter, g = depth
   uniform vec3 uRegion;                  // halfWidth, halfHeight, 1 if loaded
+  // Where the field's centre sits in the world -- zero for every surveyed
+  // region, and wherever the window was last re-baked for the generated
+  // coast. The twin of HeightField.originX/originY, and it must stay one:
+  // a shader mapping the texture about the origin while the physics reads
+  // it about the boat would shade a lee 20 km from the land that casts it.
+  uniform vec2 uRegionOrigin;
 
   /**
    * Where the field says a point is, in texture space.
@@ -115,9 +123,10 @@ const fieldGlsl = /* glsl */ `
    * flat water would otherwise appear mirrored about the middle of the bay.
    */
   vec2 fieldUv(vec2 p) {
+    vec2 q = p - uRegionOrigin;
     return vec2(
-      (p.x + uRegion.x) / (2.0 * uRegion.x),
-      1.0 - (p.y + uRegion.y) / (2.0 * uRegion.y)
+      (q.x + uRegion.x) / (2.0 * uRegion.x),
+      1.0 - (q.y + uRegion.y) / (2.0 * uRegion.y)
     );
   }
 
@@ -133,8 +142,9 @@ const fieldGlsl = /* glsl */ `
    * which is a hard seam on a line drawn on nothing.
    */
   float regionFade(vec2 p) {
-    float dx = max(0.0, abs(p.x) - uRegion.x);
-    float dy = max(0.0, abs(p.y) - uRegion.y);
+    vec2 q = p - uRegionOrigin;
+    float dx = max(0.0, abs(q.x) - uRegion.x);
+    float dy = max(0.0, abs(q.y) - uRegion.y);
     return min(1.0, max(dx, dy) / ${EDGE_FADE.toFixed(1)});
   }
 `;
@@ -686,6 +696,7 @@ export function createWater(): Water {
     uField: { value: null as THREE.DataTexture | null },
     // halfWidth, halfHeight, and whether a region is loaded at all.
     uRegion: { value: new THREE.Vector3(1, 1, 0) },
+    uRegionOrigin: { value: new THREE.Vector2(0, 0) },
   };
 
   let region: RegionTerrain | null = null;
@@ -746,6 +757,7 @@ export function createWater(): Water {
       }
       if (!next) {
         uniforms.uRegion.value.set(1, 1, 0);
+        uniforms.uRegionOrigin.value.set(0, 0);
         return;
       }
 
@@ -757,11 +769,13 @@ export function createWater(): Water {
       const data = new Uint8Array(width * height * 4);
       const halfW = next.height.halfWidth;
       const halfH = next.height.halfHeight;
+      const ox = next.height.originX;
+      const oy = next.height.originY;
       const cell = next.region.grid.cell;
       for (let row = 0; row < height; row++) {
-        const y = halfH - (row + 0.5) * cell;
+        const y = oy + halfH - (row + 0.5) * cell;
         for (let col = 0; col < width; col++) {
-          const x = -halfW + (col + 0.5) * cell;
+          const x = ox - halfW + (col + 0.5) * cell;
           // Depth is baked once here. Read through the terrain rather than the
           // raster so that it is the depth the keel will find, edge fade and
           // all, and not the raw survey.
@@ -781,6 +795,7 @@ export function createWater(): Water {
       field.needsUpdate = true;
       uniforms.uField.value = field;
       uniforms.uRegion.value.set(halfW, halfH, 1);
+      uniforms.uRegionOrigin.value.set(ox, oy);
       fieldTwd = null;
     },
 
@@ -798,10 +813,12 @@ export function createWater(): Water {
       const data = field.image.data as Uint8Array;
       const halfW = region.height.halfWidth;
       const halfH = region.height.halfHeight;
+      const ox = region.height.originX;
+      const oy = region.height.originY;
       for (let row = 0; row < height; row++) {
-        const y = halfH - (row + 0.5) * cell;
+        const y = oy + halfH - (row + 0.5) * cell;
         for (let col = 0; col < width; col++) {
-          const x = -halfW + (col + 0.5) * cell;
+          const x = ox - halfW + (col + 0.5) * cell;
           data[(row * width + col) * 4] = Math.round(
             region.shelter.shelterInputAt(x, y) * 255,
           );

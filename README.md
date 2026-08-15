@@ -480,6 +480,15 @@ being left to decay forever: an unbounded tail and a finite window cannot both
 be honest. The cost is that a large island's flat water now ends by 1.5 km
 instead of thinning out to 2.5 km, which is a long way downwind of anywhere.
 
+The generated coast keeps the no-edge promise by a different mechanism. Its
+ground is a pure function of world position and seed, sampled into the same
+20 km height-field window a surveyed region uses — and the engine re-bakes that
+window about the boat as she sails along the shore, a few raster rows per
+physics step (the full field is a measured 130 ms, too much for one frame).
+Windows are pinned to a shared 25 m world lattice, so any two of the same seed
+agree exactly where they overlap: the swap moves the horizon, never the water
+under the keel, and the mainland goes on however far you follow it.
+
 The meshes are drawn from a wider window than the physics uses, out past the fog
 at any visibility, so land is always born unseen rather than appearing out of
 clear air. Nothing in that outer ring affects the boat, so the two windows are

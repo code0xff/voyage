@@ -17,9 +17,23 @@ import type { Region } from './regions';
 
 /** Row-major from the north-west corner, which is how the raster is baked. */
 export class HeightField {
-  /** Metres east and north the grid reaches from the world origin at its centre. */
+  /** Metres east and north the grid reaches from its centre. */
   readonly halfWidth: number;
   readonly halfHeight: number;
+  /**
+   * Where the grid's centre sits in the world, m.
+   *
+   * Zero for every surveyed region -- their rasters are baked about the world
+   * origin and nothing about them can move. The generated coast is the reason
+   * this exists: its samples come from a pure function of *world* position, so
+   * the same 20 km window can be re-baked anywhere along the shore and agree
+   * exactly with every other window where they overlap. The field knows where
+   * it sits so that every consumer -- the physics, the shelter sweep, the land
+   * meshes, the water shader's texture -- asks it rather than each assuming
+   * the centre is the origin, which is the assumption this replaces.
+   */
+  readonly originX: number;
+  readonly originY: number;
 
   private readonly w: number;
   private readonly h: number;
@@ -29,7 +43,10 @@ export class HeightField {
   constructor(
     private readonly samples: Int16Array,
     region: Region,
+    origin: { x: number; y: number } = { x: 0, y: 0 },
   ) {
+    this.originX = origin.x;
+    this.originY = origin.y;
     const { width, height, cell, unit } = region.grid;
     if (samples.length !== width * height) {
       // Worth throwing rather than sampling garbage: a raster of the wrong size
@@ -50,7 +67,7 @@ export class HeightField {
   /** True while the point is inside the surveyed square. */
   contains(x: number, y: number): boolean {
     return (
-      x >= -this.halfWidth && x <= this.halfWidth && y >= -this.halfHeight && y <= this.halfHeight
+      Math.abs(x - this.originX) <= this.halfWidth && Math.abs(y - this.originY) <= this.halfHeight
     );
   }
 
@@ -66,9 +83,9 @@ export class HeightField {
   distanceOutside(x: number, y: number): number {
     return Math.max(
       0,
-      Math.abs(x) - this.halfWidth,
+      Math.abs(x - this.originX) - this.halfWidth,
       0,
-      Math.abs(y) - this.halfHeight,
+      Math.abs(y - this.originY) - this.halfHeight,
     );
   }
 
@@ -91,9 +108,9 @@ export class HeightField {
     // western and northern edges. Forgetting the half-cell shifts the whole
     // coast 12.5 m north-west, which is inside the noise of a single reading
     // and is exactly why it would never be noticed by looking.
-    const gx = (x + this.halfWidth) / this.cell - 0.5;
+    const gx = (x - this.originX + this.halfWidth) / this.cell - 0.5;
     // Row 0 is the north edge, so y counts down as the row index counts up.
-    const gy = (this.halfHeight - y) / this.cell - 0.5;
+    const gy = (this.halfHeight - (y - this.originY)) / this.cell - 0.5;
 
     const x0 = Math.floor(gx);
     const y0 = Math.floor(gy);

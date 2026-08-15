@@ -17,7 +17,14 @@ import { RegionTerrain } from './sim/region-terrain';
 import { loadRegion } from './terrain-load';
 import { passageInfo, type PassageInfo, type PassageRecord } from './sim/passage';
 import { anchorage, type Anchorage } from './sim/anchorage';
-import { COAST_ID, coastHeightField } from './sim/coast';
+import {
+  COAST_ID,
+  coastHeightField,
+  coastRegion,
+  fillCoastRows,
+  snapCoastOrigin,
+} from './sim/coast';
+import { HeightField } from './sim/heightfield';
 import { ManeuverTracker, type Maneuver } from './sim/maneuver';
 import { offerCalls } from './sim/calls';
 import { PassageLog } from './sim/passage';
@@ -504,6 +511,38 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * seed would be served last session's shore.
    */
   let coastSeed = 0;
+  /**
+   * The coast's sliding window.
+   *
+   * The generated coast is a pure function of world position, so the 20 km
+   * field it is sampled into is a *window*, not the world -- and a window that
+   * never moved was the whole of why the "mainland" ended: sail ten kilometres
+   * along the shore and the continent faded into the edge blend, dissolving in
+   * plain sight of the chart. So the window follows the boat. `coastOrigin` is
+   * where the installed field is centred; when the boat has sailed
+   * `COAST_REWINDOW` from it, `pendingCoast` starts re-baking the same seed
+   * about the boat, a few rows per physics step -- the full field is a
+   * measured 130 ms, sixteen dropped frames if paid at once, and at four rows
+   * a step it disappears into the budget and completes in under two seconds
+   * of a crossing that takes a quarter of an hour. Overlapping samples agree
+   * exactly (see snapCoastOrigin), so the swap moves the horizon, never the
+   * water under the keel.
+   *
+   * Past `COAST_JUMP` the boat cannot have sailed there -- she was put there,
+   * by a restart with the window left down the coast -- and the water she is
+   * standing in belongs to the old window's faded edge. That one is rebuilt
+   * whole, synchronously, behind the same put-to-sea the initial build hides
+   * behind.
+   */
+  const COAST_REWINDOW = 3000;
+  const COAST_JUMP = 7000;
+  const COAST_ROWS_PER_STEP = 4;
+  let coastOrigin = { x: 0, y: 0 };
+  let pendingCoast: {
+    origin: { x: number; y: number };
+    samples: Int16Array;
+    row: number;
+  } | null = null;
   /** Prevent a rebuild during one request from starting a second fetch. */
   let loadingRegion = '';
   /**
@@ -574,9 +613,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (current.region === COAST_ID) {
       wantedRegion = COAST_ID;
       if (regionTerrain?.region.id !== COAST_ID || coastSeed !== current.seed) {
-        const coast = coastHeightField(current.seed);
+        // Windowed about the boat, not the origin: a rebuild can happen
+        // mid-session (a settings edit while far down the shore), and the
+        // window must be where she is. At construction and at put-to-sea the
+        // boat is at the origin anyway, so the first window is unchanged.
+        const coast = coastHeightField(current.seed, state.pos);
         regionTerrain = new RegionTerrain(coast.region, coast.height);
         coastSeed = current.seed;
+        coastOrigin = coast.origin;
+        pendingCoast = null;
       }
       loadingRegion = '';
       publishRegionStatus(COAST_ID, 'ready');
@@ -667,6 +712,67 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   /**
+   * Keep the generated coast's window under the boat; see `coastOrigin`.
+   *
+   * Runs ahead of the publish block below, so the frame that completes a
+   * re-bake is also the frame that installs it -- the guard there watches
+   * `snapshot.region !== regionTerrain` and does the whole hand-over: physics
+   * query, wind and current terrain, chart, view meshes, field texture. The
+   * install frame pays the RegionTerrain build (a measured 39 ms) and the
+   * next wind query re-sweeps the shelter (18 ms); once per few kilometres of
+   * coast, that is the price of a mainland that does not end, and both halves
+   * were measured before being accepted rather than assumed small.
+   */
+  function slideCoast(x: number, y: number): void {
+    if (regionTerrain?.region.id !== COAST_ID) return;
+    const away = Math.max(Math.abs(x - coastOrigin.x), Math.abs(y - coastOrigin.y));
+    if (away > COAST_JUMP) {
+      const coast = coastHeightField(coastSeed, { x, y });
+      regionTerrain = new RegionTerrain(coast.region, coast.height);
+      coastOrigin = coast.origin;
+      pendingCoast = null;
+      return;
+    }
+    // A fill is only worth finishing while the boat still stands where it
+    // was ordered: outside the installed window's comfort zone, and near the
+    // pending centre. `away` back under the trigger means no re-window is
+    // needed at all -- she turned back, or a restart teleported her home --
+    // and a fill that outlived either would install a window centred on
+    // where she was going, not where she is. The distance guard alone missed
+    // exactly that: a restart from a trigger at 3.0 km lands the boat 2.9 km
+    // from the pending centre, same side, still inside the distance test.
+    if (
+      pendingCoast &&
+      (away <= COAST_REWINDOW ||
+        Math.max(Math.abs(x - pendingCoast.origin.x), Math.abs(y - pendingCoast.origin.y)) >
+          COAST_REWINDOW)
+    ) {
+      pendingCoast = null;
+    }
+    if (!pendingCoast && away > COAST_REWINDOW) {
+      const { width, height } = regionTerrain.region.grid;
+      pendingCoast = {
+        origin: snapCoastOrigin({ x, y }),
+        samples: new Int16Array(width * height),
+        row: 0,
+      };
+    }
+    if (!pendingCoast) return;
+    const rows = regionTerrain.region.grid.height;
+    const next = Math.min(pendingCoast.row + COAST_ROWS_PER_STEP, rows);
+    fillCoastRows(pendingCoast.samples, coastSeed, pendingCoast.origin, pendingCoast.row, next);
+    pendingCoast.row = next;
+    if (next < rows) return;
+    const region = coastRegion(coastSeed);
+    regionTerrain = new RegionTerrain(
+      region,
+      new HeightField(pendingCoast.samples, region, pendingCoast.origin),
+    );
+    coastOrigin = pendingCoast.origin;
+    pendingCoast = null;
+  }
+
+  /**
    * Slide the loaded window of islands along with the boat.
    *
    * Re-collecting on every step would be wasted work -- the window only changes
@@ -675,6 +781,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * travelled, and then only does anything if the island set really differs.
    */
   function streamWorld(x: number, y: number): void {
+    slideCoast(x, y);
     if (!field) {
       // Either open water, a venue or a region, and all three are the same job:
       // one fixed terrain, installed once and never slid along. The whole place

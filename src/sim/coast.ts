@@ -18,8 +18,12 @@ import type { Region } from './regions';
  * it knows or cares whether the `Int16Array` underneath came from NOAA or from
  * noise. This file is the noise.
  *
- * Everything here is a pure function of the seed. Same seed, same coast,
- * exactly — the property the whole world already keeps.
+ * Everything here is a pure function of the seed *and of world position* —
+ * same seed, same coast, exactly, the property the whole world already keeps.
+ * The second half of that is what makes the coast endless: the 20 km field is
+ * a window, not the world, and the engine re-bakes it about the boat as she
+ * sails (see `fillCoastRows` and `snapCoastOrigin`), every window agreeing
+ * exactly with every other wherever they overlap.
  */
 
 /** The one id the engine recognises as "generate, don't fetch". */
@@ -196,37 +200,85 @@ function elevation(
 }
 
 /**
- * The samples for a coast, row-major from the north-west corner — the exact
- * layout `HeightField` reads, verified against its own mapping: sample
- * (row, col) sits at x = −halfWidth + (col + ½)·cell, y = halfHeight −
- * (row + ½)·cell.
+ * Pin a window centre to the sample lattice.
+ *
+ * The whole reason two windows can agree exactly where they overlap is that
+ * their samples land on the *same* world lattice: with the centre a multiple
+ * of the cell, every sample sits at (k + ½)·cell for integer k whatever the
+ * window, so the same world point gets the same double fed to the same noise.
+ * An unsnapped centre would shear the lattice and the seam would show as a
+ * 25 m jog in every contour the two windows share.
  */
-export function coastSamples(seed: number): Int16Array {
-  const { width, height, cell, unit } = GRID;
+export function snapCoastOrigin(p: { x: number; y: number }): { x: number; y: number } {
+  return {
+    x: Math.round(p.x / GRID.cell) * GRID.cell,
+    y: Math.round(p.y / GRID.cell) * GRID.cell,
+  };
+}
+
+/**
+ * Fill rows [row0, row1) of a coast window centred at `origin`, row-major from
+ * the north-west corner — the exact layout `HeightField` reads, verified
+ * against its own mapping: sample (row, col) sits at
+ * x = origin.x − halfWidth + (col + ½)·cell, y = origin.y + halfHeight −
+ * (row + ½)·cell.
+ *
+ * A row range rather than the whole array, because the engine re-bakes the
+ * window mid-session as the boat sails along the shore, and the full 800 rows
+ * are a measured 130 ms — sixteen dropped frames if paid at once. Spread a few
+ * rows per step, generation disappears into the frame budget; this function is
+ * also the whole of `coastSamples`, so the incremental path and the all-at-once
+ * path cannot drift apart.
+ *
+ * `origin` must come through `snapCoastOrigin`; see there for why.
+ */
+export function fillCoastRows(
+  samples: Int16Array,
+  seed: number,
+  origin: { x: number; y: number },
+  row0: number,
+  row1: number,
+): void {
+  const { width, cell, unit } = GRID;
   const halfWidth = (width * cell) / 2;
-  const halfHeight = (height * cell) / 2;
+  const halfHeight = (GRID.height * cell) / 2;
 
   // Which side the mainland is on, drawn once from the seed. A full circle, so
-  // two coasts differ in aspect as well as in outline.
+  // two coasts differ in aspect as well as in outline. Per call rather than
+  // cached: it is two numbers from three rng draws, and a cache would be state
+  // this file otherwise does not have.
   const rand = rng(seed ^ 0xc0a57);
   const theta = rand() * TAU;
   const inlandX = Math.sin(theta);
   const inlandY = Math.cos(theta);
 
-  const samples = new Int16Array(width * height);
-  for (let row = 0; row < height; row++) {
-    const y = halfHeight - (row + 0.5) * cell;
+  for (let row = row0; row < row1; row++) {
+    const y = origin.y + halfHeight - (row + 0.5) * cell;
     for (let col = 0; col < width; col++) {
-      const x = -halfWidth + (col + 0.5) * cell;
+      const x = origin.x - halfWidth + (col + 0.5) * cell;
       const ground = elevation(x, y, seed, inlandX, inlandY);
       samples[row * width + col] = clamp(Math.round(ground / unit), -32768, 32767);
     }
   }
+}
+
+/** The samples for a whole coast window. */
+export function coastSamples(seed: number, origin = { x: 0, y: 0 }): Int16Array {
+  const samples = new Int16Array(GRID.width * GRID.height);
+  fillCoastRows(samples, seed, snapCoastOrigin(origin), 0, GRID.height);
   return samples;
 }
 
-/** The whole thing, ready for `RegionTerrain`. */
-export function coastHeightField(seed: number): { region: Region; height: HeightField } {
+/** The whole thing, ready for `RegionTerrain`, windowed about `origin`. */
+export function coastHeightField(
+  seed: number,
+  origin = { x: 0, y: 0 },
+): { region: Region; height: HeightField; origin: { x: number; y: number } } {
   const region = coastRegion(seed);
-  return { region, height: new HeightField(coastSamples(seed), region) };
+  const snapped = snapCoastOrigin(origin);
+  return {
+    region,
+    height: new HeightField(coastSamples(seed, snapped), region, snapped),
+    origin: snapped,
+  };
 }

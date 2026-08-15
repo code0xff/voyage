@@ -122,6 +122,9 @@ export class ShelterField {
   private readonly cell: number;
   private readonly halfWidth: number;
   private readonly halfHeight: number;
+  /** Where the field's centre sits in the world; see HeightField.originX. */
+  private readonly originX: number;
+  private readonly originY: number;
 
   /** The direction the field was last built for, or null before the first build. */
   private builtFor: number | null = null;
@@ -132,6 +135,8 @@ export class ShelterField {
     this.cell = cell;
     this.halfWidth = field.halfWidth;
     this.halfHeight = field.halfHeight;
+    this.originX = field.originX;
+    this.originY = field.originY;
 
     const n = width * height;
     this.fetch = new Float32Array(n);
@@ -145,9 +150,9 @@ export class ShelterField {
     // a bilinear interpolation inside the hot loop to recover numbers that were
     // already exact at the cell centres.
     for (let row = 0; row < height; row++) {
-      const y = this.halfHeight - (row + 0.5) * cell;
+      const y = this.originY + this.halfHeight - (row + 0.5) * cell;
       for (let col = 0; col < width; col++) {
-        const x = -this.halfWidth + (col + 0.5) * cell;
+        const x = this.originX - this.halfWidth + (col + 0.5) * cell;
         const e = field.elevationAt(x, y);
         const i = row * width + col;
         this.land[i] = e > 0 ? 1 : 0;
@@ -388,8 +393,8 @@ export class ShelterField {
    * a wave height.
    */
   shelterInputAt(x: number, y: number): number {
-    const gx = (x + this.halfWidth) / this.cell - 0.5;
-    const gy = (this.halfHeight - y) / this.cell - 0.5;
+    const gx = (x - this.originX + this.halfWidth) / this.cell - 0.5;
+    const gy = (this.halfHeight - (y - this.originY)) / this.cell - 0.5;
     const x0 = Math.floor(gx);
     const y0 = Math.floor(gy);
     const fx = gx - x0;
@@ -419,8 +424,8 @@ export class ShelterField {
    * across, and the boat crossing it would feel the breeze arrive in steps.
    */
   private sample(data: Float32Array, x: number, y: number): number {
-    const gx = (x + this.halfWidth) / this.cell - 0.5;
-    const gy = (this.halfHeight - y) / this.cell - 0.5;
+    const gx = (x - this.originX + this.halfWidth) / this.cell - 0.5;
+    const gy = (this.halfHeight - (y - this.originY)) / this.cell - 0.5;
     const x0 = Math.floor(gx);
     const y0 = Math.floor(gy);
     const fx = gx - x0;
