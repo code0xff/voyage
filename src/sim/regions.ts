@@ -1,4 +1,5 @@
 import { DEG } from './math';
+import { COAST_ID, COAST_NAME } from './coast';
 
 /**
  * Regions: bounded pieces of a real coast, sailed freely.
@@ -531,6 +532,11 @@ export const rasterBytes = (r: Region): number => r.grid.width * r.grid.height *
  * would be the logbook forgetting where someone went.
  */
 export function placeName(id: string, venueName: (id: string) => string | null): string {
+  // The generated coast is not in REGIONS -- it has no raster to ship -- but a
+  // passage sailed along one was not sailed on the open ocean, and the logbook
+  // reads its venue field through here. Imported from `coast.ts` rather than
+  // restated; the cycle is type-only in the other direction, so it is safe.
+  if (id === COAST_ID) return COAST_NAME;
   return regionByStoredId(id)?.name ?? venueName(id) ?? 'Open ocean';
 }
 
