@@ -813,48 +813,27 @@ export function MenuDialog({
               <span className="text-[11px] text-muted-foreground">
                 {t(WORLD.cruise)}
               </span>
-              {/* Both states on show, radio-fashion, rather than one button
-                  whose label is the state: a lone "Off" reads as a caption as
-                  easily as a control, and the first question a toggle has to
-                  answer -- what else could this be? -- is answered by simply
-                  showing the alternative. */}
-              <div
-                role="radiogroup"
-                aria-label={t(WORLD.cruise)}
-                className="flex gap-2"
-                // The other half of claiming role="radio": one tab stop for
-                // the group (the selected option), arrows to move within it.
-                // Two buttons that were each a tab stop and deaf to arrows
-                // wore the role without the behaviour, which is worse for a
-                // screen-reader user than two plain buttons -- the announced
-                // contract is the one that does not hold.
-                onKeyDown={(e) => {
-                  if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
-                    e.preventDefault();
-                    const next = !settings.cruise;
-                    set("cruise", next);
-                    // Focus rides with the selection -- the radio contract --
-                    // rather than staying on a button that just became
-                    // untabbable.
-                    const radios = e.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]');
-                    radios[next ? 1 : 0]?.focus();
-                  }
-                }}
+              {/* Both states on show rather than one button whose label is
+                  the state: a lone "Off" reads as a caption as easily as a
+                  control. The same Tabs primitive as the World/Conditions
+                  switch above, on request -- a mode is a place the session
+                  is in, and the two switches should feel like one family.
+                  It also retires a hand-rolled radiogroup: Radix carries the
+                  keyboard contract (one tab stop, arrows move, focus rides
+                  the selection) that the first draft half-implemented. */}
+              <Tabs
+                value={settings.cruise ? "on" : "off"}
+                onValueChange={(v) => set("cruise", v === "on")}
               >
-                {([false, true] as const).map((on) => (
-                  <Button
-                    key={String(on)}
-                    role="radio"
-                    aria-checked={settings.cruise === on}
-                    tabIndex={settings.cruise === on ? 0 : -1}
-                    variant={settings.cruise === on ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => set("cruise", on)}
-                  >
-                    {t(on ? WORLD.cruiseOn : WORLD.cruiseOff)}
-                  </Button>
-                ))}
-              </div>
+                <TabsList className="w-full">
+                  <TabsTrigger value="off" className={TAB_TRIGGER}>
+                    {t(WORLD.cruiseOff)}
+                  </TabsTrigger>
+                  <TabsTrigger value="on" className={TAB_TRIGGER}>
+                    {t(WORLD.cruiseOn)}
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
             {/* Below the row, full width, like every other note on this tab --
                 beside the buttons it was squeezed into a sliver and read as
