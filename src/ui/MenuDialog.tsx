@@ -40,6 +40,7 @@ import {
   WORLD,
 } from "./strings";
 import {
+  withCoast,
   withRegion,
   withVenue,
   withoutRegion,
@@ -48,6 +49,7 @@ import {
 } from "@/settings";
 import { VENUES, venueById } from "@/sim/venues";
 import { REGIONS, placeName, regionById } from "@/sim/regions";
+import { COAST_ID, COAST_NAME } from "@/sim/coast";
 import { Logbook } from "./Logbook";
 import { SailingGuide } from "./SailingGuide";
 import { Credits } from "./Credits";
@@ -505,7 +507,12 @@ export function MenuDialog({
                       own land, so reading "open sea" off that field alone
                       announced San Francisco as an empty ocean. */}
                   {settings.region
-                    ? (regionById(settings.region)?.name ?? t(MENU.openSea))
+                    ? // The lookup does not know the generated coast, and the
+                      // fallback announced it as the open sea -- the same
+                      // mislabelling the comment above records for venues.
+                      settings.region === COAST_ID
+                      ? COAST_NAME
+                      : (regionById(settings.region)?.name ?? t(MENU.openSea))
                     : settings.venue
                       ? (venueById(settings.venue)?.name ?? t(MENU.openSea))
                       : settings.islandCount === 0
@@ -677,10 +684,19 @@ export function MenuDialog({
               <Select
                 value={
                   settings.region
-                    ? `region:${settings.region}`
+                    ? settings.region === COAST_ID
+                      ? COAST_ID
+                      : `region:${settings.region}`
                     : settings.venue || "open"
                 }
                 onValueChange={(v) => {
+                  // Before the venue fallthrough: an unprefixed value it does
+                  // not recognise clears the world, which is exactly what must
+                  // not happen to a coast someone just picked.
+                  if (v === COAST_ID) {
+                    onSettings(withCoast(settings));
+                    return;
+                  }
                   if (v.startsWith("region:")) {
                     const region = regionById(v.slice(7));
                     if (region) onSettings(withRegion(settings, region));
@@ -704,6 +720,12 @@ export function MenuDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="open">{t(WORLD.openOcean)}</SelectItem>
+                  {/* Beside the open ocean rather than among the surveyed
+                      places: both are procedural, and the tag carries the
+                      claim about how true the land is. */}
+                  <SelectItem value={COAST_ID}>
+                    {COAST_NAME} — {t(WORLD.generatedTag)}
+                  </SelectItem>
                   {REGIONS.map((r) => (
                     <SelectItem key={r.id} value={`region:${r.id}`}>
                       {r.name} — {t(WORLD.surveyedTag)}
@@ -717,7 +739,18 @@ export function MenuDialog({
                 </SelectContent>
               </Select>
             </div>
-            {settings.region ? (
+            {settings.region === COAST_ID ? (
+              // Its own paragraph, not the surveyed one: the lead under a
+              // surveyed region says the soundings are real, and saying that
+              // over noise would be the exact mislabelling the region docblock
+              // warns against. No load notice either -- nothing is fetched.
+              <p className="text-[10px] leading-relaxed text-muted-foreground">
+                {t(WORLD.coastBrief)}
+                <br />
+                <span className="text-info">{t(WORLD.generatedLead)}</span>{" "}
+                {t(WORLD.generatedBody)}
+              </p>
+            ) : settings.region ? (
               <>
                 <p className="text-[10px] leading-relaxed text-muted-foreground">
                   {REGION_BRIEF[settings.region]
@@ -755,7 +788,7 @@ export function MenuDialog({
             )}
             <div className="grid grid-cols-[104px_1fr] items-center gap-3">
               <span className="text-[11px] text-muted-foreground">
-                {t(settings.region ? WORLD.seedRegion : WORLD.seed)}
+                {t(settings.region && settings.region !== COAST_ID ? WORLD.seedRegion : WORLD.seed)}
               </span>
               <div className="flex gap-2">
                 <input

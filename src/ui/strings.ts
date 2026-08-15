@@ -557,6 +557,22 @@ export const WORLD: Record<string, Phrase> = {
   },
   surveyedTag: { en: 'surveyed', ko: '실측' },
   sketchTag: { en: 'sketch', ko: '스케치' },
+  /**
+   * The generated coast's tag and its explanation. The lead is set apart the
+   * way the surveyed and sketch leads are, because these tags are claims about
+   * how true the land is and this one has to be as plain as the others: nobody
+   * surveyed this, and every seed is a different shore.
+   */
+  generatedTag: { en: 'generated', ko: '생성' },
+  coastBrief: {
+    en: 'A mainland running past the horizon: bays, headlands and islets drawn from the seed below.',
+    ko: '수평선 너머로 이어지는 본토 해안입니다. 아래 시드에서 만과 곶, 앞바다의 작은 섬들이 그려집니다.',
+  },
+  generatedLead: { en: 'Generated.', ko: '생성된 지형.' },
+  generatedBody: {
+    en: 'No chart has this coast: it is drawn from the seed, and a new seed is a new shore. The wind, sea and tide stay on your sliders.',
+    ko: '이 해안은 어떤 해도에도 없습니다. 시드에서 그려지며, 시드가 바뀌면 다른 해안이 됩니다. 바람·파도·조류는 아래 슬라이더 그대로입니다.',
+  },
   surveyedLead: { en: 'Surveyed.', ko: '실측 데이터.' },
   surveyedBody: { en: 'The coastline and the depths are', ko: '해안선과 수심의 출처는' },
   surveyedCaveat: {
