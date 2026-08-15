@@ -575,6 +575,52 @@ describe('engine', () => {
     }
   });
 
+  /**
+   * The generated coast is a region that is computed instead of fetched, and
+   * the wiring is the half its own tests cannot see: that picking the id
+   * builds a world at all, that it is ready synchronously with no loader in
+   * flight, and that the boat spawns in the water the generator promised.
+   */
+  it('builds a generated coast without fetching anything', () => {
+    const engine = createEngine(canvas(), settings({ region: 'coast', randomWorld: false, seed: 546 }));
+    expect(engine.snapshot.regionStatus).toBe('ready');
+    expect(engine.snapshot.region?.region.id).toBe('coast');
+    expect(regionLoad).not.toHaveBeenCalled();
+    engine.advance(2);
+    // The spawn clearing, felt through the whole stack: the depth the hull
+    // reads is the generator's water, not Infinity and not a shoal.
+    expect(engine.snapshot.depth).toBeGreaterThan(10);
+    expect(Number.isFinite(engine.snapshot.depth)).toBe(true);
+    engine.dispose();
+  });
+
+  /**
+   * A rolled seed is a new coast and a pinned one is the same coast. The
+   * region id cannot carry that distinction -- every generated coast is
+   * 'coast' -- which is exactly the cache bug this pins: keyed on the id
+   * alone, every session of a random world would serve the first session's
+   * shore.
+   */
+  it('rolls a new coast with the world, and keeps a pinned one', () => {
+    const pinned = createEngine(canvas(), settings({ region: 'coast', randomWorld: false, seed: 546 }));
+    const before = pinned.snapshot.region;
+    pinned.putToSea();
+    expect(pinned.snapshot.region).toBe(before);
+    pinned.dispose();
+
+    const rolled = createEngine(canvas(), settings({ region: 'coast', randomWorld: true, seed: 546 }));
+    const first = rolled.snapshot.region;
+    rolled.putToSea();
+    expect(rolled.snapshot.region).not.toBe(first);
+    expect(rolled.snapshot.region?.region.id).toBe('coast');
+    // Identity alone cannot tell a fresh coast from the old one regenerated --
+    // a review built a mutation that rebuilt from the stale seed every session
+    // and passed. The region records the seed it was generated from in its own
+    // provenance string, so the two shores can be told apart by name.
+    expect(rolled.snapshot.region?.region.source).not.toBe(first?.region.source);
+    rolled.dispose();
+  });
+
   it('waits for a surveyed region before allowing a new session', async () => {
     const pending = deferred<RegionTerrain>();
     regionLoad.mockReturnValue(pending.promise);

@@ -7,6 +7,7 @@ import { TIDE_PERIOD } from './sim/current';
 import { venueById, type Venue } from './sim/venues';
 import { detectLang, type Lang } from './i18n';
 import { regionById, type Region } from './sim/regions';
+import { COAST_ID } from './sim/coast';
 
 /**
  * Player settings, persisted to localStorage.
@@ -179,9 +180,11 @@ export function loadSettings(): Settings {
       venue: typeof o.venue === 'string' && venueById(o.venue) ? o.venue : DEFAULT_SETTINGS.venue,
       // Checked against the list for the same reason as the venue: a stored id
       // for a region that no longer ships must not strand the player in a world
-      // with no land the engine can load.
+      // with no land the engine can load. The generated coast is the one id
+      // that is not on the list and still always buildable -- it needs no file,
+      // only the seed stored two lines down.
       region:
-        typeof o.region === 'string' && regionById(o.region)
+        typeof o.region === 'string' && (regionById(o.region) || o.region === COAST_ID)
           ? o.region
           : DEFAULT_SETTINGS.region,
       seed: Math.round(num(o.seed, DEFAULT_SETTINGS.seed, 1, 2 ** 31)),
@@ -275,6 +278,22 @@ export function withRegion(s: Settings, r: Region): Settings {
 
 /** Leaving a region for the open ocean. Conditions stay as they were left. */
 export const withoutRegion = (s: Settings): Settings => ({ ...s, region: '' });
+
+/**
+ * Picking the generated coast.
+ *
+ * Unlike `withRegion` it writes no conditions, because there are none to
+ * write: a surveyed place brings the weather its land was laid out around,
+ * and a generated coast has no such claim to make. The sliders stay exactly
+ * where the player left them, as they do on the open ocean. The island slider
+ * stands down the same way, the coast being its own land.
+ */
+export const withCoast = (s: Settings): Settings => ({
+  ...s,
+  region: COAST_ID,
+  venue: '',
+  islandCount: 0,
+});
 
 /**
  * The gap between sightings the fields want, as a multiple of their tuned

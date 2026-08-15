@@ -13,10 +13,11 @@ import { WindField } from './sim/wind';
 import { CurrentField, DEFAULT_FULL_DEPTH, tideRate } from './sim/current';
 import { venueById } from './sim/venues';
 import { regionById, type Region } from './sim/regions';
-import type { RegionTerrain } from './sim/region-terrain';
+import { RegionTerrain } from './sim/region-terrain';
 import { loadRegion } from './terrain-load';
 import { passageInfo, type PassageInfo, type PassageRecord } from './sim/passage';
 import { anchorage, type Anchorage } from './sim/anchorage';
+import { COAST_ID, coastHeightField } from './sim/coast';
 import { ManeuverTracker, type Maneuver } from './sim/maneuver';
 import { PassageLog } from './sim/passage';
 import { LogStoreUnavailable, logbook } from './logbook';
@@ -452,6 +453,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    */
   let regionTerrain: RegionTerrain | null = null;
   let wantedRegion = '';
+  /**
+   * Which seed the installed coast was generated from. The region id alone
+   * cannot say: every generated coast is `COAST_ID`, so without this a rolled
+   * seed would be served last session's shore.
+   */
+  let coastSeed = 0;
   /** Prevent a rebuild during one request from starting a second fetch. */
   let loadingRegion = '';
   /**
@@ -509,17 +516,38 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // A surveyed region is the third kind of world, and the only one that has
     // to be fetched. It is installed when it arrives; until then the session
     // stays paused and the menu explains why it cannot yet be sailed.
-    const region = regionById(current.region);
-    wantedRegion = region ? region.id : '';
-    if (!region) {
-      regionTerrain = null;
+    //
+    // The generated coast is the fourth, and it goes through this same gate as
+    // a region that is computed instead of fetched: everything downstream --
+    // the shelter sweep, the field texture, the meshes, the chart -- reads a
+    // RegionTerrain and never asks where its samples came from. Ready
+    // synchronously, since about 130 ms of generation at Put to sea needs no
+    // loading screen. Cached against the seed that built it, not merely against being
+    // a coast: with the seed pinned a settings change must not regenerate the
+    // place, and with it rolled the same id would otherwise serve last
+    // session's shore.
+    if (current.region === COAST_ID) {
+      wantedRegion = COAST_ID;
+      if (regionTerrain?.region.id !== COAST_ID || coastSeed !== current.seed) {
+        const coast = coastHeightField(current.seed);
+        regionTerrain = new RegionTerrain(coast.region, coast.height);
+        coastSeed = current.seed;
+      }
       loadingRegion = '';
-      publishRegionStatus('', 'none');
-    } else if (regionTerrain?.region.id === region.id) {
-      loadingRegion = '';
-      publishRegionStatus(region.id, 'ready');
+      publishRegionStatus(COAST_ID, 'ready');
     } else {
-      requestRegion(region);
+      const region = regionById(current.region);
+      wantedRegion = region ? region.id : '';
+      if (!region) {
+        regionTerrain = null;
+        loadingRegion = '';
+        publishRegionStatus('', 'none');
+      } else if (regionTerrain?.region.id === region.id) {
+        loadingRegion = '';
+        publishRegionStatus(region.id, 'ready');
+      } else {
+        requestRegion(region);
+      }
     }
 
     const up = compassVec(wind.baseTwd);

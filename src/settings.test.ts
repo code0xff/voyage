@@ -105,6 +105,38 @@ describe('binocular power', () => {
 });
 
 /**
+ * The one region id that is not on the shipped list and must still survive a
+ * reload: the generated coast needs no file, only the seed stored beside it.
+ * The validator that protects against stale region ids silently dropped it,
+ * which would have quietly returned every coast sailor to the open ocean each
+ * session.
+ */
+describe('the stored world', () => {
+  it('keeps the generated coast across a reload', () => {
+    localStorage.setItem(
+      'voyage.settings.v2',
+      JSON.stringify({ region: 'coast', seed: 12345 }),
+    );
+    try {
+      const loaded = loadSettings();
+      expect(loaded.region).toBe('coast');
+      expect(loaded.seed).toBe(12345);
+    } finally {
+      localStorage.removeItem('voyage.settings.v2');
+    }
+  });
+
+  it('still drops a region id that no longer ships', () => {
+    localStorage.setItem('voyage.settings.v2', JSON.stringify({ region: 'atlantis' }));
+    try {
+      expect(loadSettings().region).toBe('');
+    } finally {
+      localStorage.removeItem('voyage.settings.v2');
+    }
+  });
+});
+
+/**
  * The wildlife slider's meaning, pinned at its three anchors.
  *
  * The mapping is two arms meeting at the default, and each anchor is a claim
