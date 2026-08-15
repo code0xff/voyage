@@ -222,14 +222,14 @@ export const KEYS: [string, Phrase][] = [
   ['C', { en: 'camera: astern / on deck / overhead', ko: '카메라: 뒤 / 갑판 / 위' }],
   ['0', { en: 'hand all sail / set again', ko: '돛 전부 거두기 / 다시 펴기' }],
   ['A', { en: 'let go / weigh anchor', ko: '닻 내리기 / 올리기' }],
-  ['N / wheel on chart', { en: 'chart range', ko: '차트 축척' }],
+  ['N / wheel / pinch on chart', { en: 'chart range', ko: '차트 축척' }],
   ['drag chart', { en: 'look around it', ko: '차트 둘러보기' }],
   ['click chart', { en: 'set where you are bound', ko: '목적지 정하기' }],
   ['drag', { en: 'orbit around the boat', ko: '배 주위로 시점 돌리기' }],
   // Not "zoom": it moves the eye nearer or further, and B is the thing that
   // actually magnifies. Calling both zoom is why one gets mistaken for the other.
   [
-    'wheel elsewhere',
+    'wheel / pinch elsewhere',
     { en: 'eye closer / further out — or the power, through the glasses', ko: '시점 거리 조절 — 쌍안경 중에는 배율' },
   ],
   ['double-click', { en: 'recentre astern', ko: '선미 뒤로 시점 복귀' }],
@@ -238,7 +238,7 @@ export const KEYS: [string, Phrase][] = [
   ['M', { en: 'sound', ko: '소리' }],
   ['K', { en: 'photograph the sea', ko: '바다 사진 찍기' }],
   ['L', { en: 'navigation lights', ko: '항해등' }],
-  ['B', { en: 'binoculars — wheel sets the power', ko: '쌍안경 — 휠로 배율 조절' }],
+  ['B', { en: 'binoculars — wheel or pinch sets the power', ko: '쌍안경 — 휠이나 핀치로 배율 조절' }],
   ['Esc', { en: 'this menu', ko: '이 메뉴' }],
 ];
 
@@ -524,8 +524,8 @@ export const CHART: Record<string, Phrase> = {
   openFull: { en: 'Open the full chart', ko: '전체 차트 열기' },
   closeFull: { en: 'Close the full chart', ko: '전체 차트 닫기' },
   hint: {
-    en: 'Click to set where you are bound · drag to look around · double-click to recentre · right-click to clear · wheel or N for range',
-    ko: '클릭해 목적지 정하기 · 드래그로 둘러보기 · 더블클릭으로 중앙 복귀 · 우클릭으로 해제 · 휠 또는 N으로 축척',
+    en: 'Click to set where you are bound · drag to look around · double-click to recentre · right-click to clear · wheel, pinch or N for range',
+    ko: '클릭해 목적지 정하기 · 드래그로 둘러보기 · 더블클릭으로 중앙 복귀 · 우클릭으로 해제 · 휠·핀치 또는 N으로 축척',
   },
 };
 

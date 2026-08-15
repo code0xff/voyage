@@ -34,7 +34,7 @@ export interface OrbitControl {
   setWheelTarget(target: 'distance' | 'magnify'): void;
   /** Restore a stored power, so the glasses open where they were last left. */
   setMagnify(power: number): void;
-  /** True while the eye is being dragged, so the scene can stop smoothing it. */
+  /** True while the eye is dragged or pinched, so the scene can stop smoothing it. */
   readonly dragging: boolean;
   /**
    * Change what `pitch` is allowed to be, and pull the current value into it.
@@ -124,6 +124,35 @@ export function dragTo(
   return { yaw: yaw + dx * YAW_PER_PX, pitch: pitch + dy * PITCH_PER_PX };
 }
 
+/**
+ * What a pinch does to the wheel's target, before any limits are applied.
+ *
+ * `ratio` is the gap between the two fingers now over what it was at the last
+ * move. One rule: **the scene follows the fingers.** Spread them and it grows,
+ * which is a shorter eye distance or more binocular power -- the same hand
+ * meaning that the wheel encodes, and encoded oppositely by the two numbers
+ * for the same reason the wheel inverts them (see onWheel).
+ *
+ * A ratio rather than a difference, so the gesture composes: two small
+ * spreads land where one big one does, and doubling the gap means the same
+ * fraction of the range at any zoom. It also makes the mapping literal for
+ * the distance target -- fingers twice as far apart, scene twice as large --
+ * which is what every photo viewer has taught the hand to expect.
+ *
+ * Separated from the pointer handling for the same reason as `dragTo`: it is
+ * two signs, and signs are what this project gets wrong. See eye.test.ts.
+ */
+export function pinchTo(
+  zoom: number,
+  magnify: number,
+  ratio: number,
+  target: 'distance' | 'magnify',
+): { zoom: number; magnify: number } {
+  return target === 'magnify'
+    ? { zoom, magnify: magnify * ratio }
+    : { zoom: zoom / ratio, magnify };
+}
+
 export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
   let yaw = 0;
   let pitch = DEFAULT_PITCH;
@@ -135,22 +164,60 @@ export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
   let magnify = DEFAULT_MAGNIFY;
   let wheelTarget: 'distance' | 'magnify' = 'distance';
 
-  let dragging = -1; // pointerId, or -1
+  /** Every pointer currently down on the canvas, by id. Two of them is a pinch. */
+  const pointers = new Map<number, { x: number; y: number }>();
+  let dragging = -1; // pointerId of the one-finger look-around, or -1
   let lastX = 0;
   let lastY = 0;
+  /** Gap between the two fingers at the last pinch move, px. */
+  let pinchSpan = 0;
+
+  const span = () => {
+    const [a, b] = [...pointers.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
 
   const onDown = (e: PointerEvent) => {
-    if (dragging !== -1 || (e.pointerType === 'mouse' && e.button !== 0)) return;
-    dragging = e.pointerId;
-    lastX = e.clientX;
-    lastY = e.clientY;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    // A third finger has no meaning here, and folding it into the pair would
+    // jolt the span. Ignored entirely rather than tracked and unused.
+    if (pointers.size >= 2) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     canvas.setPointerCapture(e.pointerId);
-    canvas.style.cursor = 'grabbing';
+    if (pointers.size === 1) {
+      dragging = e.pointerId;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      canvas.style.cursor = 'grabbing';
+    } else {
+      // A second finger turns the drag into a pinch. The look-around stops:
+      // two fingers move for the gap between them, not to steer the eye, and
+      // letting the first finger keep steering would swing the view with
+      // every pinch.
+      dragging = -1;
+      pinchSpan = span();
+    }
     // Stops the drag turning into a text selection over the UI panels.
     e.preventDefault();
   };
 
   const onMove = (e: PointerEvent) => {
+    const p = pointers.get(e.pointerId);
+    if (!p) return;
+    p.x = e.clientX;
+    p.y = e.clientY;
+    if (pointers.size === 2) {
+      const d = span();
+      // Both guards are the degenerate pinch: fingers landing or crossing on
+      // the same point, where a ratio is 0/0 and means nothing.
+      if (pinchSpan > 0 && d > 0) {
+        const next = pinchTo(zoom, magnify, d / pinchSpan, wheelTarget);
+        zoom = clamp(next.zoom, MIN_ZOOM, MAX_ZOOM);
+        magnify = clamp(next.magnify, MIN_MAGNIFY, MAX_MAGNIFY);
+      }
+      pinchSpan = d;
+      return;
+    }
     if (e.pointerId !== dragging) return;
     const dx = e.clientX - lastX;
     const dy = e.clientY - lastY;
@@ -164,10 +231,34 @@ export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
   };
 
   const endDrag = (e: PointerEvent) => {
-    if (e.pointerId !== dragging) return;
-    dragging = -1;
+    if (!pointers.delete(e.pointerId)) return;
     if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
-    canvas.style.cursor = 'grab';
+    const rest = [...pointers.entries()];
+    if (rest.length === 1) {
+      // The pinch is over but a finger is still down: it goes back to
+      // steering, re-anchored where it now is so the view does not jump by
+      // the distance it travelled while it was half of the pinch.
+      const [id, p] = rest[0];
+      dragging = id;
+      lastX = p.x;
+      lastY = p.y;
+    } else {
+      dragging = -1;
+      canvas.style.cursor = 'grab';
+    }
+  };
+
+  const onCancel = (e: PointerEvent) => {
+    if (!pointers.delete(e.pointerId)) return;
+    if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+    // Unlike endDrag, nothing is promoted to steering here. A cancel is the
+    // browser taking the gesture -- a system edge swipe, the page losing the
+    // pointers -- not a finger choosing to lift, and a camera that starts
+    // turning under a finger the user thinks the browser owns is worse than
+    // one that waits for a fresh touch. A survivor of a half-cancelled pinch
+    // stays tracked but strands until it goes down again.
+    dragging = -1;
+    if (pointers.size === 0) canvas.style.cursor = 'grab';
   };
 
   const onWheel = (e: WheelEvent) => {
@@ -205,7 +296,7 @@ export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
   canvas.addEventListener('pointerdown', onDown);
   canvas.addEventListener('pointermove', onMove);
   canvas.addEventListener('pointerup', endDrag);
-  canvas.addEventListener('pointercancel', endDrag);
+  canvas.addEventListener('pointercancel', onCancel);
   canvas.addEventListener('wheel', onWheel, { passive: false });
   canvas.addEventListener('dblclick', onDouble);
 
@@ -232,7 +323,9 @@ export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
       magnify = clamp(power, MIN_MAGNIFY, MAX_MAGNIFY);
     },
     get dragging() {
-      return dragging !== -1;
+      // A pinch counts: the fingers are placing the eye's distance, and the
+      // smoothing that steadies an idle camera would read as lag under them.
+      return dragging !== -1 || pointers.size === 2;
     },
     setPitchLimits(min, max, rest) {
       minPitch = min;
@@ -245,10 +338,19 @@ export function createOrbit(canvas: HTMLCanvasElement): OrbitControl {
     },
     reset: onDouble,
     dispose() {
+      // Captures outlive listeners: a finger still down when the scene is
+      // torn down would hold the canvas captured with nobody left listening,
+      // and a canvas that is reused would start its next life deaf to that
+      // pointer until the browser got around to an implicit release.
+      for (const id of pointers.keys()) {
+        if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+      }
+      pointers.clear();
+      dragging = -1;
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', endDrag);
-      canvas.removeEventListener('pointercancel', endDrag);
+      canvas.removeEventListener('pointercancel', onCancel);
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('dblclick', onDouble);
       canvas.style.cursor = '';

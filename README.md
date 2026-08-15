@@ -726,13 +726,13 @@ writes itself into the logbook.
 | `C` | camera: astern / on deck / overhead |
 | `0` | hand all sail, or set it again |
 | `A` | let go the anchor, or weigh it |
-| `B` | binoculars — the wheel sets the power, and it is remembered |
+| `B` | binoculars — the wheel or a pinch sets the power, and it is remembered |
 | `N` | chart range |
-| wheel over the chart | chart range |
+| wheel or pinch over the chart | chart range |
 | drag the chart | look around it; double-click recentres on the boat |
 | click the chart | set where you are bound; right-click clears it |
 | drag | look around — the eye follows your hand, as in a first-person view |
-| wheel anywhere else | the eye closer in or further out — or the power, through the glasses |
+| wheel or pinch anywhere else | the eye closer in or further out — or the power, through the glasses |
 | double-click | recentre the view astern |
 | `P` | recompute polar |
 | `R` | restart |

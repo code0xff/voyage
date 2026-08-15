@@ -41,6 +41,49 @@ import { token } from '../ui/tokens';
  */
 export const RANGES = [300, 700, 1200, 2500, 5000] as const;
 
+/**
+ * How far a pinch must travel to earn one range step, as a finger-gap ratio.
+ *
+ * The scales above sit roughly a factor of two apart, so at two the sea under
+ * the fingers would keep exactly the scale the hand asked for. Set a little
+ * under that, so a full confident pinch reliably lands its second step instead
+ * of stalling just short of it.
+ */
+const PINCH_STEP = 1.8;
+
+/**
+ * Fold one pinch movement into the running gesture, and say what it earned.
+ *
+ * The ranges are discrete, so a pinch cannot scale the chart the way it
+ * scales the orbit camera; it accumulates until it has earned a step, the
+ * same shape as the wheel accumulator in MinimapCard. `acc` is the gap ratio
+ * built up since the last step (1 at rest); `ratio` is this movement's finger
+ * gap over the last one. Returns the new accumulator and how many RANGES
+ * indices to move: negative when the fingers spread, because spreading means
+ * a closer look and a closer look is a smaller range -- the sign the chart
+ * already shares with the wheel.
+ *
+ * A reversal is a new gesture, not a continuation of the last one -- also the
+ * wheel's rule, in multiplicative form.
+ *
+ * Pure and exported for the same reason as `dragTo` in orbit.ts: the
+ * direction is a sign convention, and signs are what this project gets wrong.
+ */
+export function chartPinch(acc: number, ratio: number): { acc: number; step: number } {
+  if ((acc - 1) * (ratio - 1) < 0) acc = 1;
+  let a = acc * ratio;
+  let step = 0;
+  while (a >= PINCH_STEP) {
+    a /= PINCH_STEP;
+    step -= 1;
+  }
+  while (a * PINCH_STEP <= 1) {
+    a *= PINCH_STEP;
+    step += 1;
+  }
+  return { acc: a, step };
+}
+
 /** Grid spacing at each range, m. Something to count, so distance is readable. */
 const GRID = [100, 200, 500] as const;
 

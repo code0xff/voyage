@@ -3,6 +3,7 @@ import {
   ISLAND_DRAW_REACH,
   RANGES,
   chartCentre,
+  chartPinch,
   clampChartCentre,
   maxChartOffset,
 } from './minimap';
@@ -188,5 +189,61 @@ describe('chart ranges', () => {
     const feelable = new Set(field.active(0, 0, 0));
     const missed = inFrame.filter((isl) => !feelable.has(isl));
     expect(missed.length).toBeGreaterThan(inFrame.length * 0.5);
+  });
+});
+
+/**
+ * The pinch against the ranges. A convention again, and the same one twice
+ * over: which way the chart scales when the fingers spread, and that a
+ * gesture must *earn* its steps rather than spraying them -- the ranges are
+ * discrete, and a pinch that stepped on every pointer event would run the
+ * whole ladder in a frame, which is the failure the wheel accumulator in
+ * MinimapCard already guards against.
+ *
+ * Driven the way the pointer stream drives it: as a run of small ratios, not
+ * one clean number per test.
+ */
+describe('pinching the chart', () => {
+  /** Feed a total gap change through in `n` even multiplicative slices. */
+  const gesture = (total: number, n = 20, acc = 1): { acc: number; steps: number } => {
+    let steps = 0;
+    for (let i = 0; i < n; i++) {
+      const r = chartPinch(acc, Math.pow(total, 1 / n));
+      acc = r.acc;
+      steps += r.step;
+    }
+    return { acc, steps };
+  };
+
+  it('spreading the fingers narrows the range -- a closer look', () => {
+    expect(gesture(2.5).steps).toBeLessThan(0);
+  });
+
+  it('closing them widens it', () => {
+    expect(gesture(1 / 2.5).steps).toBeGreaterThan(0);
+  });
+
+  it('a jitter earns nothing', () => {
+    expect(gesture(1.1).steps).toBe(0);
+  });
+
+  it('one wide pinch earns more than one step', () => {
+    expect(gesture(4).steps).toBeLessThanOrEqual(-2);
+    // Even delivered as one event -- a fast pinch can double between frames,
+    // and a single-step return would swallow the rest of it. Both directions,
+    // because the two loops in chartPinch are separate code and only one of
+    // them being capped would pass a spread-only assertion.
+    expect(chartPinch(1, 4).step).toBeLessThanOrEqual(-2);
+    expect(chartPinch(1, 1 / 4).step).toBeGreaterThanOrEqual(2);
+  });
+
+  it('a reversal starts a new gesture, forfeiting the travel so far', () => {
+    // Spread almost to a step, then close. If the reversal kept the spread's
+    // credit, the close would have to pay it back before earning anything;
+    // instead it starts from rest and earns its own step on its own travel.
+    const spread = gesture(1.7);
+    expect(spread.steps).toBe(0);
+    const closed = gesture(1 / 1.9, 20, spread.acc);
+    expect(closed.steps).toBe(1);
   });
 });

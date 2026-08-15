@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { chaseEyePosition, chaseTarget, deckOrientation } from './eye';
-import { dragTo } from './orbit';
+import { dragTo, pinchTo } from './orbit';
 
 /**
  * A renderer test, which this repository does not otherwise have.
@@ -130,5 +130,47 @@ describe('the eye follows the hand', () => {
       expect(Math.sign(a.x)).toBe(Math.sign(b.x));
       expect(Math.sign(a.y)).toBe(Math.sign(b.y));
     }
+  });
+});
+
+/**
+ * The same kind of claim for the other gesture: two signs, one per wheel
+ * target, and the pair must disagree -- the hand means "more of what I am
+ * looking at" both times, and the two numbers encode that oppositely (a
+ * shorter eye distance, a higher power). A pinch that moved them the same
+ * way would zoom one view and un-zoom the other.
+ */
+describe('the scene follows the fingers', () => {
+  it('spreading them brings the boat closer -- a shorter eye distance', () => {
+    const next = pinchTo(1, 5, 1.5, 'distance');
+    expect(next.zoom).toBeLessThan(1);
+    expect(next.magnify).toBe(5);
+  });
+
+  it('closing them pushes it away', () => {
+    const next = pinchTo(1, 5, 0.6, 'distance');
+    expect(next.zoom).toBeGreaterThan(1);
+  });
+
+  it('spreading them raises the binocular power', () => {
+    const next = pinchTo(1, 5, 1.5, 'magnify');
+    expect(next.magnify).toBeGreaterThan(5);
+    expect(next.zoom).toBe(1);
+  });
+
+  it('composes: many small spreads land where one big one does', () => {
+    // The pointer stream delivers a pinch as dozens of tiny ratios; if they
+    // did not compose, the zoom would depend on the event rate. Both targets,
+    // because an additive magnify would pass every sign test above and still
+    // give a different power for the same gesture at different event rates.
+    let zoom = 1;
+    let power = 5;
+    for (let i = 0; i < 10; i++) {
+      const k = Math.pow(2, 1 / 10);
+      zoom = pinchTo(zoom, 5, k, 'distance').zoom;
+      power = pinchTo(1, power, k, 'magnify').magnify;
+    }
+    expect(zoom).toBeCloseTo(pinchTo(1, 5, 2, 'distance').zoom, 10);
+    expect(power).toBeCloseTo(pinchTo(1, 5, 2, 'magnify').magnify, 10);
   });
 });

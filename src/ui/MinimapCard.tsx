@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp, Crosshair, Maximize2, X } from 'lucide-react';
-import { RANGES, createMinimap } from '@/view/minimap';
+import { RANGES, chartPinch, createMinimap } from '@/view/minimap';
 import { CRUISER } from '@/sim/config';
 import { formatDistance } from '@/sim/units';
 import type { Vec2 } from '@/sim/math';
@@ -184,14 +184,64 @@ export function MinimapCard({
     setRange((r) => Math.min(Math.max(r + dir, 0), RANGES.length - 1));
   }, []);
 
-  /** Where the press started, in screen px, and where the chart was then. */
-  const drag = useRef<{ px: number; py: number; from: Vec2; moved: boolean } | null>(null);
+  /**
+   * The press that owns the pan or click: which pointer it is, where it
+   * started in screen px, and where the chart was then. The id matters --
+   * without it, any pointer's moves would steer whatever drag is in flight,
+   * which is exactly what a stray third finger did.
+   */
+  const drag = useRef<{ id: number; px: number; py: number; from: Vec2; moved: boolean } | null>(
+    null,
+  );
+
+  /**
+   * The fingers on the chart, and the pinch they make when there are two.
+   *
+   * `span` is the gap between them at the last move (0 while not pinching),
+   * `acc` the ratio the gesture has built towards its next step -- the rule
+   * itself is `chartPinch` in minimap.ts, where it can be tested. A mouse
+   * alone never makes a pair; a touch landing beside a held mouse button
+   * does, and is treated like any other pair -- one rule for every pointer
+   * beats a type check nobody's hand can feel.
+   */
+  const pinch = useRef({ pts: new Map<number, { x: number; y: number }>(), span: 0, acc: 1 });
+
+  /*
+   * The fullscreen transition replaces the canvas node -- the component's root
+   * element changes from Card to a backdrop div, and React rebuilds the
+   * subtree under it -- while these refs, living on the component, survive. A
+   * pointer captured by the old node can never deliver another event to the
+   * new one, so a finger that was down across the transition would stay in
+   * the gesture forever: a phantom that pairs with every later press and
+   * turns each of them into a pinch. The moment of replacement is known, so
+   * the gesture dies with the node.
+   */
+  useEffect(() => {
+    pinch.current.pts.clear();
+    pinch.current.span = 0;
+    drag.current = null;
+  }, [full]);
 
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     // Right-click is "clear the destination" and must not begin a drag.
     if (e.button !== 0) return;
+    const g = pinch.current;
+    // A third finger would jolt the span; ignored entirely, as in orbit.ts.
+    if (g.pts.size >= 2) return;
+    g.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     e.currentTarget.setPointerCapture(e.pointerId);
+    if (g.pts.size === 2) {
+      // A second finger turns the pan into a pinch, and the press it grew out
+      // of must not survive as a click -- two fingers are asking for a scale,
+      // not ordering the boat anywhere.
+      drag.current = null;
+      const [a, b] = [...g.pts.values()];
+      g.span = Math.hypot(a.x - b.x, a.y - b.y);
+      g.acc = 1;
+      return;
+    }
     drag.current = {
+      id: e.pointerId,
       px: e.clientX,
       py: e.clientY,
       from: pan.current ?? minimap.current.centre(),
@@ -201,8 +251,29 @@ export function MinimapCard({
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
+      const g = pinch.current;
+      const p = g.pts.get(e.pointerId);
+      if (p) {
+        p.x = e.clientX;
+        p.y = e.clientY;
+      }
+      if (g.pts.size === 2) {
+        if (!p) return;
+        const [a, b] = [...g.pts.values()];
+        const d2 = Math.hypot(a.x - b.x, a.y - b.y);
+        // Zero on either side is the degenerate pinch -- fingers on one point.
+        if (g.span > 0 && d2 > 0) {
+          const r = chartPinch(g.acc, d2 / g.span);
+          g.acc = r.acc;
+          if (r.step !== 0) {
+            setRange((cur) => Math.min(Math.max(cur + r.step, 0), RANGES.length - 1));
+          }
+        }
+        g.span = d2;
+        return;
+      }
       const d = drag.current;
-      if (!d) return;
+      if (!d || d.id !== e.pointerId) return;
       const dx = e.clientX - d.px;
       const dy = e.clientY - d.py;
       if (!d.moved && Math.hypot(dx, dy) < DRAG_SLOP) return;
@@ -223,6 +294,26 @@ export function MinimapCard({
 
   const onPointerUp = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
+      const g = pinch.current;
+      // A pointer this never tracked -- a third finger, or one whose gesture
+      // a cancel already tore down -- lifts without consequence: it must not
+      // end, or worse complete as a click, a drag it was never part of.
+      if (!g.pts.delete(e.pointerId)) return;
+      if (g.pts.size === 1) {
+        // The pinch is over but a finger stays down: it resumes as a pan,
+        // anchored where it now is. `moved` starts true so lifting it later
+        // is not read as a click -- it has been part of a gesture already.
+        g.span = 0;
+        const [[id, p]] = [...g.pts.entries()];
+        drag.current = {
+          id,
+          px: p.x,
+          py: p.y,
+          from: pan.current ?? minimap.current.centre(),
+          moved: true,
+        };
+        return;
+      }
       const d = drag.current;
       drag.current = null;
       if (!d || d.moved) return;
@@ -347,8 +438,8 @@ export function MinimapCard({
         </div>
       </div>
       {/*
-        Click sets where she is bound; drag moves the chart; the wheel or N
-        changes the range. The click used to cycle the range, and that was the
+        Click sets where she is bound; drag moves the chart; the wheel, a
+        pinch or N changes the range. The click used to cycle the range, and that was the
         right binding for a chart you glance at during a race. Pointing at
         somewhere to go is the more valuable thing to do to a chart now -- but
         handing the click over left no mouse-reachable zoom at all, which the
@@ -360,8 +451,15 @@ export function MinimapCard({
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerCancel={() => {
+        onPointerCancel={(e) => {
+          // A cancel is the browser taking the gesture, not a finger choosing
+          // to lift, so nothing is resumed off the back of it: the pan or
+          // pinch in flight dies here. The other finger of a pair stays
+          // tracked, so its own eventual lift is consumed as the tracked
+          // no-op above rather than mistaken for someone else's click.
+          if (!pinch.current.pts.delete(e.pointerId)) return;
           drag.current = null;
+          pinch.current.span = 0;
         }}
         onDoubleClick={recentre}
         onContextMenu={(e) => {
