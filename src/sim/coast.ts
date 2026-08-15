@@ -94,11 +94,32 @@ export function coastRegion(seed: number): Region {
  * haze on the first tack toward it.
  */
 const SHORE_DISTANCE = 3000;
-/** m, how far the big bays and headlands displace that line either way. */
-const SWING = 1200;
-/** m, alongshore wavelength of those bays: a couple per map edge. */
-const SWING_SCALE = 5200;
-/** m, the domain warp that makes the waterline crinkle at every scale. */
+
+/**
+ * The shoreline's displacement, at three scales, because one was the tell.
+ *
+ * The first coast had a single ±1200 m swing at one wavelength, and rendered
+ * top-down it read as exactly what it was: a noise-displaced straight line.
+ * Real coasts are displaced at every scale a chart can show -- gulfs you plan
+ * a day around, bays you stand into, crenellation that makes the waterline
+ * worth following -- so the line now carries three octaves, tuned by
+ * rendering five seeds and looking:
+ *
+ * - **macro**: capes and gulfs, ±3200 m over an 18 km wavelength, with the
+ *   amplitude itself breathing over 40 km so some stretches of a passage are
+ *   bold and others calm rather than every window undulating identically.
+ * - **meso**: the original bays, ±1200 m over 5.2 km.
+ * - **crenellation**: ±380 m over 1.9 km, the raggedness that keeps the
+ *   waterline from reading rounded at chart range.
+ */
+const MACRO_SWING = 3200;
+const MACRO_SCALE = 18000;
+const BREATHE_SCALE = 40000;
+const MESO_SWING = 1200;
+const MESO_SCALE = 5200;
+const CREN_SWING = 380;
+const CREN_SCALE = 1900;
+/** m, the domain warp that makes every contour crinkle at every scale. */
 const WARP = 800;
 const WARP_SCALE = 2600;
 /** Beyond this far inland the ground stops caring about the shore, m. */
@@ -108,13 +129,59 @@ const PEAK = 110;
 /** m, the deepest water; matches the open ocean the region fades into. */
 const FLOOR = 42;
 /**
- * Offshore islets: where a second noise field pokes above this threshold,
- * within a band off the coast, land rises out of open water.
+ * The shelf's width runs on its own noise rather than a constant, because a
+ * constant was the other tell: a shallow-water band of uniform width tracking
+ * the coast like a glow. Real banks are wide in one sound and gone off the
+ * next head, so the ramp to the floor takes between SHELF_MIN and
+ * SHELF_MIN + SHELF_VAR metres, decided by a 9 km field.
  */
-const ISLET_SCALE = 1400;
-const ISLET_THRESHOLD = 0.7;
-/** m, the band off the shoreline where islets may stand. */
-const ISLET_BAND = 3800;
+const SHELF_MIN = 1200;
+const SHELF_VAR = 3200;
+const SHELF_SCALE = 9000;
+
+/**
+ * Islands, two populations instead of one strip of dots.
+ *
+ * The old islets were a single 1.4 km noise thresholded inside a hard band
+ * 3.8 km off the coast: same-sized blobs on a string, and the ocean beyond
+ * them empty forever. What a coastal chart actually shows is *clumps* -- an
+ * archipelago here, clean water there -- with the occasional outlier standing
+ * well offshore. So:
+ *
+ * - **archipelago**: a 1.6 km field gated by a 6 km clump mask (where the
+ *   mask is low, the threshold rises and the water stays clean), thinning
+ *   out between 2.5 and 10 km offshore;
+ * - **lone outliers**: a rarer 3.8 km field reaching 16 km out, so the
+ *   seaward horizon keeps somewhere to sail while the far ocean does,
+ *   eventually, open.
+ *
+ * Each island's own rise supplies its shallow apron, which is what makes a
+ * sounding line around an island rather than a dot in deep water.
+ */
+const ARCH_SCALE = 1600;
+const ARCH_CLUMP_SCALE = 6000;
+const ARCH_FADE_FULL = 2500;
+const ARCH_FADE_END = 10000;
+const LONE_SCALE = 3800;
+const LONE_THRESHOLD = 0.8;
+const LONE_FADE_FULL = 6000;
+const LONE_FADE_END = 16000;
+/**
+ * m of descent per unit of noise below an island's threshold: the underwater
+ * flank that carries its shore down to the seabed instead of a cliff.
+ */
+const FLANK = 60;
+/**
+ * m an island is pushed down as its population's falloff runs out. Deeper
+ * than the tallest island stands above the deepest floor, so a fully faded
+ * island is gone rather than lurking as a shoal. Applied on the *cube* of
+ * the spent falloff: linearly, islands halfway out the band were already
+ * sunk to pale banks -- rendered, seed 546's outer archipelago dissolved
+ * into ghosts -- while cubed, the middle of the band keeps its islands
+ * standing and the drowning happens in the last stretch before the fade
+ * ends, where it belongs.
+ */
+const SINK = 80;
 
 /**
  * The spawn clearing. `placeAtStart` puts the boat 90 m from the origin, and
@@ -124,30 +191,43 @@ const ISLET_BAND = 3800;
  * deep, fading out by `CLEAR_FADE` — the same bargain the island field's
  * `keepClear` strikes.
  *
- * The clearing can shave a headland. The swing carries the shoreline up to
- * 1200 m and the warp's projection up to another ~1130, so the displaced
- * waterline can in principle come within ~670 m of the origin — inside the
- * clearing's 900 m edge — and a review found seed 546 standing dry ground a
- * few metres past it. Where that happens the clearing planes the tip of the
- * headland down into a shoal, smoothly, and that is the accepted price of a
- * spawn that is always afloat: the alternative was the bug this guard exists
- * for, a session that opens aground.
+ * The clearing can shave a headland — or now an island. The anchor holds the
+ * *mainland* waterline near 3 km, but the swing's residual grows away from
+ * the spawn's own alongshore position, the warp projects up to ~1.1 km on
+ * top, and the archipelago field may stand land anywhere offshore — seed 546
+ * still puts dry ground at the spawn without this guard, and 1764 within a
+ * couple of hundred metres (re-verified against the three-octave coast by
+ * deleting the clearing and watching the spawn test fail). Where that
+ * happens the clearing planes the offender down into a shoal, smoothly, and
+ * that is the accepted price of a spawn that is always afloat: the
+ * alternative was the bug this guard exists for, a session that opens
+ * aground.
  */
 const CLEAR_R = 250;
 const CLEAR_FADE = 650;
 const CLEAR_DEPTH = 15;
 
+/** The shoreline's total displacement at an alongshore position, m. */
+function coastSwing(along: number, seed: number): number {
+  const breathe = 0.35 + 0.65 * fbm2(along / BREATHE_SCALE, 0.71, seed + 3, 2);
+  const macro = (fbm2(along / MACRO_SCALE, 0.13, seed + 7, 3) * 2 - 1) * MACRO_SWING * breathe;
+  const meso = (fbm2(along / MESO_SCALE, 0.37, seed + 5, 4) * 2 - 1) * MESO_SWING;
+  const cren = (fbm2(along / CREN_SCALE, 0.53, seed + 9, 3) * 2 - 1) * CREN_SWING;
+  return macro + meso + cren;
+}
+
 /**
  * Ground elevation for one point of a coast, m — positive is land.
  *
  * The construction: a straight base shoreline `SHORE_DISTANCE` from the
- * origin, on a side drawn from the seed; a low-frequency alongshore swing that
- * turns it into bays and headlands; a two-axis domain warp that crinkles it at
- * smaller scales; then elevation as a ramp through that displaced line — up to
- * `PEAK` inland, down to `FLOOR` offshore. Islets are a separate noise field
- * allowed to rise above water only in a band off the coast, so the open sea
- * stays open and the coastal lane is the busy part, which is where a coastal
- * cruise actually happens.
+ * origin, on a side drawn from the seed; the three-octave alongshore swing
+ * above, anchored at the spawn, that turns it into gulfs, bays and ragged
+ * headlands; a two-axis domain warp that crinkles every contour; then
+ * elevation as a ramp through that displaced line — up to `PEAK` inland,
+ * down to `FLOOR` offshore across a shelf whose width is its own field. The
+ * two island populations rise out of the offshore side with their own
+ * falloffs, so the coastal lane is the busy part and the far ocean does,
+ * eventually, open.
  */
 function elevation(
   x: number,
@@ -155,6 +235,19 @@ function elevation(
   seed: number,
   inlandX: number,
   inlandY: number,
+  /**
+   * `coastSwing(0, seed)`, precomputed once per window fill.
+   *
+   * Subtracting the swing's own value at the spawn's alongshore position
+   * anchors the waterline near SHORE_DISTANCE from the origin whatever the
+   * macro coast is doing there -- without it, a spawn could open at the back
+   * of a five-kilometre gulf with no land in sight, which is the exact
+   * failure the 3 km shore distance was retuned to prevent. The pin is exact
+   * only for the unwarped shoreline curve; the domain warp moves the
+   * physical waterline, measured 2.6-3.3 km off the spawn across probed
+   * seeds.
+   */
+  anchor: number,
 ): number {
   // Crinkle the sample point before anything reads it, so every contour the
   // shore and the shelf draw inherits the same wrinkles.
@@ -163,8 +256,7 @@ function elevation(
 
   // Signed distance to the displaced shoreline: positive inland.
   const along = wx * inlandY - wy * inlandX;
-  const swing = (fbm2(along / SWING_SCALE, 0.37, seed + 5, 4) * 2 - 1) * SWING;
-  const s = wx * inlandX + wy * inlandY - SHORE_DISTANCE + swing;
+  const s = wx * inlandX + wy * inlandY - SHORE_DISTANCE + coastSwing(along, seed) - anchor;
 
   // A continuous profile through the waterline, assembled from three terms
   // that are each continuous, so the shore is a beach and not a wall. The
@@ -177,16 +269,39 @@ function elevation(
   const beach = clamp(s / 80, -1, 1) * 3;
   const rise = clamp((s - 80) / RAMP, 0, 1);
   const texture = 0.55 + 0.45 * fbm2(wx / 1900, wy / 1900, seed + 41, 3);
-  const shelf = (FLOOR - 3) * clamp((-s - 80) / 3000, 0, 1);
+  const shelfWidth = SHELF_MIN + SHELF_VAR * fbm2(wx / SHELF_SCALE, wy / SHELF_SCALE, seed + 87, 2);
+  const shelf = (FLOOR - 3) * clamp((-s - 80) / shelfWidth, 0, 1);
   let ground = beach + PEAK * rise * texture - shelf;
 
-  // Islets stand only in the coastal band, and never in the spawn clearing.
-  const band = smoothstep(ISLET_BAND, ISLET_BAND * 0.25, -s);
-  if (s < 0 && band > 0) {
-    const islet = fbm2(wx / ISLET_SCALE, wy / ISLET_SCALE, seed + 57, 4);
-    if (islet > ISLET_THRESHOLD) {
-      const top = ((islet - ISLET_THRESHOLD) / (1 - ISLET_THRESHOLD)) * 26 * band;
-      ground = Math.max(ground, top - 4);
+  // Islands stand only offshore of the waterline; each population carries
+  // its own falloff, and an island's rise above its threshold is also its
+  // shallow apron -- the -4 m start is what draws a sounding line around it.
+  //
+  // Two shapes matter here, and both were got wrong once. The profile runs
+  // *through* the threshold rather than starting at it -- below, `t` goes
+  // negative and the flank descends to the seabed -- because a thresholded
+  // Math.max put a forty-metre underwater cliff along every island's edge
+  // (found by a review probing adjacent samples on seed 14812). And the
+  // falloff *sinks* the whole island rather than scaling it: a multiplied
+  // fade shrinks the negative flank toward zero, which would hoist the abyss
+  // to a phantom four-metre reef wherever the fade ran out.
+  const off = -s;
+  if (off > 0) {
+    const archFade = smoothstep(ARCH_FADE_END, ARCH_FADE_FULL, off);
+    if (archFade > 0) {
+      const clump = fbm2(wx / ARCH_CLUMP_SCALE, wy / ARCH_CLUMP_SCALE, seed + 71, 2);
+      const arch = fbm2(wx / ARCH_SCALE, wy / ARCH_SCALE, seed + 57, 4);
+      const threshold = 0.6 + 0.32 * (1 - clump);
+      const t = (arch - threshold) / (1 - threshold);
+      const profile = t * (t > 0 ? 34 : FLANK) - 4;
+      ground = Math.max(ground, profile - SINK * (1 - archFade) ** 3);
+    }
+    const loneFade = smoothstep(LONE_FADE_END, LONE_FADE_FULL, off);
+    if (loneFade > 0) {
+      const lone = fbm2(wx / LONE_SCALE, wy / LONE_SCALE, seed + 93, 3);
+      const t = (lone - LONE_THRESHOLD) / (1 - LONE_THRESHOLD);
+      const profile = t * (t > 0 ? 46 : FLANK) - 5;
+      ground = Math.max(ground, profile - SINK * (1 - loneFade) ** 3);
     }
   }
 
@@ -225,7 +340,7 @@ export function snapCoastOrigin(p: { x: number; y: number }): { x: number; y: nu
  *
  * A row range rather than the whole array, because the engine re-bakes the
  * window mid-session as the boat sails along the shore, and the full 800 rows
- * are a measured 130 ms — sixteen dropped frames if paid at once. Spread a few
+ * are a measured ~190 ms — a dozen dropped frames if paid at once. Spread a few
  * rows per step, generation disappears into the frame budget; this function is
  * also the whole of `coastSamples`, so the incremental path and the all-at-once
  * path cannot drift apart.
@@ -251,12 +366,15 @@ export function fillCoastRows(
   const theta = rand() * TAU;
   const inlandX = Math.sin(theta);
   const inlandY = Math.cos(theta);
+  // Once per fill, not per sample: it is three fbm evaluations that never
+  // change within a seed. See the parameter's note in `elevation`.
+  const anchor = coastSwing(0, seed);
 
   for (let row = row0; row < row1; row++) {
     const y = origin.y + halfHeight - (row + 0.5) * cell;
     for (let col = 0; col < width; col++) {
       const x = origin.x - halfWidth + (col + 0.5) * cell;
-      const ground = elevation(x, y, seed, inlandX, inlandY);
+      const ground = elevation(x, y, seed, inlandX, inlandY, anchor);
       samples[row * width + col] = clamp(Math.round(ground / unit), -32768, 32767);
     }
   }

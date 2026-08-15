@@ -80,8 +80,14 @@ describe('the generated coast', () => {
   });
 
   it('leaves most of the square as water she can sail', () => {
+    // 0.5 rather than the first coast's 0.6, deliberately: the archipelago
+    // redesign puts more land and much more apron in the frame (measured
+    // 0.57-0.64 across these seeds), and half the square remaining open
+    // water is still a sea, not a maze. What this bound protects is the
+    // failure mode where the island fields run away and the coastal lane
+    // silts shut.
     for (const seed of SEEDS) {
-      expect(fractions(coastSamples(seed)).sailable).toBeGreaterThan(0.6);
+      expect(fractions(coastSamples(seed)).sailable).toBeGreaterThan(0.5);
     }
   });
 
@@ -259,7 +265,7 @@ describe('the generated coast', () => {
  * windows of the same seed say the same thing about every point they share.
  */
 describe('the coast window', () => {
-  // Every full window is ~130 ms of generation here and three to four times
+  // Every full window is ~190 ms of generation here and three to four times
   // that on the CI runner, and the march below bakes twelve of them -- the
   // default 5 s test timeout is a measure of the runner, not of the claim.
   // Same pattern as the trim search in shear.test.ts.
@@ -374,9 +380,12 @@ describe('the coast window', () => {
         // And the window actually went somewhere: a generator that ignored
         // the centre would serve the home raster at every hop, keep every
         // fraction in bounds, and this march would prove nothing -- which a
-        // review demonstrated by mutating exactly that. Twenty kilometres of
-        // shore shares almost no cells with the last window.
-        expect(same / cnt).toBeLessThan(0.5);
+        // review demonstrated by mutating exactly that. The deep floor is a
+        // constant, so offshore-heavy hops legitimately share up to ~0.55 of
+        // their sampled cells with the last window (measured); the mutation
+        // shares 1.0 exactly, and 0.8 separates them with room on both
+        // sides.
+        expect(same / cnt).toBeLessThan(0.8);
       }
     }
   });
@@ -477,5 +486,93 @@ describe('a moved window, felt through the whole terrain', () => {
     const db = tb.distanceToShore(p.x, p.y);
     expect(Number.isFinite(da)).toBe(true);
     expect(Math.abs(da - db)).toBeLessThan(50);
+  });
+});
+
+/**
+ * The anchor: the spawn opens in the coastal lane whatever the macro coast
+ * is doing. Anchored, the waterline curve passes through 3.0 km of the spawn
+ * by construction; unanchored, the worst of sixty thousand seeds opens
+ * 5.8 km from the nearest shore -- past any weather's visibility, which is
+ * exactly the "coastal world indistinguishable from open ocean" failure
+ * SHORE_DISTANCE was once retuned to prevent. Seed 48040 is the witness --
+ * the third candidate, because witness-hunting proved exactly as
+ * error-prone as the code it polices: 1964's shoreline meandered back
+ * within an earlier, wider probe, and 52961 came out of a hunt with the
+ * swing's sign inverted, a seed whose unanchored spawn opens *inside* the
+ * mainland. Measured through the warp, 48040's unanchored mainland stands
+ * about 5.2 km out and the first place even two islands line up for the
+ * probe is 4.35 km -- outside the 4.2 km reach -- while anchored it passes
+ * at once. The probe demands land at three stations over 2.5 km of one
+ * bearing, so a pair of offshore islands cannot bracket open water and
+ * stand in for the mainland, which a review showed the two-station version
+ * accepted on seed 13.
+ */
+describe('the anchored spawn', () => {
+  it('opens with the mainland in reach, every seed', () => {
+    for (const seed of [...SEEDS, 48040]) {
+      const { height } = coastHeightField(seed);
+      let found = false;
+      for (let b = 0; b < 24 && !found; b++) {
+        const dx = Math.sin((b / 24) * Math.PI * 2);
+        const dy = Math.cos((b / 24) * Math.PI * 2);
+        for (let d = 800; d <= 4200; d += 100) {
+          if (
+            height.elevationAt(dx * d, dy * d) > 0 &&
+            height.elevationAt(dx * (d + 1250), dy * (d + 1250)) > 0 &&
+            height.elevationAt(dx * (d + 2500), dy * (d + 2500)) > 0
+          ) {
+            found = true;
+            break;
+          }
+        }
+      }
+      expect(found, `seed ${seed}`).toBe(true);
+    }
+  });
+});
+
+/**
+ * Island flanks are slopes, not walls. The first two-population design
+ * thresholded each island field and Math.max'd the result over the seabed,
+ * which drew a forty-metre underwater cliff along every island's edge --
+ * found by a review probing adjacent samples on seed 14812 (42.2 m between
+ * neighbours 25 m apart). The waterline beach test cannot see it: the jump
+ * is entirely underwater. Twenty metres written out as the bound because
+ * the steepness itself is the claim; the fixed flank measures ~13-16 m at
+ * its steepest across these seeds, the cliff measured 42.
+ */
+describe('under the water', () => {
+  it('walks down to the seabed, never off a wall', () => {
+    for (const seed of [14812, 546]) {
+      const s = coastSamples(seed);
+      let worst = 0;
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < width - 1; col++) {
+          const a = s[row * width + col] * GRID.unit;
+          const b = s[row * width + col + 1] * GRID.unit;
+          worst = Math.max(worst, Math.abs(a - b));
+        }
+      }
+      expect(worst).toBeLessThanOrEqual(20);
+    }
+  });
+});
+
+/**
+ * The far ocean opens. The island falloffs are what keep "coastal" a place
+ * rather than the whole sea -- and the sailable-fraction bound cannot hold
+ * them: a review measured that deleting both falloffs entirely still leaves
+ * every home window above it. So the claim is asserted where it lives: a
+ * window centred 28 km to seaward -- seed 32's mainland lies due north
+ * within four degrees, so seaward is south -- is past both fade ends plus
+ * the swing's whole reach, and must hold no land at all.
+ */
+describe('the far ocean', () => {
+  it('is open water once the falloffs have run out', () => {
+    const far = coastSamples(32, { x: 0, y: -28000 });
+    let land = 0;
+    for (let i = 0; i < far.length; i++) if (far[i] > 0) land++;
+    expect(land).toBe(0);
   });
 });

@@ -522,7 +522,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * where the installed field is centred; when the boat has sailed
    * `COAST_REWINDOW` from it, `pendingCoast` starts re-baking the same seed
    * about the boat, a few rows per physics step -- the full field is a
-   * measured 130 ms, sixteen dropped frames if paid at once, and at four rows
+   * measured ~190 ms since the three-octave coast, far too much for one
+   * frame, and at four rows
    * a step it disappears into the budget and completes in under two seconds
    * of a crossing that takes a quarter of an hour. Overlapping samples agree
    * exactly (see snapCoastOrigin), so the swap moves the horizon, never the
@@ -605,7 +606,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // a region that is computed instead of fetched: everything downstream --
     // the shelter sweep, the field texture, the meshes, the chart -- reads a
     // RegionTerrain and never asks where its samples came from. Ready
-    // synchronously, since about 130 ms of generation at Put to sea needs no
+    // synchronously, since about 190 ms of generation at Put to sea needs no
     // loading screen. Cached against the seed that built it, not merely against being
     // a coast: with the seed pinned a settings change must not regenerate the
     // place, and with it rolled the same id would otherwise serve last

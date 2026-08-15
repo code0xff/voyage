@@ -484,7 +484,7 @@ The generated coast keeps the no-edge promise by a different mechanism. Its
 ground is a pure function of world position and seed, sampled into the same
 20 km height-field window a surveyed region uses — and the engine re-bakes that
 window about the boat as she sails along the shore, a few raster rows per
-physics step (the full field is a measured 130 ms, too much for one frame).
+physics step (the full field is a measured ~190 ms, too much for one frame).
 Windows are pinned to a shared 25 m world lattice, so any two of the same seed
 agree exactly where they overlap: the swap moves the horizon, never the water
 under the keel, and the mainland goes on however far you follow it.
