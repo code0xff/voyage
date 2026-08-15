@@ -810,16 +810,20 @@ export function MenuDialog({
               </div>
             </div>
             <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
-              {/* Three worlds, three notes. This read `venue ? … : …`, and a
+              {/* Four worlds, four notes. This read `venue ? … : …`, and a
                   region sets `venue` to '' -- so picking a surveyed coast
                   produced the procedural ocean's copy, promising that islands
                   would keep coming over the horizon at a place whose coastline
-                  is fixed and measured. */}
-              {settings.region
-                ? t(WORLD.regionNote)
-                : settings.venue
-                  ? t(WORLD.venueNote)
-                  : t(WORLD.oceanNote)}
+                  is fixed and measured. The generated coast then wore the
+                  surveyed note for a while, promising the opposite lie: that
+                  the seed does not move a land the seed entirely is. */}
+              {settings.region === COAST_ID
+                ? t(WORLD.coastNote)
+                : settings.region
+                  ? t(WORLD.regionNote)
+                  : settings.venue
+                    ? t(WORLD.venueNote)
+                    : t(WORLD.oceanNote)}
             </p>
           </TabsContent>
 

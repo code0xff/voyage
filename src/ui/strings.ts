@@ -605,6 +605,10 @@ export const WORLD: Record<string, Phrase> = {
     en: 'A venue brings its own land, breeze and tide, so the island slider stands down. The stream runs hardest in deep water and gives up in the shallows — which is where the wind gives up too.',
     ko: '베뉴는 자체 육지와 바람, 조류를 가져오므로 섬 슬라이더는 물러납니다. 조류는 깊은 물에서 가장 세고 얕은 곳에서 사그라드는데, 바람도 바로 그곳에서 사그라듭니다.',
   },
+  coastNote: {
+    en: 'Here the seed is the land as well as the sea: each time you put to sea, it draws the mainland, the islets, the puffs and the weather alike. Pin it to keep a shore worth coming back to.',
+    ko: '여기서는 시드가 바다만이 아니라 땅 그 자체입니다. 출항할 때마다 본토와 섬, 돌풍과 날씨가 모두 그 시드에서 그려집니다. 다시 오고 싶은 해안이면 시드를 고정하세요.',
+  },
   regionNote: {
     en: 'The coast and the depths here are surveyed and never change — the seed does not move them. What it does set is the sea you sail over them: where the puffs and the shifts fall, and how the weather turns. Pin it to sail the same day twice.',
     ko: '이곳의 해안과 수심은 실측이라 절대 바뀌지 않습니다 — 시드가 그걸 옮기지는 못합니다. 시드가 정하는 것은 그 위를 지나는 바다입니다: 돌풍과 풍향 변화가 어디에 떨어지는지, 날씨가 어떻게 변해가는지. 같은 하루를 다시 항해하려면 고정하세요.',
