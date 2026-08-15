@@ -1,5 +1,12 @@
 import { DEG, RAD, lerp } from './math';
-import { initialState, step, type Controls, type SeaState } from './boat';
+import {
+  initialState,
+  step,
+  type BoatState,
+  type Controls,
+  type Diagnostics,
+  type SeaState,
+} from './boat';
 import { autoReef, type ReefState } from './sailplan';
 import type { BoatConfig, Environment } from './config';
 import { hullSpeed, msToKnots } from './units';
@@ -38,33 +45,41 @@ export interface Polar {
 
 const AUTO: Controls = { rudder: 0, sheet: 0, twist: 0, autoTrim: true };
 
-/** Run with the heading frozen until the boat settles. */
-export function solveOne(
+/**
+ * Sail the boat on a frozen heading in still water until she settles, and
+ * report everything the settle arrived at: the state, the reef the auto-reef
+ * chose, and the last diagnostics.
+ *
+ * This is the core of `solveOne`, exported on its own because it answers a
+ * second question besides the polar's: not only how fast the boat goes on a
+ * heading, but what trim, what reef and what heel she carries once she has
+ * been sailed properly on it -- which is what a competent crew has ready
+ * before they put to sea (see departure.ts). One settle serving both keeps
+ * the two answers from drifting apart when the reef thresholds are tuned.
+ */
+export function settleOnHeading(
   cfg: BoatConfig,
   environment: Environment,
-  twaDeg: number,
+  heading: number,
   settleSeconds = 240,
   dt = 1 / 60,
-): PolarPoint {
-  // A polar is a still-water measurement by definition -- the speed the boat can
-  // hold, not the rate the ground goes past -- so any current is dropped here
-  // rather than trusted not to have been passed. `Environment.current` being
-  // optional keeps a caller from acquiring one by accident; this keeps the
-  // guarantee even from a caller who hands over the live sailing environment.
+): { s: BoatState; rs: ReefState; d: Diagnostics } {
+  // A settle is a still-water measurement by definition -- the speed the boat
+  // can hold, not the rate the ground goes past -- so any current is dropped
+  // here rather than trusted not to have been passed. `Environment.current`
+  // being optional keeps a caller from acquiring one by accident; this keeps
+  // the guarantee even from a caller who hands over the live environment.
   const env: Environment = { ...environment, current: undefined };
 
-  // To hold a given true wind angle with the wind coming from twd, point the
-  // bow at twd - twa.
-  const heading = env.twd - twaDeg * DEG;
   // Do not start from rest. Sailing is bistable -- with no speed the apparent
   // wind swings aft and the boat cannot climb to an angle it could otherwise
   // hold -- so starting slow reports angles as unattainable when they are not.
-  // The polar measures sustainable speed, so start at cruising speed.
+  // The settle measures sustainable state, so start at cruising speed.
   const s = initialState({ heading, u: hullSpeed(cfg.lwl) * 0.7, sheet: 20 * DEG });
 
-  // Only the *mean* effect of waves (added resistance) belongs in a polar.
+  // Only the *mean* effect of waves (added resistance) belongs in a settle.
   // Feeding in the roll and pitch oscillation as well would mean there is no
-  // steady state to find, and the polar would just be noise.
+  // steady state to find, and the answer would just be noise.
   const sea: SeaState = {
     h13: waveHeightFromWind(env.tws),
     dir: env.twd + Math.PI, // waves travel with the wind
@@ -79,14 +94,34 @@ export function solveOne(
   const rs: ReefState = { reef: 0, jibFurl: 0, timer: 0 };
   let d = step(s, cfg, env, AUTO, dt, opts);
   for (let i = 1; i < steps; i++) {
-    // A polar is "the speed you could hold if you sailed it well". Lying on
-    // your ear at 60 degrees of heel under full sail in a gale is not a number
-    // worth recording, so reefing is optimised alongside.
+    // The settled state is "the boat sailed well". Lying on your ear at 60
+    // degrees of heel under full sail in a gale is not a state worth
+    // recording, so reefing is optimised alongside.
     autoReef(rs, s.heelAvg, s.heel, dt);
     s.reef = rs.reef;
     s.jibFurl = rs.jibFurl;
     d = step(s, cfg, env, AUTO, dt, opts);
   }
+  return { s, rs, d };
+}
+
+/** Run with the heading frozen until the boat settles. */
+export function solveOne(
+  cfg: BoatConfig,
+  environment: Environment,
+  twaDeg: number,
+  settleSeconds = 240,
+  dt = 1 / 60,
+): PolarPoint {
+  // To hold a given true wind angle with the wind coming from twd, point the
+  // bow at twd - twa.
+  const { s, d } = settleOnHeading(
+    cfg,
+    environment,
+    environment.twd - twaDeg * DEG,
+    settleSeconds,
+    dt,
+  );
 
   return {
     twa: twaDeg * DEG,

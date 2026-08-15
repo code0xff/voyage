@@ -24,6 +24,7 @@ import { PassageLog } from './sim/passage';
 import { LogStoreUnavailable, logbook } from './logbook';
 import { WaveField, sampleHull, seaBearing, windOverWater, type HullWaveSample } from './sim/waves';
 import { MAX_REEF, autoReef, type ReefState } from './sim/sailplan';
+import { prepareDeparture } from './sim/departure';
 import { cyclePilot, initialPilot, pilotRudder, type PilotState } from './sim/autopilot';
 import {
   DEG,
@@ -850,14 +851,37 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     snapshot.maneuver = null;
 
     const up = compassVec(wind.baseTwd);
+    const heading = wrap2Pi(wind.baseTwd + 100 * DEG);
+    // Re-derived here because the physics loop's own refresh has not run yet:
+    // `newSession` reseeds the weather, and a departure prepared for the old
+    // session's wind scale would be trimmed for weather she is not in.
+    wind.baseTws = windMs(current) * weather.state.windScale;
+    // Trimmed and reefed for the conditions before the lines are slipped,
+    // and heeled to her sailing angle -- she is under way, not at a dock.
+    // See departure.ts for why this is a settle and not a wind table. The
+    // *mean* wind on purpose, not the first local sample: a crew reefs for
+    // the day, not for the puff blowing through at the moment they leave.
+    // The gust field can sit a reef-threshold to either side of the mean,
+    // and the auto-reef, starting from an honest average, takes it from
+    // there.
+    const ready = prepareDeparture(CRUISER, wind.meanEnv(DEFAULT_ENV), heading);
     state = initialState({
       pos: { x: -up.x * 90, y: -up.y * 90 },
-      heading: wrap2Pi(wind.baseTwd + 100 * DEG),
+      heading,
       u: 2.2,
+      sheet: ready.sheet,
+      twist: ready.twist,
+      reef: ready.reef,
+      jibFurl: ready.jibFurl,
+      heel: ready.heel,
+      // The auto-reef judges the average; starting it at zero would describe
+      // a boat that is not there. See Departure.heel for the measured margin
+      // this avoids depending on.
+      heelAvg: ready.heel,
     });
     snapshot.state = state;
-    reefState.reef = 0;
-    reefState.jibFurl = 0;
+    reefState.reef = ready.reef;
+    reefState.jibFurl = ready.jibFurl;
     reefState.timer = 0;
     // The helm persists now, so a session must not start with the last one's
     // correction still wound on -- nor with the pilot steering to a course

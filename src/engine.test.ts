@@ -1184,3 +1184,64 @@ describe('engine', () => {
     expect(Number.isFinite(many.whale)).toBe(true);
   });
 });
+
+/**
+ * The departure, as the engine actually wires it. The choice itself is
+ * departure.ts's business and is tested there; what these pin is that
+ * `placeAtStart` asks it -- with the session's own wind -- and writes the
+ * whole answer into the boat, not just the parts that show.
+ */
+describe('putting to sea prepared', () => {
+  it('leaves reefed, trimmed and heeled in a gale', () => {
+    const engine = sailing({ windKnots: 35, weatherMode: 'fair' });
+    const s = engine.snapshot.state;
+    expect(s.reef).toBeGreaterThanOrEqual(1);
+    // The whole answer, not just the showy half: at 35 knots the ladder has
+    // rolled some jib away as well as reefed the main.
+    expect(s.jibFurl).toBeGreaterThan(0);
+    // Not the close-hauled 20 degrees the bare start pinned: trimmed for the
+    // beam-reach departure heading.
+    expect(s.sheet).toBeGreaterThan(30 * DEG);
+    // Under way at her sailing heel, not bolt upright about to flop over.
+    expect(Math.abs(s.heel)).toBeGreaterThan(10 * DEG);
+    expect(s.heelAvg).toBe(s.heel);
+    // The reef controller was seeded too, not only the boat: unseeded, the
+    // very first physics step writes the controller's zeros back over the
+    // prepared state, and the reef is gone before the second frame.
+    engine.advance(2);
+    expect(engine.snapshot.state.reef).toBeGreaterThanOrEqual(1);
+    engine.dispose();
+  });
+
+  it('prepares for the wind the weather actually delivers', () => {
+    // 20 knots set, but a pinned squall scales the mean to 35: she must
+    // leave reefed. (This holds even without placeAtStart's own re-derive,
+    // because applySettings runs between construction and putting to sea and
+    // corrects the mean for a *pinned* mode; the test below is the one that
+    // needs the re-derive.)
+    const engine = sailing({ windKnots: 20, weatherMode: 'squall' });
+    expect(engine.snapshot.state.reef).toBeGreaterThanOrEqual(1);
+    engine.dispose();
+  });
+
+  it("does not prepare for the last session's weather", () => {
+    // The stale-mean path placeAtStart's re-derive exists for: applySettings
+    // recomputes the mean wind with the weather scale it finds *before*
+    // changing the weather, so squall-to-auto leaves baseTws carrying the
+    // squall's 1.75x -- and the new session's reseed then opens with clear,
+    // fair or overcast, none above 1.1x. Prepared from the stale mean, she
+    // would leave reefed for a squall that is no longer overhead.
+    const engine = sailing({ windKnots: 20, weatherMode: 'squall' });
+    engine.applySettings(settings({ windKnots: 20, weatherMode: 'auto' }));
+    engine.putToSea();
+    expect(engine.snapshot.state.reef).toBe(0);
+    engine.dispose();
+  });
+
+  it('leaves under full sail in a light breeze', () => {
+    const engine = sailing({ windKnots: 8, weatherMode: 'fair' });
+    expect(engine.snapshot.state.reef).toBe(0);
+    expect(engine.snapshot.state.jibFurl).toBe(0);
+    engine.dispose();
+  });
+});
