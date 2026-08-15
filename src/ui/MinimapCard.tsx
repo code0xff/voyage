@@ -10,7 +10,7 @@ import type { Vec2 } from '@/sim/math';
 import { useEngine, useEngineFrame, useReadout } from './engine-context';
 import { COMPACT_COLUMN, PANEL_COLUMN, PANEL_PAD } from './viewport';
 import { useT } from './i18n';
-import { CHART, PANEL } from './strings';
+import { CHART, PANEL, callTally } from './strings';
 
 /**
  * The chart, px. One size, matching the polar exactly -- 208 in a 232 px card.
@@ -243,6 +243,12 @@ export function MinimapCard({
   // picture only answers by eye. It changes every frame, so it goes straight
   // to the DOM rather than through React.
   const runLabel = useReadout<HTMLSpanElement>((s) => formatDistance(s.run));
+  // The whole cruise HUD: the chart is where the hand lives, so its header is
+  // where the tally belongs. Empty text when there is nothing to say -- a
+  // "calls 0" would nag every session the mode is off.
+  const callsLabel = useReadout<HTMLSpanElement>((s) =>
+    s.callsMade > 0 ? ` · ${t(callTally(s.callsMade))}` : '',
+  );
 
   useEngineFrame((s) => {
     const ctx = ref.current?.getContext('2d');
@@ -257,6 +263,7 @@ export function MinimapCard({
       range,
       session: s.session,
       destination: s.destination,
+      calls: s.calls,
       currents: s.currents,
       pan: pan.current,
     });
@@ -292,6 +299,7 @@ export function MinimapCard({
                 <span ref={runLabel} className="ml-1" />
               </>
             )}
+            <span ref={callsLabel} />
           </Badge>
           {/* Only in the full view, where there is room for it and where the
               hint is worth having: this is the one panel that takes the whole

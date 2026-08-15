@@ -211,6 +211,8 @@ export interface MinimapInput {
   session: number;
   /** Where the boat is bound, or null when she is just out sailing. */
   destination: Vec2 | null;
+  /** The cruise's hand of ports of call, or empty when there is none. */
+  calls: readonly Vec2[];
   /** The tidal streams, so the chart can show where they run. */
   currents: CurrentField;
   /**
@@ -704,6 +706,26 @@ export function createMinimap(): Minimap {
         ctx.stroke();
       }
 
+
+      // --- The ports of call on offer ------------------------------------------
+      // Drawn under the destination, so the one that has been chosen wears the
+      // destination's own ring on top: chosen-ness is the destination's claim,
+      // not a second marker style. Diamonds rather than rings, because every
+      // ring on this chart already means "go here" or "you are here" and an
+      // offer is neither -- it is a place that would count.
+      for (const call of input.calls) {
+        const px = sx(call.x);
+        const py = sy(call.y);
+        ctx.strokeStyle = token('--success');
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(px, py - 4.5);
+        ctx.lineTo(px + 4.5, py);
+        ctx.lineTo(px, py + 4.5);
+        ctx.lineTo(px - 4.5, py);
+        ctx.closePath();
+        ctx.stroke();
+      }
 
       // --- Where she is bound --------------------------------------------------
       // Drawn before the boat so the boat sits on top of it on arrival, and as a

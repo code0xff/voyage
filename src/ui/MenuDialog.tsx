@@ -809,6 +809,26 @@ export function MenuDialog({
                 </Button>
               </div>
             </div>
+            <div className="grid grid-cols-[104px_1fr] items-center gap-3">
+              <span className="text-[11px] text-muted-foreground">
+                {t(WORLD.cruise)}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={settings.cruise ? "default" : "outline"}
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => set("cruise", !settings.cruise)}
+                >
+                  {settings.cruise ? t(WORLD.cruiseOn) : t(WORLD.cruiseOff)}
+                </Button>
+                {settings.cruise && (
+                  <span className="min-w-0 text-[10px] leading-relaxed text-muted-foreground">
+                    {t(WORLD.cruiseNote)}
+                  </span>
+                )}
+              </div>
+            </div>
             <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
               {/* Four worlds, four notes. This read `venue ? … : …`, and a
                   region sets `venue` to '' -- so picking a surveyed coast

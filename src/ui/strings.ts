@@ -102,6 +102,12 @@ export const seaOf = (metres: string): Phrase => ({
   ko: `파고 ${metres} m`,
 });
 
+/** The cruise's tally for the chart header. Never shown at none. */
+export const callTally = (n: number): Phrase => ({
+  en: n === 1 ? '1 call' : `${n} calls`,
+  ko: `기항 ${n}`,
+});
+
 /** How many times she was stopped for. Never called with none. */
 export const photographCount = (n: number): Phrase => ({
   en: n === 1 ? '1 photograph' : `${n} photographs`,
@@ -601,6 +607,19 @@ export const WORLD: Record<string, Phrase> = {
   seedRegion: { en: 'Conditions seed', ko: '조건 시드' },
   seedNew: { en: 'New each time', ko: '매번 새로' },
   seedPinned: { en: 'Pinned', ko: '고정' },
+  /**
+   * The cruise. Called "ports of call" and counted in calls made rather than
+   * points, because the logbook's own rule -- a record, not a scoreboard --
+   * applies to a mode at least as hard as to a table: a score climbing in the
+   * corner is the old race machinery back under another name.
+   */
+  cruise: { en: 'Ports of call', ko: '기항지' },
+  cruiseOn: { en: 'On', ko: '켬' },
+  cruiseOff: { en: 'Off', ko: '끔' },
+  cruiseNote: {
+    en: 'A few anchorages stand on the chart. Anchor at one to call there, and the next hand is dealt from where you lie. An empty hand means none were found in reach — head for a coast.',
+    ko: '차트에 정박지 몇 곳이 제시됩니다. 그중 한 곳에 닻을 내리면 기항이 되고, 그 자리에서 다음 후보가 나옵니다. 아무것도 뜨지 않으면 닿을 거리에서 찾지 못한 것이니, 해안 쪽으로 가보세요.',
+  },
   venueNote: {
     en: 'A venue brings its own land, breeze and tide, so the island slider stands down. The stream runs hardest in deep water and gives up in the shallows — which is where the wind gives up too.',
     ko: '베뉴는 자체 육지와 바람, 조류를 가져오므로 섬 슬라이더는 물러납니다. 조류는 깊은 물에서 가장 세고 얕은 곳에서 사그라드는데, 바람도 바로 그곳에서 사그라듭니다.',
