@@ -460,6 +460,10 @@ export const TOUCH: Record<string, Phrase> = {
   camera: { en: 'Camera', ko: '카메라' },
   anchor: { en: 'Anchor', ko: '닻' },
   flare: { en: 'Flare', ko: '조명탄' },
+  binoculars: { en: 'Binoculars', ko: '쌍안경' },
+  photo: { en: 'Photograph', ko: '사진' },
+  lights: { en: 'Navigation lights', ko: '항해등' },
+  sails: { en: 'Hand or set sail', ko: '돛 걷기/펴기' },
   menu: { en: 'Menu', ko: '메뉴' },
 };
 

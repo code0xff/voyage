@@ -1,6 +1,17 @@
 import { useCallback, useRef } from 'react';
-import { Anchor, Menu, Navigation, Sparkles, Video } from 'lucide-react';
+import {
+  Anchor,
+  Binoculars,
+  Camera,
+  Lightbulb,
+  Menu,
+  Navigation,
+  Sailboat,
+  Sparkles,
+  Video,
+} from 'lucide-react';
 import { CRUISER } from '@/sim/config';
+import type { Snapshot } from '@/engine';
 import { useEngine, useEngineFrame } from './engine-context';
 import { useT } from './i18n';
 import { TOUCH } from './strings';
@@ -13,12 +24,20 @@ import { TOUCH } from './strings';
  * thing a sailing game cannot afford. What saves it is that she already sails
  * herself where it does not matter: auto-trim and auto-reef are on by default,
  * so the sheet, the vang and the reef are hands-off unless you want them. That
- * leaves the helm -- which nothing can do for you -- and a short row of the
- * things you actually reach for.
+ * leaves the helm -- which nothing can do for you -- and a row of the things
+ * you actually reach for.
  *
- * The rest stay on the keyboard, and are listed in the Controls tab. A tablet
- * with a keyboard loses nothing by this; a phone loses the fine trim, which is
- * the right thing to lose first.
+ * The row began as "four keys and no more", and the flare broke the count
+ * honestly: the phone was quietly losing not just the fine trim but the
+ * *reaching-for* things -- the glasses when a whale blows, the photograph, the
+ * lights at dusk. So the row now scrolls. Four and a half keys stand visible
+ * -- the half is the affordance, a button cut by the edge says there are more
+ * -- and the rest wait off-screen; the sea in front of the helmsman is exactly
+ * as clear as it was. The menu key is pinned outside the scroll, so wherever
+ * the strip was left, the way out never moves. What stays excluded is what the
+ * boat does for herself: reefing, trim, the wind settings. A tablet with a
+ * keyboard still loses nothing; a phone now loses only the fine trim, which
+ * is the right thing to lose first.
  *
  * Everything here goes through `engine.press` into the same bindings the keys
  * use, so there is one path from an intention to the boat and not two.
@@ -106,7 +125,7 @@ function Tiller() {
 }
 
 const KEY_CLASS =
-  'pointer-events-auto flex size-10 items-center justify-center rounded-full border border-border bg-card/70 text-muted-foreground backdrop-blur-md transition-colors active:bg-accent active:text-foreground disabled:opacity-40 [&_svg]:size-4';
+  'pointer-events-auto flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-card/70 text-muted-foreground backdrop-blur-md transition-colors active:bg-accent active:text-foreground disabled:opacity-40 data-[on=true]:border-foreground/40 data-[on=true]:bg-accent data-[on=true]:text-foreground [&_svg]:size-4';
 
 function Key({
   label,
@@ -125,19 +144,53 @@ function Key({
 }
 
 /**
+ * A key whose binding is an on/off the snapshot knows about, worn on the key
+ * itself. The keyboard player sees these states in the instrument panel; a
+ * phone hides that panel behind a fold, so without this the lights and the
+ * glasses were switches with no position.
+ *
+ * Written to the DOM off the frame snapshot, not through React state -- the
+ * header of this file says what routing per-frame values through the
+ * reconciler does to the frame budget.
+ */
+function StateKey({
+  label,
+  onPress,
+  lit,
+  children,
+}: {
+  label: string;
+  onPress: () => void;
+  lit: (s: Snapshot) => boolean;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLButtonElement>(null);
+  useEngineFrame((s) => {
+    const el = ref.current;
+    if (el) el.dataset.on = lit(s) ? 'true' : 'false';
+  });
+  return (
+    <button
+      ref={ref}
+      type="button"
+      aria-label={label}
+      title={label}
+      data-on="false"
+      onClick={onPress}
+      className={KEY_CLASS}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
  * The flare, and only after dark.
  *
- * The row's own rule is four keys and no more, and it holds -- by day. This
- * is the chart's recentre-button bargain over again: a button that appears
- * when it means something and is simply absent when it does not. A flare at
- * noon is a spark nobody can see, so daylight is when the row goes back to
- * four; at night the key stands, and dims for the two minutes the locker
- * takes to produce another.
- *
- * Shown and dimmed through the DOM, not through React state: daylight and
- * the cooldown both come off the per-frame snapshot, and this file's own
- * header warns what routing that through the reconciler does to the frame
- * budget.
+ * The chart's recentre-button bargain: a control that appears when it means
+ * something and is simply absent when it does not. A flare at noon is a spark
+ * nobody can see, so by day the strip closes over the gap; at night the key
+ * stands, and dims for the two minutes the locker takes to produce another.
  */
 function FlareKey() {
   const engine = useEngine();
@@ -185,21 +238,59 @@ export function TouchControls({ onMenu }: { onMenu: () => void }) {
       style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.75rem)' }}
       className="pointer-events-none flex w-full flex-col items-center gap-2.5"
     >
-      {/* Four by day, and no more. Reefing and trimming are not here because
-          she does both herself by default, and a row of buttons for things
-          nobody has to press is how a sea turns into a control panel. The
-          flare is the one exception, and only after dark -- see FlareKey. */}
-      <div className="flex items-center gap-2">
-        <Key label={t(TOUCH.autopilot)} onPress={() => engine.press('h')}>
-          <Navigation />
-        </Key>
-        <Key label={t(TOUCH.anchor)} onPress={() => engine.press('a')}>
-          <Anchor />
-        </Key>
-        <FlareKey />
-        <Key label={t(TOUCH.camera)} onPress={() => engine.press('c')}>
-          <Video />
-        </Key>
+      {/* The strip scrolls; the menu does not. Ordered by how often a hand
+          reaches: sailing controls first, sightseeing next. The width shows
+          four keys and a sliver of the fifth, and the sliver is the whole
+          scroll affordance -- an edge-cut button says there are more without
+          an arrow saying it. */}
+      <div className="flex max-w-[280px] items-center gap-2">
+        <div
+          className="pointer-events-auto flex items-center gap-2 overflow-x-auto py-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          style={{ maxWidth: '13.5rem', WebkitOverflowScrolling: 'touch' }}
+        >
+          <StateKey
+            label={t(TOUCH.autopilot)}
+            onPress={() => engine.press('h')}
+            lit={(s) => s.pilot.mode !== 'off'}
+          >
+            <Navigation />
+          </StateKey>
+          <StateKey
+            label={t(TOUCH.anchor)}
+            onPress={() => engine.press('a')}
+            lit={(s) => s.anchored}
+          >
+            <Anchor />
+          </StateKey>
+          <FlareKey />
+          <StateKey
+            label={t(TOUCH.binoculars)}
+            onPress={() => engine.press('b')}
+            lit={(s) => s.binoculars}
+          >
+            <Binoculars />
+          </StateKey>
+          <Key label={t(TOUCH.camera)} onPress={() => engine.press('c')}>
+            <Video />
+          </Key>
+          <Key label={t(TOUCH.photo)} onPress={() => engine.press('k')}>
+            <Camera />
+          </Key>
+          <StateKey
+            label={t(TOUCH.lights)}
+            onPress={() => engine.press('l')}
+            lit={(s) => s.lightsOn}
+          >
+            <Lightbulb />
+          </StateKey>
+          <StateKey
+            label={t(TOUCH.sails)}
+            onPress={() => engine.press('0')}
+            lit={(s) => s.state.stowed}
+          >
+            <Sailboat />
+          </StateKey>
+        </div>
         <Key label={t(TOUCH.menu)} onPress={onMenu}>
           <Menu />
         </Key>
