@@ -830,9 +830,18 @@ export function MenuDialog({
                   if (v) set("cruise", v === "on");
                 }}
                 aria-label={t(WORLD.cruise)}
+                // Sized to its two words and left-aligned with the controls
+                // above it, at the h-7 the seed's own button uses: a mode
+                // switch that spanned the panel at h-8 announced itself as
+                // the most important thing on the tab, which it is not.
+                className="w-fit"
               >
-                <ToggleGroupItem value="off">{t(WORLD.cruiseOff)}</ToggleGroupItem>
-                <ToggleGroupItem value="on">{t(WORLD.cruiseOn)}</ToggleGroupItem>
+                <ToggleGroupItem value="off" size="sm">
+                  {t(WORLD.cruiseOff)}
+                </ToggleGroupItem>
+                <ToggleGroupItem value="on" size="sm">
+                  {t(WORLD.cruiseOn)}
+                </ToggleGroupItem>
               </ToggleGroup>
             </div>
             {/* Below the row, full width, like every other note on this tab --
