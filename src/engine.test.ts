@@ -1379,8 +1379,12 @@ describe('the flare', () => {
     engine.advance(0.1);
     press('u');
     frame(0.05);
-    engine.advance(FLARE_RISE + FLARE_BURN + 6);
+    // The locker empties the moment it fires; the touch row dims off this.
+    engine.advance(0.1);
+    expect(engine.snapshot.flareReady).toBe(false);
+    engine.advance(FLARE_RISE + FLARE_BURN + 5.9);
     expect(engine.snapshot.flare).toBeNull();
+    expect(engine.snapshot.flareReady).toBe(false);
     // A breath short of the cooldown: the press is simply not taken. Probed
     // at the boundary rather than mid-wait, so a cooldown quietly shortened
     // by a second cannot pass -- review showed the mid-wait probe accepting
@@ -1390,8 +1394,9 @@ describe('the flare', () => {
     frame(0.05);
     engine.advance(0.2);
     expect(engine.snapshot.flare).toBeNull();
-    // Waited out: the locker has another.
+    // Waited out: the locker has another, and says so.
     engine.advance(2);
+    expect(engine.snapshot.flareReady).toBe(true);
     press('u');
     frame(0.05);
     engine.advance(1);
@@ -1408,6 +1413,7 @@ describe('the flare', () => {
     expect(engine.snapshot.flare).not.toBeNull();
     engine.putToSea();
     expect(engine.snapshot.flare).toBeNull();
+    expect(engine.snapshot.flareReady).toBe(true);
     engine.advance(0.1);
     press('u');
     frame(0.05);

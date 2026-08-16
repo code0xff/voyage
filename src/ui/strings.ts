@@ -459,6 +459,7 @@ export const TOUCH: Record<string, Phrase> = {
   autopilot: { en: 'Autopilot', ko: '오토파일럿' },
   camera: { en: 'Camera', ko: '카메라' },
   anchor: { en: 'Anchor', ko: '닻' },
+  flare: { en: 'Flare', ko: '조명탄' },
   menu: { en: 'Menu', ko: '메뉴' },
 };
 

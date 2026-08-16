@@ -151,6 +151,12 @@ export interface Snapshot {
    * one place and the tests can hold it.
    */
   flare: { x: number; y: number; alt: number; intensity: number } | null;
+  /**
+   * Whether the locker has a flare ready -- false while the cooldown runs.
+   * Published for the touch row, whose flare button dims during the wait;
+   * the keyboard path just has its press not taken.
+   */
+  flareReady: boolean;
   /** Whether the helmsman has the glasses up. */
   binoculars: boolean;
   /**
@@ -496,6 +502,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     pilot,
     lightsOn: true,
     flare: null,
+    flareReady: true,
     binoculars: false,
   };
 
@@ -654,6 +661,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     flareState = null;
     flareCooldown = 0;
     snapshot.flare = null;
+    snapshot.flareReady = true;
 
     // A venue brings its own land, fixed and known, so there is nothing to
     // stream: the whole place is always loaded. The procedural field is the
@@ -1031,6 +1039,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     flareState = null;
     flareCooldown = 0;
     snapshot.flare = null;
+    snapshot.flareReady = true;
 
     const up = compassVec(wind.baseTwd);
     const heading = wrap2Pi(wind.baseTwd + 100 * DEG);
@@ -1411,6 +1420,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     wildlife.update(PHYS_DT, state.pos, query);
 
     flareCooldown = Math.max(0, flareCooldown - PHYS_DT);
+    snapshot.flareReady = flareCooldown <= 0;
     if (flareState) {
       const fl = flareState;
       fl.age += PHYS_DT;

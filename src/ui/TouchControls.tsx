@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { Anchor, Menu, Navigation, Video } from 'lucide-react';
+import { Anchor, Menu, Navigation, Sparkles, Video } from 'lucide-react';
 import { CRUISER } from '@/sim/config';
 import { useEngine, useEngineFrame } from './engine-context';
 import { useT } from './i18n';
@@ -105,6 +105,9 @@ function Tiller() {
   );
 }
 
+const KEY_CLASS =
+  'pointer-events-auto flex size-10 items-center justify-center rounded-full border border-border bg-card/70 text-muted-foreground backdrop-blur-md transition-colors active:bg-accent active:text-foreground disabled:opacity-40 [&_svg]:size-4';
+
 function Key({
   label,
   onPress,
@@ -115,14 +118,49 @@ function Key({
   children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onPress}
-      className="pointer-events-auto flex size-10 items-center justify-center rounded-full border border-border bg-card/70 text-muted-foreground backdrop-blur-md transition-colors active:bg-accent active:text-foreground [&_svg]:size-4"
-    >
+    <button type="button" aria-label={label} title={label} onClick={onPress} className={KEY_CLASS}>
       {children}
+    </button>
+  );
+}
+
+/**
+ * The flare, and only after dark.
+ *
+ * The row's own rule is four keys and no more, and it holds -- by day. This
+ * is the chart's recentre-button bargain over again: a button that appears
+ * when it means something and is simply absent when it does not. A flare at
+ * noon is a spark nobody can see, so daylight is when the row goes back to
+ * four; at night the key stands, and dims for the two minutes the locker
+ * takes to produce another.
+ *
+ * Shown and dimmed through the DOM, not through React state: daylight and
+ * the cooldown both come off the per-frame snapshot, and this file's own
+ * header warns what routing that through the reconciler does to the frame
+ * budget.
+ */
+function FlareKey() {
+  const engine = useEngine();
+  const t = useT();
+  const ref = useRef<HTMLButtonElement>(null);
+  useEngineFrame((s) => {
+    const el = ref.current;
+    if (!el) return;
+    const night = s.sky.daylight < 0.4;
+    el.style.display = night ? '' : 'none';
+    el.disabled = !s.flareReady;
+  });
+  return (
+    <button
+      ref={ref}
+      type="button"
+      aria-label={t(TOUCH.flare)}
+      title={t(TOUCH.flare)}
+      onClick={() => engine.press('u')}
+      style={{ display: 'none' }}
+      className={KEY_CLASS}
+    >
+      <Sparkles />
     </button>
   );
 }
@@ -147,9 +185,10 @@ export function TouchControls({ onMenu }: { onMenu: () => void }) {
       style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.75rem)' }}
       className="pointer-events-none flex w-full flex-col items-center gap-2.5"
     >
-      {/* Four, and no more. Reefing and trimming are not here because she does
-          both herself by default, and a row of buttons for things nobody has to
-          press is how a sea turns into a control panel. */}
+      {/* Four by day, and no more. Reefing and trimming are not here because
+          she does both herself by default, and a row of buttons for things
+          nobody has to press is how a sea turns into a control panel. The
+          flare is the one exception, and only after dark -- see FlareKey. */}
       <div className="flex items-center gap-2">
         <Key label={t(TOUCH.autopilot)} onPress={() => engine.press('h')}>
           <Navigation />
@@ -157,6 +196,7 @@ export function TouchControls({ onMenu }: { onMenu: () => void }) {
         <Key label={t(TOUCH.anchor)} onPress={() => engine.press('a')}>
           <Anchor />
         </Key>
+        <FlareKey />
         <Key label={t(TOUCH.camera)} onPress={() => engine.press('c')}>
           <Video />
         </Key>
