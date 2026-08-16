@@ -8,6 +8,7 @@ import {
   type Terrain,
 } from '../sim/terrain';
 import { EDGE_FADE, type RegionTerrain } from '../sim/region-terrain';
+import { FLARE_WARM } from './flare';
 import type { SkyState } from '../sim/sky';
 import { compassVec, smoothstep } from '../sim/math';
 
@@ -628,6 +629,8 @@ export interface Water {
     twd: number,
     sky: SkyState,
     visibility: number,
+    /** The flare's scene lift, 0 with none up; see FLARE_WARM in flare.ts. */
+    flareLift: number,
   ): void;
   setTerrain(terrain: Terrain): void;
   /**
@@ -881,7 +884,7 @@ export function createWater(): Water {
       field.needsUpdate = true;
     },
 
-    update(waves, simX, simY, tws, twd, sky, visibility) {
+    update(waves, simX, simY, tws, twd, sky, visibility, flareLift) {
       // Snap to whole cells, otherwise the vertices slide and the water swims.
       const ox = Math.round(simX / quad) * quad;
       const oy = Math.round(simY / quad) * quad;
@@ -925,6 +928,20 @@ export function createWater(): Water {
       uniforms.uSky.value.setRGB(sky.skyHorizon[0], sky.skyHorizon[1], sky.skyHorizon[2]);
       uniforms.uSunColor.value.setRGB(sky.sunColor[0], sky.sunColor[1], sky.sunColor[2]);
       uniforms.uFogColor.value.setRGB(sky.fogColor[0], sky.fogColor[1], sky.fogColor[2]);
+      // The flare warms the sea's own palette, not only its explicit pool: a
+      // review traced the scene-level fog warm and found it never reached
+      // these shaders, which re-read the sky's colours every frame -- so the
+      // "whole night lifts" claim held for the hull and land and quietly
+      // failed for the water and the fog it dissolves into. Same constant and
+      // coefficients as the scene fog, so land and sea dissolve into the
+      // same warmed haze.
+      if (flareLift > 0.001) {
+        const warm = Math.min(0.5, flareLift * 0.3);
+        uniforms.uFogColor.value.lerp(FLARE_WARM, warm);
+        uniforms.uSky.value.lerp(FLARE_WARM, warm * 0.8);
+        uniforms.uDeep.value.lerp(FLARE_WARM, warm * 0.5);
+        uniforms.uShallow.value.lerp(FLARE_WARM, warm * 0.5);
+      }
       uniforms.uSun.value.set(sky.sunDir[0], sky.sunDir[1], sky.sunDir[2]);
       // A low sun lays a long glare path down the water; overhead it sparkles.
       uniforms.uSpecular.value = 0.25 + sky.daylight * 0.55 + sky.goldenness * 0.5;

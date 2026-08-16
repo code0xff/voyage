@@ -32,6 +32,14 @@ export interface FlareInput {
  */
 const FLARE_CANDELA = 150_000;
 
+/**
+ * What the world warms toward under a burning flare: dim amber, never white
+ * -- the night should lift, not turn to day. One constant, imported by the
+ * scene's fog, the water's colours and the sky dome's glow alike, because
+ * three hand-copied warm tones would drift the first time one was tuned.
+ */
+export const FLARE_WARM = new THREE.Color(0.42, 0.33, 0.2);
+
 export function createFlareView(scene: THREE.Scene): {
   update(f: FlareInput | null, daylight: number, visibility: number, dt: number): number;
   dispose(): void;

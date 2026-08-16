@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { FLARE_WARM } from './flare';
 import { approach } from '../sim/math';
 import type { SkyState } from '../sim/sky';
 
@@ -36,6 +37,8 @@ const vertexShader = /* glsl */ `
 const fragmentShader = /* glsl */ `
   uniform vec3 uTop;
   uniform vec3 uHorizon;
+  uniform vec3 uFlareWarm;
+  uniform float uFlareGlow;
   uniform vec3 uSunColor;
   uniform vec3 uSunDir;
   uniform float uCloud;
@@ -182,6 +185,11 @@ const fragmentShader = /* glsl */ `
     float h = clamp(d.y, 0.0, 1.0);
     vec3 col = mix(uHorizon, uTop, pow(h, 0.42));
 
+    // A burning flare warms the sky's skirt. Hugging the horizon and gone by
+    // overhead, because that is where a low star's light meets the haze --
+    // and the stars above staying dark is what keeps a lifted night a night.
+    col += uFlareWarm * (uFlareGlow * pow(1.0 - h, 2.0));
+
     // Sun glow. Wide and warm near the horizon, tight and bright when high.
     float cosA = max(dot(d, normalize(uSunDir)), 0.0);
     float tight = pow(cosA, 220.0);
@@ -278,6 +286,8 @@ export interface SkyDome {
     rainbow: number,
     dt: number,
     session: number,
+    /** The flare's scene lift, 0 with none up; see FLARE_WARM in flare.ts. */
+    flareLift: number,
   ): void;
   dispose(): void;
 }
@@ -302,6 +312,8 @@ export function createSkyDome(): SkyDome {
   const uniforms = {
     uTop: { value: new THREE.Color(0x24446f) },
     uHorizon: { value: new THREE.Color(0x9ebad5) },
+    uFlareWarm: { value: FLARE_WARM },
+    uFlareGlow: { value: 0 },
     uSunColor: { value: new THREE.Color(1, 0.98, 0.94) },
     uSunDir: { value: new THREE.Vector3(0, 1, 0) },
     uCloud: { value: 0 },
@@ -327,7 +339,8 @@ export function createSkyDome(): SkyDome {
 
   return {
     mesh,
-    update(sky, cloud, elapsedHours, windTwd, rainbow, dt, session) {
+    update(sky, cloud, elapsedHours, windTwd, rainbow, dt, session, flareLift) {
+      uniforms.uFlareGlow.value = Math.min(0.7, flareLift * 0.45);
       if (session !== lastSession) {
         displayedRainbow = 0;
         lastSession = session;

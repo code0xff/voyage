@@ -15,7 +15,7 @@ import { createIslandView } from './islands';
 import { createRain } from './rain';
 import { createSkyDome } from './skydome';
 import { createBoatLights, lampLevel } from './lights';
-import { createFlareView } from './flare';
+import { FLARE_WARM, createFlareView } from './flare';
 import { createOrbit } from './orbit';
 import { chaseEyePosition, chaseTarget, deckOrientation } from './eye';
 import type { WhaleSighting } from '../sim/whales';
@@ -348,9 +348,6 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   scene.add(skyDome.mesh);
 
   const flareView = createFlareView(scene);
-  // What the fog warms toward under a flare: dim amber, not white -- the
-  // night should lift, not turn to day.
-  const FLARE_HORIZON = new THREE.Color(0.42, 0.33, 0.2);
 
   // --- Water --------------------------------------------------------------
   // Wave shape on the GPU, floating height on the CPU, from the same formula.
@@ -658,7 +655,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     fogColor.setRGB(sky.fogColor[0], sky.fogColor[1], sky.fogColor[2]);
     // The horizon warms toward the burn -- fog and background together, so
     // the far sea and the sky's skirt lift with the rest of the night.
-    if (flareLift > 0.001) fogColor.lerp(FLARE_HORIZON, Math.min(0.55, flareLift * 0.32));
+    if (flareLift > 0.001) fogColor.lerp(FLARE_WARM, Math.min(0.5, flareLift * 0.3));
     scene.background = fogColor;
     /*
      * Linearised before it is handed to the fog, so that land dissolves into
@@ -694,6 +691,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       rainbowStrength(f.weather.rain, f.weather.cloud, sky.sunElevation),
       dt,
       f.session,
+      flareLift,
     );
     islandView.update(sky);
     regionView.update(state.pos.x, state.pos.y, sky);
@@ -718,6 +716,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       wind.baseTwd,
       sky,
       f.visibility,
+      flareLift,
     );
     // state.pos is passed straight through rather than copied: the animal views
     // only read it, and a fresh object literal per frame is garbage the render
