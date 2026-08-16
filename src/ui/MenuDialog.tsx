@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { formatClock } from "@/sim/sky";
 import { WEATHER_KINDS, type WeatherKind } from "@/sim/weather";
 import { LANGS, type Lang } from "@/i18n";
@@ -815,28 +816,24 @@ export function MenuDialog({
               </span>
               {/* Both states on show rather than one button whose label is
                   the state: a lone "Off" reads as a caption as easily as a
-                  control. A joined pair of the ordinary Button, asked for
-                  over the tabs look: the design system ships no toggle-group
-                  primitive, and two buttons sharing an edge -- filled when
-                  chosen, outline when not, aria-pressed carrying the state --
-                  is the whole of what a button group is. The negative margin
-                  collapses the doubled border where they meet. */}
-              <div role="group" aria-label={t(WORLD.cruise)} className="flex">
-                {([false, true] as const).map((on) => (
-                  <Button
-                    key={String(on)}
-                    aria-pressed={settings.cruise === on}
-                    variant={settings.cruise === on ? "default" : "outline"}
-                    size="sm"
-                    className={
-                      on ? "-ml-px flex-1 rounded-l-none" : "flex-1 rounded-r-none"
-                    }
-                    onClick={() => set("cruise", on)}
-                  >
-                    {t(on ? WORLD.cruiseOn : WORLD.cruiseOff)}
-                  </Button>
-                ))}
-              </div>
+                  control. A real toggle group (see toggle-group.tsx), the
+                  fourth and final shape of this control: the joined look of
+                  a button group with Radix carrying the radio contract the
+                  hand-joined pair could not. The empty-string guard is the
+                  primitive's one sharp edge -- a single-type group reports
+                  deselection as "", and a mode must always be one or the
+                  other. */}
+              <ToggleGroup
+                type="single"
+                value={settings.cruise ? "on" : "off"}
+                onValueChange={(v) => {
+                  if (v) set("cruise", v === "on");
+                }}
+                aria-label={t(WORLD.cruise)}
+              >
+                <ToggleGroupItem value="off">{t(WORLD.cruiseOff)}</ToggleGroupItem>
+                <ToggleGroupItem value="on">{t(WORLD.cruiseOn)}</ToggleGroupItem>
+              </ToggleGroup>
             </div>
             {/* Below the row, full width, like every other note on this tab --
                 beside the buttons it was squeezed into a sliver and read as
