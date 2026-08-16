@@ -518,6 +518,82 @@ export class SoundEngine {
   }
 
   /**
+   * Thunder, heard from wherever the bolt was.
+   *
+   * The whole character of it is distance, and distance is two things at
+   * once: the delay -- three seconds a kilometre, the count everybody knows
+   * -- and what the air has done to the sound by the time it arrives. Close
+   * by it is a crack with a rip in it; a horizon strike has had every edge
+   * taken off and arrives as a long low roll, so far becomes *lower*,
+   * *longer* and *softer* together rather than merely quieter, which is the
+   * difference between thunder and a drum.
+   *
+   * Rolled rather than struck: the sound is smeared over a second or more,
+   * because a bolt is kilometres long and its far end is further away than
+   * its near end. That smear is the roll, and it is why the tail of a
+   * distant one wanders.
+   *
+   * @param distance metres to the strike
+   * @param power the bolt's own 0..1, so a near weak one is not a near loud one
+   */
+  thunder(distance: number, power: number): boolean {
+    const ctx = this.ctx;
+    const master = this.master;
+    const noise = this.noise;
+    // Reports whether the sound was actually built, so the caller can hold a
+    // strike that arrived while the context was still asleep -- the same
+    // contract, and for the same reason, as `whaleBlow`.
+    if (!ctx || !master || !noise || ctx.state !== 'running') return false;
+
+    // Distant thunder carries far better than a gull does -- it is enormous
+    // -- so the fall-off reference is kilometres rather than hundreds of
+    // metres. Below the audible floor nothing is built at all.
+    const near = 1 - Math.min(1, distance / 14000);
+    const gain = (0.18 + 0.5 * near * near) * power;
+    // Inaudible counts as dealt with: nothing is built, and the caller must
+    // not hold it waiting for a louder moment that will never come.
+    if (gain < 0.015) return true;
+
+    const t = ctx.currentTime + distance / 343;
+    // Long and low far away, short and bright close to. Both ends measured
+    // against the same roll: the crack is the first tenth of it.
+    const roll = 0.9 + (1 - near) * 3.2;
+    const cut = 260 + near * 2600;
+
+    const layer = (freq: number, q: number, delay: number, attack: number, decay: number, peak: number) => {
+      const src = ctx.createBufferSource();
+      src.buffer = noise;
+      src.loop = true;
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = freq;
+      f.Q.value = q;
+      const g = ctx.createGain();
+      const t0 = t + delay;
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(peak * gain, t0 + attack);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + decay);
+      src.connect(f).connect(g).connect(master);
+      src.start(t0, Math.random() * 2);
+      src.stop(t0 + attack + decay + 0.05);
+      this.pending.push(src);
+      src.onended = () => {
+        const i = this.pending.indexOf(src);
+        if (i >= 0) this.pending.splice(i, 1);
+      };
+    };
+
+    // The crack, only really there when it is close: a sharp front edge that
+    // a horizon strike has lost entirely.
+    if (near > 0.35) layer(cut * 1.6, 0.7, 0, 0.006, 0.25 * roll, 0.9 * near);
+    // The body, and the roll: a second entry a beat later and lower is what
+    // makes the tail wander instead of fading in a straight line.
+    layer(cut, 0.6, 0.02, 0.05 + (1 - near) * 0.25, roll, 1);
+    layer(cut * 0.55, 0.5, 0.35 * roll, 0.2 * roll, roll * 0.9, 0.55);
+    return true;
+  }
+
+  /**
    * An illumination flare going up.
    *
    * Three moments, all noise: the thump of the launch under your feet, the

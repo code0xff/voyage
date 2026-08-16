@@ -8,7 +8,6 @@ import {
   type Terrain,
 } from '../sim/terrain';
 import { EDGE_FADE, type RegionTerrain } from '../sim/region-terrain';
-import { FLARE_WARM } from './flare';
 import type { SkyState } from '../sim/sky';
 import { compassVec, smoothstep } from '../sim/math';
 
@@ -629,8 +628,10 @@ export interface Water {
     twd: number,
     sky: SkyState,
     visibility: number,
-    /** The flare's scene lift, 0 with none up; see FLARE_WARM in flare.ts. */
+    /** The scene's flash lift, 0 with nothing burning; see scene.ts. */
     flareLift: number,
+    /** What that flash warms the sea toward -- amber for a flare, blue for a bolt. */
+    flashColor: THREE.Color,
   ): void;
   setTerrain(terrain: Terrain): void;
   /**
@@ -884,7 +885,7 @@ export function createWater(): Water {
       field.needsUpdate = true;
     },
 
-    update(waves, simX, simY, tws, twd, sky, visibility, flareLift) {
+    update(waves, simX, simY, tws, twd, sky, visibility, flareLift, flashColor) {
       // Snap to whole cells, otherwise the vertices slide and the water swims.
       const ox = Math.round(simX / quad) * quad;
       const oy = Math.round(simY / quad) * quad;
@@ -937,10 +938,10 @@ export function createWater(): Water {
       // same warmed haze.
       if (flareLift > 0.001) {
         const warm = Math.min(0.5, flareLift * 0.3);
-        uniforms.uFogColor.value.lerp(FLARE_WARM, warm);
-        uniforms.uSky.value.lerp(FLARE_WARM, warm * 0.8);
-        uniforms.uDeep.value.lerp(FLARE_WARM, warm * 0.5);
-        uniforms.uShallow.value.lerp(FLARE_WARM, warm * 0.5);
+        uniforms.uFogColor.value.lerp(flashColor, warm);
+        uniforms.uSky.value.lerp(flashColor, warm * 0.8);
+        uniforms.uDeep.value.lerp(flashColor, warm * 0.5);
+        uniforms.uShallow.value.lerp(flashColor, warm * 0.5);
       }
       uniforms.uSun.value.set(sky.sunDir[0], sky.sunDir[1], sky.sunDir[2]);
       // A low sun lays a long glare path down the water; overhead it sparkles.

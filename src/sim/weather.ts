@@ -124,6 +124,70 @@ const TRANSITIONS: Record<WeatherKind, [WeatherKind, number][]> = {
   ],
 };
 
+/**
+ * A stroke of lightning: where it went off, and how hard.
+ *
+ * Bearing and distance rather than a world position, because nothing in the
+ * game is *at* a bolt -- it is a light on the sky and a noise that arrives
+ * later, and both of those are answered by how far away it was and which way
+ * to look. The far end of the range is beyond anything the fog draws, which
+ * is right: most lightning in a squall is a sky that lights up with nothing
+ * visible in it.
+ */
+export interface Lightning {
+  /** Compass bearing from the boat, rad. */
+  bearing: number;
+  /** Metres away. */
+  distance: number;
+  /** 0..1, how much sky this one lights. */
+  power: number;
+  /** Real seconds since it struck. */
+  age: number;
+}
+
+/**
+ * How lightning is scheduled.
+ *
+ * On *real* seconds, not world ones -- the same rule the wildlife clocks and
+ * the flare's burn follow. A strike is something the player watches happen,
+ * and at the default 60x time scale a storm rolled on world time would strobe
+ * rather than flash.
+ *
+ * Only in heavy rain, and more of it the heavier: measured, a squall (rain
+ * 0.9) averages a bolt every six seconds and steady rain (0.65) one every
+ * fifty, and anything drier than `RAIN_FLOOR` throws none at all. Nothing here consults
+ * the *kind*: a squall easing into rain should thin its lightning out with
+ * the rain rather than stop the moment the label changes.
+ */
+const RAIN_FLOOR = 0.55;
+const STRIKE_INTERVAL_MIN = 6;
+const STRIKE_INTERVAL_MAX = 70;
+/** m. The near end is close enough to be frightening; the far end is a horizon. */
+const STRIKE_NEAR = 400;
+const STRIKE_FAR = 14000;
+/** s. How long one bolt's flicker lasts. */
+export const FLASH_TIME = 0.45;
+
+/**
+ * The flash a bolt is throwing at this age, 0..1.
+ *
+ * Two or three pulses inside half a second, not one fade: a real stroke is a
+ * leader and its return strokes, and it is the stutter that says lightning
+ * rather than "someone turned a light on". Pure and exported so the shape can
+ * be asserted without a renderer.
+ */
+export function flashAt(age: number, power: number): number {
+  if (!(age >= 0) || age > FLASH_TIME) return 0;
+  const pulse = (at: number, height: number, decay: number) =>
+    age < at ? 0 : height * Math.exp(-(age - at) / decay);
+  const v = pulse(0, 1, 0.055) + pulse(0.09, 0.7, 0.05) + pulse(0.21, 0.45, 0.07);
+  // Faded to nothing over the last tenth rather than cut off at the end:
+  // the pulses still carry about 1.5% of full brightness at FLASH_TIME, and
+  // a step from there to zero is a blink at the end of every stroke.
+  const close = Math.min(1, (FLASH_TIME - age) / 0.1);
+  return Math.min(1, v) * clamp(power, 0, 1) * close;
+}
+
 export interface WeatherState {
   kind: WeatherKind;
   /** Smoothed values actually applied to the world. */
@@ -134,6 +198,19 @@ export interface WeatherState {
   gustScale: number;
   /** World seconds until the next roll, on the same clock as `dwell`. */
   timeToChange: number;
+  /**
+   * The bolt whose flash is running, or null. Kept for the whole flash so a
+   * renderer can put the light where the bolt was rather than overhead.
+   */
+  lightning: Lightning | null;
+  /** How much sky that bolt is lighting right now, 0..1. */
+  flash: number;
+  /**
+   * True for the one step a bolt strikes on, which is when the thunder is
+   * scheduled -- the sound is the engine's to play, and it belongs to the
+   * strike rather than to any frame that follows it.
+   */
+  struck: boolean;
 }
 
 function rng(seed: number): () => number {
@@ -151,12 +228,26 @@ export class Weather {
   readonly state: WeatherState;
   private target: WeatherProfile;
   private rand: () => number;
+  /**
+   * Lightning draws from its own stream, not the weather's.
+   *
+   * A shared one would make the *fronts* depend on how much lightning had
+   * been thrown, so a pinned seed would stop meaning a pinned world the day
+   * this feature landed -- a review measured the first transition moving
+   * from 5115 s to 2866 s on seed 1. Stirred off the same seed so a storm is
+   * still reproducible, and separate so it cannot reach back into anything
+   * that was reproducible before it existed.
+   */
+  private bolt: () => number;
   private timer = 0;
+  /** Real seconds until the next bolt; 0 means "roll a new interval". */
+  private nextStrike = 0;
   /** When false the weather is pinned to whatever it currently is. */
   evolve = true;
 
   constructor(seed = 1, kind: WeatherKind = 'fair') {
     this.rand = rng(seed);
+    this.bolt = rng(seed ^ 0xb017);
     this.target = PROFILES[kind];
     this.state = {
       kind,
@@ -166,6 +257,9 @@ export class Weather {
       windScale: this.target.windScale,
       gustScale: this.target.gustScale,
       timeToChange: this.target.dwell,
+      lightning: null,
+      flash: 0,
+      struck: false,
     };
     this.timer = this.target.dwell;
   }
@@ -184,6 +278,7 @@ export class Weather {
    */
   reseed(seed: number): void {
     this.rand = rng(seed);
+    this.bolt = rng(seed ^ 0xb017);
     const openers: WeatherKind[] = ['clear', 'fair', 'fair', 'overcast'];
     this.set(openers[Math.floor(this.rand() * openers.length)]);
   }
@@ -199,6 +294,14 @@ export class Weather {
     this.state.gustScale = this.target.gustScale;
     this.timer = this.target.dwell;
     this.state.timeToChange = this.timer;
+    // The sky is cleared with everything else. Jumping conditions -- a new
+    // session, a pinned mode, a reseed -- must not carry a bolt across:
+    // review found a flash of 0.94 surviving `reseed()` into fair weather,
+    // and the old interval deciding when the new storm's first strike fell.
+    this.nextStrike = 0;
+    this.state.lightning = null;
+    this.state.flash = 0;
+    this.state.struck = false;
   }
 
   private roll(): void {
@@ -228,6 +331,7 @@ export class Weather {
    * and read as a bug rather than as weather.
    */
   update(dt: number, worldDt = dt): void {
+    this.updateLightning(dt);
     if (this.evolve) {
       this.timer -= worldDt;
       if (this.timer <= 0) this.roll();
@@ -243,6 +347,78 @@ export class Weather {
     s.fog = approach(s.fog, t.fog, 60, dt);
     s.windScale = approach(s.windScale, t.windScale, 22, dt);
     s.gustScale = approach(s.gustScale, t.gustScale, 22, dt);
+  }
+
+  /**
+   * Strike, flash, and clear again -- on real seconds; see the note above.
+   *
+   * The next strike is timed as soon as the last one is scheduled rather than
+   * rolled every step, so the interval a storm is running at is a property of
+   * the storm and not of the frame rate.
+   */
+  private updateLightning(dt: number): void {
+    const s = this.state;
+    s.struck = false;
+
+    if (s.lightning) {
+      s.lightning.age += dt;
+      s.flash = flashAt(s.lightning.age, s.lightning.power);
+      if (s.lightning.age > FLASH_TIME) {
+        s.lightning = null;
+        s.flash = 0;
+      }
+    }
+
+    if (s.rain < RAIN_FLOOR) {
+      // A storm that has rained itself out keeps whatever bolt is in the air
+      // -- it was already struck -- but schedules no more.
+      this.nextStrike = 0;
+      return;
+    }
+
+    // Heavier rain, shorter gaps. Linear in the rain above the floor, which
+    // is enough: what matters is that a squall crackles and steady rain
+    // merely grumbles.
+    const heaviness = clamp((s.rain - RAIN_FLOOR) / (0.9 - RAIN_FLOOR), 0, 1);
+    if (this.nextStrike <= 0) {
+      const mean = STRIKE_INTERVAL_MAX - (STRIKE_INTERVAL_MAX - STRIKE_INTERVAL_MIN) * heaviness;
+      // Exponentially distributed, so strikes cluster the way they really do
+      // instead of arriving on a metronome. Clamped off zero: the log of a
+      // zero from the generator is infinite, and a storm that stopped forever
+      // would be a hard bug to find.
+      this.nextStrike = -Math.log(Math.max(this.bolt(), 1e-6)) * mean;
+      return;
+    }
+
+    this.nextStrike -= dt;
+    if (this.nextStrike > 0) return;
+    // One bolt at a time on screen. Intervals are exponential, so two can
+    // fall inside one flash -- review found pairs 0.27 s apart -- and the
+    // second used to replace the first mid-stutter, cutting a stroke short.
+    // The new one waits out the old one's flash rather than being dropped:
+    // a storm that crackles should look like one.
+    if (this.state.lightning) return;
+
+    // Far strikes are commoner than near ones: most of a storm is over there,
+    // and the close one has to stay rare enough to startle. Raising the roll
+    // to a power *below* one pushes it toward the far end -- the first
+    // version cubed it, which pushes the other way and put nearly six bolts
+    // in ten within three kilometres, a lightning field rather than weather.
+    // Caught by the test that measures the mix, which is why it is written
+    // as a fraction and not as a formula.
+    const roll = Math.pow(this.bolt(), 0.75);
+    const distance = STRIKE_NEAR + (STRIKE_FAR - STRIKE_NEAR) * roll;
+    s.lightning = {
+      bearing: this.bolt() * Math.PI * 2,
+      distance,
+      // Near bolts light more sky, but the far ones are not dark: a horizon
+      // flash lights the whole cloud base, which is why the floor is high.
+      power: clamp(1.15 - distance / STRIKE_FAR, 0.35, 1),
+      age: 0,
+    };
+    s.flash = flashAt(0, s.lightning.power);
+    s.struck = true;
+    this.nextStrike = 0;
   }
 
   /** Visibility in metres, for fog and rain. */

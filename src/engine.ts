@@ -468,6 +468,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let flareCooldown = 0;
   /** Seconds left of showing the refused-press hint; see Snapshot.flareWait. */
   let flareDeniedFor = 0;
+  /**
+   * Thunder that struck before the audio could take it; see the drain above.
+   * Bounded by the drop rule -- nothing waits longer than its own flight
+   * time -- so a muted hour cannot pile up a storm to play at once.
+   */
+  const pendingThunder: { distance: number; power: number; waited: number }[] = [];
   /** The passage under way, or null when she is just out sailing. */
   let log: PassageLog | null = null;
   /** Whether this session has already said the local logbook will not open. */
@@ -1335,6 +1341,30 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // *looks* like it arrives is a matter of what reads as weather rather than
     // as a glitch, and that does not speed up just because the clock does.
     weather.update(PHYS_DT, PHYS_DT * current.timeScale);
+    // Thunder belongs to the strike, not to any frame after it: scheduled
+    // once, on the step the bolt goes off, and heard when the sound of it
+    // has crossed the distance -- the same speed-of-sound honesty as the
+    // whale's blow and the flare's pop.
+    if (weather.state.struck && weather.state.lightning) {
+      // Held rather than played straight through: the audio context is
+      // asleep until the first gesture and simply refuses while suspended,
+      // and `struck` is true for one step -- so a bolt that struck a moment
+      // before the player touched anything used to be silent forever. The
+      // queue is drained below, and a strike whose thunder never became
+      // audible is dropped once it is older than its own sound could be.
+      pendingThunder.push({
+        distance: weather.state.lightning.distance,
+        power: weather.state.lightning.power,
+        waited: 0,
+      });
+    }
+    for (let i = pendingThunder.length - 1; i >= 0; i--) {
+      const th = pendingThunder[i];
+      th.waited += PHYS_DT;
+      if (sound.thunder(th.distance, th.power) || th.waited > th.distance / 343) {
+        pendingThunder.splice(i, 1);
+      }
+    }
 
     // Weather drives the mean wind, so re-derive it every step rather than
     // only when a setting changes.
@@ -1863,6 +1893,16 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     setPaused(p) {
       paused = p;
       snapshot.paused = p;
+      // A flash does not wait behind the menu. The physics stops while
+      // paused, so a bolt caught mid-stutter used to hang lit on the frozen
+      // scene -- and its thunder, already scheduled, would arrive over a
+      // photograph. Cleared on the way in; the storm carries on when the
+      // world does.
+      if (p) {
+        weather.state.lightning = null;
+        weather.state.flash = 0;
+        weather.state.struck = false;
+      }
       /*
        * And drop whatever was pressed on the way through the boundary.
        *

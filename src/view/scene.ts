@@ -16,6 +16,14 @@ import { createRain } from './rain';
 import { createSkyDome } from './skydome';
 import { createBoatLights, lampLevel } from './lights';
 import { FLARE_WARM, createFlareView } from './flare';
+
+/**
+ * What lightning warms the world toward: a cold blue-white, against the
+ * flare's amber. One is a chemical star hanging over you and the other is a
+ * spark kilometres long, and the eye knows the difference by colour before
+ * anything else.
+ */
+const BOLT_WHITE = new THREE.Color(0.62, 0.68, 0.85);
 import { createOrbit } from './orbit';
 import { BRACED, chaseEyePosition, chaseTarget, deckOrientation } from './eye';
 import type { WhaleSighting } from '../sim/whales';
@@ -645,19 +653,35 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     // lifted night.
     const flareLevel = flareView.update(f.flare, sky.daylight, f.visibility, f.dt);
     const flareLift = 0.35 * flareLevel + 2.2 * Math.max(0, flareLevel - 1);
+    /*
+     * Lightning goes through the same channel, and that sharing is the point:
+     * a flare and a bolt are both "something out there is lighting the sky",
+     * and the scene already knows how to answer that -- ambient, fill,
+     * horizon glow, the sea's own palette. What differs is the colour and the
+     * shape in time. A bolt is cold, brief and much stronger, so it is
+     * weighted hard and its colour is a blue-white the amber never reaches.
+     *
+     * Combined by taking whichever is louder rather than by adding: a flare
+     * burning through a squall should not have its steady amber pushed to
+     * daylight by every distant flash, and the flash should not be tinted by
+     * the flare it happens to share a sky with.
+     */
+    const boltLift = f.weather.flash * 4.5 * (1 - sky.daylight * 0.75);
+    const lift = Math.max(flareLift, boltLift);
+    const liftColor = boltLift >= flareLift ? BOLT_WHITE : FLARE_WARM;
     const overcast = 1 - f.weather.cloud * 0.72;
     sun.color.setRGB(sky.sunColor[0], sky.sunColor[1], sky.sunColor[2]);
     sun.intensity = sky.sunIntensity * overcast;
     sun.position.set(sky.sunDir[0] * 400, sky.sunDir[1] * 400 + 30, sky.sunDir[2] * 400);
     hemi.color.setRGB(sky.skyHorizon[0], sky.skyHorizon[1], sky.skyHorizon[2]);
     hemi.groundColor.setRGB(sky.waterDeep[0], sky.waterDeep[1], sky.waterDeep[2]);
-    hemi.intensity = sky.ambientIntensity * (0.65 + f.weather.cloud * 0.35) + flareLift * 1.3;
-    fill.intensity = 0.25 + sky.daylight * 0.55 + flareLift * 0.4;
+    hemi.intensity = sky.ambientIntensity * (0.65 + f.weather.cloud * 0.35) + lift * 1.3;
+    fill.intensity = 0.25 + sky.daylight * 0.55 + lift * 0.4;
 
     fogColor.setRGB(sky.fogColor[0], sky.fogColor[1], sky.fogColor[2]);
     // The horizon warms toward the burn -- fog and background together, so
     // the far sea and the sky's skirt lift with the rest of the night.
-    if (flareLift > 0.001) fogColor.lerp(FLARE_WARM, Math.min(0.5, flareLift * 0.3));
+    if (lift > 0.001) fogColor.lerp(liftColor, Math.min(0.5, lift * 0.3));
     scene.background = fogColor;
     /*
      * Linearised before it is handed to the fog, so that land dissolves into
@@ -693,7 +717,8 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       rainbowStrength(f.weather.rain, f.weather.cloud, sky.sunElevation),
       dt,
       f.session,
-      flareLift,
+      lift,
+      liftColor,
     );
     islandView.update(sky);
     regionView.update(state.pos.x, state.pos.y, sky);
@@ -718,7 +743,8 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       wind.baseTwd,
       sky,
       f.visibility,
-      flareLift,
+      lift,
+      liftColor,
     );
     // state.pos is passed straight through rather than copied: the animal views
     // only read it, and a fresh object literal per frame is garbage the render

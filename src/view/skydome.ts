@@ -286,8 +286,10 @@ export interface SkyDome {
     rainbow: number,
     dt: number,
     session: number,
-    /** The flare's scene lift, 0 with none up; see FLARE_WARM in flare.ts. */
+    /** The scene's flash lift, 0 with nothing burning; see scene.ts. */
     flareLift: number,
+    /** What that flash warms the sky toward -- amber for a flare, blue for a bolt. */
+    flashColor: THREE.Color,
   ): void;
   dispose(): void;
 }
@@ -339,8 +341,9 @@ export function createSkyDome(): SkyDome {
 
   return {
     mesh,
-    update(sky, cloud, elapsedHours, windTwd, rainbow, dt, session, flareLift) {
+    update(sky, cloud, elapsedHours, windTwd, rainbow, dt, session, flareLift, flashColor) {
       uniforms.uFlareGlow.value = Math.min(0.7, flareLift * 0.45);
+      uniforms.uFlareWarm.value = flashColor;
       if (session !== lastSession) {
         displayedRainbow = 0;
         lastSession = session;
