@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { cgHeight, type BoatConfig } from '../sim/config';
 import type { BoatState, Diagnostics } from '../sim/boat';
-import { clamp, compassVec, side } from '../sim/math';
+import { clamp, compassVec, side, approach} from '../sim/math';
 import { REEF_AREA_FACTOR } from '../sim/sailplan';
 import { ADVECTION, type WindField } from '../sim/wind';
 import type { WaveField } from '../sim/waves';
@@ -17,7 +17,7 @@ import { createSkyDome } from './skydome';
 import { createBoatLights, lampLevel } from './lights';
 import { FLARE_WARM, createFlareView } from './flare';
 import { createOrbit } from './orbit';
-import { chaseEyePosition, chaseTarget, deckOrientation } from './eye';
+import { BRACED, chaseEyePosition, chaseTarget, deckOrientation } from './eye';
 import type { WhaleSighting } from '../sim/whales';
 import type { SharkSighting } from '../sim/sharks';
 import type { GullFlockSighting } from '../sim/wildlife';
@@ -348,6 +348,8 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   scene.add(skyDome.mesh);
 
   const flareView = createFlareView(scene);
+  /** How much of her motion the deck eye is taking; see BRACED in eye.ts. */
+  let braced = 1;
 
   // --- Water --------------------------------------------------------------
   // Wave shape on the GPU, floating height on the CPU, from the same formula.
@@ -846,6 +848,11 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       wakeCount = 0;
       wakeTimer = 0;
       wakeGeo.setDrawRange(0, 0);
+      // A new session starts with the glasses down and a head that has not
+      // braced for anything: the engine puts binoculars away on a restart,
+      // and the factor is scene-local, so without this a session begun with
+      // them up would hand the next one a stabilised deck eye.
+      braced = 1;
     }
 
     /*
@@ -895,6 +902,13 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
      * foredeck wondering what happened.
      */
     const eyeMode = f.binoculars ? BOW : camMode;
+    // Eased every frame, not only while the deck eye is the one drawing:
+    // lowered from the chase camera, the factor used to stay braced -- and
+    // the next visit to the foredeck opened with a second of stabilisation
+    // nobody asked for. Eased rather than switched because the glasses
+    // coming up should settle the horizon over a moment, the way a body
+    // finds its brace; snapping it reads as the sea stopping dead.
+    braced = approach(braced, f.binoculars ? BRACED : 1, 0.35, dt);
     if (f.binoculars !== glassesUp) {
       glassesUp = f.binoculars;
       framePitchFor(eyeMode, true);
@@ -926,6 +940,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
         state.heel,
         orbit.yaw,
         orbit.pitch,
+        braced,
       );
       camera.position.copy(camPos);
       camera.quaternion.copy(q);

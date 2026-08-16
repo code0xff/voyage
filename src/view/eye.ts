@@ -24,6 +24,22 @@ export const HEAD_PITCH = 0.8;
 export const HEAD_ROLL = 0.6;
 
 /**
+ * What is left of that once the glasses are up.
+ *
+ * A helmsman with binoculars braces and lets the boat move under him: the
+ * eyepieces hold the horizon while his knees take the sea. Magnification is
+ * what makes this necessary rather than merely nice -- at five power the
+ * residual swing is five times as wide across the field, and a view that
+ * only ever swept the sky and the water was unusable for the one job the
+ * glasses have, which is finding a blow.
+ *
+ * Not zero, deliberately. Perfectly welded to the horizon reads as a tripod
+ * bolted to the sea rather than a person holding glasses, and the little
+ * that is left is what says a body is doing the holding.
+ */
+export const BRACED = 0.12;
+
+/**
  * Which way a head on deck is looking.
  *
  * Orientation is built rather than taken off the scene graph, because this is
@@ -43,12 +59,21 @@ export function deckOrientation(
   boatHeel: number,
   yaw: number,
   pitch: number,
+  /**
+   * How much of her motion the head still takes, 1 with the naked eye and
+   * `BRACED` behind the glasses. Scales the follow factors rather than
+   * replacing them, so the braced view is the ordinary view with the sea
+   * taken out of it -- and heading is untouched at any value, because which
+   * way she points is not motion to be absorbed, it is where you are
+   * looking.
+   */
+  follow = 1,
 ): THREE.Quaternion {
   return new THREE.Quaternion().setFromEuler(
     new THREE.Euler(
-      boatPitch * HEAD_PITCH - pitch,
+      boatPitch * HEAD_PITCH * follow - pitch,
       -boatHeading - yaw,
-      -boatHeel * HEAD_ROLL,
+      -boatHeel * HEAD_ROLL * follow,
       'YXZ',
     ),
   );

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { chaseEyePosition, chaseTarget, deckOrientation } from './eye';
+import { BRACED, chaseEyePosition, chaseTarget, deckOrientation } from './eye';
 import { dragTo, pinchTo } from './orbit';
 
 /**
@@ -172,5 +172,95 @@ describe('the scene follows the fingers', () => {
     }
     expect(zoom).toBeCloseTo(pinchTo(1, 5, 2, 'distance').zoom, 10);
     expect(power).toBeCloseTo(pinchTo(1, 5, 2, 'magnify').magnify, 10);
+  });
+});
+
+/**
+ * The braced view, behind the glasses.
+ *
+ * Not a look but a claim with a truth value, which is why it is here: with
+ * the glasses up the horizon must hold while she rolls and pitches, or the
+ * one job binoculars have -- finding a blow at five power, where every
+ * residual degree is five degrees of field -- is impossible. Asserted
+ * against the world rather than against the other factor: a mark sitting on
+ * the water dead ahead is projected through the real pose function, and the
+ * question is how far it moves across the screen when she heels.
+ */
+describe('the glasses hold the horizon', () => {
+  /** Where the mark lands with the deck eye at this pose. */
+  const deckAt = (heel: number, boatPitch: number, follow: number) => {
+    const cam = camera();
+    cam.position.set(0, 2.5, 0);
+    cam.quaternion.copy(deckOrientation(boatPitch, 0, heel, 0, 0, follow));
+    return onScreen(cam);
+  };
+
+  /**
+   * The same mark, off to one side, where roll actually shows.
+   *
+   * A review pointed out that the dead-ahead mark sits on the roll axis, so
+   * a mutation dropping `follow` from the roll term alone passed everything
+   * here. Twenty degrees off the bow is where a horizon tilt reads.
+   */
+  const OFF_BOW = new THREE.Vector3(-Math.sin(0.35) * 500, 0, -Math.cos(0.35) * 500);
+
+  const offBowAt = (heel: number, follow: number) => {
+    const cam = camera();
+    cam.position.set(0, 2.5, 0);
+    cam.quaternion.copy(deckOrientation(0, 0, heel, 0, 0, follow));
+    cam.updateMatrixWorld(true);
+    cam.updateProjectionMatrix();
+    const p = OFF_BOW.clone().project(cam);
+    return { x: p.x, y: p.y };
+  };
+
+  it('steadies her roll, seen where roll shows', () => {
+    const heel = 18 * (Math.PI / 180);
+    const level = offBowAt(0, 1);
+    const naked = offBowAt(heel, 1);
+    const braced = offBowAt(heel, BRACED);
+    const swingNaked = Math.abs(naked.y - level.y);
+    const swingBraced = Math.abs(braced.y - offBowAt(0, BRACED).y);
+    expect(swingNaked).toBeGreaterThan(0.05);
+    expect(swingBraced).toBeLessThan(swingNaked * 0.2);
+  });
+
+  it('takes far less of her roll and pitch than the naked eye', () => {
+    const heel = 18 * (Math.PI / 180);
+    const pitch = 6 * (Math.PI / 180);
+    const level = deckAt(0, 0, 1);
+    const naked = deckAt(heel, pitch, 1);
+    const braced = deckAt(heel, pitch, BRACED);
+
+    const swingNaked = Math.hypot(naked.x - level.x, naked.y - level.y);
+    const swingBraced = Math.hypot(braced.x - level.x, braced.y - level.y);
+    expect(swingNaked).toBeGreaterThan(0.1);
+    // Written out rather than derived from BRACED: the claim is that the
+    // view is steady enough to search with, not that one number equals
+    // another. A fifth of the naked swing is that claim.
+    expect(swingBraced).toBeLessThan(swingNaked * 0.2);
+  });
+
+  it('still moves a little -- a braced body, not a tripod', () => {
+    // Through her pitch, not her roll: roll turns the view about its own
+    // axis, so a mark dead ahead sits on the pivot and hardly moves however
+    // hard she rolls. The first draft of this test asked the roll question
+    // and measured 1e-4 of screen -- a number that says nothing about the
+    // stabilisation and everything about where the mark was put.
+    const level = deckAt(0, 0, BRACED);
+    const braced = deckAt(0, 6 * (Math.PI / 180), BRACED);
+    expect(Math.hypot(braced.x - level.x, braced.y - level.y)).toBeGreaterThan(0.005);
+  });
+
+  it('never steadies the heading -- where she points is where you look', () => {
+    // The trap this guards: "hold the view" read as "hold the compass" would
+    // leave the glasses pointing at a fixed bearing while the boat turned
+    // under them, which is not bracing, it is a gyro.
+    const cam = camera();
+    cam.position.set(0, 2.5, 0);
+    cam.quaternion.copy(deckOrientation(0, 0.4, 0, 0, 0, BRACED));
+    const turned = onScreen(cam);
+    const ahead = deckAt(0, 0, BRACED);
+    expect(Math.abs(turned.x - ahead.x)).toBeGreaterThan(0.3);
   });
 });
