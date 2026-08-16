@@ -4,6 +4,21 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark light" />
+    <!--
+      Icons, beside the models under public/assets. Written root-absolute
+      because Vite rewrites href and src in this file when VOYAGE_BASE names
+      a subpath -- measured, and the reason scripts/check-base.ts does not
+      police HTML. The manifest's *contents* are not rewritten, so the paths
+      inside it are relative to itself; see site.webmanifest.
+    -->
+    <link rel="icon" href="/assets/icons/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png" />
+    <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <!-- The dark theme's own --background, so the browser chrome and the
+         splash match the app rather than framing it in white. -->
+    <meta name="theme-color" content="#0a0a0a" />
     <title>voyage — sailing simulator</title>
   </head>
   <body class="overflow-hidden">
