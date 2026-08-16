@@ -16,13 +16,16 @@ import { cn } from "@/lib/utils";
  * on the right side of an RTL layout, and the focused seam outranks the
  * selected one (z-20 over z-10) so the ring is never painted over.
  *
- * Items size to their labels; a group that should fill its row asks for it
- * (`flex-1` on the items, or `w-full` on the root). Filling by default made
- * a two-word on/off switch as wide as the panel, which read as a much more
- * important control than it is.
+ * Items size to their labels but never below `min-w-12`, so a two-option
+ * switch reads as one control rather than two buttons of different sizes:
+ * "Off" is a wider word than "On", and at these paddings that showed as a
+ * 1.4 px step between the halves. A group that should fill its row asks for
+ * it (`flex-1` on the items, or `w-full` on the root). Filling by default
+ * made a two-word on/off switch as wide as the panel, which read as a much
+ * more important control than it is.
  */
 const toggleGroupItemVariants = cva(
-  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap border border-input bg-background text-xs font-medium transition-colors first:rounded-s-md last:rounded-e-md [&:not(:first-child)]:-ms-px hover:bg-accent hover:text-accent-foreground focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=on]:z-10 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0",
+  "inline-flex min-w-12 items-center justify-center gap-1.5 whitespace-nowrap border border-input bg-background text-xs font-medium transition-colors first:rounded-s-md last:rounded-e-md [&:not(:first-child)]:-ms-px hover:bg-accent hover:text-accent-foreground focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=on]:z-10 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0",
   {
     variants: {
       size: {
