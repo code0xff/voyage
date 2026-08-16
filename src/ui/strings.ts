@@ -239,6 +239,7 @@ export const KEYS: [string, Phrase][] = [
   ['K', { en: 'photograph the sea', ko: '바다 사진 찍기' }],
   ['L', { en: 'navigation lights', ko: '항해등' }],
   ['B', { en: 'binoculars — wheel or pinch sets the power', ko: '쌍안경 — 휠이나 핀치로 배율 조절' }],
+  ['U', { en: 'fire a flare — night is when it earns it', ko: '조명탄 — 밤에 진가를 발휘' }],
   ['Esc', { en: 'this menu', ko: '이 메뉴' }],
 ];
 

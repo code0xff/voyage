@@ -518,6 +518,67 @@ export class SoundEngine {
   }
 
   /**
+   * An illumination flare going up.
+   *
+   * Three moments, all noise: the thump of the launch under your feet, the
+   * rocket's hiss climbing away and thinning, and -- well over a second
+   * later, because the star ignites five hundred slant metres away and
+   * sound takes its time -- the soft crack of it lighting. The delay is
+   * passed in by the caller, who knows where the rocket flies; the same
+   * speed-of-sound honesty as the whale's blow below, and just as free.
+   *
+   * Deliberately quiet for what it is. A real parachute rocket is an event;
+   * this one happens beside your ear every couple of minutes, and the light
+   * is the show.
+   */
+  flare(popAfter: number): void {
+    const ctx = this.ctx;
+    const master = this.master;
+    const noise = this.noise;
+    if (!ctx || !master || !noise || ctx.state !== 'running') return;
+    const t = ctx.currentTime;
+
+    const burst = (
+      type: BiquadFilterType,
+      freq: number,
+      q: number,
+      at: number,
+      attack: number,
+      decay: number,
+      peak: number,
+      sweepTo = 0,
+    ) => {
+      const src = ctx.createBufferSource();
+      src.buffer = noise;
+      src.loop = true;
+      const f = ctx.createBiquadFilter();
+      f.type = type;
+      f.Q.value = q;
+      f.frequency.setValueAtTime(freq, t + at);
+      if (sweepTo > 0) f.frequency.exponentialRampToValueAtTime(sweepTo, t + at + attack + decay);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t + at);
+      g.gain.linearRampToValueAtTime(peak, t + at + attack);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + at + attack + decay);
+      src.connect(f).connect(g).connect(master);
+      src.start(t + at, Math.random() * 2);
+      src.stop(t + at + attack + decay + 0.05);
+      this.pending.push(src);
+      src.onended = () => {
+        const i = this.pending.indexOf(src);
+        if (i >= 0) this.pending.splice(i, 1);
+      };
+    };
+
+    // The launch: a chest thump and the first rush of the motor.
+    burst('lowpass', 160, 0.7, 0, 0.015, 0.3, 0.4);
+    // The climb: a hiss that rises and thins as the rocket gets away.
+    burst('bandpass', 900, 1.2, 0.05, 0.12, 1.8, 0.14, 2600);
+    // The star lighting, heard late from altitude.
+    burst('bandpass', 700, 0.9, popAfter, 0.012, 0.35, 0.2);
+  }
+
+  /**
    * A whale's blow.
    *
    * Noise and not an oscillator, which is the whole difference from the gull:

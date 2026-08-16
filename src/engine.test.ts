@@ -129,7 +129,7 @@ vi.mock('./sim/calls', async (importActual) => {
   };
 });
 
-import { createEngine } from './engine';
+import { FLARE_BURN, FLARE_COOLDOWN, FLARE_RISE, createEngine } from './engine';
 import { DEFAULT_SETTINGS, type Settings } from './settings';
 import { WhaleField } from './sim/whales';
 import { SharkField } from './sim/sharks';
@@ -1326,6 +1326,93 @@ describe('the coast window follows the boat', () => {
     // The session starts at the origin, and so must its window.
     expect(away).toBeLessThan(200);
     expect(engine.snapshot.depth).toBeGreaterThan(10);
+    engine.dispose();
+  });
+});
+
+/**
+ * The flare: a rocket, half a minute of light, and a two-minute wait for the
+ * next one. Durations imported, not restated -- the burn and the cooldown are
+ * exactly the kind of retunable numbers whose hardcoded copies quietly stop
+ * covering anything (the shark's dive did it twice). The *envelope* is the
+ * claim under test: dark on the way up, full once it pops, gone when it dies.
+ */
+describe('the flare', () => {
+  // Keys are consumed by the frame loop, not the physics loop, so each press
+  // is followed by a sliver of frames before `advance` carries the clock.
+  it('goes up dark, pops into light, and burns out', () => {
+    const engine = sailing({});
+    engine.advance(0.1);
+    press('u');
+    frame(0.05);
+    engine.advance(0.5);
+    const climbing = engine.snapshot.flare;
+    expect(climbing).not.toBeNull();
+    expect(climbing!.intensity).toBeLessThan(0.5);
+    expect(climbing!.alt).toBeGreaterThan(10);
+    engine.advance(FLARE_RISE);
+    const lit = engine.snapshot.flare;
+    expect(lit).not.toBeNull();
+    expect(lit!.intensity).toBeGreaterThan(0.9);
+    expect(lit!.alt).toBeGreaterThan(180);
+    // Half the burn later she is still up and still at full light -- review
+    // showed an expiry cut to a tenth of the burn passing the old version of
+    // this test, which only ever looked at the two ends.
+    engine.advance(FLARE_BURN / 2);
+    const midburn = engine.snapshot.flare;
+    expect(midburn).not.toBeNull();
+    expect(midburn!.intensity).toBeGreaterThan(0.9);
+    // Two thirds into the dying seconds: fading, not out and not full --
+    // the probe that catches the fade being deleted outright.
+    engine.advance(FLARE_BURN / 2 - 2.65);
+    const dying = engine.snapshot.flare;
+    expect(dying).not.toBeNull();
+    expect(dying!.intensity).toBeGreaterThan(0.05);
+    expect(dying!.intensity).toBeLessThan(0.6);
+    engine.advance(6);
+    expect(engine.snapshot.flare).toBeNull();
+    engine.dispose();
+  });
+
+  it('is one every couple of minutes, not a pocketful', () => {
+    const engine = sailing({});
+    engine.advance(0.1);
+    press('u');
+    frame(0.05);
+    engine.advance(FLARE_RISE + FLARE_BURN + 6);
+    expect(engine.snapshot.flare).toBeNull();
+    // A breath short of the cooldown: the press is simply not taken. Probed
+    // at the boundary rather than mid-wait, so a cooldown quietly shortened
+    // by a second cannot pass -- review showed the mid-wait probe accepting
+    // exactly that.
+    engine.advance(FLARE_COOLDOWN - (FLARE_RISE + FLARE_BURN + 6) - 1);
+    press('u');
+    frame(0.05);
+    engine.advance(0.2);
+    expect(engine.snapshot.flare).toBeNull();
+    // Waited out: the locker has another.
+    engine.advance(2);
+    press('u');
+    frame(0.05);
+    engine.advance(1);
+    expect(engine.snapshot.flare).not.toBeNull();
+    engine.dispose();
+  });
+
+  it('does not survive a restart, and neither does the wait', () => {
+    const engine = sailing({});
+    engine.advance(0.1);
+    press('u');
+    frame(0.05);
+    engine.advance(2);
+    expect(engine.snapshot.flare).not.toBeNull();
+    engine.putToSea();
+    expect(engine.snapshot.flare).toBeNull();
+    engine.advance(0.1);
+    press('u');
+    frame(0.05);
+    engine.advance(1);
+    expect(engine.snapshot.flare).not.toBeNull();
     engine.dispose();
   });
 });

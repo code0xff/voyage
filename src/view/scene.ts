@@ -15,6 +15,7 @@ import { createIslandView } from './islands';
 import { createRain } from './rain';
 import { createSkyDome } from './skydome';
 import { createBoatLights, lampLevel } from './lights';
+import { createFlareView } from './flare';
 import { createOrbit } from './orbit';
 import { chaseEyePosition, chaseTarget, deckOrientation } from './eye';
 import type { WhaleSighting } from '../sim/whales';
@@ -80,6 +81,8 @@ export interface FrameInput {
   visibility: number;
   /** Whether the boat is showing her lights. */
   lightsOn: boolean;
+  /** The flare in the air, or null; see Snapshot.flare for the envelope. */
+  flare: { x: number; y: number; alt: number; intensity: number } | null;
   /** The glasses are up: the same view, magnified. */
   binoculars: boolean;
   /** Bumped on every new session, so the view can drop what it was trailing. */
@@ -343,6 +346,8 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
 
   const skyDome = createSkyDome();
   scene.add(skyDome.mesh);
+
+  const flareView = createFlareView(scene);
 
   // --- Water --------------------------------------------------------------
   // Wave shape on the GPU, floating height on the CPU, from the same formula.
@@ -683,6 +688,10 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     // The lamps and the pool they throw on the water come off one number, so
     // the sea cannot be lit by a boat that is showing no lights.
     const lamp = lampLevel(f.lightsOn, sky.daylight);
+    // The flare, if one is up: the point light and the star here, the pool on
+    // the water through the same explicit channel the lamps use.
+    const flareLevel = flareView.update(f.flare, sky.daylight, f.visibility, f.dt);
+    water.setFlare(f.flare?.x ?? 0, f.flare?.y ?? 0, flareLevel, f.flare?.alt ?? 1);
     // Keep the shelter texture in step with the sweep the physics is reading.
     // Both go through the same ShelterField, which is what stops the flat water
     // and the felt lee from ever disagreeing.
@@ -1053,6 +1062,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       waitingForShot = [];
       for (const settle of stranded) settle(null);
       boatLights.dispose();
+      flareView.dispose();
       orbit.dispose();
       water.dispose();
       islandView.dispose();

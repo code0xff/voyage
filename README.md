@@ -736,6 +736,7 @@ writes itself into the logbook.
 | `0` | hand all sail, or set it again |
 | `A` | let go the anchor, or weigh it |
 | `B` | binoculars — the wheel or a pinch sets the power, and it is remembered |
+| `U` | fire a parachute flare — one every two minutes, and the night answers |
 | `N` | chart range |
 | wheel or pinch over the chart | chart range |
 | drag the chart | look around it; double-click recentres on the boat |

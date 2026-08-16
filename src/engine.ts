@@ -39,6 +39,7 @@ import {
   approach,
   clamp,
   compassVec,
+  smoothstep,
   len,
   scale,
   sub,
@@ -140,6 +141,16 @@ export interface Snapshot {
   pilot: PilotState;
   /** Whether the boat is showing her lights. */
   lightsOn: boolean;
+  /**
+   * The flare in the air, or null.
+   *
+   * Position in sim metres, altitude in metres, intensity 0..1 -- dark while
+   * the rocket climbs, lighting over the half-second around the pop, fading
+   * out over the last seconds.
+   * Published rather than derived in the view so the burn's meaning lives in
+   * one place and the tests can hold it.
+   */
+  flare: { x: number; y: number; alt: number; intensity: number } | null;
   /** Whether the helmsman has the glasses up. */
   binoculars: boolean;
   /**
@@ -288,6 +299,37 @@ const HELM_GAIN = 1.5;
 const SEA_BUILD_TAU = 1200;
 const MAX_CATCHUP = 0.25;
 
+/**
+ * The flare's numbers. Real seconds; see the state's note in createEngine.
+ * The cooldown and burn are exported because tests must outlast them and a
+ * hardcoded copy would quietly stop covering the burn the day it is retuned
+ * -- the shark's dive taught that lesson twice.
+ */
+export const FLARE_COOLDOWN = 120;
+export const FLARE_RISE = 3;
+export const FLARE_BURN = 32;
+/**
+ * m, where the rocket pops. A real parachute rocket makes 300 m; this one
+ * stops lower on purpose -- measured in the chase framing, a 300 m star
+ * 340 m out hangs at 39 degrees of elevation, two degrees above the top of
+ * the frame, and a light whose source can never be seen reads as a bug. At
+ * 230 m over 420 m it stands about 26 degrees up: in frame, over the sea
+ * she is sailing into.
+ */
+const FLARE_APEX = 230;
+/**
+ * m the rocket carries ahead of the bow before it pops. Fired straight up it
+ * hung at the zenith for its whole burn -- lighting everything and visible in
+ * no camera, since the chase view cannot look higher than the masthead. Sent
+ * ahead, the star stands about forty degrees up in the view she is sailing
+ * into, which is also the sea worth lighting.
+ */
+const FLARE_REACH = 420;
+/** m/s down under the parachute. */
+const FLARE_SINK = 5.5;
+/** Fraction of the mean wind the parachute drifts at. */
+const FLARE_DRIFT = 0.35;
+
 export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Engine {
   const cfg = CRUISER;
   const env: Environment = { ...DEFAULT_ENV };
@@ -381,6 +423,23 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   const pilot = initialPilot();
   let destination: Vec2 | null = null;
   let anchored = false;
+
+  /**
+   * The illumination flare: a rocket, a pop, half a minute of light swinging
+   * down under its parachute. Real seconds throughout -- like the wildlife
+   * clocks, it is something the player watches happen, and the world's time
+   * scale must not turn a thirty-second burn into a blink.
+   */
+  let flareState: {
+    age: number;
+    x: number;
+    y: number;
+    alt: number;
+    /** The bow direction at launch, which the rocket arcs away along. */
+    bowX: number;
+    bowY: number;
+  } | null = null;
+  let flareCooldown = 0;
   /** The passage under way, or null when she is just out sailing. */
   let log: PassageLog | null = null;
   /** Whether this session has already said the local logbook will not open. */
@@ -436,6 +495,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     session: 0,
     pilot,
     lightsOn: true,
+    flare: null,
     binoculars: false,
   };
 
@@ -585,6 +645,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // caught this route around the teleport reset.
     maneuvers.reset();
     snapshot.maneuver = null;
+    // A flare does not survive the world being replaced, and neither does
+    // the wait for the next one. Its *sound* is deliberately not chased
+    // down on this path: newSession silences everything pending, but a
+    // settings change mid-session replaces the world without one, and the
+    // hiss of a rocket that really was fired finishing its two seconds is
+    // true in a way that cutting it mid-breath is not.
+    flareState = null;
+    flareCooldown = 0;
+    snapshot.flare = null;
 
     // A venue brings its own land, fixed and known, so there is nothing to
     // stream: the whole place is always loaded. The procedural field is the
@@ -957,6 +1026,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // not read that jump as the bow going through the wind.
     maneuvers.reset();
     snapshot.maneuver = null;
+    // A flare does not survive the teleport, and neither does the wait for
+    // the next one: a fresh session starts with a full locker.
+    flareState = null;
+    flareCooldown = 0;
+    snapshot.flare = null;
 
     const up = compassVec(wind.baseTwd);
     const heading = wrap2Pi(wind.baseTwd + 100 * DEG);
@@ -1335,6 +1409,46 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // Gulls run on the physics clock, so a boat that is standing in towards a
     // shore hears them come up at the rate she is closing it.
     wildlife.update(PHYS_DT, state.pos, query);
+
+    flareCooldown = Math.max(0, flareCooldown - PHYS_DT);
+    if (flareState) {
+      const fl = flareState;
+      fl.age += PHYS_DT;
+      if (fl.age <= FLARE_RISE) {
+        // Ease-out arc: fast off the rail, slowing to an apex ahead of the
+        // bow she had at launch.
+        const t = fl.age / FLARE_RISE;
+        const ease = t * (2 - t);
+        const step = ease - ((fl.age - PHYS_DT) / FLARE_RISE) * (2 - (fl.age - PHYS_DT) / FLARE_RISE);
+        fl.alt = FLARE_APEX * ease;
+        fl.x += fl.bowX * FLARE_REACH * step;
+        fl.y += fl.bowY * FLARE_REACH * step;
+      } else {
+        // Under the parachute: sinking slowly, carried down the mean wind.
+        fl.alt -= FLARE_SINK * PHYS_DT;
+        const down = compassVec(wind.baseTwd);
+        fl.x -= down.x * wind.baseTws * FLARE_DRIFT * PHYS_DT;
+        fl.y -= down.y * wind.baseTws * FLARE_DRIFT * PHYS_DT;
+      }
+      // Splashdown is a parachute affair: judged only after the rise, or the
+      // first metres off the rail read as landing and the rocket dies on it.
+      // At today's numbers it never fires -- the burn ends with the star
+      // still fifty metres up, as the real thing's does -- so this guards the
+      // retune that makes the sink faster or the burn longer, not a case.
+      const splashed = fl.age > FLARE_RISE && fl.alt < 4;
+      if (fl.age > FLARE_RISE + FLARE_BURN || splashed) flareState = null;
+    }
+    // Dark on the way up, full once it pops, dying over the last seconds.
+    snapshot.flare = flareState
+      ? {
+          x: flareState.x,
+          y: flareState.y,
+          alt: flareState.alt,
+          intensity:
+            smoothstep(FLARE_RISE - 0.3, FLARE_RISE + 0.4, flareState.age) *
+            smoothstep(FLARE_RISE + FLARE_BURN, FLARE_RISE + FLARE_BURN - 5, flareState.age),
+        }
+      : null;
     for (const ev of wildlife.events) {
       const d = Math.hypot(ev.pos.x - state.pos.x, ev.pos.y - state.pos.y);
       sound.gullCall(d, ev.strength, weather.state.fog);
@@ -1529,6 +1643,18 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (input.wasPressed('h')) cyclePilot(pilot, state.heading, wrapPi(env.twd - state.heading));
     if (input.wasPressed('c')) view.toggleCamera();
     if (input.wasPressed('l')) snapshot.lightsOn = !snapshot.lightsOn;
+    // One flare every couple of minutes, and the press during the wait is
+    // simply not taken -- a flare is not a thing a locker holds hundreds of.
+    if (input.wasPressed('u') && flareCooldown <= 0) {
+      const bow = compassVec(state.heading);
+      flareState = { age: 0, x: state.pos.x, y: state.pos.y, alt: 0, bowX: bow.x, bowY: bow.y };
+      flareCooldown = FLARE_COOLDOWN;
+      // The pop is heard when the sound of it arrives from the apex -- the
+      // slant range, since the star stands ahead as well as up: review
+      // measured the altitude-only delay arriving three quarters of a
+      // second early.
+      sound.flare(FLARE_RISE + Math.hypot(FLARE_REACH, FLARE_APEX) / 343);
+    }
     // Resolves a frame later -- see SceneView.capture -- so this cannot be
     // written as a plain call. A refusal from the encoder is silent on purpose:
     // there is nothing the player could do about it and nothing worth stopping
@@ -1638,6 +1764,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       elapsedHours: hour,
       visibility: weather.visibility,
       lightsOn: snapshot.lightsOn,
+      flare: snapshot.flare,
       binoculars: snapshot.binoculars,
       session,
       whales: whales.events,

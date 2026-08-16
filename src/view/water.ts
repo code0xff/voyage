@@ -199,6 +199,43 @@ const shoalGlsl = /* glsl */ `
 `;
 
 /**
+ * The flare's pool on the sea, shared by both surfaces.
+ *
+ * Shared for the same reason shoalTint is: the star hangs a couple of
+ * hundred metres up, so its footprint spans several hundred metres of water
+ * -- far past the 450 m where the wave grid hands over to the flat sea. The
+ * first cut lived in the grid shader alone, and a review pointed out that
+ * most of the pool it claimed was being rendered dark by the other surface.
+ *
+ * It declares its own uniforms, so neither shader may declare them again;
+ * both materials are built on the same uniforms object.
+ *
+ * The construction is the deck lamps' cone-and-fall with the source high
+ * instead of at the spreader. The cone is squared and the base kept low
+ * because at 230 m of altitude everything in frame is inside the footprint,
+ * and the shaping has to come from the curve -- unsquared, the first cut
+ * washed the whole visible sea khaki.
+ */
+const flareGlsl = /* glsl */ `
+  uniform vec4 uFlare;      // simX, simY, level 0..1, altitude m
+  uniform vec3 uFlareColor;
+
+  vec3 flarePool(vec3 col, vec3 n, vec3 viewDir, vec2 simP, vec3 world) {
+    if (uFlare.z <= 0.001) return col;
+    float df = distance(simP, uFlare.xy);
+    float fh = max(uFlare.w, 10.0);
+    float fRadius = fh * 1.6;
+    float fCone = 1.0 - smoothstep(fRadius * 0.3, fRadius, df);
+    float fFall = (fh * fh) / (df * df + fh * fh);
+    vec3 flarePos = vec3(uFlare.x, fh, -uFlare.y);
+    vec3 fDir = normalize(flarePos - world);
+    vec3 fHalf = normalize(fDir + viewDir);
+    float fGlint = pow(max(dot(n, fHalf), 0.0), 40.0);
+    return col + uFlareColor * uFlare.z * fCone * fCone * fFall * (0.12 + fGlint * 0.9);
+  }
+`;
+
+/**
  * How much of the sea's wave energy survives at a point, 0..1.
  *
  * Shared because both surfaces need it now. The grid has always damped its
@@ -376,6 +413,7 @@ const fragmentShader = /* glsl */ `
   ${rippleGlsl}
   ${fieldGlsl}
   ${shoalGlsl}
+  ${flareGlsl}
 
   void main() {
     float dist = length(cameraPosition - vWorld);
@@ -459,6 +497,10 @@ const fragmentShader = /* glsl */ `
       col += uLampColor * uLamp.z * pool * (0.8 + glint * 2.4);
     }
 
+    // The flare's pool, shared with the flat sea beyond the grid -- see
+    // flareGlsl for why it cannot live in one shader alone.
+    col = flarePool(col, n, viewDir, simP, vWorld);
+
     col = mix(col, uFogColor, smoothstep(uFogNear, uFogFar, dist));
 
     gl_FragColor = vec4(col, 1.0);
@@ -523,6 +565,7 @@ const farFragmentShader = /* glsl */ `
   ${rippleGlsl}
   ${fieldGlsl}
   ${shoalGlsl}
+  ${flareGlsl}
   ${shelterGlsl}
 
   // The colour half of the grid's fragment shader, with the swell gone and only
@@ -561,6 +604,10 @@ const farFragmentShader = /* glsl */ `
 
     vec3 h = normalize(sunDir + viewDir);
     col += uSunColor * pow(max(dot(n, h), 0.0), 90.0) * uSpecular;
+
+    // The flare's pool, before the fog for the lamp's reason: lost with
+    // distance the way everything on the water is.
+    col = flarePool(col, n, viewDir, simP, vWorld);
 
     col = mix(col, uFogColor, smoothstep(uFogNear, uFogFar, dist));
 
@@ -601,6 +648,8 @@ export interface Water {
    * @param height metres above the water; it sets the size of the pool
    */
   setLamp(simX: number, simY: number, level: number, height: number): void;
+  /** The flare's pool, same contract as the lamp: level 0 puts it out. */
+  setFlare(simX: number, simY: number, level: number, altitude: number): void;
   dispose(): void;
 }
 
@@ -693,6 +742,8 @@ export function createWater(): Water {
     // xy: the lamp in sim coordinates, z: how lit it is, w: its height.
     uLamp: { value: new THREE.Vector4(0, 0, 0, 1) },
     uLampColor: { value: new THREE.Color(0.42, 0.29, 0.14) },
+    uFlare: { value: new THREE.Vector4(0, 0, 0, 1) },
+    uFlareColor: { value: new THREE.Color(0.6, 0.46, 0.3) },
     uField: { value: null as THREE.DataTexture | null },
     // halfWidth, halfHeight, and whether a region is loaded at all.
     uRegion: { value: new THREE.Vector3(1, 1, 0) },
@@ -734,6 +785,9 @@ export function createWater(): Water {
     far,
     setLamp(simX, simY, level, height) {
       uniforms.uLamp.value.set(simX, simY, level, height);
+    },
+    setFlare(simX, simY, level, altitude) {
+      uniforms.uFlare.value.set(simX, simY, level, altitude);
     },
     setTerrain(terrain) {
       physicsTerrain = terrain;
