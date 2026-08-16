@@ -39,8 +39,10 @@ import { TOUCH } from './strings';
  * keyboard still loses nothing; a phone now loses only the fine trim, which
  * is the right thing to lose first.
  *
- * Everything here goes through `engine.press` into the same bindings the keys
- * use, so there is one path from an intention to the boat and not two.
+ * Every key goes through `engine.press` into the same bindings the keyboard
+ * uses, so a tap and a keystroke are one path to the boat, not two. The two
+ * exceptions are the two things that are not keys: the tiller, which is an
+ * angle and speaks `setHelm`, and the menu, which belongs to the shell.
  */
 
 /** How far the tiller reaches either side, px. */
@@ -167,7 +169,17 @@ function StateKey({
   const ref = useRef<HTMLButtonElement>(null);
   useEngineFrame((s) => {
     const el = ref.current;
-    if (el) el.dataset.on = lit(s) ? 'true' : 'false';
+    if (!el) return;
+    // Written only on change: these run every frame, and an unconditional
+    // dataset write is a style invalidation the browser has to chew even
+    // when nothing moved. aria-pressed rides along -- the state a sighted
+    // finger reads off the highlight is the same state a screen reader must
+    // hear, which the toggle-group review already taught once.
+    const on = lit(s) ? 'true' : 'false';
+    if (el.dataset.on !== on) {
+      el.dataset.on = on;
+      el.setAttribute('aria-pressed', on);
+    }
   });
   return (
     <button
@@ -176,6 +188,7 @@ function StateKey({
       aria-label={label}
       title={label}
       data-on="false"
+      aria-pressed="false"
       onClick={onPress}
       className={KEY_CLASS}
     >
@@ -189,7 +202,7 @@ function StateKey({
  *
  * The chart's recentre-button bargain: a control that appears when it means
  * something and is simply absent when it does not. A flare at noon is a spark
- * nobody can see, so by day the strip closes over the gap; at night the key
+ * nobody can see, so by day the strip closes over the gap; from dusk the key
  * stands, and dims for the two minutes the locker takes to produce another.
  */
 function FlareKey() {
@@ -199,9 +212,12 @@ function FlareKey() {
   useEngineFrame((s) => {
     const el = ref.current;
     if (!el) return;
-    const night = s.sky.daylight < 0.4;
-    el.style.display = night ? '' : 'none';
-    el.disabled = !s.flareReady;
+    // 0.4 is dusk, not astronomical night, on purpose: failing light is
+    // exactly when a hand starts reaching for a flare, and the threshold
+    // was picked so the key arrives with the gloom rather than after it.
+    const display = s.sky.daylight < 0.4 ? '' : 'none';
+    if (el.style.display !== display) el.style.display = display;
+    if (el.disabled === s.flareReady) el.disabled = !s.flareReady;
   });
   return (
     <button

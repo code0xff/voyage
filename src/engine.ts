@@ -1659,6 +1659,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       const bow = compassVec(state.heading);
       flareState = { age: 0, x: state.pos.x, y: state.pos.y, alt: 0, bowX: bow.x, bowY: bow.y };
       flareCooldown = FLARE_COOLDOWN;
+      // Told to the snapshot here as well as in the physics step: a frame
+      // that accumulates less than one step would otherwise leave the touch
+      // key lit a frame after the locker emptied. Cosmetic -- the cooldown
+      // itself already refuses a second press -- but a lit key that does
+      // nothing is a broken key to the finger on it.
+      snapshot.flareReady = false;
       // The pop is heard when the sound of it arrives from the apex -- the
       // slant range, since the star stands ahead as well as up: review
       // measured the altitude-only delay arriving three quarters of a

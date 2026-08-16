@@ -10,11 +10,14 @@ import { cn } from "@/lib/utils";
  * Not part of the generated design system: added by hand for the settings'
  * on/off controls, so it follows the system's conventions (h-8, text-xs,
  * semantic tokens, cva) rather than upstream shadcn's own toggle styling.
- * Radix carries the keyboard contract -- one tab stop, arrows move the
- * selection -- which two hand-joined Buttons could not.
+ * Radix carries the keyboard contract -- one tab stop, arrows rove the
+ * focus, Enter or Space selects -- which two hand-joined Buttons could not.
+ * Logical corner and margin utilities (s/e, not l/r) keep the joined edge
+ * on the right side of an RTL layout, and the focused seam outranks the
+ * selected one (z-20 over z-10) so the ring is never painted over.
  */
 const toggleGroupItemVariants = cva(
-  "inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap border border-input bg-background text-xs font-medium transition-colors first:rounded-l-md last:rounded-r-md [&:not(:first-child)]:-ml-px hover:bg-accent hover:text-accent-foreground focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=on]:z-10 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0",
+  "inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap border border-input bg-background text-xs font-medium transition-colors first:rounded-s-md last:rounded-e-md [&:not(:first-child)]:-ms-px hover:bg-accent hover:text-accent-foreground focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=on]:z-10 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0",
   {
     variants: {
       size: {
