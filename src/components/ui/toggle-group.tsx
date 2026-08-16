@@ -25,12 +25,12 @@ import { cn } from "@/lib/utils";
  * more important control than it is.
  */
 const toggleGroupItemVariants = cva(
-  "inline-flex min-w-12 items-center justify-center gap-1.5 whitespace-nowrap border border-input bg-background text-xs font-medium transition-colors first:rounded-s-md last:rounded-e-md [&:not(:first-child)]:-ms-px hover:bg-accent hover:text-accent-foreground focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=on]:z-10 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0",
+  "inline-flex min-w-12 items-center justify-center gap-1.5 whitespace-nowrap rounded text-xs font-medium text-muted-foreground transition-all hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0",
   {
     variants: {
       size: {
-        default: "h-8 px-3 py-1.5",
-        sm: "h-7 px-2.5 text-xs",
+        default: "px-3 py-1",
+        sm: "px-2.5 py-1",
       },
     },
     defaultVariants: { size: "default" },
@@ -41,7 +41,11 @@ const ToggleGroup = React.forwardRef<
   React.ElementRef<typeof ToggleGroupPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Root>
 >(({ className, ...props }, ref) => (
-  <ToggleGroupPrimitive.Root ref={ref} className={cn("flex", className)} {...props} />
+  <ToggleGroupPrimitive.Root
+    ref={ref}
+    className={cn("inline-flex items-center justify-center rounded-md bg-muted p-0.5", className)}
+    {...props}
+  />
 ));
 ToggleGroup.displayName = ToggleGroupPrimitive.Root.displayName;
 

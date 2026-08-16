@@ -831,10 +831,10 @@ export function MenuDialog({
                 }}
                 aria-label={t(WORLD.cruise)}
                 // Sized to its two words and left-aligned with the controls
-                // above it, at the h-7 the seed's own button uses: a mode
-                // switch that spanned the panel at h-8 announced itself as
-                // the most important thing on the tab, which it is not.
-                className="w-fit"
+                // above it: a mode switch that spanned the panel announced
+                // itself as the most important thing on the tab, which it is
+                // not. h-7 matches the seed's own button beside it.
+                className="h-7 w-fit"
               >
                 <ToggleGroupItem value="off" size="sm">
                   {t(WORLD.cruiseOff)}
