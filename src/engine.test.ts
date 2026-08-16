@@ -1409,6 +1409,12 @@ describe('the flare', () => {
     frame(0.05);
     engine.advance(0.2);
     expect(engine.snapshot.flare).toBeNull();
+    // But the refusal is answered: the hint bar gets the wait for a few
+    // seconds -- a silently dead key reads as a broken one -- and the line
+    // clears once its moment has passed.
+    expect(engine.snapshot.flareWait).toBe(1);
+    engine.advance(4);
+    expect(engine.snapshot.flareWait).toBeNull();
     // Waited out: the locker has another, and says so.
     engine.advance(2);
     expect(engine.snapshot.flareReady).toBe(true);

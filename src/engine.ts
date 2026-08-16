@@ -160,6 +160,13 @@ export interface Snapshot {
    * the keyboard path just has its press not taken.
    */
   flareReady: boolean;
+  /**
+   * Seconds until the next flare, published only for a few seconds after a
+   * press that the cooldown refused -- the keyboard's answer to the touch
+   * row's dimmed key. A silently ignored key reads as a broken one; null
+   * the rest of the time, so the hint bar is not nagged for two minutes.
+   */
+  flareWait: number | null;
   /** Whether the helmsman has the glasses up. */
   binoculars: boolean;
   /**
@@ -459,6 +466,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     bowY: number;
   } | null = null;
   let flareCooldown = 0;
+  /** Seconds left of showing the refused-press hint; see Snapshot.flareWait. */
+  let flareDeniedFor = 0;
   /** The passage under way, or null when she is just out sailing. */
   let log: PassageLog | null = null;
   /** Whether this session has already said the local logbook will not open. */
@@ -516,6 +525,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     lightsOn: true,
     flare: null,
     flareReady: true,
+    flareWait: null,
     binoculars: false,
   };
 
@@ -673,8 +683,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // true in a way that cutting it mid-breath is not.
     flareState = null;
     flareCooldown = 0;
+    flareDeniedFor = 0;
     snapshot.flare = null;
     snapshot.flareReady = true;
+    snapshot.flareWait = null;
 
     // A venue brings its own land, fixed and known, so there is nothing to
     // stream: the whole place is always loaded. The procedural field is the
@@ -1051,8 +1063,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // the next one: a fresh session starts with a full locker.
     flareState = null;
     flareCooldown = 0;
+    flareDeniedFor = 0;
     snapshot.flare = null;
     snapshot.flareReady = true;
+    snapshot.flareWait = null;
 
     const up = compassVec(wind.baseTwd);
     const heading = wrap2Pi(wind.baseTwd + 100 * DEG);
@@ -1434,6 +1448,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
     flareCooldown = Math.max(0, flareCooldown - PHYS_DT);
     snapshot.flareReady = flareCooldown <= 0;
+    flareDeniedFor = Math.max(0, flareDeniedFor - PHYS_DT);
+    // Live while shown: the count runs down in front of the player rather
+    // than freezing at the number the press happened to catch.
+    snapshot.flareWait =
+      flareDeniedFor > 0 && flareCooldown > 0 ? Math.ceil(flareCooldown) : null;
     if (flareState) {
       const fl = flareState;
       fl.age += PHYS_DT;
@@ -1671,8 +1690,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (input.wasPressed('h')) cyclePilot(pilot, state.heading, wrapPi(env.twd - state.heading));
     if (input.wasPressed('c')) view.toggleCamera();
     if (input.wasPressed('l')) snapshot.lightsOn = !snapshot.lightsOn;
-    // One flare every couple of minutes, and the press during the wait is
-    // simply not taken -- a flare is not a thing a locker holds hundreds of.
+    // One flare every couple of minutes. The press during the wait is not
+    // taken -- a flare is not a thing a locker holds hundreds of -- but it
+    // is *answered*: three seconds of the hint bar saying how long, because
+    // a key that does nothing silently reads as a key that is broken.
+    if (input.wasPressed('u') && flareCooldown > 0) flareDeniedFor = 3;
     if (input.wasPressed('u') && flareCooldown <= 0) {
       const bow = compassVec(state.heading);
       flareState = { age: 0, x: state.pos.x, y: state.pos.y, alt: 0, bowX: bow.x, bowY: bow.y };

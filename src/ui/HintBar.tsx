@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { MAX_WAY, anchorProblem } from '@/sim/anchorage';
 import { useEngineFrame } from './engine-context';
 import { useT } from './i18n';
-import { ANCHOR_PROBLEM, HINT, holding, nowhereToAnchor } from './strings';
+import { ANCHOR_PROBLEM, HINT, flareWait, holding, nowhereToAnchor } from './strings';
 
 /**
  * A single line of context at the bottom of the screen.
@@ -28,6 +28,9 @@ export function HintBar() {
     // she is lying to it nothing else on this list is worth saying.
     if (s.anchored) parts.push(t(HINT.anchored));
     else if (s.clearance < 0) parts.push(t(HINT.aground));
+    // A direct answer to a press outranks ambient advice for the three
+    // seconds it is on: the player just asked the boat something.
+    else if (s.flareWait != null) parts.push(t(flareWait(s.flareWait)));
     else if (w.exposure < 0.6) parts.push(t(HINT.lee));
     else if (s.weather.state.kind === 'squall') parts.push(t(HINT.squall));
     else if (s.weather.state.fog > 0.5) parts.push(t(HINT.fog));

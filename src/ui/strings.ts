@@ -56,6 +56,12 @@ export const ANCHOR_PROBLEM: Record<AnchorProblem, Phrase> = {
   },
 };
 
+/** The hint bar's answer to a flare pressed during the cooldown. */
+export const flareWait = (seconds: number): Phrase => ({
+  en: `Flare locker empty — another in ${seconds} s`,
+  ko: `조명탄 재장전 중 — ${seconds}초 후 발사 가능`,
+});
+
 export const nowhereToAnchor = (why: Phrase): Phrase => ({
   en: `Nowhere to anchor: ${why.en}`,
   ko: `닻 내릴 곳이 아님: ${why.ko}`,
