@@ -106,7 +106,10 @@ export function createFlareView(scene: THREE.Scene): {
       // brightest thing out there.
       const haze = Math.min(1, Math.max(0.12, visibility / 900));
       sprite.material.opacity = Math.min(1, f.intensity * (0.4 + 0.6 * night) * haze);
-      const s = 22 * (0.85 + 0.25 * flicker);
+      // The pop's flash carries into the star's size: intensity overshoots 1
+      // at ignition (see Snapshot.flare), and the square root keeps the
+      // swell readable without ballooning.
+      const s = 22 * (0.85 + 0.25 * flicker) * Math.sqrt(Math.max(1, f.intensity));
       sprite.scale.set(s, s, 1);
       return level;
     },

@@ -144,9 +144,12 @@ export interface Snapshot {
   /**
    * The flare in the air, or null.
    *
-   * Position in sim metres, altitude in metres, intensity 0..1 -- dark while
-   * the rocket climbs, lighting over the half-second around the pop, fading
-   * out over the last seconds.
+   * Position in sim metres, altitude in metres, intensity -- 0 while the
+   * rocket climbs, leaping past 1 (peaking near 1.5 -- the gate and the
+   * overshoot cross) in the flash of the pop, settling to 1 through the
+   * burn and fading out over the last seconds.
+   * The view and the water pool scale off it directly, which is what makes
+   * the whole scene blink at ignition.
    * Published rather than derived in the view so the burn's meaning lives in
    * one place and the tests can hold it.
    */
@@ -335,6 +338,16 @@ const FLARE_REACH = 420;
 const FLARE_SINK = 5.5;
 /** Fraction of the mean wind the parachute drifts at. */
 const FLARE_DRIFT = 0.35;
+/**
+ * The pop's flash: how far the ignition overshoots the steady burn, and how
+ * fast it settles. A star that faded in over most of a second read as a
+ * lamp warming up; the flash is what makes it a *pop* -- the overshoot term
+ * is 1 + FLARE_FLASH, the sixty-millisecond gate rises through it, and the
+ * published envelope peaks near 1.5 where the two cross before decaying
+ * onto the steady burn with this time constant.
+ */
+const FLARE_FLASH = 0.7;
+const FLARE_FLASH_TAU = 0.25;
 
 export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Engine {
   const cfg = CRUISER;
@@ -1448,14 +1461,19 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       const splashed = fl.age > FLARE_RISE && fl.alt < 4;
       if (fl.age > FLARE_RISE + FLARE_BURN || splashed) flareState = null;
     }
-    // Dark on the way up, full once it pops, dying over the last seconds.
+    // Dark on the way up; the pop is a flash, not a fade-in -- a sixty
+    // millisecond gate, an overshoot that decays onto the steady burn --
+    // and the last seconds die away.
     snapshot.flare = flareState
       ? {
           x: flareState.x,
           y: flareState.y,
           alt: flareState.alt,
           intensity:
-            smoothstep(FLARE_RISE - 0.3, FLARE_RISE + 0.4, flareState.age) *
+            smoothstep(FLARE_RISE, FLARE_RISE + 0.06, flareState.age) *
+            (1 +
+              FLARE_FLASH *
+                Math.exp(-Math.max(0, flareState.age - FLARE_RISE) / FLARE_FLASH_TAU)) *
             smoothstep(FLARE_RISE + FLARE_BURN, FLARE_RISE + FLARE_BURN - 5, flareState.age),
         }
       : null;

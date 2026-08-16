@@ -1350,15 +1350,30 @@ describe('the flare', () => {
     expect(climbing).not.toBeNull();
     expect(climbing!.intensity).toBeLessThan(0.5);
     expect(climbing!.alt).toBeGreaterThan(10);
-    engine.advance(FLARE_RISE);
+    // The pop is a flash: an overshoot standing well above the steady burn
+    // for a couple of tenths. Scanned for its peak across a window rather
+    // than sampled at one instant -- the press-to-physics offset rides on
+    // the harness's first real frame delta, and a review measured a slow
+    // runner drifting a single sample right off the flash's shoulder.
+    engine.advance(FLARE_RISE - 0.85);
+    let peak = 0;
+    for (let i = 0; i < 30; i++) {
+      engine.advance(0.05);
+      peak = Math.max(peak, engine.snapshot.flare?.intensity ?? 0);
+    }
+    expect(peak).toBeGreaterThan(1.25);
+    expect(peak).toBeLessThan(1.8);
+    engine.advance(0.85);
     const lit = engine.snapshot.flare;
     expect(lit).not.toBeNull();
     expect(lit!.intensity).toBeGreaterThan(0.9);
+    // And back on the steady burn: the flash is a moment, not a new level.
+    expect(lit!.intensity).toBeLessThan(1.05);
     expect(lit!.alt).toBeGreaterThan(180);
     // Half the burn later she is still up and still at full light -- review
     // showed an expiry cut to a tenth of the burn passing the old version of
     // this test, which only ever looked at the two ends.
-    engine.advance(FLARE_BURN / 2);
+    engine.advance(FLARE_BURN / 2 - 2);
     const midburn = engine.snapshot.flare;
     expect(midburn).not.toBeNull();
     expect(midburn!.intensity).toBeGreaterThan(0.9);

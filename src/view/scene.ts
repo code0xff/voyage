@@ -348,6 +348,9 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   scene.add(skyDome.mesh);
 
   const flareView = createFlareView(scene);
+  // What the fog warms toward under a flare: dim amber, not white -- the
+  // night should lift, not turn to day.
+  const FLARE_HORIZON = new THREE.Color(0.42, 0.33, 0.2);
 
   // --- Water --------------------------------------------------------------
   // Wave shape on the GPU, floating height on the CPU, from the same formula.
@@ -632,16 +635,30 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
 
     // --- Sky, light and visibility ---
     // Weather thins the sun and thickens the air; time of day sets the colour.
+    //
+    // The flare joins here, not only at its own point light: a burning star
+    // lifts the *whole* night -- the ambient, the fill, the horizon's tone --
+    // or the blink of it going off never reaches the parts of the scene its
+    // pool and its candela cannot. The lift is deliberately lopsided: the
+    // steady burn adds a gentle ambient, and the overshoot above 1 -- the
+    // pop itself -- is weighted nearly five times harder, so the moment of
+    // ignition is a visible blink and the half-minute after it is merely a
+    // lifted night.
+    const flareLevel = flareView.update(f.flare, sky.daylight, f.visibility, f.dt);
+    const flareLift = 0.35 * flareLevel + 2.2 * Math.max(0, flareLevel - 1);
     const overcast = 1 - f.weather.cloud * 0.72;
     sun.color.setRGB(sky.sunColor[0], sky.sunColor[1], sky.sunColor[2]);
     sun.intensity = sky.sunIntensity * overcast;
     sun.position.set(sky.sunDir[0] * 400, sky.sunDir[1] * 400 + 30, sky.sunDir[2] * 400);
     hemi.color.setRGB(sky.skyHorizon[0], sky.skyHorizon[1], sky.skyHorizon[2]);
     hemi.groundColor.setRGB(sky.waterDeep[0], sky.waterDeep[1], sky.waterDeep[2]);
-    hemi.intensity = sky.ambientIntensity * (0.65 + f.weather.cloud * 0.35);
-    fill.intensity = 0.25 + sky.daylight * 0.55;
+    hemi.intensity = sky.ambientIntensity * (0.65 + f.weather.cloud * 0.35) + flareLift * 1.3;
+    fill.intensity = 0.25 + sky.daylight * 0.55 + flareLift * 0.4;
 
     fogColor.setRGB(sky.fogColor[0], sky.fogColor[1], sky.fogColor[2]);
+    // The horizon warms toward the burn -- fog and background together, so
+    // the far sea and the sky's skirt lift with the rest of the night.
+    if (flareLift > 0.001) fogColor.lerp(FLARE_HORIZON, Math.min(0.55, flareLift * 0.32));
     scene.background = fogColor;
     /*
      * Linearised before it is handed to the fog, so that land dissolves into
@@ -688,9 +705,6 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     // The lamps and the pool they throw on the water come off one number, so
     // the sea cannot be lit by a boat that is showing no lights.
     const lamp = lampLevel(f.lightsOn, sky.daylight);
-    // The flare, if one is up: the point light and the star here, the pool on
-    // the water through the same explicit channel the lamps use.
-    const flareLevel = flareView.update(f.flare, sky.daylight, f.visibility, f.dt);
     water.setFlare(f.flare?.x ?? 0, f.flare?.y ?? 0, flareLevel, f.flare?.alt ?? 1);
     // Keep the shelter texture in step with the sweep the physics is reading.
     // Both go through the same ShelterField, which is what stops the flat water

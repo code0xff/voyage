@@ -217,7 +217,7 @@ const shoalGlsl = /* glsl */ `
  * washed the whole visible sea khaki.
  */
 const flareGlsl = /* glsl */ `
-  uniform vec4 uFlare;      // simX, simY, level 0..1, altitude m
+  uniform vec4 uFlare;      // simX, simY, level (0 dark, ~1.5 in the pop's flash), altitude m
   uniform vec3 uFlareColor;
 
   vec3 flarePool(vec3 col, vec3 n, vec3 viewDir, vec2 simP, vec3 world) {

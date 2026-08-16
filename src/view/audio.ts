@@ -574,8 +574,11 @@ export class SoundEngine {
     burst('lowpass', 160, 0.7, 0, 0.015, 0.3, 0.4);
     // The climb: a hiss that rises and thins as the rocket gets away.
     burst('bandpass', 900, 1.2, 0.05, 0.12, 1.8, 0.14, 2600);
-    // The star lighting, heard late from altitude.
-    burst('bandpass', 700, 0.9, popAfter, 0.012, 0.35, 0.2);
+    // The star lighting, heard late from altitude: a chest-thud and a
+    // crack, layered, because one band read as a distant knock rather than
+    // a pop -- the low half is the report, the bright half is the snap.
+    burst('lowpass', 260, 0.7, popAfter, 0.01, 0.3, 0.32);
+    burst('bandpass', 1500, 1.1, popAfter, 0.008, 0.22, 0.28);
   }
 
   /**
