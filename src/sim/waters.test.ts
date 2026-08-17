@@ -68,10 +68,17 @@ describe('the departures', () => {
      *
      * Built exactly as the engine builds it: the Earth's shoreline for this
      * window, handed to the generator, at the window's own origin.
+     *
+     * Over several seeds, because the game rolls a new one every session and
+     * the shoreline detail is drawn from it -- up to a kilometre and a half
+     * of wander on top of the Earth's coast. The first version of this test
+     * used seed 13 alone and would have passed a departure that opens in
+     * eight metres of water on every other seed.
      */
     for (const w of WATERS) {
       const patch = earth.shorePatch(w.place, 10_000);
-      const { height } = coastHeightField(13, { x: 0, y: 0 }, patch);
+      for (const seed of [13, 546, 1764]) {
+      const { height } = coastHeightField(seed, { x: 0, y: 0 }, patch);
       let land = 0;
       let n = 0;
       for (let x = -9800; x <= 9800; x += 400) {
@@ -80,22 +87,26 @@ describe('the departures', () => {
           if (height.elevationAt(x, y) > 0) land++;
         }
       }
+      const where = `${w.id} on seed ${seed}`;
       // A tenth of the window at least: a coast to look at and to sail
       // along, not a rock on the horizon.
-      expect(land / n, `${w.id} shows ${((land / n) * 100).toFixed(1)}% land`).toBeGreaterThan(0.1);
+      expect(land / n, `${where} shows ${((land / n) * 100).toFixed(1)}% land`).toBeGreaterThan(0.1);
       // And not so much that she is in a bay with no way out.
-      expect(land / n, `${w.id} shows ${((land / n) * 100).toFixed(1)}% land`).toBeLessThan(0.6);
-      // Ten metres of water all round the spawn, out to where she will have
-      // gathered way. The same promise `coast.test.ts` makes of every seed.
+      expect(land / n, `${where} shows ${((land / n) * 100).toFixed(1)}% land`).toBeLessThan(0.6);
+      // Ten metres of water all round the spawn, out to where she has
+      // gathered way -- the same promise, at the same radii, that
+      // `coast.test.ts` makes of every seed on the open coast. Written out
+      // rather than imported for the reason given there: it is the claim.
       for (let a = 0; a < 12; a++) {
-        for (const r of [0, 90, 300, 600]) {
+        for (const r of [0, 90, 200, 300]) {
           const x = Math.sin((a / 12) * Math.PI * 2) * r;
           const y = Math.cos((a / 12) * Math.PI * 2) * r;
-          expect(-height.elevationAt(x, y), `${w.id} at ${r} m`).toBeGreaterThan(10);
+          expect(-height.elevationAt(x, y), `${where} at ${r} m`).toBeGreaterThan(10);
         }
       }
+      }
     }
-  }, 30_000);
+  }, 60_000);
 
   it('covers the belts rather than ten versions of one sea', () => {
     // The point of the planet is that the seas differ, so a list that was
