@@ -28,6 +28,7 @@ import { LANGS, type Lang } from "@/i18n";
 import type { Phrase } from "@/i18n";
 import { Rich, useLang, useT } from "./i18n";
 import {
+  BELT,
   CONTROLS_NOTE,
   KEYS,
   LOG,
@@ -37,6 +38,7 @@ import {
   REGION_BRIEF,
   SETTINGS_UI,
   TABS,
+  WATER_NAME,
   WEATHER,
   WORLD,
 } from "./strings";
@@ -53,6 +55,9 @@ import { REGIONS, placeName, regionById } from "@/sim/regions";
 import { COAST_ID, COAST_NAME } from "@/sim/coast";
 import { formatLatLon } from "@/sim/globe";
 import { loadReckoning } from "@/reckoning";
+import { WATERS, waterAt, waterById } from "@/sim/waters";
+import { beltAt } from "@/sim/climate";
+import type { LatLon } from "@/sim/globe";
 import { Logbook } from "./Logbook";
 import { SailingGuide } from "./SailingGuide";
 import { Credits } from "./Credits";
@@ -253,38 +258,67 @@ function EngineLoadNotice({
 }
 
 /**
- * Where the next departure opens, and the way back to the beginning.
+ * Where the next departure opens: the position she carries, and the list of
+ * places she can ask to start from instead.
  *
- * The position is the one thing a session carries over, so it is also the
- * one thing a player can be surprised by: opening the game in the Southern
- * Ocean because that is where the last session ended is right, and being
- * unable to find out why would not be. It is silent until she has actually
- * been somewhere -- a line saying "you are where the game starts" is noise.
+ * The list is the door into the planet. An ocean that may be entered at any
+ * point is an ocean with no doors at all, and a player who wants to sail the
+ * Cape has otherwise to spend a fortnight getting there -- so the ten waters
+ * in `sim/waters.ts` are offered outright, each named with the belt it sits
+ * in, because the belt is the thing that makes one of them a different sail
+ * from another.
  *
- * Read when the dialog renders rather than watched. The engine writes it
- * every half minute of sailing, and this is a menu: it is looked at while
- * the boat is not moving.
+ * The position is read when the dialog renders rather than watched. The
+ * engine writes it every half minute of sailing, and this is a menu: it is
+ * read while the boat is standing still.
  */
-function Resume({ onForget }: { onForget: () => void }) {
+function Departure({ onChoose }: { onChoose: (place: LatLon | null) => void }) {
   const t = useT();
-  const [place, setPlace] = useState(() => loadReckoning());
-  if (!place) return null;
+  const [place, setPlace] = useState<LatLon | null>(() => loadReckoning());
+  const here = place ? waterAt(place) : null;
   return (
-    <div className="flex items-center justify-between gap-2 pt-0.5">
-      <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-        {t(WORLD.resumeFrom)} {formatLatLon(place)}
-      </span>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-6 px-2 text-[10px]"
-        onClick={() => {
-          onForget();
-          setPlace(null);
-        }}
-      >
-        {t(WORLD.resumeForget)}
-      </Button>
+    <div className="flex flex-col gap-1.5 pt-0.5">
+      <div className="grid grid-cols-[104px_1fr] items-center gap-3">
+        <span className="text-[11px] text-muted-foreground">{t(WORLD.departure)}</span>
+        <Select
+          value={here ? here.id : ""}
+          onValueChange={(id) => {
+            const water = waterById(id);
+            if (!water) return;
+            onChoose(water.place);
+            setPlace(water.place);
+          }}
+        >
+          <SelectTrigger className="h-8">
+            <SelectValue placeholder={t(WORLD.departureAtSea)} />
+          </SelectTrigger>
+          <SelectContent>
+            {WATERS.map((w) => (
+              <SelectItem key={w.id} value={w.id}>
+                {t(WATER_NAME[w.id])} — {t(BELT[beltAt(w.place.lat)])}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {place && (
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+            {t(WORLD.resumeFrom)} {formatLatLon(place)}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[10px]"
+            onClick={() => {
+              onChoose(null);
+              setPlace(null);
+            }}
+          >
+            {t(WORLD.resumeForget)}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -306,7 +340,7 @@ export function MenuDialog({
   onRetryEngine,
   regionStatus,
   onRetryRegion,
-  onForgetPlace,
+  onDeparture,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -327,8 +361,8 @@ export function MenuDialog({
   onRetryEngine: () => void;
   regionStatus: RegionLoadStatus;
   onRetryRegion: () => void;
-  /** Forget the remembered position; takes effect at the next departure. */
-  onForgetPlace: () => void;
+  /** Choose where the next departure opens, or null for where the game opens. */
+  onDeparture: (place: LatLon | null) => void;
 }) {
   const [tab, setTab] = useState("world");
   const [helpTab, setHelpTab] = useState("sailing");
@@ -794,7 +828,7 @@ export function MenuDialog({
                   <span className="text-info">{t(WORLD.earthLead)}</span>{" "}
                   {t(WORLD.earthBody)}
                 </p>
-                <Resume onForget={onForgetPlace} />
+                <Departure onChoose={onDeparture} />
               </>
             ) : settings.region ? (
               <>

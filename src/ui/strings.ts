@@ -251,6 +251,25 @@ export const KEYS: [string, Phrase][] = [
 ];
 
 /**
+ * The world's departures, keyed by `sim/waters.ts`. Names as a chart writes
+ * them, so a Korean player reads 대한해협 and an English one the Korea
+ * Strait -- these are places rather than labels, and both are their names.
+ */
+export const WATER_NAME: Record<string, Phrase> = {
+  'golden-gate': { en: 'Golden Gate', ko: '골든게이트' },
+  cadiz: { en: 'Cádiz', ko: '카디스' },
+  'good-hope': { en: 'Cape of Good Hope', ko: '희망봉' },
+  'korea-strait': { en: 'Korea Strait', ko: '대한해협' },
+  sydney: { en: 'Sydney', ko: '시드니' },
+  'cape-horn': { en: 'Cape Horn', ko: '혼곶' },
+  antigua: { en: 'Antigua', ko: '앤티가' },
+  oahu: { en: 'Oahu', ko: '오아후' },
+  reykjanes: { en: 'Reykjanes', ko: '레이캬네스' },
+  zanzibar: { en: 'Zanzibar', ko: '잔지바르' },
+  galapagos: { en: 'Galápagos', ko: '갈라파고스' },
+};
+
+/**
  * The wind belts, in the words a pilot chart uses.
  *
  * Here rather than in `sim/climate.ts` so that there is one place a name is
@@ -619,6 +638,9 @@ export const WORLD: Record<string, Phrase> = {
    * reason a player is reading it.
    */
   resumeFrom: { en: 'Sails from', ko: '다음 출항' },
+  departure: { en: 'Take departure', ko: '출항지' },
+  /** Shown when the carried position is not one of the listed waters. */
+  departureAtSea: { en: 'At sea', ko: '바다 위' },
   resumeForget: { en: 'Start over', ko: '처음 위치로' },
   surveyedLead: { en: 'Surveyed.', ko: '실측 데이터.' },
   surveyedBody: { en: 'The coastline and the depths are', ko: '해안선과 수심의 출처는' },

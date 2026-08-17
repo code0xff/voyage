@@ -530,6 +530,16 @@ The beach you anchor off is invented — a plausible coast in the right place, n
 the coast that is there. The six surveyed regions remain the only places where
 the ground itself is true, and they say so.
 
+Eleven **departures** are offered outright — the Golden Gate, Cádiz, the Cape of
+Good Hope, the Korea Strait, Sydney, Cape Horn, Antigua, Oahu, Reykjanes,
+Zanzibar and the Galápagos. An ocean that may be entered at any point is an
+ocean with no doors, and a player who wants to sail the Cape should not have to
+spend a fortnight getting there. They are spread across the belts on purpose,
+each named with the one it sits in, and every position is *verified against the
+shipped raster* rather than remembered: about twelve kilometres off its coast,
+in water deeper than twenty metres, checked by `waters.test.ts`. Three of the
+first draft's coordinates were dry land.
+
 A session opens where the last one got to. That is what makes the planet a
 place rather than a backdrop: a boat that reached the Azores and reopened off
 San Francisco has had a passage taken away from her. One row in localStorage

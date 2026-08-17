@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Engine, RegionLoadStatus } from "@/engine";
 import { loadSettings, saveSettings, type Settings } from "@/settings";
 import { regionById } from "@/sim/regions";
+import type { LatLon } from "@/sim/globe";
 import { venueById } from "@/sim/venues";
 import { EngineProvider } from "./engine-context";
 import { LangProvider } from "./i18n";
@@ -329,13 +330,16 @@ export function App() {
   }, [engine]);
 
   /**
-   * Forget where she got to. Not a teleport -- she stays where she is until
-   * she next puts to sea -- so the menu says "from the next departure" and
-   * this only has to clear the record.
+   * Choose where the next departure opens, or null to go back to where the
+   * game opens. Not a teleport -- she stays where she is until she next puts
+   * to sea -- so the menu says "from the next departure".
    */
-  const forgetPlace = useCallback(() => {
-    engine?.forgetPlace();
-  }, [engine]);
+  const setDeparture = useCallback(
+    (place: LatLon | null) => {
+      engine?.setDeparture(place);
+    },
+    [engine],
+  );
 
   // A reload, because it is the only thing that recovers -- see `loadEngine`.
   const retryEngine = useCallback(() => {
@@ -497,7 +501,7 @@ export function App() {
           onRetryEngine={retryEngine}
           regionStatus={regionStatus}
           onRetryRegion={retryRegion}
-          onForgetPlace={forgetPlace}
+          onDeparture={setDeparture}
         />
       </div>
     </LangProvider>

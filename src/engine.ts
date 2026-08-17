@@ -301,11 +301,15 @@ export interface Engine {
   /** Development hook, exposed on window. */
   advance(seconds: number, rudder?: number): void;
   /**
-   * Forget where she got to, so the next departure opens where the game
-   * opens. Deliberately not a teleport: she is still where she is, and the
-   * menu that offers this says "from the next departure".
+   * Choose where the next departure opens: one of the world's waters, or
+   * null to forget the remembered position and open where the game opens.
+   *
+   * Deliberately not a teleport. She is still where she is until she next
+   * puts to sea -- a menu that moved the boat under the player while they
+   * were reading it would be a worse answer than one that waits -- and the
+   * menu that offers this says so.
    */
-  forgetPlace(): void;
+  setDeparture(place: LatLon | null): void;
 }
 
 const PHYS_DT = 1 / 120;
@@ -2378,9 +2382,18 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     press: (key) => input.inject(key),
     recomputePolar: () => schedulePolar(0),
     resize: () => view.resize(),
-    forgetPlace() {
-      clearReckoning();
-      oceanAnchor = { ...DEFAULT_ANCHOR };
+    setDeparture(place) {
+      if (place) {
+        saveReckoning(place);
+        oceanAnchor = { lat: place.lat, lon: place.lon };
+      } else {
+        clearReckoning();
+        oceanAnchor = { ...DEFAULT_ANCHOR };
+      }
+      // Written down at once rather than left to the throttle, because this
+      // is the one change to the position the player made on purpose: a tab
+      // closed straight after choosing must not lose the choice.
+      sinceSaved = 0;
     },
 
     dispose() {

@@ -186,6 +186,7 @@ import { LogStoreUnavailable } from './logbook';
 import type { EngineEvent } from './engine';
 import { METRES_PER_DEG_LAT } from './sim/globe';
 import { regionById } from './sim/regions';
+import { waterById } from './sim/waters';
 import { ManeuverTracker, type Maneuver } from './sim/maneuver';
 import { offerCalls } from './sim/calls';
 import { anchorage } from './sim/anchorage';
@@ -1767,14 +1768,26 @@ describe('sailing on the Earth', () => {
     engine.dispose();
   });
 
-  it('forgets it on request, from the next departure', () => {
+  it('takes a departure the player chose, and forgets one on request', () => {
     kept.stored = { lat: -33.5, lon: 18.4, at: 1 };
     const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
     engine.advance(0.5);
-    engine.forgetPlace();
+    // Choosing one writes it down at once -- a tab closed straight after
+    // choosing must not lose the choice -- and it takes effect at the next
+    // departure rather than moving the boat under the player's hand.
+    const horn = waterById('cape-horn')!;
+    engine.setDeparture(horn.place);
+    expect(kept.stored!.lat).toBeCloseTo(horn.place.lat, 3);
+    expect(placeOf(engine).lat).toBeCloseTo(-33.5, 1);
+    engine.putToSea();
+    engine.advance(0.5);
+    expect(placeOf(engine).lat).toBeCloseTo(horn.place.lat, 1);
+    expect(engine.snapshot.belt).toBe('westerlies');
+
+    engine.setDeparture(null);
     expect(kept.stored).toBeNull();
     // Not a teleport: she is still where she is until she next puts to sea.
-    expect(placeOf(engine).lat).toBeCloseTo(-33.5, 1);
+    expect(placeOf(engine).lat).toBeCloseTo(horn.place.lat, 1);
     engine.putToSea();
     engine.advance(0.5);
     expect(placeOf(engine).lat).toBeCloseTo(37.78, 1);
