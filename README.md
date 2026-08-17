@@ -906,6 +906,12 @@ meaning anything.
   and there is no port to make for and nothing to carry there. Each of those is
   a real difference between one sea and another, and each is a separate piece of
   work rather than a gap in this one.
+- **No ice, and a wall at 89.5°.** The Arctic reads as open water, because the
+  grid is surface elevation and sea ice is not in it — so the polar easterlies
+  can be sailed in a way they cannot be sailed. The plane's latitude is clamped
+  short of the pole (crossing it would have to reverse the y axis), which is the
+  one hard wall in the world model. Both are stated in `globe.ts` where they
+  live.
 
 ---
 
