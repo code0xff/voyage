@@ -1693,6 +1693,29 @@ describe('sailing on the Earth', () => {
     engine.dispose();
   });
 
+  it('fetches the planet only where it is used, and again if it fails', async () => {
+    // 29 MB on the wire, so it is not fetched for a session in Newport --
+    // whose ground is surveyed, and which never asks the globe anything.
+    regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
+    const inRegion = sailing({ region: 'newport', venue: '' });
+    expect(earthLoad).not.toHaveBeenCalled();
+    inRegion.dispose();
+
+    // And a dropped connection costs this session's geography rather than
+    // the engine's whole lifetime: the next coast build asks again.
+    const failed = vi.spyOn(console, 'error').mockImplementation(() => {});
+    earthLoad.mockRejectedValueOnce(new Error('offline'));
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(earthLoad).toHaveBeenCalledTimes(1);
+    expect(failed).toHaveBeenCalled();
+    engine.applySettings(settings({ region: 'coast', randomWorld: false, seed: 99 }));
+    expect(earthLoad).toHaveBeenCalledTimes(2);
+    failed.mockRestore();
+    engine.dispose();
+  });
+
   it('builds the coast on the Earth once the planet lands', async () => {
     // The stub is land north of the equator and sea south of it, and the
     // default anchor is at 37N -- so a window there must hold land, and one

@@ -706,6 +706,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    */
   let spawn: Vec2 = { x: 0, y: 0 };
   let earth: Earth | null = null;
+  /** True while the planet is on the wire, so a retry cannot start a second one. */
+  let fetchingEarth = false;
 
   let pendingCoast: {
     origin: { x: number; y: number };
@@ -813,6 +815,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
     if (current.region === COAST_ID) {
       wantedRegion = COAST_ID;
+      wantEarth();
       if (regionTerrain?.region.id !== COAST_ID || coastSeed !== current.seed) {
         // Windowed about the boat, not the origin: a rebuild can happen
         // mid-session (a settings edit while far down the shore), and the
@@ -930,6 +933,37 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (!earth) return null;
     const patch = earth.shorePatch(toLatLon(anchor, origin.x, origin.y), 10_000);
     return { at: (x, y) => patch.at(x - origin.x, y - origin.y) };
+  }
+
+  /**
+   * Fetch the planet, if the world she is in is one it applies to.
+   *
+   * Not at construction and not unconditionally, which is how it started:
+   * that is 29 MB on the wire for a session in Newport, whose ground is
+   * surveyed and which never asks the globe anything. Only the endless coast
+   * takes its shoreline from the Earth.
+   *
+   * Nothing waits for it -- the seed's own coast is a working world, and the
+   * window is rebuilt when the planet lands. A failure is logged and left,
+   * but it is no longer permanent: the fetch is attempted again the next
+   * time the coast is built, so a dropped connection costs this session's
+   * geography rather than the engine's whole lifetime.
+   */
+  function wantEarth(): void {
+    if (earth || fetchingEarth || current.region !== COAST_ID) return;
+    fetchingEarth = true;
+    void loadEarth().then(
+      (loaded) => {
+        fetchingEarth = false;
+        if (disposed) return;
+        earth = loaded;
+        rebuildCoastWindow();
+      },
+      (err) => {
+        fetchingEarth = false;
+        console.error('could not load the globe', err);
+      },
+    );
   }
 
   /** Rebuild the coast window about the boat, on the anchor as it stands now. */
@@ -1170,6 +1204,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   function retryRegion(): void {
+    // The planet counts as part of the world to retry: it is fetched on the
+    // same connection and fails for the same reasons.
+    wantEarth();
     const region = regionById(current.region);
     if (!region) return;
     wantedRegion = region.id;
@@ -2110,21 +2147,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       dt,
     });
   }
-
-  /*
-   * The planet, fetched once and installed when it lands. Nothing waits for
-   * it; a failure is logged and left, because the seed's own coast is a
-   * working world and a planet that could not be fetched is not worth
-   * stopping a session for.
-   */
-  void loadEarth().then(
-    (loaded) => {
-      if (disposed) return;
-      earth = loaded;
-      rebuildCoastWindow();
-    },
-    (err) => console.error('could not load the globe', err),
-  );
 
   applySettings(settings);
   rebuildWorld();
