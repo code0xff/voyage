@@ -932,7 +932,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   function shoreFor(origin: { x: number; y: number }): ShoreSource | null {
     if (!earth) return null;
     const patch = earth.shorePatch(toLatLon(anchor, origin.x, origin.y), 10_000);
-    return { at: (x, y) => patch.at(x - origin.x, y - origin.y) };
+    return {
+      at: (x, y) => patch.at(x - origin.x, y - origin.y),
+      floor: (x, y) => patch.floor(x - origin.x, y - origin.y),
+    };
   }
 
   /**

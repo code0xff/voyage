@@ -119,7 +119,9 @@ describe('the coarse Earth', () => {
     // which is the case the two corrections disagree about: root two cells
     // less half a diagonal is 707 m, and less a flat half cell is 914.
     const land = new Uint8Array([1, 0, 0, 0, 0, 0, 0, 0, 0]);
-    const patch = new ShorePatch(land, 3, 1000, 1000);
+    // A flat 10 m of water everywhere: the depth field is beside the point
+    // here, and a patch has to be given one.
+    const patch = new ShorePatch(land, new Float32Array(9).fill(10), 3, 1000, 1000);
     const centre = Math.abs(patch.at(0, 0));
     expect(centre).toBeGreaterThan(650);
     expect(centre).toBeLessThan(780);
@@ -190,5 +192,31 @@ describe('the coarse Earth', () => {
 
   it('refuses a raster of the wrong size', () => {
     expect(() => new Earth(new Int16Array(100))).toThrow(/expected/);
+  });
+});
+
+/**
+ * The other half of what the patch reads: how deep it is out there.
+ *
+ * A generated coast has always faded to a 42 m floor, which is a fair shelf
+ * and a lie two thousand kilometres from anywhere -- it says the boat may
+ * anchor in the middle of the Pacific. The coarse grid is far too blunt for a
+ * sounding near a shore, and exactly good enough for this.
+ */
+describe('how deep it is out there', () => {
+  it('reads the abyssal ocean as kilometres and the shelf as metres', () => {
+    // Middle of the North Pacific, a long way from anything: four kilometres
+    // of water, and this is the number written out rather than imported
+    // because it is the claim -- an assertion against the file's own value
+    // would pass at any depth including forty metres.
+    const abyss = earth.shorePatch({ lat: 30, lon: -155 }, 2000).floor(0, 0);
+    expect(abyss).toBeGreaterThan(3000);
+    expect(abyss).toBeLessThan(7000);
+    // The Grand Banks off Newfoundland: shallow enough to fish, and the
+    // reason a shelf and an ocean cannot share one number.
+    const banks = earth.shorePatch({ lat: 45.5, lon: -50.5 }, 2000).floor(0, 0);
+    expect(banks).toBeLessThan(300);
+    // Never negative, on land: the land's own height is not a depth.
+    expect(earth.shorePatch({ lat: 39.5, lon: -117 }, 2000).floor(0, 0)).toBe(0);
   });
 });

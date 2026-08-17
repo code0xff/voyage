@@ -1716,6 +1716,21 @@ describe('sailing on the Earth', () => {
     engine.dispose();
   });
 
+  it('gives her the ocean floor when she is out over it', async () => {
+    // The stub planet is 4,000 m of water south of 30N. A generated coast
+    // fades to 42 m on its own, which is a fair shelf and a lie in
+    // mid-ocean: it says she may anchor two thousand kilometres from
+    // anywhere.
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    await Promise.resolve();
+    await Promise.resolve();
+    engine.advance(0.1);
+    carryTo(engine, 5);
+    engine.advance(0.1);
+    expect(engine.snapshot.depth).toBeGreaterThan(1000);
+    engine.dispose();
+  });
+
   it('builds the coast on the Earth once the planet lands', async () => {
     // The stub is land north of the equator and sea south of it, and the
     // default anchor is at 37N -- so a window there must hold land, and one

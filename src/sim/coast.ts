@@ -38,7 +38,16 @@ export const COAST_NAME = 'Uncharted coast';
  * sized against this, and a generated coast should exercise the identical
  * path, not a near-identical one.
  */
-const GRID = { width: 800, height: 800, cell: 25, unit: 0.1 } as const;
+/*
+ * `unit` is 0.2 m rather than the decimetre a surveyed region stores, because
+ * an int16 of decimetres reaches 3,276 m and the real ocean floor is deeper
+ * than that: the Pacific abyssal plain would have read as a plateau at the
+ * clamp. Twenty centimetres is still an order finer than anything the
+ * generator claims to know -- the beach it quantises is made of 380 m of
+ * crenellation noise -- and it buys 6,553 m, which is past every floor the
+ * boat can sail over.
+ */
+const GRID = { width: 800, height: 800, cell: 25, unit: 0.2 } as const;
 
 /**
  * The Region record a generated coast sails under.
@@ -126,7 +135,11 @@ const WARP_SCALE = 2600;
 const RAMP = 2500;
 /** m, the tallest ground; well under the int16 ceiling of 3276 m. */
 const PEAK = 110;
-/** m, the deepest water; matches the open ocean the region fades into. */
+/**
+ * m, the deepest water a coast makes on its own; matches the open ocean a
+ * surveyed region fades into. Where the source knows the real depth it wins,
+ * and the int16 sounding reaches 6,553 m -- see `GRID.unit`.
+ */
 const FLOOR = 42;
 /**
  * The shelf's width runs on its own noise rather than a constant, because a
@@ -138,6 +151,14 @@ const FLOOR = 42;
 const SHELF_MIN = 1200;
 const SHELF_VAR = 3200;
 const SHELF_SCALE = 9000;
+
+/**
+ * m offshore, where the continental slope starts and where it has finished.
+ * The start is past the outer island population's 16 km reach, so the deep
+ * water never undercuts anything the generator has stood up.
+ */
+const SLOPE_START = 17_000;
+const SLOPE_END = 32_000;
 
 /**
  * Islands, two populations instead of one strip of dots.
@@ -245,6 +266,19 @@ function coastSwing(along: number, seed: number): number {
  */
 export interface ShoreSource {
   at(x: number, y: number): number;
+  /**
+   * How deep the water is out here, in metres, or undefined from a source
+   * that does not know.
+   *
+   * Separate from `at` because they answer different questions and only one
+   * of them has a fallback: without a shoreline there is no coast to
+   * generate, but without a floor there is simply the `FLOOR` this file has
+   * always used. It exists because a source that knows where the land is
+   * generally also knows how far down the sea goes, and 42 m of water two
+   * thousand kilometres from anywhere is a sounding nobody should believe --
+   * it says the boat may anchor in the middle of the Pacific.
+   */
+  floor?(x: number, y: number): number;
 }
 
 /**
@@ -337,7 +371,24 @@ function elevation(
   const texture = 0.55 + 0.45 * fbm2(wx / 1900, wy / 1900, seed + 41, 3);
   const shelfWidth = SHELF_MIN + SHELF_VAR * fbm2(wx / SHELF_SCALE, wy / SHELF_SCALE, seed + 87, 2);
   const shelf = (FLOOR - 3) * clamp((-s - 80) / shelfWidth, 0, 1);
-  let ground = beach + PEAK * rise * texture - shelf;
+  /*
+   * And then, a long way out, the bottom drops away.
+   *
+   * The shelf above is a coastal shelf and stays one: it reaches 42 m within
+   * a few kilometres of the beach, which is what a shelf does and what every
+   * sounding near a coast should read. What was wrong was that it was *also*
+   * the middle of the Pacific, where 42 m says the boat may anchor two
+   * thousand kilometres from anywhere.
+   *
+   * So the real floor is a second, much wider ramp, and it begins past
+   * everything this file invents -- the outer island population reaches 16
+   * km, so nothing is undercut and no islet is left standing on a cliff. By
+   * SLOPE_END the water is the ocean's own depth, which past the shore
+   * patch's reach is all this can be asked about anyway.
+   */
+  const abyss = Math.max(0, (coarse?.floor?.(wx, wy) ?? 0) - FLOOR);
+  const slope = abyss * smoothstep(SLOPE_START, SLOPE_END, -s);
+  let ground = beach + PEAK * rise * texture - shelf - slope;
 
   // Islands stand only offshore of the waterline; each population carries
   // its own falloff, and an island's rise above its threshold is also its

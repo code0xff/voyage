@@ -651,6 +651,42 @@ describe('a coast conditioned on a real shoreline', () => {
     expect(farWest).toBe(0);
   });
 
+  it('lets the source say how deep the ocean is', () => {
+    // 42 m is a fair shelf and a lie in mid-ocean: it says the boat may
+    // anchor two thousand kilometres from anywhere. Where the source carries
+    // the real bathymetry, the shelf ramps down to that instead.
+    // 35 km is what the Earth's own patch saturates at, so this is the
+    // answer the generator really gets in mid-ocean.
+    const abyss = { at: () => -35_000, floor: () => 4200 };
+    const deep = coastHeightField(13, { x: 0, y: 0 }, abyss).height;
+    // Written out rather than imported: four kilometres of water is the
+    // claim, and asserting the generator's own constant back at it would
+    // hold at any depth including the 42 m this is about.
+    expect(-deep.elevationAt(0, 0)).toBeGreaterThan(3000);
+    // A source that does not know leaves the old floor alone, so nothing
+    // that has no planet behind it changes.
+    const shelf = coastHeightField(13, { x: 0, y: 0 }, { at: () => -35_000 }).height;
+    expect(-shelf.elevationAt(0, 0)).toBeGreaterThan(35);
+    expect(-shelf.elevationAt(0, 0)).toBeLessThan(50);
+  });
+
+  it('still walks up the beach from an abyssal floor', () => {
+    // The deep floor must not reach in and undercut the shore: the ramp is a
+    // continental slope, so the water off the beach is still shoal water and
+    // the boat can still sail in and ground on it.
+    const slope = { at: (x: number) => x - SHORE_AT, floor: () => 4200 };
+    const beach = coastHeightField(13, { x: 0, y: 0 }, slope).height;
+    // A hundred metres off the waterline, still a beach's depth.
+    expect(-beach.elevationAt(SHORE_AT - 100, 0)).toBeLessThan(30);
+    // Two kilometres off, over the shelf: shelf water, not abyssal. The
+    // slope begins a long way further out, past everything this file
+    // invents, so a coast conditioned on the deepest ocean on the planet is
+    // still the same coast to sail.
+    const off = -beach.elevationAt(SHORE_AT - 2000, 0);
+    expect(off).toBeGreaterThan(20);
+    expect(off).toBeLessThan(60);
+  });
+
   it('leaves the open ocean open', () => {
     // A window with no shore in reach must have no land in it at all --
     // most of a planet is this, and an island field that ignored the source

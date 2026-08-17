@@ -150,15 +150,22 @@ export class Earth {
     const half = halfSpan + SHORE_MARGIN;
     const n = Math.max(3, Math.ceil((half * 2) / spacing) + 1);
     const land = new Uint8Array(n * n);
+    // The same read, kept rather than thrown away: `elevationAt` has already
+    // been called for every cell, and how deep the water is out here is the
+    // other half of what it answers. Building a second patch for it would be
+    // ten thousand more reads of the same raster.
+    const deep = new Float32Array(n * n);
     for (let row = 0; row < n; row++) {
       // Row 0 is the north edge, as everywhere else in this project.
       const y = half - (row / (n - 1)) * half * 2;
       for (let col = 0; col < n; col++) {
         const x = -half + (col / (n - 1)) * half * 2;
-        land[row * n + col] = this.isLand(toLatLon(anchor, x, y)) ? 1 : 0;
+        const metres = this.elevationAt(toLatLon(anchor, x, y));
+        land[row * n + col] = metres > 0 ? 1 : 0;
+        deep[row * n + col] = Math.max(0, -metres);
       }
     }
-    return new ShorePatch(land, n, (half * 2) / (n - 1), half);
+    return new ShorePatch(land, deep, n, (half * 2) / (n - 1), half);
   }
 
   /**
@@ -186,6 +193,7 @@ export class ShorePatch {
 
   constructor(
     land: Uint8Array,
+    private readonly deep: Float32Array,
     private readonly n: number,
     private readonly spacing: number,
     private readonly half: number,
@@ -221,16 +229,33 @@ export class ShorePatch {
     }
   }
 
+  /**
+   * How deep the ocean is here, in metres, bilinear and never negative.
+   *
+   * The coarse grid's own bathymetry, straight: it is far too blunt for a
+   * sounding near a coast -- seven kilometres a cell -- but out where the
+   * generator has nothing else to go on it is the difference between the
+   * abyssal Pacific and a 42-metre shelf. Near the shore the generator's own
+   * beach and slope decide, and this only sets what they ramp down to.
+   */
+  floor(x: number, y: number): number {
+    return this.sample(this.deep, x, y);
+  }
+
   /** Signed metres at a plane position, bilinear. Positive is inland. */
   at(x: number, y: number): number {
-    const gx = ((x + this.half) / this.spacing);
-    const gy = ((this.half - y) / this.spacing);
+    return this.sample(this.field, x, y);
+  }
+
+  /** One bilinear read, shared so the two fields cannot drift apart. */
+  private sample(f: Float32Array, x: number, y: number): number {
+    const gx = (x + this.half) / this.spacing;
+    const gy = (this.half - y) / this.spacing;
     const c = (i: number) => (i < 0 ? 0 : i >= this.n - 1 ? this.n - 2 : i);
     const x0 = c(Math.floor(gx));
     const y0 = c(Math.floor(gy));
     const fx = Math.max(0, Math.min(1, gx - x0));
     const fy = Math.max(0, Math.min(1, gy - y0));
-    const f = this.field;
     const a = f[y0 * this.n + x0];
     const b = f[y0 * this.n + x0 + 1];
     const d = f[(y0 + 1) * this.n + x0];

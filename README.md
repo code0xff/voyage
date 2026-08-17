@@ -538,6 +538,14 @@ every plane position the session holds is *reprojected* through latitude and
 longitude rather than offset (an offset is 43 m wrong over 100 km, because
 mean-latitude scaling is not a translation).
 
+It answers a second question with the same read: **how deep it is out there**.
+A generated coast fades to a 42 m floor, which is a fair coastal shelf and a lie
+two thousand kilometres from anywhere — it says the boat may anchor in the
+middle of the Pacific. The shelf stays a shelf, and past everything the
+generator invents (the outer islands reach 16 km) a second, much wider ramp
+takes the ground down to the ocean's own floor by 32 km offshore. The soundings
+are stored as int16 at 20 cm, which reaches 6,553 m.
+
 Which half of the pair is the shoreline, in one number: the coast generator was
 already built around a single input, the signed distance to the waterline, so
 conditioning it on the Earth is a matter of handing it a distance field read off
