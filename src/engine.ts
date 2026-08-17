@@ -26,6 +26,7 @@ import {
 } from './sim/coast';
 import type { Earth } from './sim/earth';
 import { DEFAULT_ANCHOR, reproject, toLatLon, type LatLon } from './sim/globe';
+import { climateAt, climateSpeed, type Belt } from './sim/climate';
 import { HeightField } from './sim/heightfield';
 import { ManeuverTracker, type Maneuver } from './sim/maneuver';
 import { offerCalls } from './sim/calls';
@@ -47,8 +48,7 @@ import {
   sub,
   wrap2Pi,
   wrapPi,
-  type Vec2,
-} from './sim/math';
+  type Vec2, approachAngle,} from './sim/math';
 import { msToKnots } from './sim/units';
 import {
   EMPTY_TERRAIN,
@@ -151,6 +151,12 @@ export interface Snapshot {
    * one would be wrong exactly when it mattered -- after a re-anchoring.
    */
   place: LatLon;
+  /**
+   * Which wind belt she is in, or null where the belts do not apply -- a
+   * surveyed region and a venue keep their own conditions, so naming a belt
+   * there would be a claim about a wind nobody is feeling.
+   */
+  belt: Belt | null;
   /** Whether the boat is showing her lights. */
   lightsOn: boolean;
   /**
@@ -302,6 +308,15 @@ const PHYS_DT = 1 / 120;
  * probe the boundary without writing the number down beside it.
  */
 export const REANCHOR_AT = 200_000;
+/**
+ * s. How fast the mean wind eases toward the belt it is sailing into.
+ *
+ * Real seconds, and long: a boat crossing from the trades into the horse
+ * latitudes should find the wind going soft over a watch, not over a
+ * minute. Short enough that a re-anchoring or a jump does not leave her
+ * sailing last ocean's breeze for the rest of the session.
+ */
+const CLIMATE_TAU = 240;
 /**
  * How far the boat must travel before the island window is re-collected, m.
  * The window reaches kilometres, so being a hundred metres late to load an
@@ -550,6 +565,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     session: 0,
     pilot,
     place: { ...DEFAULT_ANCHOR },
+    belt: null,
     lightsOn: true,
     flare: null,
     flareReady: true,
@@ -887,6 +903,20 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   /**
+   * The mean wind the session opens in, which is the belt's where there is
+   * one. Shared with the refresh below rather than repeated: the departure
+   * settles the boat against this number, so a departure computed from the
+   * player's slider and a first physics step computed from the belt would
+   * hand her a trim for a wind she is not in -- softly in the doldrums and
+   * badly in the southern westerlies, which is where it would matter.
+   */
+  function departureTws(): number {
+    const settingMs = windMs(current) * weather.state.windScale;
+    if (current.region !== COAST_ID) return settingMs;
+    return climateSpeed(settingMs, climateAt(toLatLon(anchor, state.pos.x, state.pos.y).lat));
+  }
+
+  /**
    * Keep the plane pinned near the boat.
    *
    * A tangent plane is only honest near its pin, so the pin moves -- and
@@ -1189,7 +1219,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // Re-derived here because the physics loop's own refresh has not run yet:
     // `newSession` reseeds the weather, and a departure prepared for the old
     // session's wind scale would be trimmed for weather she is not in.
-    wind.baseTws = windMs(current) * weather.state.windScale;
+    wind.baseTws = departureTws();
     // Trimmed and reefed for the conditions before the lines are slipped,
     // and heeled to her sailing angle -- she is under way, not at a dock.
     // See departure.ts for why this is a settle and not a wind table. The
@@ -1272,6 +1302,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // Q/E afterwards, like anywhere else.
     const place = regionById(current.region)?.conditions ?? venueById(current.venue);
     if (place) wind.baseTwd = place.windTwd;
+    // And so does the belt's, out on the open coast, where there is no venue
+    // to say what the wind does. *Snapped* here rather than eased: the ease
+    // below exists so a boat sailing north into the westerlies finds them
+    // gradually, but a session opening in the trades must open with the
+    // trades blowing -- otherwise she is trimmed and reefed at the dock for
+    // a wind that spends the next four minutes swinging out from under her.
+    if (current.region === COAST_ID) {
+      wind.baseTwd = climateAt(toLatLon(anchor, state.pos.x, state.pos.y).lat).twd;
+    }
     session++;
     snapshot.session = session;
     weather.reseed(current.seed);
@@ -1476,10 +1515,38 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       }
     }
 
-    // Weather drives the mean wind, so re-derive it every step rather than
-    // only when a setting changes.
-    wind.baseTws = windMs(current) * weather.state.windScale;
-    wind.gustiness = current.gustiness * weather.state.gustScale;
+    /*
+     * Weather drives the mean wind, so re-derive it every step rather than
+     * only when a setting changes -- and on the generated Earth the
+     * *latitude* drives it too.
+     *
+     * The belts are the point of the planet: the trades, the westerlies and
+     * the two calms between them are why one sea is not another, and why a
+     * passage plan is a latitude plan. So where the world is the Earth, the
+     * climatology sets the direction outright -- a compass bearing has no
+     * slider to respect -- and scales the player's own wind speed rather
+     * than replacing it, so a setting of 25 knots is still a hard sail
+     * wherever she is.
+     *
+     * A surveyed region keeps its own conditions and a venue keeps the
+     * player's: those places were laid out around a particular breeze, and
+     * a belt reaching in to turn it would undo the thing that makes them
+     * worth sailing.
+     */
+    const settingMs = windMs(current) * weather.state.windScale;
+    if (current.region === COAST_ID) {
+      const climate = climateAt(snapshot.place.lat);
+      wind.baseTws = climateSpeed(settingMs, climate);
+      // Eased rather than set: the wind must swing as she sails into the
+      // next belt, not snap when a smoothstep crosses a half.
+      wind.baseTwd = approachAngle(wind.baseTwd, climate.twd, CLIMATE_TAU, PHYS_DT);
+      wind.gustiness = climate.gustiness * weather.state.gustScale;
+      snapshot.belt = climate.belt;
+    } else {
+      wind.baseTws = settingMs;
+      wind.gustiness = current.gustiness * weather.state.gustScale;
+      snapshot.belt = null;
+    }
 
     // And the polar has to follow it too, for the same reason and by the same
     // argument as the sea below. It was solved for one wind speed and only ever

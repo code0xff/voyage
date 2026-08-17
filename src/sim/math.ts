@@ -75,3 +75,20 @@ export const side = (v: number): number => (v < 0 ? -1 : 1);
 /** First-order lag with time constant tau. Frame-rate independent. */
 export const approach = (current: number, target: number, tau: number, dt: number): number =>
   current + (target - current) * (1 - Math.exp(-dt / Math.max(tau, 1e-6)));
+
+/**
+ * The same first-order lag, for an angle.
+ *
+ * The difference is the whole reason it exists: an angle eased with the
+ * plain `approach` takes the long way round whenever the two straddle the
+ * wrap -- a wind backing from 350 degrees to 10 swings through south rather
+ * than through north, which is a whole sea's worth of wrong. The error is
+ * taken the short way first and then eased, which is the same lag with the
+ * wrap folded in.
+ *
+ * Here rather than in the one caller that first wanted it, for the reason
+ * `weather.ts` learned the hard way: a local copy of a lag arrives without
+ * the corrections the shared one has already grown.
+ */
+export const approachAngle = (current: number, target: number, tau: number, dt: number): number =>
+  wrap2Pi(current + wrapPi(target - current) * (1 - Math.exp(-dt / Math.max(tau, 1e-6))));

@@ -147,6 +147,7 @@ import { DEG, wrapPi } from './sim/math';
 import { TIDE_PERIOD } from './sim/current';
 import { LogStoreUnavailable } from './logbook';
 import type { EngineEvent } from './engine';
+import { METRES_PER_DEG_LAT } from './sim/globe';
 import { ManeuverTracker, type Maneuver } from './sim/maneuver';
 import { offerCalls } from './sim/calls';
 import { anchorage } from './sim/anchorage';
@@ -1572,6 +1573,121 @@ describe('sailing on the Earth', () => {
       }
     }
     expect(land).toBeGreaterThan(0);
+    engine.dispose();
+  });
+});
+
+/**
+ * The wind belts, as the engine applies them.
+ *
+ * `climate.test.ts` already asserts that the belts are the ones a pilot chart
+ * carries; what is left to the engine is that the boat is *in* one, that
+ * moving her across the planet moves her between them, and that the wind she
+ * feels changes accordingly rather than staying whatever the settings slider
+ * last said.
+ */
+describe('the wind belts', () => {
+  const deg = (r: number) => ((r * 180) / Math.PI + 360) % 360;
+
+  /**
+   * Put her at a latitude, through the engine's own re-anchoring.
+   *
+   * One jump rather than a walk, and due *north or south* rather than along
+   * a diagonal, which is what makes it honest: `+y` is a pure change of
+   * latitude -- `toLatLon` divides it by the metres in a degree and leaves
+   * the longitude alone -- so none of the tangent plane's east-west stretch
+   * enters, however far the jump is. It crosses `REANCHOR_AT`, so the engine
+   * re-pins to wherever she lands, exactly as it would after a long passage.
+   * Walking her there in 200-km steps was the first version and it took
+   * fifty coast rebuilds to cross a hemisphere.
+   */
+  function carryTo(engine: ReturnType<typeof sailing>, lat: number): void {
+    const dy = (lat - engine.snapshot.place.lat) * METRES_PER_DEG_LAT;
+    engine.snapshot.state.pos = { x: 0, y: dy };
+    engine.advance(0.02);
+    expect(engine.snapshot.place.lat).toBeCloseTo(lat, 3);
+  }
+
+  it('blows from the east in the trades and from the west down south', () => {
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    engine.advance(0.1);
+    carryTo(engine, 15);
+    // Put to sea again where she now is: a session opens in the belt it opens
+    // in, without a four-minute swing.
+    engine.putToSea();
+    engine.advance(0.1);
+    expect(engine.snapshot.belt).toBe('trades');
+    // The north-east trades: from between north and east, which is the fact
+    // the trade routes were built on.
+    const trades = deg(engine.snapshot.wind.baseTwd);
+    expect(trades).toBeGreaterThan(20);
+    expect(trades).toBeLessThan(90);
+    const tradeTws = engine.snapshot.wind.baseTws;
+
+    carryTo(engine, -50);
+    engine.putToSea();
+    engine.advance(0.1);
+    expect(engine.snapshot.belt).toBe('westerlies');
+    // The roaring forties: from between west and north-west, and harder than
+    // the trades on the same setting -- which is the whole reason a passage
+    // plan is a latitude plan.
+    const roaring = deg(engine.snapshot.wind.baseTwd);
+    expect(roaring).toBeGreaterThan(250);
+    expect(roaring).toBeLessThan(330);
+    expect(engine.snapshot.wind.baseTws).toBeGreaterThan(tradeTws * 1.3);
+    engine.dispose();
+  });
+
+  it('goes soft in the doldrums', () => {
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    engine.advance(0.1);
+    const away = engine.snapshot.wind.baseTws;
+    carryTo(engine, 0);
+    engine.putToSea();
+    engine.advance(0.1);
+    expect(engine.snapshot.belt).toBe('doldrums');
+    // Calm, not dead: a doldrum with no wind in it is a wall rather than a
+    // passage, and she still has to be able to crawl out of it.
+    expect(engine.snapshot.wind.baseTws).toBeLessThan(away * 0.5);
+    expect(engine.snapshot.wind.baseTws).toBeGreaterThan(0.4);
+    engine.dispose();
+  });
+
+  it('swings into the next belt over a watch, not in a step', () => {
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    engine.advance(0.1);
+    carryTo(engine, 12);
+    engine.putToSea();
+    engine.advance(0.1);
+    const started = deg(engine.snapshot.wind.baseTwd);
+    // Carried into the southern westerlies without a restart: the wind must
+    // now be wrong for where she is, and must correct itself gradually.
+    carryTo(engine, -45);
+    engine.advance(60);
+    const soon = deg(engine.snapshot.wind.baseTwd);
+    // A minute in, most of the way still to go. Asserted as "has not
+    // arrived" rather than as a number, because the constant is a tuning
+    // value and the claim is that there is a lag at all.
+    expect(Math.abs(soon - started)).toBeLessThan(120);
+    engine.advance(900);
+    const arrived = deg(engine.snapshot.wind.baseTwd);
+    expect(arrived).toBeGreaterThan(250);
+    expect(arrived).toBeLessThan(330);
+    engine.dispose();
+  });
+
+  it('leaves a surveyed region alone', () => {
+    // Those places were laid out around a particular breeze; a belt reaching
+    // in to turn it would undo the thing that makes them worth sailing. Shown
+    // by taking a session that *does* have a belt and moving it, so that a
+    // deleted branch cannot pass on the strength of the field starting null.
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    engine.advance(0.5);
+    expect(engine.snapshot.belt).not.toBeNull();
+    regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
+    engine.applySettings(settings({ region: 'sf-bay', venue: '' }));
+    engine.advance(0.5);
+    expect(engine.snapshot.belt).toBeNull();
     engine.dispose();
   });
 });
