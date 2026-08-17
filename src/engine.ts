@@ -49,7 +49,9 @@ import {
   sub,
   wrap2Pi,
   wrapPi,
-  type Vec2, approachAngle,} from './sim/math';
+  approachAngle,
+  type Vec2,
+} from './sim/math';
 import { msToKnots } from './sim/units';
 import {
   EMPTY_TERRAIN,
@@ -565,7 +567,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     run: 0,
     session: 0,
     pilot,
-    place: { ...DEFAULT_ANCHOR },
+    // Null rather than the default anchor: the first `applySettings` below
+    // publishes the real one before anything can read this, and a world that
+    // is not on the Earth must never carry a position at all.
+    place: null,
     belt: null,
     lightsOn: true,
     flare: null,
