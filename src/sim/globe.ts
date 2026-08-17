@@ -215,8 +215,16 @@ export function formatLatLon(p: LatLon): string {
   const one = (v: number, pos: string, neg: string) => {
     const hemi = v >= 0 ? pos : neg;
     const abs = Math.abs(v);
-    const deg = Math.floor(abs);
-    const min = (abs - deg) * 60;
+    let deg = Math.floor(abs);
+    // Rounded *before* the degrees are settled, because the rounding can
+    // reach a whole degree and then it has to carry. 11.99997 north printed
+    // as 11°60.0'N -- a reading no chart contains, seen in the menu the day
+    // the position was first put on screen.
+    let min = Math.round((abs - deg) * 600) / 10;
+    if (min >= 60) {
+      min = 0;
+      deg += 1;
+    }
     return `${deg}°${min.toFixed(1)}'${hemi}`;
   };
   return `${one(p.lat, 'N', 'S')} ${one(p.lon, 'E', 'W')}`;

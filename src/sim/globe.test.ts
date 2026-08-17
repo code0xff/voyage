@@ -173,5 +173,10 @@ describe('the plane and the globe', () => {
   it('reads out as a navigator writes it', () => {
     expect(formatLatLon({ lat: 37.825, lon: -122.43 })).toBe("37°49.5'N 122°25.8'W");
     expect(formatLatLon({ lat: -33.87, lon: 151.21 })).toBe("33°52.2'S 151°12.6'E");
+    // A hair under a whole degree: the minutes round to sixty and have to
+    // carry. It printed 11°60.0'N, which is not a reading any chart
+    // contains, and it was on screen in the menu before anyone noticed.
+    expect(formatLatLon({ lat: 11.99997, lon: -122.65 })).toBe("12°0.0'N 122°39.0'W");
+    expect(formatLatLon({ lat: -0.00001, lon: 179.99999 })).toBe("0°0.0'S 180°0.0'E");
   });
 });
