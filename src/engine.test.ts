@@ -23,6 +23,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sceneCalls: { render: number } = { render: 0 };
 const regionLoad = vi.hoisted(() => vi.fn());
+const earthLoad = vi.hoisted(() => vi.fn());
 const logAdd = vi.hoisted(() => vi.fn<(record: unknown) => Promise<void>>());
 /**
  * Let the boat anchor where she is, for the two tests about completing a
@@ -89,8 +90,17 @@ vi.mock('./view/telemetry', () => ({
   },
 }));
 
-/** Region rasters are fetched over the network; no test here sails one. */
-vi.mock('./terrain-load', () => ({ loadRegion: regionLoad }));
+/**
+ * Region rasters and the globe are fetched over the network.
+ *
+ * `loadEarth` resolves from a real `Earth` built on a *stub* raster, not the
+ * shipped 29 MB one: what these tests ask is whether the engine wires a
+ * planet into its windows and its readouts, not whether NOAA has the
+ * Atlantic in the right place -- `earth.test.ts` asks that, of the real
+ * file. The stub is land in the northern half and sea in the southern, so
+ * "is there a coast here" has a knowable answer.
+ */
+vi.mock('./terrain-load', () => ({ loadRegion: regionLoad, loadEarth: earthLoad }));
 
 /** IndexedDB. The passage log is asserted through the engine's own event. */
 vi.mock('./sim/anchorage', async (importActual) => {
@@ -129,7 +139,7 @@ vi.mock('./sim/calls', async (importActual) => {
   };
 });
 
-import { FLARE_BURN, FLARE_COOLDOWN, FLARE_RISE, createEngine } from './engine';
+import { FLARE_BURN, FLARE_COOLDOWN, FLARE_RISE, REANCHOR_AT, createEngine } from './engine';
 import { DEFAULT_SETTINGS, type Settings } from './settings';
 import { WhaleField } from './sim/whales';
 import { SharkField } from './sim/sharks';
@@ -140,9 +150,33 @@ import type { EngineEvent } from './engine';
 import { ManeuverTracker, type Maneuver } from './sim/maneuver';
 import { offerCalls } from './sim/calls';
 import { anchorage } from './sim/anchorage';
+import { Earth } from './sim/earth';
 import { CRUISER } from './sim/config';
 import type { PassageRecord } from './sim/passage';
 import type { RegionTerrain } from './sim/region-terrain';
+
+/**
+ * A whole planet at one degree a cell: land north of 30N, sea everywhere
+ * else.
+ *
+ * Coarse on purpose -- what the engine has to get right is "did a shoreline
+ * reach the window", not any real coast -- but not *too* coarse. The first
+ * stub was two rows of 90-degree cells, and the sampler's bilinear
+ * interpolation duly read 37N as most of the way from the pole to the
+ * equator and called it sea, so a correctly wired engine looked broken. A
+ * degree a cell is finer than the window and the trap goes away.
+ */
+function stubEarth(): Earth {
+  const grid = { width: 360, height: 180, arcMinutes: 60 };
+  const samples = new Int16Array(grid.width * grid.height);
+  for (let row = 0; row < grid.height; row++) {
+    const lat = 90 - row;
+    for (let col = 0; col < grid.width; col++) {
+      samples[row * grid.width + col] = lat > 30 ? 500 : -4000;
+    }
+  }
+  return new Earth(samples, grid);
+}
 
 /**
  * Enough of a browser for the engine to start: it listens for a gesture to
@@ -171,6 +205,8 @@ beforeEach(() => {
   frames = [];
   sceneCalls.render = 0;
   regionLoad.mockReset();
+  earthLoad.mockReset();
+  earthLoad.mockImplementation(() => Promise.resolve(stubEarth()));
   logAdd.mockReset();
   logAdd.mockResolvedValue(undefined);
   anchorAnywhere.on = false;
@@ -1440,6 +1476,102 @@ describe('the flare', () => {
     frame(0.05);
     engine.advance(1);
     expect(engine.snapshot.flare).not.toBeNull();
+    engine.dispose();
+  });
+});
+
+/**
+ * The Earth, as the engine uses it.
+ *
+ * Three claims, and they are the engine's rather than the sim's: that the
+ * boat has a place on the planet and it moves as she sails, that the plane
+ * is re-pinned before it stops being honest and nothing the session holds is
+ * left behind when it happens, and that the coast is built on the Earth's
+ * shoreline once the raster has landed.
+ */
+describe('sailing on the Earth', () => {
+  it('knows where she is, and moves her there as she sails', () => {
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const start = { ...engine.snapshot.place };
+    // The default anchor is off the Golden Gate; a session that opened
+    // somewhere else entirely would mean the anchor never reached the
+    // snapshot.
+    expect(start.lat).toBeGreaterThan(30);
+    expect(start.lat).toBeLessThan(45);
+    expect(start.lon).toBeLessThan(-100);
+    engine.advance(0.1);
+    engine.press('h');
+    engine.advance(600);
+    const now = engine.snapshot.place;
+    // Ten minutes of sailing is a mile or so: the position has to have
+    // moved, and by a plausible amount rather than a degree.
+    const moved = Math.hypot(now.lat - start.lat, now.lon - start.lon);
+    expect(moved).toBeGreaterThan(0.005);
+    expect(moved).toBeLessThan(0.5);
+    engine.dispose();
+  });
+
+  it('re-pins the plane without moving anything on the Earth', () => {
+    // The re-anchoring rule: plane metres are measured from a pin that
+    // moves, so everything the session holds in them must be carried across
+    // -- and the way to check that is that nothing *on the Earth* moved.
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    engine.advance(0.1);
+    const before = { ...engine.snapshot.place };
+    // Put her most of the way to the trigger rather than sailing it: two
+    // hundred kilometres is half a day. The position is *assigned* rather
+    // than mutated in place because the physics replaces `pos` with a fresh
+    // object every step -- a captured reference goes stale on the next one,
+    // which is what the first draft of this test did and why it saw the
+    // boat never move.
+    engine.snapshot.state.pos = { x: 199_000, y: 0 };
+    engine.advance(1);
+    const mid = { ...engine.snapshot.place };
+    // Still the same place on Earth, in new plane coordinates: the position
+    // she was carried to is roughly 199 km east of where she started.
+    expect(mid.lon).toBeGreaterThan(before.lon + 1.5);
+    expect(Math.abs(mid.lat - before.lat)).toBeLessThan(0.5);
+    // Crossing the trigger re-pins the plane, and the test of that is
+    // *continuity*: two metres of easting either side of the boundary must
+    // read as two metres on the Earth, not as a jump. Comparing two points
+    // hundreds of metres apart -- which the first draft did -- measures the
+    // distance between them and calls it error.
+    engine.snapshot.state.pos = { x: REANCHOR_AT - 1, y: 0 };
+    engine.advance(0.02);
+    const justBefore = { ...engine.snapshot.place };
+    const planeBefore = Math.hypot(engine.snapshot.state.pos.x, engine.snapshot.state.pos.y);
+    engine.snapshot.state.pos = { x: REANCHOR_AT + 1, y: 0 };
+    engine.advance(0.02);
+    const justAfter = engine.snapshot.place;
+    // The pin moved: the plane collapsed from 200 km to nothing.
+    expect(planeBefore).toBeGreaterThan(REANCHOR_AT - 100);
+    expect(Math.hypot(engine.snapshot.state.pos.x, engine.snapshot.state.pos.y)).toBeLessThan(100);
+    // And she did not: two metres east is two metres east, which at this
+    // latitude is a couple of hundred-thousandths of a degree.
+    expect(Math.abs(justAfter.lat - justBefore.lat)).toBeLessThan(1e-4);
+    expect(Math.abs(justAfter.lon - justBefore.lon)).toBeLessThan(1e-4);
+    expect(justAfter.lon).toBeGreaterThan(justBefore.lon);
+    engine.dispose();
+  });
+
+  it('builds the coast on the Earth once the planet lands', async () => {
+    // The stub is land north of the equator and sea south of it, and the
+    // default anchor is at 37N -- so a window there must hold land, and one
+    // moved deep into the southern ocean must hold none. That is the whole
+    // claim: the shoreline the generator used came from the planet.
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    await Promise.resolve();
+    await Promise.resolve();
+    engine.advance(1);
+    const region = engine.snapshot.region;
+    expect(region).not.toBeNull();
+    let land = 0;
+    for (let x = -9000; x <= 9000; x += 500) {
+      for (let y = -9000; y <= 9000; y += 500) {
+        if (region!.elevationAt(x, y) > 0) land++;
+      }
+    }
+    expect(land).toBeGreaterThan(0);
     engine.dispose();
   });
 });

@@ -38,6 +38,16 @@ export interface LatLon {
   lon: number;
 }
 
+/**
+ * Where a session opens when nothing else says.
+ *
+ * Outside the Golden Gate, in the deep water off the bar: the sim's own
+ * home waters -- the surveyed region the project started from is right
+ * there -- and a coast with an ocean to the west and a continent to the
+ * east, which is the arrangement a first look at the world should get.
+ */
+export const DEFAULT_ANCHOR: LatLon = { lat: 37.78, lon: -122.65 };
+
 const DEG = Math.PI / 180;
 
 /** Metres per degree of latitude. Constant on a sphere, which is half the point. */

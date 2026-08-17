@@ -14,7 +14,7 @@ import { CurrentField, DEFAULT_FULL_DEPTH, tideRate } from './sim/current';
 import { venueById } from './sim/venues';
 import { regionById, type Region } from './sim/regions';
 import { RegionTerrain } from './sim/region-terrain';
-import { loadRegion } from './terrain-load';
+import { loadEarth, loadRegion } from './terrain-load';
 import { passageInfo, type PassageInfo, type PassageRecord } from './sim/passage';
 import { anchorage, type Anchorage } from './sim/anchorage';
 import {
@@ -24,6 +24,8 @@ import {
   fillCoastRows,
   snapCoastOrigin,
 } from './sim/coast';
+import type { Earth } from './sim/earth';
+import { DEFAULT_ANCHOR, reproject, toLatLon, type LatLon } from './sim/globe';
 import { HeightField } from './sim/heightfield';
 import { ManeuverTracker, type Maneuver } from './sim/maneuver';
 import { offerCalls } from './sim/calls';
@@ -139,6 +141,16 @@ export interface Snapshot {
   /** Increments whenever a new session starts. A view can reset its own state on it. */
   session: number;
   pilot: PilotState;
+  /**
+   * Where she is on the Earth.
+   *
+   * The plane's own coordinates are metres from a pin that moves, so they
+   * are meaningless to a player and to a logbook; this is the position that
+   * means something. Published rather than derived at the call site because
+   * the anchor is the engine's, and a readout recomputing it from a stale
+   * one would be wrong exactly when it mattered -- after a re-anchoring.
+   */
+  place: LatLon;
   /** Whether the boat is showing her lights. */
   lightsOn: boolean;
   /**
@@ -281,6 +293,15 @@ export interface Engine {
 }
 
 const PHYS_DT = 1 / 120;
+/**
+ * m of plane travel before the anchor is re-pinned under the boat.
+ *
+ * Generous rather than tight: `planeError` puts two hundred kilometres far
+ * inside the honest range, and re-anchoring costs a handful of conversions
+ * plus the window re-bake the slide already does. Exported so a test can
+ * probe the boundary without writing the number down beside it.
+ */
+export const REANCHOR_AT = 200_000;
 /**
  * How far the boat must travel before the island window is re-collected, m.
  * The window reaches kilometres, so being a hundred metres late to load an
@@ -528,6 +549,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     run: 0,
     session: 0,
     pilot,
+    place: { ...DEFAULT_ANCHOR },
     lightsOn: true,
     flare: null,
     flareReady: true,
@@ -635,8 +657,27 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   const COAST_JUMP = 7000;
   const COAST_ROWS_PER_STEP = 4;
   let coastOrigin = { x: 0, y: 0 };
+  /**
+   * Where the plane is pinned to the Earth, and the Earth itself once it has
+   * arrived.
+   *
+   * The sim's metres are measured from `anchor`; globe.ts says why that has
+   * to be a moving pin, and `planeError` says how far it may drift -- a
+   * working window costs under a part in a million and a thousand kilometres
+   * 0.06%, so the re-anchor below is generous rather than tight.
+   *
+   * `earth` is null until the raster lands, and nothing waits for it: a
+   * coast keeps being generated from the seed alone until the planet
+   * arrives, and the window is re-baked the moment it does. The alternative
+   * is a loading screen for 29 MB before anything can be sailed.
+   */
+  let anchor: LatLon = { ...DEFAULT_ANCHOR };
+  let earth: Earth | null = null;
+
   let pendingCoast: {
     origin: { x: number; y: number };
+    /** The Earth's shoreline for this window, or null for a seed-only coast. */
+    shore: ReturnType<Earth['shorePatch']> | null;
     samples: Int16Array;
     row: number;
   } | null = null;
@@ -726,7 +767,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
         // mid-session (a settings edit while far down the shore), and the
         // window must be where she is. At construction and at put-to-sea the
         // boat is at the origin anyway, so the first window is unchanged.
-        const coast = coastHeightField(current.seed, state.pos);
+        const snapped = snapCoastOrigin(state.pos);
+        const coast = coastHeightField(current.seed, snapped, shoreFor(snapped));
         regionTerrain = new RegionTerrain(coast.region, coast.height);
         coastSeed = current.seed;
         coastOrigin = coast.origin;
@@ -821,6 +863,60 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   /**
+   * The Earth's own shoreline for a window centred at this plane position,
+   * or null while the planet is still on the wire.
+   *
+   * Anchored at the window's *own* place, so the patch's coordinates and the
+   * fill's are the same coordinates -- the one alignment that would silently
+   * put a real coastline somewhere the boat is not.
+   */
+  function shoreFor(origin: { x: number; y: number }): ReturnType<Earth['shorePatch']> | null {
+    if (!earth) return null;
+    return earth.shorePatch(toLatLon(anchor, origin.x, origin.y), 10_000);
+  }
+
+  /** Rebuild the coast window about the boat, on the anchor as it stands now. */
+  function rebuildCoastWindow(): void {
+    if (regionTerrain?.region.id !== COAST_ID) return;
+    const snapped = snapCoastOrigin(state.pos);
+    const coast = coastHeightField(coastSeed, snapped, shoreFor(snapped));
+    regionTerrain = new RegionTerrain(coast.region, coast.height);
+    coastOrigin = coast.origin;
+    pendingCoast = null;
+    published = false;
+  }
+
+  /**
+   * Keep the plane pinned near the boat.
+   *
+   * A tangent plane is only honest near its pin, so the pin moves -- and
+   * everything holding a *plane* position moves with it: the boat, where she
+   * is bound, the coast window, the hand of calls. That list is the risk,
+   * which is why it is written out here rather than hidden behind a helper:
+   * a position left behind would be silently somewhere else on the Earth,
+   * and nothing would say so.
+   */
+  function reanchorIfFar(x: number, y: number): void {
+    if (Math.hypot(x, y) < REANCHOR_AT) return;
+    const from = anchor;
+    const to = toLatLon(from, x, y);
+    const move = (p: { x: number; y: number }) => reproject(from, to, p.x, p.y);
+
+    const boat = move(state.pos);
+    state.pos = boat;
+    if (destination) destination = move(destination);
+    coastOrigin = move(coastOrigin);
+    // Dropped rather than moved: its rows were filled about the old plane
+    // and the rest would be filled about the new one, which would leave a
+    // seam through the middle of the window.
+    pendingCoast = null;
+    snapshot.calls = snapshot.calls.map(move);
+    anchor = to;
+    snapshot.place = { ...anchor };
+    rebuildCoastWindow();
+  }
+
+  /**
    * Keep the generated coast's window under the boat; see `coastOrigin`.
    *
    * Runs ahead of the publish block below, so the frame that completes a
@@ -836,7 +932,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (regionTerrain?.region.id !== COAST_ID) return;
     const away = Math.max(Math.abs(x - coastOrigin.x), Math.abs(y - coastOrigin.y));
     if (away > COAST_JUMP) {
-      const coast = coastHeightField(coastSeed, { x, y });
+      const jumped = snapCoastOrigin({ x, y });
+      const coast = coastHeightField(coastSeed, jumped, shoreFor(jumped));
       regionTerrain = new RegionTerrain(coast.region, coast.height);
       coastOrigin = coast.origin;
       pendingCoast = null;
@@ -860,8 +957,13 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     }
     if (!pendingCoast && away > COAST_REWINDOW) {
       const { width, height } = regionTerrain.region.grid;
+      const origin = snapCoastOrigin({ x, y });
       pendingCoast = {
-        origin: snapCoastOrigin({ x, y }),
+        origin,
+        // Built once with the window rather than per row: it is a chamfer,
+        // and it must be the same shoreline for every row of one field or
+        // the coast would step where the fill was interrupted.
+        shore: shoreFor(origin),
         samples: new Int16Array(width * height),
         row: 0,
       };
@@ -869,7 +971,14 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (!pendingCoast) return;
     const rows = regionTerrain.region.grid.height;
     const next = Math.min(pendingCoast.row + COAST_ROWS_PER_STEP, rows);
-    fillCoastRows(pendingCoast.samples, coastSeed, pendingCoast.origin, pendingCoast.row, next);
+    fillCoastRows(
+      pendingCoast.samples,
+      coastSeed,
+      pendingCoast.origin,
+      pendingCoast.row,
+      next,
+      pendingCoast.shore,
+    );
     pendingCoast.row = next;
     if (next < rows) return;
     const region = coastRegion(coastSeed);
@@ -890,6 +999,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * travelled, and then only does anything if the island set really differs.
    */
   function streamWorld(x: number, y: number): void {
+    reanchorIfFar(x, y);
     slideCoast(x, y);
     if (!field) {
       // Either open water, a venue or a region, and all three are the same job:
@@ -1476,6 +1586,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // shore hears them come up at the rate she is closing it.
     wildlife.update(PHYS_DT, state.pos, query);
 
+    // Where she is, in the only coordinates that survive a re-anchoring.
+    snapshot.place = toLatLon(anchor, state.pos.x, state.pos.y);
+
     flareCooldown = Math.max(0, flareCooldown - PHYS_DT);
     snapshot.flareReady = flareCooldown <= 0;
     flareDeniedFor = Math.max(0, flareDeniedFor - PHYS_DT);
@@ -1859,6 +1972,21 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       dt,
     });
   }
+
+  /*
+   * The planet, fetched once and installed when it lands. Nothing waits for
+   * it; a failure is logged and left, because the seed's own coast is a
+   * working world and a planet that could not be fetched is not worth
+   * stopping a session for.
+   */
+  void loadEarth().then(
+    (loaded) => {
+      if (disposed) return;
+      earth = loaded;
+      rebuildCoastWindow();
+    },
+    (err) => console.error('could not load the globe', err),
+  );
 
   applySettings(settings);
   rebuildWorld();
