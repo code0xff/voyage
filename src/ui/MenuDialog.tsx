@@ -868,7 +868,13 @@ export function MenuDialog({
             )}
             <div className="grid grid-cols-[104px_1fr] items-center gap-3">
               <span className="text-[11px] text-muted-foreground">
-                {t(settings.region && settings.region !== COAST_ID ? WORLD.seedRegion : WORLD.seed)}
+                {t(
+                  settings.region === COAST_ID
+                    ? WORLD.seedCoast
+                    : settings.region
+                      ? WORLD.seedRegion
+                      : WORLD.seed,
+                )}
               </span>
               <div className="flex gap-2">
                 <input

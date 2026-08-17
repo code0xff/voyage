@@ -668,6 +668,14 @@ export const WORLD: Record<string, Phrase> = {
    * coast and delivers a different Tuesday.
    */
   seedRegion: { en: 'Conditions seed', ko: '조건 시드' },
+  /**
+   * And on the Earth it is neither. The planet decides where the land is, so
+   * the seed no longer names a world -- it draws the shoreline's own shape
+   * inside the Earth's coast, stands the islets off it, and runs the puffs
+   * and the weather. Calling it the world seed there promises a different
+   * planet and delivers a different beach.
+   */
+  seedCoast: { en: 'Coast seed', ko: '해안 시드' },
   seedNew: { en: 'New each time', ko: '매번 새로' },
   seedPinned: { en: 'Pinned', ko: '고정' },
   /**
