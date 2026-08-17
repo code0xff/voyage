@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { Earth } from './earth';
 import { beltAt } from './climate';
+import { coastHeightField } from './coast';
 import { WATERS, waterAt, waterById } from './waters';
 
 /**
@@ -29,26 +30,72 @@ describe('the departures', () => {
       // place with no land within it reads as saturated rather than as a
       // number, which is the case the upper bound is here to catch.
       const shore = -earth.shorePatch(w.place, 40_000, 2000).at(0, 0);
-      // Five kilometres clear, because the coast generator invents up to a
-      // kilometre and a half of shoreline on top of the Earth's and the
-      // spawn must not land in it. Both numbers are written out: they are
-      // the claim, and importing the generator's own constants would make
-      // this pass at any value including zero.
-      expect(shore, `${w.id} is ${(shore / 1000).toFixed(1)} km off`).toBeGreaterThan(5_000);
-      // And thirty at the outside, so there is a coast in the window she
-      // sails in rather than an empty sea with a name on it.
-      expect(shore, `${w.id} is ${(shore / 1000).toFixed(1)} km off`).toBeLessThan(30_000);
+      // Two and a half kilometres clear, because the coast generator invents
+      // up to a kilometre and a half of shoreline on top of the Earth's and
+      // the spawn must not land in it. Both numbers are written out: they
+      // are the claim, and importing the generator's own constants would
+      // make this pass at any value including zero.
+      expect(shore, `${w.id} is ${(shore / 1000).toFixed(1)} km off`).toBeGreaterThan(2_500);
+      // And eight at the outside. The window she sails in is twenty
+      // kilometres square, so a coast twelve off -- which is where these
+      // were first put -- is a smudge in one corner or outside it
+      // altogether, and every departure opens on an empty sea.
+      expect(shore, `${w.id} is ${(shore / 1000).toFixed(1)} km off`).toBeLessThan(8_000);
     }
   });
 
-  it('gives her water under the keel at every one', () => {
+  it('picks water the Earth itself calls water', () => {
     for (const w of WATERS) {
       const depth = earth.shorePatch(w.place, 5_000, 1000).floor(0, 0);
-      // Twenty metres: past any shoal the coarse grid could be hiding, and
-      // deeper than the boat's draft by an order.
-      expect(depth, w.id).toBeGreaterThan(20);
+      // Five metres, and no more is asked of the *coarse* grid: four
+      // kilometres off a real coast is a real shelf, and some of these are
+      // properly shoal there -- the Golden Gate's own bar reads fourteen.
+      // What the boat actually floats in is the generated depth, which the
+      // window test above holds to ten metres all round the spawn. This one
+      // is only here to refuse a lagoon the grid has rounded into the sea.
+      expect(depth, `${w.id} has ${depth.toFixed(0)} m`).toBeGreaterThan(5);
     }
   });
+
+  it('opens each one with a coast in sight and water to sail out of', () => {
+    /*
+     * The test the list is really for, and the one it did not have: not how
+     * far the coarse shoreline is, but what she can actually see when the
+     * world is built around her. The first version of this file put every
+     * departure twelve kilometres off, which passed a distance check and
+     * opened on an empty sea in all eleven -- there was no telling one from
+     * another, which is the whole point of having a list.
+     *
+     * Built exactly as the engine builds it: the Earth's shoreline for this
+     * window, handed to the generator, at the window's own origin.
+     */
+    for (const w of WATERS) {
+      const patch = earth.shorePatch(w.place, 10_000);
+      const { height } = coastHeightField(13, { x: 0, y: 0 }, patch);
+      let land = 0;
+      let n = 0;
+      for (let x = -9800; x <= 9800; x += 400) {
+        for (let y = -9800; y <= 9800; y += 400) {
+          n++;
+          if (height.elevationAt(x, y) > 0) land++;
+        }
+      }
+      // A tenth of the window at least: a coast to look at and to sail
+      // along, not a rock on the horizon.
+      expect(land / n, `${w.id} shows ${((land / n) * 100).toFixed(1)}% land`).toBeGreaterThan(0.1);
+      // And not so much that she is in a bay with no way out.
+      expect(land / n, `${w.id} shows ${((land / n) * 100).toFixed(1)}% land`).toBeLessThan(0.6);
+      // Ten metres of water all round the spawn, out to where she will have
+      // gathered way. The same promise `coast.test.ts` makes of every seed.
+      for (let a = 0; a < 12; a++) {
+        for (const r of [0, 90, 300, 600]) {
+          const x = Math.sin((a / 12) * Math.PI * 2) * r;
+          const y = Math.cos((a / 12) * Math.PI * 2) * r;
+          expect(-height.elevationAt(x, y), `${w.id} at ${r} m`).toBeGreaterThan(10);
+        }
+      }
+    }
+  }, 30_000);
 
   it('covers the belts rather than ten versions of one sea', () => {
     // The point of the planet is that the seas differ, so a list that was

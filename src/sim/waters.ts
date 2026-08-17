@@ -15,10 +15,14 @@ import type { LatLon } from './globe';
  * inhabited continent, which is the shape a list like this should have.
  *
  * **Every position is verified against the shipped raster, not remembered.**
- * Each was tuned to lie about twelve kilometres off its coast: far enough
- * that the generated shoreline's own kilometre and a half of invention
- * cannot beach her, close enough that the land is inside the window she
- * sails in and visible from it. `waters.test.ts` re-checks all of them
+ * Each was tuned to lie about four kilometres off its coast, which is the
+ * distance the generated coast has always put its own spawn at: far enough
+ * that the shoreline's kilometre and a half of invention cannot beach her,
+ * near enough that the land is *in* the window she sails in rather than at
+ * the corner of it. Twelve was the first answer and it was wrong -- the
+ * window is twenty kilometres square, so land twelve off is a smudge in one
+ * corner or outside it altogether, and every departure opened on an empty
+ * sea with no way to tell one from another. `waters.test.ts` re-checks all of them
  * against `globe-4m.bin` itself, so a hand-edited coordinate fails a test
  * rather than opening a session inside Spain. Three of the first draft's
  * candidates -- Iceland, the Falklands and Golfo Nuevo -- were dry land at
@@ -37,27 +41,27 @@ export interface Water {
 
 export const WATERS: readonly Water[] = [
   // Where the game opens, listed so there is a way back to it.
-  { id: 'golden-gate', place: { lat: 37.78, lon: -122.65 } },
+  { id: 'golden-gate', place: { lat: 37.78, lon: -122.57 } },
   // The Gulf of Cádiz, inside Trafalgar and a day from Gibraltar.
-  { id: 'cadiz', place: { lat: 36.46, lon: -6.36 } },
+  { id: 'cadiz', place: { lat: 36.52, lon: -6.3 } },
   // Off Cape Point, where the two oceans are said to meet.
-  { id: 'good-hope', place: { lat: -34.38, lon: 18.4 } },
+  { id: 'good-hope', place: { lat: -34.3, lon: 18.42 } },
   // Between Busan and Tsushima.
-  { id: 'korea-strait', place: { lat: 34.42, lon: 129.08 } },
+  { id: 'korea-strait', place: { lat: 34.48, lon: 129.22 } },
   // Outside Sydney Heads.
-  { id: 'sydney', place: { lat: -33.9, lon: 151.4 } },
+  { id: 'sydney', place: { lat: -33.84, lon: 151.34 } },
   // Off the Horn itself, in the westerlies with nothing in their way.
-  { id: 'cape-horn', place: { lat: -55.96, lon: -67.12 } },
+  { id: 'cape-horn', place: { lat: -55.9, lon: -67.2 } },
   // The Leewards: the trade wind that carried the sailing ships west.
-  { id: 'antigua', place: { lat: 17.02, lon: -61.62 } },
+  { id: 'antigua', place: { lat: 17.08, lon: -61.66 } },
   // Mid-Pacific, two thousand miles from anywhere.
-  { id: 'oahu', place: { lat: 21.26, lon: -157.92 } },
+  { id: 'oahu', place: { lat: 21.32, lon: -157.9 } },
   // Reykjanes, at the top of the North Atlantic.
-  { id: 'reykjanes', place: { lat: 64.18, lon: -22.4 } },
+  { id: 'reykjanes', place: { lat: 64.12, lon: -22.32 } },
   // The Zanzibar channel, in the south-east trades of the Indian Ocean.
-  { id: 'zanzibar', place: { lat: -6.16, lon: 39.64 } },
+  { id: 'zanzibar', place: { lat: -6.2, lon: 39.58 } },
   // The Galápagos, on the equator: the doldrums, where the wind goes out.
-  { id: 'galapagos', place: { lat: -0.81, lon: -90.28 } },
+  { id: 'galapagos', place: { lat: -0.75, lon: -90.3 } },
 ];
 
 export const waterById = (id: string): Water | null =>

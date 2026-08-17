@@ -536,9 +536,13 @@ Zanzibar and the Galápagos. An ocean that may be entered at any point is an
 ocean with no doors, and a player who wants to sail the Cape should not have to
 spend a fortnight getting there. They are spread across the belts on purpose,
 each named with the one it sits in, and every position is *verified against the
-shipped raster* rather than remembered: about twelve kilometres off its coast,
-in water deeper than twenty metres, checked by `waters.test.ts`. Three of the
-first draft's coordinates were dry land.
+shipped raster* rather than remembered: about four kilometres off its coast --
+the distance the generated coast has always put its own spawn at -- with a
+coast filling a fifth of the window she opens in and ten metres of water all
+round her. `waters.test.ts` builds each window and checks exactly that. Three of
+the first draft's coordinates were dry land, and the draft after that put every
+departure twelve kilometres out, which passes a distance check and opens on an
+empty sea.
 
 A session opens where the last one got to. That is what makes the planet a
 place rather than a backdrop: a boat that reached the Azores and reopened off
