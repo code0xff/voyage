@@ -1775,19 +1775,29 @@ describe('sailing on the Earth', () => {
     // Choosing one writes it down at once -- a tab closed straight after
     // choosing must not lose the choice -- and it takes effect at the next
     // departure rather than moving the boat under the player's hand.
-    const horn = waterById('cape-horn')!;
-    engine.setDeparture(horn.place);
-    expect(kept.stored!.lat).toBeCloseTo(horn.place.lat, 3);
+    // Antigua on purpose, and from the Cape on purpose: the two are in
+    // different belts, so the wind she opens in says which pin was used.
+    const antigua = waterById('antigua')!;
+    engine.setDeparture(antigua.place);
+    expect(kept.stored!.lat).toBeCloseTo(antigua.place.lat, 3);
     expect(placeOf(engine).lat).toBeCloseTo(-33.5, 1);
     engine.putToSea();
     engine.advance(0.5);
-    expect(placeOf(engine).lat).toBeCloseTo(horn.place.lat, 1);
-    expect(engine.snapshot.belt).toBe('westerlies');
+    expect(placeOf(engine).lat).toBeCloseTo(antigua.place.lat, 1);
+    expect(engine.snapshot.belt).toBe('trades');
+    // And in the trades, not in the westerly she was lying to. The opening
+    // wind is read at the plane's origin, which means nothing until the pin
+    // has been moved -- and the pin used to move afterwards, so choosing a
+    // departure sailed her out of it in the wind of the place she had left,
+    // for the four minutes the ease took to creep round.
+    const twd = ((engine.snapshot.wind.baseTwd * 180) / Math.PI + 360) % 360;
+    expect(twd).toBeGreaterThan(20);
+    expect(twd).toBeLessThan(100);
 
     engine.setDeparture(null);
     expect(kept.stored).toBeNull();
     // Not a teleport: she is still where she is until she next puts to sea.
-    expect(placeOf(engine).lat).toBeCloseTo(horn.place.lat, 1);
+    expect(placeOf(engine).lat).toBeCloseTo(antigua.place.lat, 1);
     engine.putToSea();
     engine.advance(0.5);
     expect(placeOf(engine).lat).toBeCloseTo(37.78, 1);

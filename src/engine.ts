@@ -845,7 +845,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // session's shore.
     /*
      * Where plane zero is on the Earth, which is a property of the world and
-     * not of the session.
+     * not of the session. See `pinForWorld`.
      *
      * A surveyed region is a real place with a surveyed centre, and its grid
      * is laid out about that centre -- so a session at Newport must read out
@@ -872,7 +872,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (surveyed && !inSurveyed) oceanPos = { ...state.pos };
     if (!surveyed && inSurveyed) state.pos = { ...oceanPos };
     inSurveyed = !!surveyed;
-    anchor = surveyed ? { ...surveyed.centre } : { ...oceanAnchor };
+    pinForWorld();
 
     if (current.region === COAST_ID) {
       wantedRegion = COAST_ID;
@@ -1016,6 +1016,24 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (current.region !== COAST_ID || !snapshot.place) return;
     saveReckoning(snapshot.place);
     sinceSaved = 0;
+  }
+
+  /**
+   * Point the plane's pin at the world she is in.
+   *
+   * A surveyed region is laid out about its own surveyed centre; the endless
+   * Earth is pinned wherever she got to. Called from `rebuildWorld`, which
+   * is late -- and from `newSession` *before* it reads the opening wind,
+   * which is the whole reason it is a function: choosing a departure and
+   * putting to sea gave her the belt of the place she had just left, because
+   * the wind was worked out against a pin that had not moved yet. Sailing
+   * from the Cape in the Caribbean's trades, and only until the ease crept
+   * round over the next four minutes.
+   */
+  function pinForWorld(): void {
+    const surveyed =
+      current.region && current.region !== COAST_ID ? regionById(current.region) : null;
+    anchor = surveyed ? { ...surveyed.centre } : { ...oceanAnchor };
   }
 
   /**
@@ -1560,6 +1578,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // trades blowing -- otherwise she is trimmed and reefed at the dock for
     // a wind that spends the next four minutes swinging out from under her.
     windShift = 0;
+    // The pin first: the belt below is read at the plane's origin, and the
+    // origin means nothing until the pin is where this session's world says.
+    pinForWorld();
     // The plane's origin, not where she is: `placeAtStart` is about to put
     // her within ninety metres of it.
     const opening = beltFor(0, 0);
