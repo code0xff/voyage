@@ -1804,6 +1804,50 @@ describe('sailing on the Earth', () => {
     engine.dispose();
   });
 
+  it('does not write over a choice she has not taken yet', () => {
+    // The record is one row, so a session that goes on recording after a
+    // departure is chosen puts her current position straight back over the
+    // choice -- within half a minute for the throttle, or the moment the tab
+    // goes away. "Start over" survived exactly thirty seconds.
+    kept.stored = { lat: -33.5, lon: 18.4, at: 1 };
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    engine.advance(0.5);
+
+    engine.setDeparture(null);
+    expect(kept.stored).toBeNull();
+    engine.advance(61);
+    expect(kept.stored, 'the throttle wrote over it').toBeNull();
+    engine.dispose();
+    expect(kept.stored, 'quitting wrote over it').toBeNull();
+
+    // The same for a chosen one: it is still the choice a minute later.
+    const antigua = waterById('antigua')!;
+    const second = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    second.advance(0.5);
+    second.setDeparture(antigua.place);
+    second.advance(61);
+    second.dispose();
+    expect(kept.stored!.lat).toBeCloseTo(antigua.place.lat, 3);
+    expect(kept.stored!.lon).toBeCloseTo(antigua.place.lon, 3);
+  });
+
+  it('does not move her when she chooses where to sail from next', () => {
+    // The choice belongs to the next departure. Written into this session's
+    // pin, the next thing that rebuilt the world -- a seed roll, any
+    // settings edit -- read it and carried her there without a departure:
+    // several thousand kilometres, silently, in the path whose comment
+    // promises it is not a teleport.
+    kept.stored = { lat: -33.5, lon: 18.4, at: 1 };
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    engine.advance(0.5);
+    engine.setDeparture(waterById('antigua')!.place);
+    // A settings change that rebuilds the world, without putting to sea.
+    engine.applySettings(settings({ region: 'coast', randomWorld: false, seed: 77 }));
+    engine.advance(0.5);
+    expect(placeOf(engine).lat).toBeCloseTo(-33.5, 1);
+    engine.dispose();
+  });
+
   it('keeps no position for a world that is not on the Earth', () => {
     // A surveyed region is a real place but it is not *her* place on the
     // ocean, and the island field is nowhere at all. A write from either

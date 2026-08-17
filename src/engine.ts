@@ -736,6 +736,27 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   /** s of sailing since the position was last written down; see `keepPlace`. */
   let sinceSaved = 0;
   /**
+   * Where the player has asked the *next* departure to open, if they have
+   * asked at all. Held apart from `oceanAnchor`, which is where the plane is
+   * pinned for the session she is sailing now: writing the choice straight
+   * into the pin meant the next thing that rebuilt the world -- a seed roll,
+   * any settings edit -- read it and moved her there without a departure,
+   * which is a silent teleport of several thousand kilometres in the one
+   * path whose comment promises it is not a teleport.
+   */
+  let departure: LatLon | null = null;
+  /**
+   * Whether her position is still being written down.
+   *
+   * False from the moment a departure is chosen until the next one is taken.
+   * Without it the choice does not survive the session it was made in: the
+   * throttle below, or quitting, writes wherever she happens to be over the
+   * top of it -- so "start over" put her back where she was thirty seconds
+   * later, and choosing the Cape while sailing off Antigua quietly became
+   * Antigua again. Proven with a probe before it was fixed.
+   */
+  let keeping = true;
+  /**
    * Where this session began, in plane metres, so the coast generator can
    * keep that one spot clear of its own inventions. Carried across a
    * re-anchoring like every other plane position, which is the whole point:
@@ -1013,7 +1034,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * move the ocean under a boat that was never in it.
    */
   function keepPlace(): void {
-    if (current.region !== COAST_ID || !snapshot.place) return;
+    if (!keeping || current.region !== COAST_ID || !snapshot.place) return;
     saveReckoning(snapshot.place);
     sinceSaved = 0;
   }
@@ -1181,8 +1202,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // two can never be moved by one assignment.
     oceanAnchor = { ...to };
     snapshot.place = placeOf(state.pos.x, state.pos.y);
-    sinceSaved += PHYS_DT;
-    if (sinceSaved >= KEEP_PLACE_EVERY) keepPlace();
     rebuildCoastWindow();
   }
 
@@ -1578,6 +1597,13 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // trades blowing -- otherwise she is trimmed and reefed at the dock for
     // a wind that spends the next four minutes swinging out from under her.
     windShift = 0;
+    // The departure the player chose, taken now and only now.
+    if (departure) {
+      oceanAnchor = { ...departure };
+      departure = null;
+    }
+    // And her position is worth writing down again, from here.
+    keeping = true;
     // The pin first: the belt below is read at the plane's origin, and the
     // origin means nothing until the pin is where this session's world says.
     pinForWorld();
@@ -2404,16 +2430,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     recomputePolar: () => schedulePolar(0),
     resize: () => view.resize(),
     setDeparture(place) {
-      if (place) {
-        saveReckoning(place);
-        oceanAnchor = { lat: place.lat, lon: place.lon };
-      } else {
-        clearReckoning();
-        oceanAnchor = { ...DEFAULT_ANCHOR };
-      }
-      // Written down at once rather than left to the throttle, because this
-      // is the one change to the position the player made on purpose: a tab
-      // closed straight after choosing must not lose the choice.
+      if (place) saveReckoning(place);
+      else clearReckoning();
+      // Held for the next departure rather than applied to this session's
+      // pin: she is still where she is, which is what the menu says.
+      departure = place ? { lat: place.lat, lon: place.lon } : { ...DEFAULT_ANCHOR };
+      // And nothing more is written down until she takes it. The record is
+      // one row, so going on recording this session would put her current
+      // position back over the choice within the half minute.
+      keeping = false;
       sinceSaved = 0;
     },
 
