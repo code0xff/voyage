@@ -27,7 +27,7 @@ import {
 } from './sim/coast';
 import type { Earth } from './sim/earth';
 import { DEFAULT_ANCHOR, reproject, toLatLon, type LatLon } from './sim/globe';
-import { climateAt, climateSpeed, type Belt } from './sim/climate';
+import { climateAt, climateSpeed, type Belt, type Climate } from './sim/climate';
 import { HeightField } from './sim/heightfield';
 import { ManeuverTracker, type Maneuver } from './sim/maneuver';
 import { offerCalls } from './sim/calls';
@@ -1000,17 +1000,35 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   /**
-   * The mean wind the session opens in, which is the belt's where there is
-   * one. Shared with the refresh below rather than repeated: the departure
-   * settles the boat against this number, so a departure computed from the
-   * player's slider and a first physics step computed from the belt would
-   * hand her a trim for a wind she is not in -- softly in the doldrums and
-   * badly in the southern westerlies, which is where it would matter.
+   * The belt at a plane position, or null in a world the belts do not reach.
+   *
+   * Takes the position rather than reading the boat's, because the three
+   * callers ask about three different moments: the physics step asks where
+   * she *is*, and a session opening or a settings change asks about the
+   * plane's origin, which is where `placeAtStart` is about to put her. The
+   * first version read `state.pos` in all three, so a restart from 166 km
+   * north prepared the boat for the latitude she was leaving and then
+   * dropped her at the one she was not. A review found it.
    */
-  function departureTws(): number {
-    const settingMs = windMs(current) * weather.state.windScale;
-    if (current.region !== COAST_ID) return settingMs;
-    return climateSpeed(settingMs, climateAt(toLatLon(anchor, state.pos.x, state.pos.y).lat));
+  function beltFor(x: number, y: number): Climate | null {
+    if (current.region !== COAST_ID) return null;
+    return climateAt(toLatLon(anchor, x, y).lat);
+  }
+
+  /**
+   * The mean wind at a plane position: the belt's where there is one, and the
+   * player's slider where there is not, with the weather's scale on top.
+   *
+   * The one answer every path uses. The physics step had it and nothing else
+   * did, so the departure was trimmed from the raw slider and -- worse -- the
+   * sea was *built* from it: a session opening in the doldrums began under a
+   * twelve-knot sea over a three-knot wind, and could only decay towards the
+   * truth over the following few minutes.
+   */
+  function meanTws(x: number, y: number): number {
+    const setting = windMs(current) * weather.state.windScale;
+    const belt = beltFor(x, y);
+    return belt ? climateSpeed(setting, belt) : setting;
   }
 
   /**
@@ -1289,7 +1307,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       }
     }
 
-    wind.baseTws = windMs(s) * weather.state.windScale;
+    wind.baseTws = meanTws(state.pos.x, state.pos.y);
     // The tide is not weather: it runs at the rate it runs whatever the front
     // overhead is doing, so it is set straight from the player's number and
     // never scaled by `weather.state`. This is the rate in deep water; where
@@ -1353,7 +1371,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // Re-derived here because the physics loop's own refresh has not run yet:
     // `newSession` reseeds the weather, and a departure prepared for the old
     // session's wind scale would be trimmed for weather she is not in.
-    wind.baseTws = departureTws();
+    wind.baseTws = meanTws(0, 0);
     // Trimmed and reefed for the conditions before the lines are slipped,
     // and heeled to her sailing angle -- she is under way, not at a dock.
     // See departure.ts for why this is a settle and not a wind table. The
@@ -1443,9 +1461,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // gradually, but a session opening in the trades must open with the
     // trades blowing -- otherwise she is trimmed and reefed at the dock for
     // a wind that spends the next four minutes swinging out from under her.
-    if (current.region === COAST_ID) {
-      wind.baseTwd = climateAt(toLatLon(anchor, state.pos.x, state.pos.y).lat).twd;
-    }
+    // The plane's origin, not where she is: `placeAtStart` is about to put
+    // her within ninety metres of it.
+    const opening = beltFor(0, 0);
+    if (opening) wind.baseTwd = opening.twd;
     session++;
     snapshot.session = session;
     weather.reseed(current.seed);
@@ -1477,18 +1496,18 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // Seeded from the same relative wind the step uses, not from the breeze
     // alone. With the clock stopped the easing below never runs, so a session
     // that started on the wrong number would have shown that sea for ever.
+    // The weather is settled *before* the sea is raised on it. Pinned to a
+    // mode, `set` moves the wind scale, and the sea was being built a line
+    // earlier from whatever scale the seeded opener happened to have.
+    weather.evolve = current.weatherMode === 'auto';
+    if (current.weatherMode !== 'auto') weather.set(current.weatherMode);
     seaTws = len(
-      sub(
-        scale(compassVec(wind.baseTwd), -windMs(current) * weather.state.windScale),
-        currents.peak,
-      ),
+      sub(scale(compassVec(wind.baseTwd), -meanTws(0, 0)), currents.peak),
     );
     // ...and the sea's own clock with it. `seaTws` decides how big the waves
     // are; this decides where in them she starts, and it was the one piece of
     // world state a new session inherited from the last.
     waves.restart();
-    weather.evolve = current.weatherMode === 'auto';
-    if (current.weatherMode !== 'auto') weather.set(current.weatherMode);
     rebuildWorld();
   }
 
@@ -1668,21 +1687,16 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
      * a belt reaching in to turn it would undo the thing that makes them
      * worth sailing.
      */
-    const settingMs = windMs(current) * weather.state.windScale;
-    if (current.region === COAST_ID) {
-      // Non-null on the endless coast by construction -- `placeOf` gives a
-      // position for exactly the worlds that are on the Earth, and this is
-      // one of them -- but read through the boat rather than the snapshot so
-      // the two cannot get out of step.
-      const climate = climateAt(toLatLon(anchor, state.pos.x, state.pos.y).lat);
-      wind.baseTws = climateSpeed(settingMs, climate);
+    const climate = beltFor(state.pos.x, state.pos.y);
+    if (climate) {
+      wind.baseTws = meanTws(state.pos.x, state.pos.y);
       // Eased rather than set: the wind must swing as she sails into the
       // next belt, not snap when a smoothstep crosses a half.
       wind.baseTwd = approachAngle(wind.baseTwd, climate.twd, CLIMATE_TAU, PHYS_DT);
       wind.gustiness = climate.gustiness * weather.state.gustScale;
       snapshot.belt = climate.belt;
     } else {
-      wind.baseTws = settingMs;
+      wind.baseTws = meanTws(state.pos.x, state.pos.y);
       wind.gustiness = current.gustiness * weather.state.gustScale;
       snapshot.belt = null;
     }

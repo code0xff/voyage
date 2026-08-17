@@ -1817,6 +1817,28 @@ describe('the wind belts', () => {
     engine.dispose();
   });
 
+  it('opens the session in the belt she opens in, sea and all', () => {
+    // Two things a review found on the same line of reasoning. The departure
+    // was trimmed from the raw slider while the first physics step used the
+    // belt, and -- worse -- the *sea* was built from the slider too: a
+    // session opening in the doldrums began under a twelve-knot sea over a
+    // three-knot wind and could only decay towards the truth.
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    engine.advance(0.1);
+    const away = engine.snapshot.waves.sigWaveHeight;
+    carryTo(engine, 0);
+    engine.putToSea();
+    // One step only: the claim is about the water she is *put into*, before
+    // anything has had time to ease.
+    engine.advance(0.02);
+    expect(engine.snapshot.belt).toBe('doldrums');
+    expect(engine.snapshot.waves.sigWaveHeight).toBeLessThan(away * 0.5);
+    // And she is trimmed for it rather than reefed for a wind that is not
+    // there: full main in four knots of breeze.
+    expect(engine.snapshot.state.reef).toBe(0);
+    engine.dispose();
+  });
+
   it('goes soft in the doldrums', () => {
     const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
     engine.advance(0.1);
