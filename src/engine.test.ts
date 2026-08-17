@@ -139,7 +139,24 @@ vi.mock('./sim/calls', async (importActual) => {
   };
 });
 
+/**
+ * How many whole coast windows have been built, so a test can say that
+ * re-anchoring costs one and not three. Counted rather than timed: the
+ * number of builds is the property, and a timing assertion would be a
+ * different test on every machine.
+ */
+vi.mock('./sim/coast', async (importActual) => {
+  const actual = await importActual<typeof import('./sim/coast')>();
+  return {
+    ...actual,
+    coastHeightField: vi.fn((...args: Parameters<typeof actual.coastHeightField>) =>
+      actual.coastHeightField(...args),
+    ),
+  };
+});
+
 import { FLARE_BURN, FLARE_COOLDOWN, FLARE_RISE, REANCHOR_AT, createEngine } from './engine';
+import { coastHeightField } from './sim/coast';
 import { DEFAULT_SETTINGS, type Settings } from './settings';
 import { WhaleField } from './sim/whales';
 import { SharkField } from './sim/sharks';
@@ -1617,6 +1634,25 @@ describe('sailing on the Earth', () => {
     // they are invented rather than the Earth's. A continent is another
     // matter -- untranslated this window measures four fifths land.
     expect(land / (37 * 37)).toBeLessThan(0.05);
+    engine.dispose();
+  });
+
+  it('rebuilds the coast once when the plane is re-pinned, not three times', async () => {
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    await Promise.resolve();
+    await Promise.resolve();
+    engine.advance(1);
+    const builds = coastHeightField as ReturnType<typeof vi.fn>;
+    builds.mockClear();
+    // Across the trigger, then one more step to catch a window left centred
+    // where she used to be.
+    engine.snapshot.state.pos = { x: REANCHOR_AT + 1, y: 0 };
+    engine.advance(0.02);
+    engine.advance(0.02);
+    // One: the re-anchor's own. Passing the *old* plane's metres on to the
+    // slide added a second window around a point 200 km away and a third to
+    // put it back -- three builds of 640,000 samples each, all synchronous.
+    expect(builds.mock.calls.length).toBe(1);
     engine.dispose();
   });
 

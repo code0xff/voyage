@@ -1035,8 +1035,16 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * the same islands come back would hitch the frame. So this runs on distance
    * travelled, and then only does anything if the island set really differs.
    */
-  function streamWorld(x: number, y: number): void {
-    reanchorIfFar(x, y);
+  function streamWorld(atX: number, atY: number): void {
+    reanchorIfFar(atX, atY);
+    // Re-read rather than carried on. A re-anchor rewrites `state.pos` into
+    // the new plane, and the arguments are the old plane's metres -- so
+    // everything below was told the boat was still 200 km out. The coast was
+    // rebuilt once correctly by the re-anchor, immediately again around that
+    // stale point, and a third time by the next physics step putting it back:
+    // three synchronous window builds, about half a second of stalled main
+    // thread, at the one moment in a passage when it is guaranteed to happen.
+    const { x, y } = state.pos;
     slideCoast(x, y);
     if (!field) {
       // Either open water, a venue or a region, and all three are the same job:
