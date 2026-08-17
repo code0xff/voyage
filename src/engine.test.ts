@@ -1482,13 +1482,34 @@ describe('the flare', () => {
 });
 
 /**
+ * Put her at a latitude, through the engine's own re-anchoring.
+ *
+ * One jump rather than a walk, and due *north or south* rather than along
+ * a diagonal, which is what makes it honest: `+y` is a pure change of
+ * latitude -- `toLatLon` divides it by the metres in a degree and leaves
+ * the longitude alone -- so none of the tangent plane's east-west stretch
+ * enters, however far the jump is. It crosses `REANCHOR_AT`, so the engine
+ * re-pins to wherever she lands, exactly as it would after a long passage.
+ * Walking her there in 200-km steps was the first version and it took
+ * fifty coast rebuilds to cross a hemisphere.
+ */
+function carryTo(engine: ReturnType<typeof sailing>, lat: number): void {
+  const dy = (lat - engine.snapshot.place.lat) * METRES_PER_DEG_LAT;
+  engine.snapshot.state.pos = { x: 0, y: dy };
+  engine.advance(0.02);
+  expect(engine.snapshot.place.lat).toBeCloseTo(lat, 3);
+}
+
+
+/**
  * The Earth, as the engine uses it.
  *
- * Three claims, and they are the engine's rather than the sim's: that the
+ * Four claims, and they are the engine's rather than the sim's: that the
  * boat has a place on the planet and it moves as she sails, that the plane
  * is re-pinned before it stops being honest and nothing the session holds is
- * left behind when it happens, and that the coast is built on the Earth's
- * shoreline once the raster has landed.
+ * left behind when it happens, that the window reads the Earth beneath
+ * itself however far it has slid from the pin, and that the coast is built
+ * on the Earth's shoreline once the raster has landed.
  */
 describe('sailing on the Earth', () => {
   it('knows where she is, and moves her there as she sails', () => {
@@ -1555,6 +1576,50 @@ describe('sailing on the Earth', () => {
     engine.dispose();
   });
 
+  it('reads the Earth under the window, not under the pin', async () => {
+    // The frame bug this locks down: a shore patch measures from its own
+    // centre and the coast fill works in plane metres, so a window that had
+    // slid away from the pin read the Earth its own offset away -- right at
+    // the start of a session, when the two coincide, and a mile out for
+    // every mile she sailed. Every window the tests built before this one
+    // sat on the pin, which is why a clean self-review passed it.
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    // The planet arrives on a promise. Without this the window is built from
+    // the seed alone and the test is about nothing -- which is exactly what
+    // the first draft did, and it reported the same land either way.
+    await Promise.resolve();
+    await Promise.resolve();
+    engine.advance(0.1);
+
+    // Where the stub's coast actually is, asked of the stub rather than read
+    // off its source: it is land north of 30N by *sample*, and a bilinear
+    // read puts the waterline most of a degree further on.
+    const planet = stubEarth();
+    let shoreLat = 29;
+    while (!planet.isLand({ lat: shoreLat, lon: -122.65 }) && shoreLat < 33) shoreLat += 0.005;
+    expect(shoreLat).toBeLessThan(33);
+
+    // Pin her 55 km south of that shore and slide the window 30 km north of
+    // the pin. Correctly translated, the window spans 20-40 km north of the
+    // pin and is open sea by 15 km. Untranslated, it reads the patch at 20-40
+    // km from the *patch's* centre, which is 50-65 km north of the pin --
+    // straight through the shoreline.
+    carryTo(engine, shoreLat - 55_000 / METRES_PER_DEG_LAT);
+    engine.snapshot.state.pos = { x: 0, y: 30_000 };
+    engine.advance(0.02);
+    let land = 0;
+    for (let x = -9000; x <= 9000; x += 500) {
+      for (let y = 21_000; y <= 39_000; y += 500) {
+        if (engine.snapshot.region!.elevationAt(x, y) > 0) land++;
+      }
+    }
+    // Not zero: the generator still scatters its own islands offshore, and
+    // they are invented rather than the Earth's. A continent is another
+    // matter -- untranslated this window measures four fifths land.
+    expect(land / (37 * 37)).toBeLessThan(0.05);
+    engine.dispose();
+  });
+
   it('builds the coast on the Earth once the planet lands', async () => {
     // The stub is land north of the equator and sea south of it, and the
     // default anchor is at 37N -- so a window there must hold land, and one
@@ -1588,25 +1653,6 @@ describe('sailing on the Earth', () => {
  */
 describe('the wind belts', () => {
   const deg = (r: number) => ((r * 180) / Math.PI + 360) % 360;
-
-  /**
-   * Put her at a latitude, through the engine's own re-anchoring.
-   *
-   * One jump rather than a walk, and due *north or south* rather than along
-   * a diagonal, which is what makes it honest: `+y` is a pure change of
-   * latitude -- `toLatLon` divides it by the metres in a degree and leaves
-   * the longitude alone -- so none of the tangent plane's east-west stretch
-   * enters, however far the jump is. It crosses `REANCHOR_AT`, so the engine
-   * re-pins to wherever she lands, exactly as it would after a long passage.
-   * Walking her there in 200-km steps was the first version and it took
-   * fifty coast rebuilds to cross a hemisphere.
-   */
-  function carryTo(engine: ReturnType<typeof sailing>, lat: number): void {
-    const dy = (lat - engine.snapshot.place.lat) * METRES_PER_DEG_LAT;
-    engine.snapshot.state.pos = { x: 0, y: dy };
-    engine.advance(0.02);
-    expect(engine.snapshot.place.lat).toBeCloseTo(lat, 3);
-  }
 
   it('blows from the east in the trades and from the west down south', () => {
     const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });

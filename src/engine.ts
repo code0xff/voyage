@@ -23,6 +23,7 @@ import {
   coastRegion,
   fillCoastRows,
   snapCoastOrigin,
+  type ShoreSource,
 } from './sim/coast';
 import type { Earth } from './sim/earth';
 import { DEFAULT_ANCHOR, reproject, toLatLon, type LatLon } from './sim/globe';
@@ -693,7 +694,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let pendingCoast: {
     origin: { x: number; y: number };
     /** The Earth's shoreline for this window, or null for a seed-only coast. */
-    shore: ReturnType<Earth['shorePatch']> | null;
+    shore: ShoreSource | null;
     samples: Int16Array;
     row: number;
   } | null = null;
@@ -882,13 +883,19 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * The Earth's own shoreline for a window centred at this plane position,
    * or null while the planet is still on the wire.
    *
-   * Anchored at the window's *own* place, so the patch's coordinates and the
-   * fill's are the same coordinates -- the one alignment that would silently
-   * put a real coastline somewhere the boat is not.
+   * The translation is the whole job and it is not incidental. A patch
+   * measures from *its own centre*; the coast fill works in plane metres,
+   * which run from wherever the anchor happens to be pinned. Handing the
+   * patch the fill's coordinates directly reads the Earth `origin` away from
+   * the point being asked about -- correct at the start of a session, when
+   * the window sits on the pin, and increasingly wrong with every mile she
+   * sails from it. It survived a clean self-review because the only window
+   * the tests built was the one at zero, where the bug is invisible.
    */
-  function shoreFor(origin: { x: number; y: number }): ReturnType<Earth['shorePatch']> | null {
+  function shoreFor(origin: { x: number; y: number }): ShoreSource | null {
     if (!earth) return null;
-    return earth.shorePatch(toLatLon(anchor, origin.x, origin.y), 10_000);
+    const patch = earth.shorePatch(toLatLon(anchor, origin.x, origin.y), 10_000);
+    return { at: (x, y) => patch.at(x - origin.x, y - origin.y) };
   }
 
   /** Rebuild the coast window about the boat, on the anchor as it stands now. */
