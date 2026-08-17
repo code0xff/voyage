@@ -1,4 +1,5 @@
 import { clamp, lerp, smoothstep, wrap2Pi } from './math';
+import { knotsToMs } from './units';
 
 /**
  * What the latitude does to the wind, and why a chart of the world is a
@@ -89,8 +90,6 @@ const GUST = {
   polar: 0.5,
 } as const;
 
-const KNOT = 0.514444;
-
 /**
  * The belt at a latitude, by its own boundaries.
  *
@@ -171,7 +170,7 @@ export function climateAt(lat: number): Climate {
 
   return {
     twd: componentsToTwd(fromEast, fromNorth),
-    tws: Math.max(1.5, knots) * KNOT,
+    tws: knotsToMs(Math.max(1.5, knots)),
     gustiness: GUST[belt],
     belt,
   };
@@ -206,8 +205,8 @@ export function componentsToTwd(fromEast: number, fromNorth: number): number {
 export function climateSpeed(settingMs: number, climate: Climate): number {
   // The trades are the reference: a setting of 12 knots means "trade wind
   // strength", and everything else is relative to it.
-  const ratio = climate.tws / (SPEED.trades * KNOT);
-  return clamp(settingMs * ratio, 1 * KNOT, 45 * KNOT);
+  const ratio = climate.tws / knotsToMs(SPEED.trades);
+  return clamp(settingMs * ratio, knotsToMs(1), knotsToMs(45));
 }
 
 /** Degrees, exported so a test can walk the seams rather than guess them. */
