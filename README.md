@@ -9,6 +9,11 @@ its own, the sun rises and sets, and islands steal your breeze and ground you if
 you cut the corner. The ocean has no edge: keep sailing and new land keeps
 coming over the horizon.
 
+That ocean is the real one. The boat has a latitude and a longitude, the coast
+that comes over the horizon is where the Earth says a coast is, and the wind at
+a latitude is the wind that belongs to it -- the trades from the east, the
+westerlies from the west, and the doldrums in between where a day can go by.
+
 ```bash
 npm install
 npm run dev        # simulator
@@ -63,6 +68,9 @@ src/sim/     pure physics core -- no Three.js, no React, no browser APIs
   anchorage  whether a spot will hold her
   current    tidal streams as a function of position
   regions    bounded pieces of real coast, surveyed
+  globe      the tangent plane <-> latitude and longitude, and great circles
+  earth      the coarse planet, asked one question: where is the land
+  climate    what the latitude does to the wind -- the belts a pilot chart has
 
 src/engine.ts  the 120 Hz loop, the render loop and everything imperative
 
@@ -505,6 +513,68 @@ boat, and how far a coastline is drawn past its own centre; `minimap.test.ts`
 adds those three up from the same constants, so a range added without the sea to
 back it fails a test rather than quietly drawing an empty sea.
 
+### 7b. The planet
+
+The endless coast is not invented any more. `globe-4m.bin` is ETOPO 2022's
+surface elevation at four arc-minutes — 5,400 × 2,700 int16 metres, 29 MB — and
+`Earth` is asked exactly one question of it: **where is the land**. Seven
+kilometres a cell (north-south; less east-west, and much less near the poles) is
+a quarter of the window the boat sails inside, so it is far too coarse to anchor
+in and is never used as terrain. It decides continents, gulfs, and islands big
+enough to have a name; the metres under the keel are still the coast generator's,
+conditioned on it.
+
+That division is worth being plain about. Sail from Gibraltar to the Canaries
+and the passage, the bearing, the distance and the landfall are the real Earth's.
+The beach you anchor off is invented — a plausible coast in the right place, not
+the coast that is there. The six surveyed regions remain the only places where
+the ground itself is true, and they say so.
+
+The sim works in metres on a tangent plane, and it keeps doing so: `globe.ts`
+converts to latitude and longitude at the edges. A plane is honest near its pin
+and not far from it — measured against the great circle, 0.001% at 100 km due
+east, 0.06% at 1,000 km, 1.6% at 5,000 — so the pin moves, every 200 km, and
+every plane position the session holds is *reprojected* through latitude and
+longitude rather than offset (an offset is 43 m wrong over 100 km, because
+mean-latitude scaling is not a translation).
+
+Which half of the pair is the shoreline, in one number: the coast generator was
+already built around a single input, the signed distance to the waterline, so
+conditioning it on the Earth is a matter of handing it a distance field read off
+the planet instead of one made from a straight line and three octaves of noise.
+The meso and crenellation octaves are still added on top — the real gulf, with an
+invented shoreline inside it — because the source has no feature finer than a
+cell. Only the macro swing drops out, which is the scale the Earth now supplies.
+
+### 7c. The wind belts
+
+Latitude is not decoration here: it is what decides the wind. `climate.ts` is a
+climatology — the long-run averages a pilot chart carries, not a forecast, with
+the weather still deciding what today does on top of it.
+
+| belt | latitude | from | mean |
+|---|---|---|---|
+| doldrums | 0-5° | — | 4 kn |
+| trades | 5-28° | NE (north), SE (south) | 15 kn |
+| horse latitudes | 28-34° | — | 6 kn |
+| westerlies | 34-62° | W, backing NW | 22 kn, ×1.25 in the south |
+| polar easterlies | 62-90° | E | 11 kn |
+
+Blended along the latitude with overlapping smoothsteps rather than branched on,
+so crossing 30° is a day of the wind swinging and easing rather than a line where
+it changes. The direction is built as *how much comes from the east* and *how
+much from the north* and turned into a bearing only at the end, which is what
+keeps it continuous across the equator, where the meridional lean changes sign.
+The Southern Ocean is the one asymmetry: nothing is in its way, so the same belt
+that gives Biscay a gale gives Cape Horn a bigger one.
+
+The player's wind slider is scaled, not replaced. It sets what trade-wind
+strength means and every belt is relative to it, so 25 knots is still a hard sail
+everywhere and the doldrums are still the softest place they can be. Direction is
+taken outright — a compass bearing has no slider to honour. Surveyed regions and
+venues keep their own conditions untouched: their land was laid out around a
+particular breeze.
+
 ### 8. Time of day and weather
 
 The sun is not astronomical: elevation is a sine between fixed sunrise and sunset
@@ -820,6 +890,14 @@ meaning anything.
   it for a thing you have to go out of your way to see.
 - The sun is not astronomical, and islands shadow the wind without bending it
   around headlands. Both are deliberate: see AGENTS.md.
+- **The planet is a coastline and a climate, not a world.** The Earth decides
+  where the land is and the latitude decides what the wind does; nothing else
+  follows from where you are. There is no season, so day length is the same at
+  the equator and at 60 north; the sea state comes from the local wind rather
+  than from an ocean's own swell; the animals are the same animals everywhere;
+  and there is no port to make for and nothing to carry there. Each of those is
+  a real difference between one sea and another, and each is a separate piece of
+  work rather than a gap in this one.
 
 ---
 
