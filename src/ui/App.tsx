@@ -328,6 +328,15 @@ export function App() {
     engine?.retryRegion();
   }, [engine]);
 
+  /**
+   * Forget where she got to. Not a teleport -- she stays where she is until
+   * she next puts to sea -- so the menu says "from the next departure" and
+   * this only has to clear the record.
+   */
+  const forgetPlace = useCallback(() => {
+    engine?.forgetPlace();
+  }, [engine]);
+
   // A reload, because it is the only thing that recovers -- see `loadEngine`.
   const retryEngine = useCallback(() => {
     window.location.reload();
@@ -488,6 +497,7 @@ export function App() {
           onRetryEngine={retryEngine}
           regionStatus={regionStatus}
           onRetryRegion={retryRegion}
+          onForgetPlace={forgetPlace}
         />
       </div>
     </LangProvider>

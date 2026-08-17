@@ -603,14 +603,23 @@ export const WORLD: Record<string, Phrase> = {
    */
   earthTag: { en: "Earth's coastline", ko: '지구 해안선' },
   coastBrief: {
-    en: 'The real planet, from off the Golden Gate: continents and islands where they actually are, and the wind of whatever latitude you reach.',
-    ko: '실제 지구입니다. 골든게이트 앞바다에서 출발하며, 대륙과 섬은 실제 위치에 있고, 도달한 위도의 바람이 그대로 붑니다.',
+    // No longer "from off the Golden Gate": that is only where a first
+    // session opens, and the line below says where the next one does.
+    en: 'The real planet: continents and islands where they actually are, the wind of whatever latitude you reach, and a shore that keeps coming as long as you sail.',
+    ko: '실제 지구입니다. 대륙과 섬은 실제 위치에 있고, 도달한 위도의 바람이 그대로 불며, 항해하는 한 해안은 계속 이어집니다.',
   },
   earthLead: { en: 'The Earth, coarsely.', ko: '지구, 성기게.' },
   earthBody: {
     en: 'Where the land is comes from a four-arc-minute map of the planet — about seven kilometres a cell — so the passage, the distance and the landfall are the real Earth’s. The beach you anchor off is drawn from the seed below: a plausible coast in the right place, not the coast that is there.',
     ko: '육지의 위치는 4분각(약 7 km) 지구 지형도에서 가져옵니다. 그래서 항로와 거리, 랜드폴은 실제 지구의 것입니다. 다만 정박하는 해변의 생김새는 아래 시드에서 그려집니다. 제자리에 있는 그럴듯한 해안이지, 실제로 그곳에 있는 해안은 아닙니다.',
   },
+  /**
+   * The carried position. Named "resume" rather than "last position" because
+   * what it answers is where the *next* departure opens, which is the only
+   * reason a player is reading it.
+   */
+  resumeFrom: { en: 'Sails from', ko: '다음 출항' },
+  resumeForget: { en: 'Start over', ko: '처음 위치로' },
   surveyedLead: { en: 'Surveyed.', ko: '실측 데이터.' },
   surveyedBody: { en: 'The coastline and the depths are', ko: '해안선과 수심의 출처는' },
   surveyedCaveat: {

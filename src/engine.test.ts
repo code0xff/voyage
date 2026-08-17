@@ -116,6 +116,26 @@ vi.mock('./sim/anchorage', async (importActual) => {
   };
 });
 
+/**
+ * The remembered position. A hoisted cell rather than a spy alone, because
+ * the tests want both halves: what the engine reads at construction, and
+ * what it writes as she sails.
+ */
+const kept = vi.hoisted(() => ({
+  stored: null as { lat: number; lon: number; at: number } | null,
+  writes: 0,
+}));
+vi.mock('./reckoning', () => ({
+  loadReckoning: () => kept.stored,
+  saveReckoning: (place: { lat: number; lon: number }) => {
+    kept.stored = { ...place, at: 1 };
+    kept.writes++;
+  },
+  clearReckoning: () => {
+    kept.stored = null;
+  },
+}));
+
 vi.mock('./logbook', async (importActual) => ({
   ...(await importActual<typeof import('./logbook')>()),
   logbook: { add: logAdd, all: async () => [], clear: async () => undefined },
@@ -228,6 +248,8 @@ beforeEach(() => {
   earthLoad.mockImplementation(() => Promise.resolve(stubEarth()));
   logAdd.mockReset();
   logAdd.mockResolvedValue(undefined);
+  kept.stored = null;
+  kept.writes = 0;
   anchorAnywhere.on = false;
   capture.blob = null;
   callsOverride.hand = null;
@@ -1720,6 +1742,54 @@ describe('sailing on the Earth', () => {
     const engine = sailing({ region: '', venue: '', islandCount: 4 });
     engine.advance(0.5);
     expect(engine.snapshot.place).toBeNull();
+    engine.dispose();
+  });
+
+  it('opens where she got to, and writes down where she gets to', () => {
+    // The planet made this necessary: a boat that reached the Azores and
+    // reopened off San Francisco has had a passage taken away from her, and
+    // a circumnavigation becomes impossible in principle rather than merely
+    // long.
+    kept.stored = { lat: -33.5, lon: 18.4, at: 1 };
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    engine.advance(0.5);
+    // Off the Cape, where the row says, and not off the Golden Gate.
+    expect(placeOf(engine).lat).toBeCloseTo(-33.5, 1);
+    expect(placeOf(engine).lon).toBeCloseTo(18.4, 1);
+
+    // And she keeps her own record as she sails: half a minute of it is
+    // enough, which at six knots is a hundred metres.
+    kept.writes = 0;
+    carryTo(engine, -20);
+    engine.advance(31);
+    expect(kept.writes).toBeGreaterThan(0);
+    expect(kept.stored!.lat).toBeCloseTo(-20, 1);
+    engine.dispose();
+  });
+
+  it('forgets it on request, from the next departure', () => {
+    kept.stored = { lat: -33.5, lon: 18.4, at: 1 };
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    engine.advance(0.5);
+    engine.forgetPlace();
+    expect(kept.stored).toBeNull();
+    // Not a teleport: she is still where she is until she next puts to sea.
+    expect(placeOf(engine).lat).toBeCloseTo(-33.5, 1);
+    engine.putToSea();
+    engine.advance(0.5);
+    expect(placeOf(engine).lat).toBeCloseTo(37.78, 1);
+    engine.dispose();
+  });
+
+  it('keeps no position for a world that is not on the Earth', () => {
+    // A surveyed region is a real place but it is not *her* place on the
+    // ocean, and the island field is nowhere at all. A write from either
+    // would move the ocean under a boat that was never in it.
+    regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
+    const engine = sailing({ region: 'newport', venue: '' });
+    engine.advance(61);
+    expect(kept.writes).toBe(0);
+    expect(kept.stored).toBeNull();
     engine.dispose();
   });
 

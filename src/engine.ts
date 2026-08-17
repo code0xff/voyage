@@ -15,6 +15,7 @@ import { venueById } from './sim/venues';
 import { regionById, type Region } from './sim/regions';
 import { RegionTerrain } from './sim/region-terrain';
 import { loadEarth, loadRegion } from './terrain-load';
+import { clearReckoning, loadReckoning, saveReckoning } from './reckoning';
 import { passageInfo, type PassageInfo, type PassageRecord } from './sim/passage';
 import { anchorage, type Anchorage } from './sim/anchorage';
 import {
@@ -299,6 +300,12 @@ export interface Engine {
   dispose(): void;
   /** Development hook, exposed on window. */
   advance(seconds: number, rudder?: number): void;
+  /**
+   * Forget where she got to, so the next departure opens where the game
+   * opens. Deliberately not a teleport: she is still where she is, and the
+   * menu that offers this says "from the next departure".
+   */
+  forgetPlace(): void;
 }
 
 const PHYS_DT = 1 / 120;
@@ -320,6 +327,13 @@ export const REANCHOR_AT = 200_000;
  * sailing last ocean's breeze for the rest of the session.
  */
 const CLIMATE_TAU = 240;
+/**
+ * s of sailing between writes of her position. At six knots that is a
+ * hundred metres, which is finer than the thing being remembered -- which
+ * sea she is in -- and rare enough that a synchronous localStorage write is
+ * never in a frame's way.
+ */
+const KEEP_PLACE_EVERY = 30;
 /**
  * How far the boat must travel before the island window is re-collected, m.
  * The window reaches kilometres, so being a hundred metres late to load an
@@ -692,19 +706,31 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * coast keeps being generated from the seed alone until the planet
    * arrives, and the window is re-baked the moment it does. The alternative
    * is a loading screen for 29 MB before anything can be sailed.
+   *
+   * It opens where she got to, if she has been anywhere: read once here and
+   * then owned by the engine, so that a browser which refuses to store --
+   * private mode throws on write -- still keeps the boat where she is for
+   * the rest of the session instead of teleporting her home on every
+   * restart. `forgetPlace` is the only thing that puts it back.
    */
-  let anchor: LatLon = { ...DEFAULT_ANCHOR };
+  const remembered = loadReckoning();
+  /** A fresh copy each time: two pins that shared one object would be one pin. */
+  const opening = (): LatLon =>
+    remembered ? { lat: remembered.lat, lon: remembered.lon } : { ...DEFAULT_ANCHOR };
+  let anchor: LatLon = opening();
   /**
    * Where the endless coast's plane is pinned, held apart from `anchor` so
    * that it survives a visit to a surveyed region. Sailing to the Azores and
    * then looking at Newport for a minute should not put her back off San
    * Francisco.
    */
-  let oceanAnchor: LatLon = { ...DEFAULT_ANCHOR };
+  let oceanAnchor: LatLon = opening();
   /** Where she was on the ocean when she last left it; see `rebuildWorld`. */
   let oceanPos: Vec2 = { x: 0, y: 0 };
   /** Whether the world she is in now is a surveyed one. */
   let inSurveyed = false;
+  /** s of sailing since the position was last written down; see `keepPlace`. */
+  let sinceSaved = 0;
   /**
    * Where this session began, in plane metres, so the coast generator can
    * keep that one spot clear of its own inventions. Carried across a
@@ -970,6 +996,25 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   /**
+   * Write down where she is, now and then.
+   *
+   * Every 30 seconds of sailing, which at six knots is a hundred metres --
+   * fine enough that closing the tab loses nothing worth having, and rare
+   * enough that a synchronous localStorage write is not in the way of the
+   * frame. Also on the way out, so quitting deliberately keeps the last of
+   * it.
+   *
+   * Only where there is a position to keep: a surveyed region and the island
+   * field are not places on the Earth, and writing one from either would
+   * move the ocean under a boat that was never in it.
+   */
+  function keepPlace(): void {
+    if (current.region !== COAST_ID || !snapshot.place) return;
+    saveReckoning(snapshot.place);
+    sinceSaved = 0;
+  }
+
+  /**
    * Where she is on the Earth, or null in a world that is not on it.
    *
    * The island field is an invented ocean and a venue is an invented place:
@@ -1110,9 +1155,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     snapshot.calls = snapshot.calls.map(move);
     anchor = to;
     // The ocean's own pin, kept so that visiting a surveyed region and coming
-    // back does not undo the passage that got her here.
-    oceanAnchor = to;
+    // back does not undo the passage that got her here. Its own copy, so the
+    // two can never be moved by one assignment.
+    oceanAnchor = { ...to };
     snapshot.place = placeOf(state.pos.x, state.pos.y);
+    sinceSaved += PHYS_DT;
+    if (sinceSaved >= KEEP_PLACE_EVERY) keepPlace();
     rebuildCoastWindow();
   }
 
@@ -1948,6 +1996,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // she had been at the start of the step, which is the same one-step lie
     // the diagnostics avoid by being read out here too.
     snapshot.place = placeOf(state.pos.x, state.pos.y);
+    sinceSaved += PHYS_DT;
+    if (sinceSaved >= KEEP_PLACE_EVERY) keepPlace();
 
     // Was that a tack, and what did it cost? Fed after `step()` for the same
     // reason the passage's conditions are: this step's angle and speed exist
@@ -2328,7 +2378,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     press: (key) => input.inject(key),
     recomputePolar: () => schedulePolar(0),
     resize: () => view.resize(),
+    forgetPlace() {
+      clearReckoning();
+      oceanAnchor = { ...DEFAULT_ANCHOR };
+    },
+
     dispose() {
+      // Quitting deliberately keeps the last of it; the throttle above may
+      // be twenty-nine seconds from its next write.
+      keepPlace();
       disposed = true;
       cancelAnimationFrame(raf);
       input.dispose();

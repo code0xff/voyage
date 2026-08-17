@@ -530,6 +530,15 @@ The beach you anchor off is invented — a plausible coast in the right place, n
 the coast that is there. The six surveyed regions remain the only places where
 the ground itself is true, and they say so.
 
+A session opens where the last one got to. That is what makes the planet a
+place rather than a backdrop: a boat that reached the Azores and reopened off
+San Francisco has had a passage taken away from her. One row in localStorage
+holds the position and nothing else — not the trim, not the heading, not the
+hour — because every session in this game is a *departure*, prepared for the
+conditions of the moment, and restoring an exact instant would fight that
+rather than extend it. The menu shows where the next departure opens and offers
+to forget it.
+
 The sim works in metres on a tangent plane, and it keeps doing so: `globe.ts`
 converts to latitude and longitude at the edges. A plane is honest near its pin
 and not far from it — measured against the great circle, 0.001% at 100 km due
@@ -909,6 +918,10 @@ meaning anything.
   and there is no port to make for and nothing to carry there. Each of those is
   a real difference between one sea and another, and each is a separate piece of
   work rather than a gap in this one.
+- **No time compression at sea.** The clock speeds up — day and night, the
+  weather, the sea building — but the boat does not. A circumnavigation is
+  therefore possible in the world and impossible in practice: 32,000 km at six
+  knots is 120 days of real time, and nothing shortens it.
 - **No ice, and a wall at 89.5°.** The Arctic reads as open water, because the
   grid is surface elevation and sea ice is not in it — so the polar easterlies
   can be sailed in a way they cannot be sailed. The plane's latitude is clamped

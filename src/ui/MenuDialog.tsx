@@ -51,6 +51,8 @@ import {
 import { VENUES, venueById } from "@/sim/venues";
 import { REGIONS, placeName, regionById } from "@/sim/regions";
 import { COAST_ID, COAST_NAME } from "@/sim/coast";
+import { formatLatLon } from "@/sim/globe";
+import { loadReckoning } from "@/reckoning";
 import { Logbook } from "./Logbook";
 import { SailingGuide } from "./SailingGuide";
 import { Credits } from "./Credits";
@@ -250,6 +252,43 @@ function EngineLoadNotice({
   );
 }
 
+/**
+ * Where the next departure opens, and the way back to the beginning.
+ *
+ * The position is the one thing a session carries over, so it is also the
+ * one thing a player can be surprised by: opening the game in the Southern
+ * Ocean because that is where the last session ended is right, and being
+ * unable to find out why would not be. It is silent until she has actually
+ * been somewhere -- a line saying "you are where the game starts" is noise.
+ *
+ * Read when the dialog renders rather than watched. The engine writes it
+ * every half minute of sailing, and this is a menu: it is looked at while
+ * the boat is not moving.
+ */
+function Resume({ onForget }: { onForget: () => void }) {
+  const t = useT();
+  const [place, setPlace] = useState(() => loadReckoning());
+  if (!place) return null;
+  return (
+    <div className="flex items-center justify-between gap-2 pt-0.5">
+      <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+        {t(WORLD.resumeFrom)} {formatLatLon(place)}
+      </span>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-6 px-2 text-[10px]"
+        onClick={() => {
+          onForget();
+          setPlace(null);
+        }}
+      >
+        {t(WORLD.resumeForget)}
+      </Button>
+    </div>
+  );
+}
+
 export function MenuDialog({
   open,
   onOpenChange,
@@ -267,6 +306,7 @@ export function MenuDialog({
   onRetryEngine,
   regionStatus,
   onRetryRegion,
+  onForgetPlace,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -287,6 +327,8 @@ export function MenuDialog({
   onRetryEngine: () => void;
   regionStatus: RegionLoadStatus;
   onRetryRegion: () => void;
+  /** Forget the remembered position; takes effect at the next departure. */
+  onForgetPlace: () => void;
 }) {
   const [tab, setTab] = useState("world");
   const [helpTab, setHelpTab] = useState("sailing");
@@ -745,12 +787,15 @@ export function MenuDialog({
               // surveyed region says the soundings are real, and saying that
               // over noise would be the exact mislabelling the region docblock
               // warns against. No load notice either -- nothing is fetched.
-              <p className="text-[10px] leading-relaxed text-muted-foreground">
-                {t(WORLD.coastBrief)}
-                <br />
-                <span className="text-info">{t(WORLD.earthLead)}</span>{" "}
-                {t(WORLD.earthBody)}
-              </p>
+              <>
+                <p className="text-[10px] leading-relaxed text-muted-foreground">
+                  {t(WORLD.coastBrief)}
+                  <br />
+                  <span className="text-info">{t(WORLD.earthLead)}</span>{" "}
+                  {t(WORLD.earthBody)}
+                </p>
+                <Resume onForget={onForgetPlace} />
+              </>
             ) : settings.region ? (
               <>
                 <p className="text-[10px] leading-relaxed text-muted-foreground">
