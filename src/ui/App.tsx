@@ -10,6 +10,7 @@ import { Instruments } from "./Instruments";
 import { PolarCard } from "./PolarCard";
 import { MenuDialog } from "./MenuDialog";
 import { logbook } from "@/logbook";
+import { clearReckoning, saveReckoning } from "@/reckoning";
 import { HintBar } from "./HintBar";
 import { BinocularMask } from "./BinocularMask";
 import { MinimapCard } from "./MinimapCard";
@@ -336,6 +337,14 @@ export function App() {
    */
   const setDeparture = useCallback(
     (place: LatLon | null) => {
+      // Written here as well as in the engine, because the menu can be open
+      // before the engine exists -- it is loaded on a dynamic import, and the
+      // dialog is up first. The engine's own call was optional-chained away
+      // in that window, so the row was never cleared: "start over" hid the
+      // line, the engine finished loading, read the untouched row, and put
+      // her back where she had been. A review found it.
+      if (place) saveReckoning(place);
+      else clearReckoning();
       engine?.setDeparture(place);
     },
     [engine],

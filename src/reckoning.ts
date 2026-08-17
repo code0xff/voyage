@@ -49,11 +49,19 @@ export function loadReckoning(): Reckoning | null {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const o = JSON.parse(raw) as Partial<Reckoning>;
-    if (!Number.isFinite(o.lat) || !Number.isFinite(o.lon)) return null;
+    // All three or none. The timestamp is the only thing a later sync could
+    // resolve two copies on, so a row without a usable one is a row that
+    // cannot be reasoned about -- and it is not a row this game has ever
+    // written, which makes it something else's. Defaulting it to zero,
+    // which is what this did, quietly turned a half-written row into a
+    // valid one: a review pointed it out.
+    if (!Number.isFinite(o.lat) || !Number.isFinite(o.lon) || !Number.isFinite(o.at)) {
+      return null;
+    }
     return {
       lat: clampLat(o.lat as number),
       lon: wrapLon(o.lon as number),
-      at: Number.isFinite(o.at) ? (o.at as number) : 0,
+      at: o.at as number,
     };
   } catch {
     return null;

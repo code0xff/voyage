@@ -67,10 +67,30 @@ describe('the remembered position', () => {
     expect(back!.lon).toBeLessThanOrEqual(180);
   });
 
-  it('refuses a row that is not a position', () => {
-    for (const bad of ['{', '{"lat":"north","lon":3}', '{"lon":3}', 'null', '{"lat":null}']) {
-      store.raw.set('voyage.reckoning.v1', bad);
-      expect(loadReckoning(), bad).toBeNull();
+  it('refuses a row that is not a whole position', () => {
+    // Not only the shapes that are obviously wrong: a row with two good
+    // numbers and no usable timestamp is half-written, and it is not a row
+    // this game has ever produced. It used to be accepted with `at` quietly
+    // defaulted to zero, which turned someone else's data into ours.
+    const bad = [
+      '{',
+      '[]',
+      '"12,34"',
+      '3',
+      'null',
+      '{"lat":null}',
+      '{"lat":"north","lon":3,"at":1}',
+      '{"lon":3,"at":1}',
+      '{"lat":12,"lon":34}',
+      '{"lat":12,"lon":34,"at":"bad"}',
+      '{"lat":12,"lon":34,"at":null}',
+      '{"lat":12,"lon":34,"at":{}}',
+      '{"lat":12,"lon":null,"at":1}',
+      `{"lat":12,"lon":${Number.MAX_VALUE * 2},"at":1}`,
+    ];
+    for (const row of bad) {
+      store.raw.set('voyage.reckoning.v1', row);
+      expect(loadReckoning(), row).toBeNull();
     }
   });
 
