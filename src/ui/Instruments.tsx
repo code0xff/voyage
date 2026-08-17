@@ -34,10 +34,18 @@ import { useRef } from 'react';
  */
 function Fix() {
   const t = useT();
-  const where = useReadout<HTMLSpanElement>((s) => formatLatLon(s.place));
+  const where = useReadout<HTMLSpanElement>((s) => (s.place ? formatLatLon(s.place) : ''));
   const belt = useReadout<HTMLSpanElement>((s) => (s.belt ? t(BELT[s.belt]) : ''));
+  // The whole line goes away in a world that is not on the Earth -- the
+  // island field is an invented ocean, and a blank row where a position
+  // should be reads as an instrument that has failed.
+  const row = useRef<HTMLDivElement>(null);
+  useEngineFrame((s) => {
+    const el = row.current;
+    if (el) el.style.display = s.place ? '' : 'none';
+  });
   return (
-    <div className="mt-2 flex items-baseline justify-between gap-2">
+    <div ref={row} className="mt-2 flex items-baseline justify-between gap-2">
       <span ref={where} className="font-mono text-[10.5px] tabular-nums text-muted-foreground" />
       <span ref={belt} className="truncate text-[10.5px] text-muted-foreground" />
     </div>

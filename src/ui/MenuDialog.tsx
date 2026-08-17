@@ -725,7 +725,7 @@ export function MenuDialog({
                       places: both are procedural, and the tag carries the
                       claim about how true the land is. */}
                   <SelectItem value={COAST_ID}>
-                    {COAST_NAME} — {t(WORLD.generatedTag)}
+                    {COAST_NAME} — {t(WORLD.earthTag)}
                   </SelectItem>
                   {REGIONS.map((r) => (
                     <SelectItem key={r.id} value={`region:${r.id}`}>
@@ -748,8 +748,8 @@ export function MenuDialog({
               <p className="text-[10px] leading-relaxed text-muted-foreground">
                 {t(WORLD.coastBrief)}
                 <br />
-                <span className="text-info">{t(WORLD.generatedLead)}</span>{" "}
-                {t(WORLD.generatedBody)}
+                <span className="text-info">{t(WORLD.earthLead)}</span>{" "}
+                {t(WORLD.earthBody)}
               </p>
             ) : settings.region ? (
               <>

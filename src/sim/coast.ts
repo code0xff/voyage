@@ -29,8 +29,15 @@ import type { Region } from './regions';
 /** The one id the engine recognises as "generate, don't fetch". */
 export const COAST_ID = 'coast';
 
-/** What the logbook calls a passage sailed along one. */
-export const COAST_NAME = 'Uncharted coast';
+/**
+ * What the menu and the logbook call it.
+ *
+ * It was "Uncharted coast" while the shore was invented outright. It is the
+ * real planet's coastline now, so the name says so -- a world called
+ * uncharted, in a list beside six surveyed places, is where a player looks
+ * last for the Earth.
+ */
+export const COAST_NAME = 'Open Earth';
 
 /**
  * The same grid the surveyed regions use: 20 km square at 25 m, decimetres in

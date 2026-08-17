@@ -593,20 +593,23 @@ export const WORLD: Record<string, Phrase> = {
   surveyedTag: { en: 'surveyed', ko: '실측' },
   sketchTag: { en: 'sketch', ko: '스케치' },
   /**
-   * The generated coast's tag and its explanation. The lead is set apart the
-   * way the surveyed and sketch leads are, because these tags are claims about
-   * how true the land is and this one has to be as plain as the others: nobody
-   * surveyed this, and every seed is a different shore.
+   * The planet's tag and its explanation. The lead is set apart the way the
+   * surveyed and sketch leads are, because these tags are claims about how
+   * true the land is and this one is a claim about *half* of it: where the
+   * land lies is the Earth's and the beach you anchor off is not. It said
+   * "no chart has this coast", which stopped being true the day the mainland
+   * came off a map of the planet -- and the first person to read the new
+   * version asked where the Earth was, which is what a stale label costs.
    */
-  generatedTag: { en: 'generated', ko: '생성' },
+  earthTag: { en: "Earth's coastline", ko: '지구 해안선' },
   coastBrief: {
-    en: 'A mainland running past the horizon: bays, headlands and islets drawn from the seed below.',
-    ko: '수평선 너머로 이어지는 본토 해안입니다. 아래 시드에서 만과 곶, 앞바다의 작은 섬들이 그려집니다.',
+    en: 'The real planet, from off the Golden Gate: continents and islands where they actually are, and the wind of whatever latitude you reach.',
+    ko: '실제 지구입니다. 골든게이트 앞바다에서 출발하며, 대륙과 섬은 실제 위치에 있고, 도달한 위도의 바람이 그대로 붑니다.',
   },
-  generatedLead: { en: 'Generated.', ko: '생성된 지형.' },
-  generatedBody: {
-    en: 'No chart has this coast: it is drawn from the seed, and a new seed is a new shore. The wind, sea and tide stay on your sliders.',
-    ko: '이 해안은 어떤 해도에도 없습니다. 시드에서 그려지며, 시드가 바뀌면 다른 해안이 됩니다. 바람·파도·조류는 아래 슬라이더 그대로입니다.',
+  earthLead: { en: 'The Earth, coarsely.', ko: '지구, 성기게.' },
+  earthBody: {
+    en: 'Where the land is comes from a four-arc-minute map of the planet — about seven kilometres a cell — so the passage, the distance and the landfall are the real Earth’s. The beach you anchor off is drawn from the seed below: a plausible coast in the right place, not the coast that is there.',
+    ko: '육지의 위치는 4분각(약 7 km) 지구 지형도에서 가져옵니다. 그래서 항로와 거리, 랜드폴은 실제 지구의 것입니다. 다만 정박하는 해변의 생김새는 아래 시드에서 그려집니다. 제자리에 있는 그럴듯한 해안이지, 실제로 그곳에 있는 해안은 아닙니다.',
   },
   surveyedLead: { en: 'Surveyed.', ko: '실측 데이터.' },
   surveyedBody: { en: 'The coastline and the depths are', ko: '해안선과 수심의 출처는' },
@@ -654,8 +657,8 @@ export const WORLD: Record<string, Phrase> = {
     ko: '베뉴는 자체 육지와 바람, 조류를 가져오므로 섬 슬라이더는 물러납니다. 조류는 깊은 물에서 가장 세고 얕은 곳에서 사그라드는데, 바람도 바로 그곳에서 사그라듭니다.',
   },
   coastNote: {
-    en: 'Here the seed is the land as well as the sea: each time you put to sea, it draws the mainland, the islets, the puffs and the weather alike. Pin it to keep a shore worth coming back to.',
-    ko: '여기서는 시드가 바다만이 아니라 땅 그 자체입니다. 출항할 때마다 본토와 섬, 돌풍과 날씨가 모두 그 시드에서 그려집니다. 다시 오고 싶은 해안이면 시드를 고정하세요.',
+    en: 'The planet does not move, so the seed is everything on top of it: the shape of the shore, the islets, the puffs and the weather. Pin it to keep a coast worth coming back to.',
+    ko: '지구는 시드로 바뀌지 않습니다. 시드가 정하는 것은 그 위의 것들입니다. 해안선의 생김새와 앞바다의 섬, 돌풍과 날씨. 다시 오고 싶은 해안이면 시드를 고정하세요.',
   },
   regionNote: {
     en: 'The coast and the depths here are surveyed and never change — the seed does not move them. What it does set is the sea you sail over them: where the puffs and the shifts fall, and how the weather turns. Pin it to sail the same day twice.',

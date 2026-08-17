@@ -1500,6 +1500,17 @@ describe('the flare', () => {
 });
 
 /**
+ * The boat's place, asserted to exist. Every test that uses it is sailing a
+ * world that is on the Earth -- the endless coast or a surveyed region -- so
+ * a null here is a failure and not a case to handle.
+ */
+function placeOf(engine: ReturnType<typeof sailing>) {
+  const place = engine.snapshot.place;
+  if (!place) throw new Error('the boat has no position on the Earth');
+  return place;
+}
+
+/**
  * Put her at a latitude, through the engine's own re-anchoring.
  *
  * One jump rather than a walk, and due *north or south* rather than along
@@ -1512,10 +1523,10 @@ describe('the flare', () => {
  * fifty coast rebuilds to cross a hemisphere.
  */
 function carryTo(engine: ReturnType<typeof sailing>, lat: number): void {
-  const dy = (lat - engine.snapshot.place.lat) * METRES_PER_DEG_LAT;
+  const dy = (lat - placeOf(engine).lat) * METRES_PER_DEG_LAT;
   engine.snapshot.state.pos = { x: 0, y: dy };
   engine.advance(0.02);
-  expect(engine.snapshot.place.lat).toBeCloseTo(lat, 3);
+  expect(placeOf(engine).lat).toBeCloseTo(lat, 3);
 }
 
 
@@ -1532,7 +1543,7 @@ function carryTo(engine: ReturnType<typeof sailing>, lat: number): void {
 describe('sailing on the Earth', () => {
   it('knows where she is, and moves her there as she sails', () => {
     const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
-    const start = { ...engine.snapshot.place };
+    const start = { ...placeOf(engine) };
     // The default anchor is off the Golden Gate; a session that opened
     // somewhere else entirely would mean the anchor never reached the
     // snapshot.
@@ -1542,7 +1553,7 @@ describe('sailing on the Earth', () => {
     engine.advance(0.1);
     engine.press('h');
     engine.advance(600);
-    const now = engine.snapshot.place;
+    const now = placeOf(engine);
     // Ten minutes of sailing is a mile or so: the position has to have
     // moved, and by a plausible amount rather than a degree.
     const moved = Math.hypot(now.lat - start.lat, now.lon - start.lon);
@@ -1557,7 +1568,7 @@ describe('sailing on the Earth', () => {
     // -- and the way to check that is that nothing *on the Earth* moved.
     const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
     engine.advance(0.1);
-    const before = { ...engine.snapshot.place };
+    const before = { ...placeOf(engine) };
     // Put her most of the way to the trigger rather than sailing it: two
     // hundred kilometres is half a day. The position is *assigned* rather
     // than mutated in place because the physics replaces `pos` with a fresh
@@ -1566,7 +1577,7 @@ describe('sailing on the Earth', () => {
     // boat never move.
     engine.snapshot.state.pos = { x: 199_000, y: 0 };
     engine.advance(1);
-    const mid = { ...engine.snapshot.place };
+    const mid = { ...placeOf(engine) };
     // Still the same place on Earth, in new plane coordinates: the position
     // she was carried to is roughly 199 km east of where she started.
     expect(mid.lon).toBeGreaterThan(before.lon + 1.5);
@@ -1578,11 +1589,11 @@ describe('sailing on the Earth', () => {
     // distance between them and calls it error.
     engine.snapshot.state.pos = { x: REANCHOR_AT - 1, y: 0 };
     engine.advance(0.02);
-    const justBefore = { ...engine.snapshot.place };
+    const justBefore = { ...placeOf(engine) };
     const planeBefore = Math.hypot(engine.snapshot.state.pos.x, engine.snapshot.state.pos.y);
     engine.snapshot.state.pos = { x: REANCHOR_AT + 1, y: 0 };
     engine.advance(0.02);
-    const justAfter = engine.snapshot.place;
+    const justAfter = placeOf(engine);
     // The pin moved: the plane collapsed from 200 km to nothing.
     expect(planeBefore).toBeGreaterThan(REANCHOR_AT - 100);
     expect(Math.hypot(engine.snapshot.state.pos.x, engine.snapshot.state.pos.y)).toBeLessThan(100);
@@ -1666,17 +1677,17 @@ describe('sailing on the Earth', () => {
     const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
     engine.advance(0.1);
     carryTo(engine, 10);
-    const ocean = { ...engine.snapshot.place };
+    const ocean = { ...placeOf(engine) };
     regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
     engine.applySettings(settings({ region: 'newport', venue: '' }));
     const newport = regionById('newport')!.centre;
-    expect(engine.snapshot.place.lat).toBeCloseTo(newport.lat, 1);
-    expect(engine.snapshot.place.lon).toBeCloseTo(newport.lon, 1);
+    expect(placeOf(engine).lat).toBeCloseTo(newport.lat, 1);
+    expect(placeOf(engine).lon).toBeCloseTo(newport.lon, 1);
     // And back out to the ocean where she left it, not to where the game
     // opens: the passage that got her to ten north still happened.
     engine.applySettings(settings({ region: 'coast', randomWorld: false, seed: 13 }));
-    expect(engine.snapshot.place.lat).toBeCloseTo(ocean.lat, 1);
-    expect(engine.snapshot.place.lon).toBeCloseTo(ocean.lon, 1);
+    expect(placeOf(engine).lat).toBeCloseTo(ocean.lat, 1);
+    expect(placeOf(engine).lon).toBeCloseTo(ocean.lon, 1);
     engine.dispose();
   });
 
@@ -1690,6 +1701,18 @@ describe('sailing on the Earth', () => {
     engine.snapshot.state.pos = { x: REANCHOR_AT + 5_000, y: 0 };
     engine.advance(0.02);
     expect(engine.snapshot.state.pos.x).toBeGreaterThan(REANCHOR_AT);
+    engine.dispose();
+  });
+
+  it('gives no position to a world that is not on the Earth', () => {
+    // The island field is an invented ocean. Printing a real latitude and
+    // longitude over it would be a false claim of exactly the kind this
+    // project does not make elsewhere -- and the readout hides itself on
+    // this, so a position here would put San Francisco under an ocean that
+    // is nowhere.
+    const engine = sailing({ region: '', venue: '', islandCount: 4 });
+    engine.advance(0.5);
+    expect(engine.snapshot.place).toBeNull();
     engine.dispose();
   });
 

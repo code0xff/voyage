@@ -151,7 +151,7 @@ export interface Snapshot {
    * the anchor is the engine's, and a readout recomputing it from a stale
    * one would be wrong exactly when it mattered -- after a re-anchoring.
    */
-  place: LatLon;
+  place: LatLon | null;
   /**
    * Which wind belt she is in, or null where the belts do not apply -- a
    * surveyed region and a venue keep their own conditions, so naming a belt
@@ -939,6 +939,20 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   /**
+   * Where she is on the Earth, or null in a world that is not on it.
+   *
+   * The island field is an invented ocean and a venue is an invented place:
+   * printing a real latitude and longitude over either is a false claim of
+   * exactly the kind this project does not make elsewhere. The endless coast
+   * is the planet and a surveyed region is a real place, and those two get a
+   * position.
+   */
+  function placeOf(x: number, y: number): LatLon | null {
+    const real = current.region === COAST_ID || !!regionById(current.region);
+    return real ? toLatLon(anchor, x, y) : null;
+  }
+
+  /**
    * Fetch the planet, if the world she is in is one it applies to.
    *
    * Not at construction and not unconditionally, which is how it started:
@@ -1030,7 +1044,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // The ocean's own pin, kept so that visiting a surveyed region and coming
     // back does not undo the passage that got her here.
     oceanAnchor = to;
-    snapshot.place = { ...anchor };
+    snapshot.place = placeOf(state.pos.x, state.pos.y);
     rebuildCoastWindow();
   }
 
@@ -1132,7 +1146,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // every path that *puts* her somewhere -- a restart, a settings change, a
     // region finishing its load -- and each of those left `place` describing
     // the world she had just left until the next physics step ran.
-    snapshot.place = toLatLon(anchor, x, y);
+    snapshot.place = placeOf(x, y);
     slideCoast(x, y);
     if (!field) {
       // Either open water, a venue or a region, and all three are the same job:
@@ -1642,7 +1656,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
      */
     const settingMs = windMs(current) * weather.state.windScale;
     if (current.region === COAST_ID) {
-      const climate = climateAt(snapshot.place.lat);
+      // Non-null on the endless coast by construction -- `placeOf` gives a
+      // position for exactly the worlds that are on the Earth, and this is
+      // one of them -- but read through the boat rather than the snapshot so
+      // the two cannot get out of step.
+      const climate = climateAt(toLatLon(anchor, state.pos.x, state.pos.y).lat);
       wind.baseTws = climateSpeed(settingMs, climate);
       // Eased rather than set: the wind must swing as she sails into the
       // next belt, not snap when a smoothstep crosses a half.
@@ -1849,7 +1867,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // after the step rather than before it: written first, it described where
     // she had been at the start of the step, which is the same one-step lie
     // the diagnostics avoid by being read out here too.
-    snapshot.place = toLatLon(anchor, state.pos.x, state.pos.y);
+    snapshot.place = placeOf(state.pos.x, state.pos.y);
 
     // Was that a tack, and what did it cost? Fed after `step()` for the same
     // reason the passage's conditions are: this step's angle and speed exist
