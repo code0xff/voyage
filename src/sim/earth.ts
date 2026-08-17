@@ -34,6 +34,13 @@ export interface GlobeGrid {
 export const GLOBE_4M: GlobeGrid = { width: 5400, height: 2700, arcMinutes: 4 };
 
 /**
+ * Degrees per cell of the *source* grid the fetcher subsamples: ETOPO's 60
+ * arc-seconds. It is the offset of a kept sample inside its block, so it
+ * belongs to the reader as much as to the script -- see `elevationAt`.
+ */
+const SOURCE_STEP = 1 / 60;
+
+/**
  * How far a coarse cell reaches, in metres of latitude. Four arc-minutes is
  * about 7.4 km; the shore is smoothed over roughly this, which is why the
  * generated detail has to supply everything below it.
@@ -71,9 +78,22 @@ export class Earth {
   elevationAt(place: LatLon): number {
     const { width, height, arcMinutes } = this.grid;
     const step = arcMinutes / 60;
-    // Cell centres sit half a step in, exactly as the surveyed rasters do.
-    const gx = (wrapLon(place.lon) + 180) / step - 0.5;
-    const gy = (90 - place.lat) / step - 0.5;
+    /*
+     * Where a sample actually sits, which is not where a surveyed raster's
+     * would.
+     *
+     * Those are baked as cell centres and are read at half-step offsets. This
+     * grid is *subsampled*: the fetcher keeps every fourth source cell, so a
+     * sample carries the position of the first 60-arcsecond cell of its
+     * block -- half a source step in from the block's edge, not half an
+     * output step. Reading it on the surveyed convention put the entire
+     * planet 1.5 arc-minutes north-east of itself, which is 2.8 km: a review
+     * caught it by comparing the fetch's own indices against the coordinate
+     * variable, and nothing in the game would have looked wrong.
+     */
+    const half = SOURCE_STEP / 2;
+    const gx = (wrapLon(place.lon) + 180 - half) / step;
+    const gy = (90 - place.lat - half) / step;
 
     const x0 = Math.floor(gx);
     const y0 = Math.floor(gy);
@@ -184,13 +204,18 @@ export class ShorePatch {
     // the only one this patch can support.
     const limit = half;
     for (let i = 0; i < this.field.length; i++) {
-      // Half a cell off each side, which is where the waterline actually
-      // runs: a chamfer gives the *nearest opposite cell*, so a land cell
-      // against the sea reads one whole cell and its neighbour reads minus
-      // one, and the field crosses zero twice as fast as distance does.
-      // Measured before the correction: 200 m of change over a 100 m step,
-      // which slopes a beach at twice its intended angle.
-      const cells = (land[i] ? toSea[i] : toLand[i]) - 0.5;
+      // Half a *step* off, not half a cell, and the difference shows at a
+      // corner. A chamfer gives the nearest opposite cell in its own units:
+      // one across an edge, root two across a diagonal. The waterline runs
+      // halfway along whichever of those it was, so the correction is half
+      // the step that produced the distance -- taking a flat 0.5 off a
+      // diagonal left the shore 354 m out at a corner, which a review found
+      // with a three-cell test mask. The fractional part carries the step:
+      // an exact integer came across edges, anything else across at least
+      // one diagonal.
+      const raw = land[i] ? toSea[i] : toLand[i];
+      const diagonal = Math.abs(raw - Math.round(raw)) > 1e-6;
+      const cells = raw - (diagonal ? Math.SQRT1_2 : 0.5);
       const metres = Math.min(Math.max(0, cells) * spacing, limit);
       this.field[i] = land[i] ? metres : -metres;
     }

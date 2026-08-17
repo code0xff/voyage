@@ -73,6 +73,20 @@ export function toLatLon(anchor: LatLon, x: number, y: number): LatLon {
   return { lat: clampLat(lat), lon: wrapLon(lon) };
 }
 
+/**
+ * The domain both conversions are honest in: a few hundred kilometres of the
+ * anchor.
+ *
+ * Beyond it the plane is not merely inaccurate, it stops being invertible --
+ * past a quarter of the planet east or west the shortest-longitude rule
+ * folds two plane positions onto one place, and past the polar wall the
+ * latitude clamp does the same. Neither is a bug to fix: a tangent plane
+ * *cannot* cover a sphere, which is why the anchor moves. It is a
+ * precondition to state, and the engine keeps it by re-anchoring long
+ * before either limit -- see `planeError`.
+ */
+export const PLANE_DOMAIN = 500_000;
+
 /** Where a place on the Earth sits on the plane. The inverse of `toLatLon`. */
 export function toPlane(anchor: LatLon, place: LatLon): { x: number; y: number } {
   const dLat = place.lat - anchor.lat;
@@ -94,10 +108,15 @@ export function toPlane(anchor: LatLon, place: LatLon): { x: number; y: number }
  */
 export function planeError(anchor: LatLon, x: number, y: number): number {
   const here = toLatLon(anchor, x, y);
-  const atAnchor = metresPerDegLon(anchor.lat);
-  const atHere = metresPerDegLon(here.lat);
-  if (atAnchor < 1e-6) return 1;
-  return Math.abs(atHere - atAnchor) / atAnchor;
+  const straight = Math.hypot(x, y);
+  if (straight < 1) return 0;
+  // Measured rather than modelled: how far the plane says it is against how
+  // far the Earth says it is. The first version compared the longitude
+  // scale at the two latitudes, which is one term of the error and not the
+  // error -- it returned exactly zero for a point ten thousand kilometres
+  // due east, where the plane is out by hundreds of kilometres. A review
+  // found that by asking it about a course it does not measure at all.
+  return Math.abs(straight - greatCircle(anchor, here)) / straight;
 }
 
 /**

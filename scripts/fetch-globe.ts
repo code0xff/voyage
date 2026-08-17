@@ -5,10 +5,17 @@
  *     npx tsx scripts/fetch-globe.ts 8          # coarser, for a quick trial
  *
  * Writes `public/terrain/globe-<arcmin>m.bin`: an Int16Array of metres, row
- * major from the north-west corner at (90N, 180W), the same layout and the
- * same units as every surveyed raster in `public/terrain`. One file, no
- * tiling: at 4 arc-minutes the whole planet is 29 MB raw and about 7 as a
- * gzip on the wire, which is less than the six surveyed squares together.
+ * major from the north-west corner, the same layout and the same units as
+ * every surveyed raster in `public/terrain`. One file, no tiling: at four
+ * arc-minutes the whole planet is 29 MB raw and 22 gzipped -- three times
+ * the six surveyed squares put together, and the price of a planet.
+ *
+ * **The samples are not cell centres.** This keeps every `stride`-th source
+ * cell, so each one carries the position of the *first* 60-arcsecond cell of
+ * its block: half a source step in from the block edge. `Earth.elevationAt`
+ * reads them on exactly that convention, and reading them on the surveyed
+ * rasters' half-output-step convention instead moved the whole planet 1.5
+ * arc-minutes -- 2.8 km -- which is what a review found.
  *
  * **The source runs the other way up.** Its file is named N90W180 and its
  * first row is 89.99 *south* -- checked by reading the coordinate variable
@@ -40,8 +47,10 @@ const SRC =
 const SRC_ROWS = 10800;
 const SRC_COLS = 21600;
 
-const arcmin = Number(process.argv[2] ?? 4);
-const stride = Math.round(arcmin);
+const stride = Number(process.argv[2] ?? 4);
+// Whole source minutes only, and checked before the rounding rather than
+// after it: `Math.round` accepted 4.4 and then built a grid the reader would
+// have mapped as though it were 4.
 if (!Number.isInteger(stride) || stride < 1 || stride > 60) {
   throw new Error(`arc-minutes must be a whole number of source minutes, got ${process.argv[2]}`);
 }
@@ -80,6 +89,11 @@ for (let row = 0; row < rows; row += BAND) {
     throw new Error(`expected ${count * cols} samples, got ${values.length}`);
   }
   for (let i = 0; i < values.length; i++) {
+    // A malformed 200 with the right count and NaNs in it would otherwise
+    // write a plausible planet of zeros -- sea level everywhere.
+    if (!Number.isFinite(values[i])) {
+      throw new Error(`non-finite sample in rows ${row}+${count}`);
+    }
     const srcRow = row + Math.floor(i / cols);
     // Flipped: source row 0 is the far south, ours is the far north.
     const dstRow = rows - 1 - srcRow;

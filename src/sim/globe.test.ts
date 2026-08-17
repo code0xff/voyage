@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   METRES_PER_DEG_LAT,
+  PLANE_DOMAIN,
   formatLatLon,
   greatCircle,
   initialBearing,
@@ -130,13 +131,43 @@ describe('the plane and the globe', () => {
 
   it('reports the stretch that decides when to re-anchor', () => {
     expect(planeError(GOLDEN_GATE, 0, 0)).toBeCloseTo(0, 9);
-    // A hundred kilometres north of 38 degrees costs about one percent; a
-    // thousand costs far more, which is why the anchor has to move.
-    const near = planeError(GOLDEN_GATE, 0, 100_000);
-    const far = planeError(GOLDEN_GATE, 0, 1_000_000);
-    expect(near).toBeGreaterThan(0.005);
-    expect(near).toBeLessThan(0.03);
-    expect(far).toBeGreaterThan(near * 5);
+    // Growing with distance, in every direction, and small where the plane
+    // is meant to be used. Due *north* is nearly free -- a meridian is a
+    // great circle -- and due east is where a plane really pays, which is
+    // exactly what the first version of this function could not see: it
+    // compared longitude scales and returned a flat zero for a course due
+    // east, however long. A review found it by asking about ten thousand
+    // kilometres of easting.
+    // Measured across the range, due east from the Gate: 0.001% at 100 km,
+    // 0.015% at 500, 0.06% at 1,000, 1.6% at 5,000. So a window is free, a
+    // day's sail is nothing, and an ocean is where the anchor must move.
+    const east100 = planeError(GOLDEN_GATE, 100_000, 0);
+    const east1000 = planeError(GOLDEN_GATE, 1_000_000, 0);
+    expect(east100).toBeLessThan(1e-4);
+    expect(east1000).toBeGreaterThan(east100 * 5);
+    expect(planeError(GOLDEN_GATE, 5_000_000, 0)).toBeGreaterThan(0.01);
+    // And a working window is free: twenty kilometres costs less than a
+    // part in a million, which is why the sim may go on using metres.
+    expect(planeError(GOLDEN_GATE, 20_000, 20_000)).toBeLessThan(1e-6);
+    // Due north costs nothing at any distance -- a meridian *is* a great
+    // circle -- which is the asymmetry the old version mistook for the
+    // whole error.
+    expect(planeError(GOLDEN_GATE, 0, 1_000_000)).toBeLessThan(1e-9);
+  });
+
+  it('names the domain it is honest in, and is honest about why', () => {
+    // The plane cannot cover a sphere: past a quarter of the planet the
+    // shortest-longitude rule folds two plane positions onto one place, and
+    // the round trip stops being a round trip. That is a precondition, not
+    // a bug -- but it must be stated, and PLANE_DOMAIN states it.
+    expect(PLANE_DOMAIN).toBeGreaterThan(100_000);
+    expect(PLANE_DOMAIN).toBeLessThan(2_000_000);
+    const inside = toPlane(GOLDEN_GATE, toLatLon(GOLDEN_GATE, PLANE_DOMAIN * 0.9, 0));
+    expect(inside.x).toBeCloseTo(PLANE_DOMAIN * 0.9, 3);
+    // Well outside it, the inversion aliases -- demonstrated rather than
+    // asserted away, so nobody mistakes the domain for a suggestion.
+    const wayOut = toPlane(GOLDEN_GATE, toLatLon(GOLDEN_GATE, 20_100_000, 0));
+    expect(Math.abs(wayOut.x - 20_100_000)).toBeGreaterThan(1_000_000);
   });
 
   it('reads out as a navigator writes it', () => {
