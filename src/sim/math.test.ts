@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { approach, approachAngle } from './math';
+import { approach, approachAngle, wrap2Pi, wrapPi } from './math';
 
 /**
  * The angular lag. Its whole reason for existing is the wrap: the plain
@@ -32,5 +32,28 @@ describe('easing an angle', () => {
     const moved = deg(approachAngle(rad(0), rad(100), 1, 0.1));
     expect(moved).toBeGreaterThan(5);
     expect(moved).toBeLessThan(15);
+  });
+});
+
+/**
+ * The wrap's own endpoints, pinned because the convention is the point.
+ *
+ * `wrapPi`'s docblock promised (-PI, PI] and the code delivered [-PI, PI) --
+ * caught by a review, and left as the code has it. What matters is that the
+ * two agree and that nothing changes it by accident: this is the function
+ * every sign convention in the project is expressed through.
+ */
+describe('wrapping an angle', () => {
+  it('puts exactly astern at the bottom of the range', () => {
+    expect(wrapPi(Math.PI)).toBe(-Math.PI);
+    expect(wrapPi(-Math.PI)).toBe(-Math.PI);
+    expect(wrapPi(3 * Math.PI)).toBe(-Math.PI);
+  });
+
+  it('leaves everything inside the range alone', () => {
+    for (const a of [0, 1, -1, 3, -3]) expect(wrapPi(a)).toBeCloseTo(a, 12);
+    expect(wrapPi(4)).toBeCloseTo(4 - 2 * Math.PI, 12);
+    expect(wrap2Pi(-1)).toBeCloseTo(2 * Math.PI - 1, 12);
+    expect(wrap2Pi(2 * Math.PI)).toBe(0);
   });
 });

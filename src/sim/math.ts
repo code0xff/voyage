@@ -45,7 +45,22 @@ export const rotCW90 = (v: Vec2): Vec2 => ({ x: v.y, y: -v.x });
 /** Rotate 90 degrees counter-clockwise. */
 export const rotCCW90 = (v: Vec2): Vec2 => ({ x: -v.y, y: v.x });
 
-/** Wrap an angle into (-PI, PI]. */
+/**
+ * Wrap an angle into [-PI, PI).
+ *
+ * The half-open end is at the *bottom*: exactly astern comes back as -PI and
+ * never as +PI. The docblock claimed the opposite for a long time and a
+ * review caught the disagreement, which is worth more than it sounds -- this
+ * is the function every sign convention in the project is expressed through,
+ * and "positive means starboard" has to mean something definite at the one
+ * angle that is neither.
+ *
+ * The comment moved rather than the code, deliberately. Which way an exactly
+ * antipodal angle falls is arbitrary -- dead astern is not to starboard or to
+ * port -- but it is not arbitrary that everything already built on this
+ * agrees about it, and flipping the endpoint would silently flip a tie-break
+ * in every give-way and manoeuvre judgement at once.
+ */
 export function wrapPi(a: number): number {
   let r = (a + Math.PI) % (2 * Math.PI);
   if (r < 0) r += 2 * Math.PI;
