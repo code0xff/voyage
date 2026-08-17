@@ -1946,12 +1946,18 @@ describe('the wind belts', () => {
     // arrived" rather than as a number, because the constant is a tuning
     // value and the claim is that there is a lag at all.
     expect(Math.abs(soon - started)).toBeLessThan(120);
-    engine.advance(900);
+    // Ten more minutes: two and a half of the ease's time constants, which
+    // is 92% of the way there and plenty to tell arrival from a lag.
+    engine.advance(600);
     const arrived = deg(engine.snapshot.wind.baseTwd);
     expect(arrived).toBeGreaterThan(250);
     expect(arrived).toBeLessThan(330);
     engine.dispose();
-  });
+    // Eleven minutes of physics at 120 Hz is nearly eighty thousand steps,
+    // which runs in a few seconds here and rather more on a loaded CI
+    // machine -- where it duly hit the five-second default and failed for a
+    // reason that had nothing to do with the wind.
+  }, 30_000);
 
   it('brings the belt with her when she arrives on the Earth', () => {
     // Puget Sound's own breeze is from 350 -- near north, and nothing like
@@ -1997,7 +2003,10 @@ describe('the wind belts', () => {
     const later = deg(engine.snapshot.wind.baseTwd);
     expect(Math.abs(((later - shifted + 540) % 360) - 180)).toBeLessThan(3);
     engine.dispose();
-  });
+    // Twenty minutes at 120 Hz, for the same reason as the belt-crossing
+    // test above: it fits in the default five seconds here and not
+    // necessarily on a loaded runner, and a timeout is not a finding.
+  }, 30_000);
 
   it('leaves a surveyed region alone', () => {
     // Those places were laid out around a particular breeze; a belt reaching
