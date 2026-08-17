@@ -113,6 +113,31 @@ describe('the generated coast', () => {
   });
 
   /**
+   * The clearing belongs to the spawn, not to the plane's origin.
+   *
+   * They are the same point only until the plane is re-pinned, and on the
+   * endless Earth the pin moves to wherever the boat is every two hundred
+   * kilometres -- so a clearing nailed to the origin followed her out to sea
+   * and planed down whatever real headland she happened to be passing.
+   *
+   * Seed 546 is the one the clearing's own note names: it stands dry ground
+   * at the origin without the guard, which makes it the seed where "the
+   * clearing is here and not there" can actually be seen.
+   */
+  it('clears where the boat is put, and only there', () => {
+    const away = { x: 3000, y: 0 };
+    const { height } = coastHeightField(546, { x: 0, y: 0 }, null, away);
+    // Water to sail out of at the spawn, by the same ten metres the promise
+    // above is written in.
+    for (const r of [0, 90, 200]) {
+      expect(-height.elevationAt(away.x + r, away.y)).toBeGreaterThan(10);
+    }
+    // And the origin left as the coast made it: this seed's dry ground is
+    // still dry ground, rather than a pond dug in it.
+    expect(height.elevationAt(0, 0)).toBeGreaterThan(0);
+  });
+
+  /**
    * Offshore islets exist -- land the flood fill cannot reach from the border
    * -- because a bare mainland is a wall, and the interesting water of a real
    * coast is the lane between the shore and its outliers. Asserted across the

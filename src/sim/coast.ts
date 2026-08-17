@@ -1,6 +1,6 @@
 import { fbm2 } from './noise';
 import { rng } from './rng';
-import { TAU, clamp, smoothstep } from './math';
+import { TAU, clamp, smoothstep, type Vec2 } from './math';
 import { HeightField } from './heightfield';
 import type { Region } from './regions';
 
@@ -183,13 +183,22 @@ const FLANK = 60;
  */
 const SINK = 80;
 
+/** The default spawn: the plane's origin, which is where a session opens. */
+const ORIGIN: Vec2 = { x: 0, y: 0 };
+
 /**
- * The spawn clearing. `placeAtStart` puts the boat 90 m from the origin, and
- * Newport's own siting note records what happens when that is not respected:
- * centred 800 m from where it is now, she went to sea on a two-metre shoal.
- * Within `CLEAR_R` of the origin the water is forced at least `CLEAR_DEPTH`
- * deep, fading out by `CLEAR_FADE` — the same bargain the island field's
- * `keepClear` strikes.
+ * The spawn clearing. `placeAtStart` puts the boat 90 m from the plane's
+ * origin, and Newport's own siting note records what happens when that is
+ * not respected: centred 800 m from where it is now, she went to sea on a
+ * two-metre shoal. Within `CLEAR_R` of *the spawn* the water is forced at
+ * least `CLEAR_DEPTH` deep, fading out by `CLEAR_FADE` — the same bargain
+ * the island field's `keepClear` strikes.
+ *
+ * Of the spawn and not of the origin, which are the same point only until
+ * the plane is re-pinned. On the endless Earth that happens every two
+ * hundred kilometres, wherever the boat then is, and a clearing nailed to
+ * the origin followed her out and took a nine-hundred-metre bite out of
+ * whatever real coast she was passing.
  *
  * The clearing can shave a headland — or now an island. The anchor holds the
  * *mainland* waterline near 3 km, but the swing's residual grows away from
@@ -292,6 +301,17 @@ function elevation(
    * the Earth is now supplying.
    */
   coarse: ShoreSource | null = null,
+  /**
+   * Where the clearing goes, in the same plane metres as `x` and `y`.
+   *
+   * It used to be plane zero, which is the same point only until the plane
+   * is re-pinned. On the endless Earth the pin moves to wherever the boat is
+   * every two hundred kilometres, so the clearing followed her out to sea
+   * and took a 900-metre bite out of whatever real headland she happened to
+   * be passing at the time. It belongs to the *spawn*, which is the only
+   * thing it was ever protecting.
+   */
+  spawn: Vec2 = ORIGIN,
 ): number {
   // Crinkle the sample point before anything reads it, so every contour the
   // shore and the shelf draw inherits the same wrinkles.
@@ -353,7 +373,7 @@ function elevation(
 
   // The clearing outranks everything: whatever stood here, the boat spawns in
   // water she can sail out of.
-  const r = Math.hypot(x, y);
+  const r = Math.hypot(x - spawn.x, y - spawn.y);
   const clear = smoothstep(CLEAR_R + CLEAR_FADE, CLEAR_R, r);
   if (clear > 0) ground = Math.min(ground, -CLEAR_DEPTH * clear + -3 * (1 - clear));
 
@@ -411,6 +431,8 @@ export function fillCoastRows(
    * together in `coastHeightField`.
    */
   coarse: ShoreSource | null = null,
+  /** Where the boat will be put; see `elevation`. */
+  spawn: Vec2 = ORIGIN,
 ): void {
   const { width, cell, unit } = GRID;
   const halfWidth = (width * cell) / 2;
@@ -432,7 +454,7 @@ export function fillCoastRows(
     const y = origin.y + halfHeight - (row + 0.5) * cell;
     for (let col = 0; col < width; col++) {
       const x = origin.x - halfWidth + (col + 0.5) * cell;
-      const ground = elevation(x, y, seed, inlandX, inlandY, anchor, coarse);
+      const ground = elevation(x, y, seed, inlandX, inlandY, anchor, coarse, spawn);
       samples[row * width + col] = clamp(Math.round(ground / unit), -32768, 32767);
     }
   }
@@ -443,9 +465,10 @@ export function coastSamples(
   seed: number,
   origin = { x: 0, y: 0 },
   coarse: ShoreSource | null = null,
+  spawn: Vec2 = ORIGIN,
 ): Int16Array {
   const samples = new Int16Array(GRID.width * GRID.height);
-  fillCoastRows(samples, seed, snapCoastOrigin(origin), 0, GRID.height, coarse);
+  fillCoastRows(samples, seed, snapCoastOrigin(origin), 0, GRID.height, coarse, spawn);
   return samples;
 }
 
@@ -454,12 +477,13 @@ export function coastHeightField(
   seed: number,
   origin = { x: 0, y: 0 },
   coarse: ShoreSource | null = null,
+  spawn: Vec2 = ORIGIN,
 ): { region: Region; height: HeightField; origin: { x: number; y: number } } {
   const region = coastRegion(seed);
   const snapped = snapCoastOrigin(origin);
   return {
     region,
-    height: new HeightField(coastSamples(seed, snapped, coarse), region, snapped),
+    height: new HeightField(coastSamples(seed, snapped, coarse, spawn), region, snapped),
     origin: snapped,
   };
 }

@@ -696,12 +696,23 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * Francisco.
    */
   let oceanAnchor: LatLon = { ...DEFAULT_ANCHOR };
+  /**
+   * Where this session began, in plane metres, so the coast generator can
+   * keep that one spot clear of its own inventions. Carried across a
+   * re-anchoring like every other plane position, which is the whole point:
+   * pinned to the plane's origin instead, the clearing followed the boat out
+   * to sea and bit a nine-hundred-metre notch out of the real coast at every
+   * re-pin.
+   */
+  let spawn: Vec2 = { x: 0, y: 0 };
   let earth: Earth | null = null;
 
   let pendingCoast: {
     origin: { x: number; y: number };
     /** The Earth's shoreline for this window, or null for a seed-only coast. */
     shore: ShoreSource | null;
+    /** Frozen with the window for the same reason as `shore`. */
+    spawn: Vec2;
     samples: Int16Array;
     row: number;
   } | null = null;
@@ -808,7 +819,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
         // window must be where she is. At construction and at put-to-sea the
         // boat is at the origin anyway, so the first window is unchanged.
         const snapped = snapCoastOrigin(state.pos);
-        const coast = coastHeightField(current.seed, snapped, shoreFor(snapped));
+        const coast = coastHeightField(current.seed, snapped, shoreFor(snapped), spawn);
         regionTerrain = new RegionTerrain(coast.region, coast.height);
         coastSeed = current.seed;
         coastOrigin = coast.origin;
@@ -925,7 +936,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   function rebuildCoastWindow(): void {
     if (regionTerrain?.region.id !== COAST_ID) return;
     const snapped = snapCoastOrigin(state.pos);
-    const coast = coastHeightField(coastSeed, snapped, shoreFor(snapped));
+    const coast = coastHeightField(coastSeed, snapped, shoreFor(snapped), spawn);
     regionTerrain = new RegionTerrain(coast.region, coast.height);
     coastOrigin = coast.origin;
     pendingCoast = null;
@@ -970,6 +981,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
     const boat = move(state.pos);
     state.pos = boat;
+    spawn = move(spawn);
     if (destination) destination = move(destination);
     coastOrigin = move(coastOrigin);
     // Dropped rather than moved: its rows were filled about the old plane
@@ -1002,7 +1014,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     const away = Math.max(Math.abs(x - coastOrigin.x), Math.abs(y - coastOrigin.y));
     if (away > COAST_JUMP) {
       const jumped = snapCoastOrigin({ x, y });
-      const coast = coastHeightField(coastSeed, jumped, shoreFor(jumped));
+      const coast = coastHeightField(coastSeed, jumped, shoreFor(jumped), spawn);
       regionTerrain = new RegionTerrain(coast.region, coast.height);
       coastOrigin = coast.origin;
       pendingCoast = null;
@@ -1033,6 +1045,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
         // and it must be the same shoreline for every row of one field or
         // the coast would step where the fill was interrupted.
         shore: shoreFor(origin),
+        spawn,
         samples: new Int16Array(width * height),
         row: 0,
       };
@@ -1047,6 +1060,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       pendingCoast.row,
       next,
       pendingCoast.shore,
+      pendingCoast.spawn,
     );
     pendingCoast.row = next;
     if (next < rows) return;
@@ -1281,8 +1295,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // and the auto-reef, starting from an honest average, takes it from
     // there.
     const ready = prepareDeparture(CRUISER, wind.meanEnv(DEFAULT_ENV), heading);
+    spawn = { x: -up.x * 90, y: -up.y * 90 };
     state = initialState({
-      pos: { x: -up.x * 90, y: -up.y * 90 },
+      pos: { ...spawn },
       heading,
       u: 2.2,
       sheet: ready.sheet,
