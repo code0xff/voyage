@@ -4,8 +4,9 @@ import { METRES_PER_DEG_LAT, toLatLon, wrapLon, type LatLon } from './globe';
  * The coarse Earth, asked the one question the world needs of it.
  *
  * `globe-4m.bin` is elevation in metres at four arc-minutes -- about seven
- * kilometres a cell, which is a quarter of the window the boat sails inside
- * and far too coarse to anchor in. So it is *not* used as terrain. What it
+ * kilometres a cell north-south, and less east-west the further from the
+ * equator you are (six off San Francisco, three at 60 degrees) -- which is a
+ * quarter of the window the boat sails inside and far too coarse to anchor in. So it is *not* used as terrain. What it
  * decides is **where the land is**: continents, islands big enough to have a
  * name, the shape of a gulf. The metres under the keel are still made by the
  * coast generator, conditioned on this.
@@ -42,7 +43,9 @@ const SOURCE_STEP = 1 / 60;
 
 /**
  * How far a coarse cell reaches, in metres of latitude. Four arc-minutes is
- * about 7.4 km; the shore is smoothed over roughly this, which is why the
+ * about 7.4 km, and that is the north-south figure: east-west a cell is
+ * narrower by the cosine of the latitude, so this is the *widest* the grid
+ * ever is. The shore is smoothed over roughly this, which is why the
  * generated detail has to supply everything below it.
  */
 export function cellMetres(grid: GlobeGrid): number {

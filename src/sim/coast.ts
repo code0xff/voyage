@@ -336,7 +336,8 @@ function elevation(
    * rather than a second generator.
    *
    * The noise does not go away when the Earth arrives: the coarse grid has
-   * no feature finer than seven kilometres, so the meso and crenellation
+   * no feature finer than a cell -- seven kilometres north-south, less
+   * east-west -- so the meso and crenellation
    * octaves are added *to* it -- the real gulf, with an invented shoreline
    * inside it. Only the macro swing drops out, because that is the scale
    * the Earth is now supplying.
