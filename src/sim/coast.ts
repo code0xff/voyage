@@ -207,13 +207,35 @@ const CLEAR_R = 250;
 const CLEAR_FADE = 650;
 const CLEAR_DEPTH = 15;
 
+/**
+ * The two smaller octaves: bays and crenellation, without the macro swing.
+ *
+ * Separated because a real coast supplies its own gulfs and capes and needs
+ * only what the coarse grid is too blunt to hold -- see the `coarse`
+ * parameter in `elevation`.
+ */
+function coastDetail(along: number, seed: number): number {
+  const meso = (fbm2(along / MESO_SCALE, 0.37, seed + 5, 4) * 2 - 1) * MESO_SWING;
+  const cren = (fbm2(along / CREN_SCALE, 0.53, seed + 9, 3) * 2 - 1) * CREN_SWING;
+  return meso + cren;
+}
+
 /** The shoreline's total displacement at an alongshore position, m. */
 function coastSwing(along: number, seed: number): number {
   const breathe = 0.35 + 0.65 * fbm2(along / BREATHE_SCALE, 0.71, seed + 3, 2);
   const macro = (fbm2(along / MACRO_SCALE, 0.13, seed + 7, 3) * 2 - 1) * MACRO_SWING * breathe;
-  const meso = (fbm2(along / MESO_SCALE, 0.37, seed + 5, 4) * 2 - 1) * MESO_SWING;
-  const cren = (fbm2(along / CREN_SCALE, 0.53, seed + 9, 3) * 2 - 1) * CREN_SWING;
-  return macro + meso + cren;
+  return macro + coastDetail(along, seed);
+}
+
+/**
+ * Whatever can say how far a point is from the shore, signed, positive
+ * inland. `ShorePatch` from earth.ts is one; a test's own stub is another.
+ * Declared here rather than imported so `coast.ts` keeps knowing nothing
+ * about the Earth -- it takes a number source, and the engine decides
+ * whether that source is a planet.
+ */
+export interface ShoreSource {
+  at(x: number, y: number): number;
 }
 
 /**
@@ -246,8 +268,30 @@ function elevation(
    * only for the unwarped shoreline curve; the domain warp moves the
    * physical waterline, measured 2.6-3.3 km off the spawn across probed
    * seeds.
+   *
+   * Ignored when a `coarse` shoreline is given: a real coast is where it is,
+   * and there is nothing to anchor.
    */
   anchor: number,
+  /**
+   * Where the real Earth says the shore is, or null for a coast of this
+   * file's own invention.
+   *
+   * This is the whole of what opening the planet costs the generator. Every
+   * feature below -- the beach, the ridge, the shelf, the two island fields
+   * -- is built from one number, the signed distance to the waterline, and
+   * that number is either drawn from a straight line and three octaves of
+   * noise or read from a coarse map of the Earth. The rest of the file
+   * cannot tell the difference, which is why a planet costs one parameter
+   * rather than a second generator.
+   *
+   * The noise does not go away when the Earth arrives: the coarse grid has
+   * no feature finer than seven kilometres, so the meso and crenellation
+   * octaves are added *to* it -- the real gulf, with an invented shoreline
+   * inside it. Only the macro swing drops out, because that is the scale
+   * the Earth is now supplying.
+   */
+  coarse: ShoreSource | null = null,
 ): number {
   // Crinkle the sample point before anything reads it, so every contour the
   // shore and the shelf draw inherits the same wrinkles.
@@ -256,7 +300,9 @@ function elevation(
 
   // Signed distance to the displaced shoreline: positive inland.
   const along = wx * inlandY - wy * inlandX;
-  const s = wx * inlandX + wy * inlandY - SHORE_DISTANCE + coastSwing(along, seed) - anchor;
+  const s = coarse
+    ? coarse.at(wx, wy) + coastDetail(along, seed)
+    : wx * inlandX + wy * inlandY - SHORE_DISTANCE + coastSwing(along, seed) - anchor;
 
   // A continuous profile through the waterline, assembled from three terms
   // that are each continuous, so the shore is a beach and not a wall. The
@@ -353,6 +399,18 @@ export function fillCoastRows(
   origin: { x: number; y: number },
   row0: number,
   row1: number,
+  /**
+   * The Earth's own shoreline for this window, or null for a coast the seed
+   * invents. Built once per window by the caller -- see `Earth.shorePatch`
+   * -- because it costs a chamfer and every row of the fill reads it.
+   *
+   * Its coordinates are this window's: the caller anchors the patch on the
+   * same place the window is centred, so `at(x, y)` and the fill's own
+   * (x, y) mean the same point. Getting that wrong would put the Earth's
+   * coastline somewhere the boat is not, which is why the two are built
+   * together in `coastHeightField`.
+   */
+  coarse: ShoreSource | null = null,
 ): void {
   const { width, cell, unit } = GRID;
   const halfWidth = (width * cell) / 2;
@@ -374,16 +432,20 @@ export function fillCoastRows(
     const y = origin.y + halfHeight - (row + 0.5) * cell;
     for (let col = 0; col < width; col++) {
       const x = origin.x - halfWidth + (col + 0.5) * cell;
-      const ground = elevation(x, y, seed, inlandX, inlandY, anchor);
+      const ground = elevation(x, y, seed, inlandX, inlandY, anchor, coarse);
       samples[row * width + col] = clamp(Math.round(ground / unit), -32768, 32767);
     }
   }
 }
 
 /** The samples for a whole coast window. */
-export function coastSamples(seed: number, origin = { x: 0, y: 0 }): Int16Array {
+export function coastSamples(
+  seed: number,
+  origin = { x: 0, y: 0 },
+  coarse: ShoreSource | null = null,
+): Int16Array {
   const samples = new Int16Array(GRID.width * GRID.height);
-  fillCoastRows(samples, seed, snapCoastOrigin(origin), 0, GRID.height);
+  fillCoastRows(samples, seed, snapCoastOrigin(origin), 0, GRID.height, coarse);
   return samples;
 }
 
@@ -391,12 +453,13 @@ export function coastSamples(seed: number, origin = { x: 0, y: 0 }): Int16Array 
 export function coastHeightField(
   seed: number,
   origin = { x: 0, y: 0 },
+  coarse: ShoreSource | null = null,
 ): { region: Region; height: HeightField; origin: { x: number; y: number } } {
   const region = coastRegion(seed);
   const snapped = snapCoastOrigin(origin);
   return {
     region,
-    height: new HeightField(coastSamples(seed, snapped), region, snapped),
+    height: new HeightField(coastSamples(seed, snapped, coarse), region, snapped),
     origin: snapped,
   };
 }

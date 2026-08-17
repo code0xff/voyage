@@ -576,3 +576,97 @@ describe('the far ocean', () => {
     expect(land).toBe(0);
   });
 });
+
+/**
+ * The coast built on the real Earth rather than on its own straight line.
+ *
+ * The generator takes a signed distance to the shore and makes everything
+ * from it; conditioning it on the planet is a matter of handing it a
+ * different source for that one number. These hold the properties that must
+ * survive the swap -- and they use a *stub* source rather than the shipped
+ * globe, because what is under test is the generator's response to a
+ * shoreline, not whether NOAA has the Atlantic in the right place. That is
+ * `earth.test.ts`'s question and it asks it there.
+ */
+describe('a coast conditioned on a real shoreline', () => {
+  /**
+   * A shoreline five kilometres east of the window's centre: sea to the
+   * west, land to the east. Offset rather than through the origin because
+   * that is the arrangement the engine guarantees -- a window is centred on
+   * the boat, and the boat is afloat. Centred *on* the shoreline the spawn
+   * clearing planes a 15 m hole out of the beach it lands on, which is a
+   * real property of the clearing and not something to hide: it is a safety
+   * net for a boat, and it assumes there is water to clear.
+   */
+  const SHORE_AT = 5000;
+  const straight = { at: (x: number) => x - SHORE_AT };
+  /** Nothing but ocean, as far as the patch can see. */
+  const openSea = { at: () => -25_000 };
+
+  it('puts its land where the source says, not where the seed would', () => {
+    const s = coastSamples(13, { x: 0, y: 0 }, straight);
+    let farWest = 0;
+    let inland = 0;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < width; col++) {
+        const dry = s[row * width + col] > 0;
+        if (!dry) continue;
+        // Column centre in metres, the fill's own mapping.
+        const x = -((width * cell) / 2) + (col + 0.5) * cell;
+        // Past every island fade -- the outer population reaches 16 km --
+        // there can be no land at all: that far offshore is ocean by
+        // construction, and it is the claim the source is being obeyed.
+        if (x < SHORE_AT - 17_000) farWest++;
+        // And three kilometres inland of the source's line is solidly land,
+        // whatever the two remaining octaves do to the waterline.
+        if (x > SHORE_AT + 3000) inland++;
+      }
+    }
+    expect(inland).toBeGreaterThan(10_000);
+    expect(farWest).toBe(0);
+  });
+
+  it('leaves the open ocean open', () => {
+    // A window with no shore in reach must have no land in it at all --
+    // most of a planet is this, and an island field that ignored the source
+    // would sprinkle rocks across the whole Pacific.
+    const s = coastSamples(13, { x: 0, y: 0 }, openSea);
+    let land = 0;
+    for (let i = 0; i < s.length; i++) if (s[i] > 0) land++;
+    expect(land).toBe(0);
+  });
+
+  it('still crosses the waterline as a beach', () => {
+    // The property the generator's own coast is held to, and the swap must
+    // not cost it: no cliff at the shore.
+    const s = coastSamples(13, { x: 0, y: 0 }, straight);
+    const jumps: number[] = [];
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < width - 1; col++) {
+        const a = s[row * width + col] * GRID.unit;
+        const b = s[row * width + col + 1] * GRID.unit;
+        if (a > 0 !== b > 0) jumps.push(Math.abs(a - b));
+      }
+    }
+    jumps.sort((x, y) => x - y);
+    expect(jumps.length).toBeGreaterThan(100);
+    expect(jumps[Math.floor(jumps.length * 0.95)]).toBeLessThanOrEqual(3);
+  });
+
+  it('keeps the seed for everything the Earth is too coarse to say', () => {
+    // Same shoreline, two seeds: the coastline's position is the Earth's and
+    // its detail is the seed's, so the two must differ without either
+    // moving the mainland.
+    const a = coastSamples(13, { x: 0, y: 0 }, straight);
+    const b = coastSamples(99, { x: 0, y: 0 }, straight);
+    let differing = 0;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) differing++;
+    expect(differing / a.length).toBeGreaterThan(0.3);
+  });
+
+  it('is deterministic, source and all', () => {
+    expect(coastSamples(13, { x: 0, y: 0 }, straight)).toEqual(
+      coastSamples(13, { x: 0, y: 0 }, straight),
+    );
+  });
+});
