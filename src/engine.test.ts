@@ -1753,6 +1753,75 @@ describe('sailing on the Earth', () => {
     engine.dispose();
   });
 
+  it('carries everything standing in the water across a re-pin', () => {
+    // The list in `reanchorIfFar` is the risk, and it was three short. The
+    // published destination stayed where it had been while the arrival check
+    // used the moved one, so the minimap drew the mark in the wrong place;
+    // the passage log's endpoints stayed too, so its straight-line distance
+    // came out longer than the track that made it; and a burning flare hung
+    // in the old plane.
+    //
+    // Asserted as *separations*, which is the actual claim: a re-pin is a
+    // change of coordinates and nothing in the water may move relative to
+    // anything else. Distances from the boat are no good here, because the
+    // test moves the boat 200 km to reach the trigger and everything really
+    // is 200 km behind her afterwards.
+    anchorAnywhere.on = true;
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    engine.advance(0.1);
+    engine.setDestination({ x: 3000, y: 0 });
+    press('u');
+    frame(0.05);
+    engine.advance(3);
+
+    const gap = () => {
+      const boat = engine.snapshot.state.pos;
+      const dest = engine.snapshot.destination;
+      const flare = engine.snapshot.flare;
+      expect(dest).not.toBeNull();
+      expect(flare).not.toBeNull();
+      return {
+        dest: Math.hypot(dest!.x - boat.x, dest!.y - boat.y),
+        flare: Math.hypot(flare!.x - boat.x, flare!.y - boat.y),
+      };
+    };
+    engine.snapshot.state.pos = { x: REANCHOR_AT + 1, y: 0 };
+    const before = gap();
+    engine.advance(0.02);
+    const after = gap();
+    // A part in ten thousand of the separation, which is the tangent
+    // plane's own accuracy at this range and not a slack threshold: the
+    // measured stretch at 200 km is 0.003%, so a 197 km separation cannot be
+    // carried to better than about six metres however the arithmetic is
+    // done. Left behind, each of these is out by the whole 200 km.
+    expect(Math.abs(after.dest - before.dest)).toBeLessThan(before.dest * 1e-4);
+    expect(Math.abs(after.flare - before.flare)).toBeLessThan(before.flare * 1e-4 + 1);
+    engine.dispose();
+  });
+
+  it('files a passage whose straight line survives the re-pin', async () => {
+    // `direct` is measured between where she set out and where the anchor
+    // went down, and both are plane positions -- so on a passage that
+    // crossed a re-pin they were written in different planes. Here she is
+    // bound for a mark 200 km off: the straight line is 200 km, and with the
+    // origin left behind in the old plane it came out as nothing at all,
+    // because both ends read as the origin of their own frame.
+    anchorAnywhere.on = true;
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    engine.advance(0.1);
+    engine.setDestination({ x: REANCHOR_AT + 1, y: 0 });
+    engine.advance(1);
+    engine.snapshot.state.pos = { x: REANCHOR_AT + 1, y: 0 };
+    engine.advance(0.02);
+    press('a');
+    frame(0.1);
+    await Promise.resolve();
+    await Promise.resolve();
+    const record = logAdd.mock.calls[0][0] as PassageRecord;
+    expect(record.direct).toBeGreaterThan(150_000);
+    engine.dispose();
+  });
+
   it('builds the coast on the Earth once the planet lands', async () => {
     // The stub is land north of the equator and sea south of it, and the
     // default anchor is at 37N -- so a window there must hold land, and one

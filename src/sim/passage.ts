@@ -270,11 +270,31 @@ export class PassageLog {
   private photographs = 0;
 
   constructor(
-    readonly from: Vec2,
-    readonly to: Vec2,
+    /** Where she set out, in plane metres. Mutable only through `reframe`. */
+    public from: Vec2,
+    public to: Vec2,
     /** ms since the epoch, supplied because the sim core has no clock. */
     readonly startedAt: number,
   ) {}
+
+  /**
+   * The plane was re-pinned under the passage; here are the same two points
+   * in the new one.
+   *
+   * A passage is measured between its endpoints, and on a long one those
+   * endpoints outlive the coordinates they were written in -- the engine
+   * moves the pin every 200 km. Left behind, `direct` came out as the
+   * distance sailed *plus* the width of a re-anchoring, so the logbook
+   * reported a straight-line distance longer than the track that made it.
+   *
+   * Only the endpoints. Distance, duration and every average are already
+   * scalars, and a re-pin does not move the boat -- only the numbers she is
+   * described by.
+   */
+  reframe(from: Vec2, to: Vec2): void {
+    this.from = from;
+    this.to = to;
+  }
 
   /**
    * @param sog speed over the ground, m/s

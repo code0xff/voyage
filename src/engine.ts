@@ -1064,6 +1064,25 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     state.pos = boat;
     spawn = move(spawn);
     if (destination) destination = move(destination);
+    // The *published* one as well as the private one. They were allowed to
+    // disagree, so the minimap went on drawing the mark where it had been
+    // 200 km ago while the arrival check used the moved one.
+    snapshot.destination = destination;
+    // A passage in progress is measured between two points, and those points
+    // outlive the plane they were written in: left behind, the logbook's
+    // straight-line distance came out longer than the track that made it.
+    if (log) log.reframe(move(log.from), move(log.to));
+    // And anything else standing in the water. A flare is a light hanging in
+    // the sky at a plane position; it was left where the old plane had it,
+    // which on the next frame drew it a couple of hundred kilometres away.
+    if (flareState) {
+      const lit = move(flareState);
+      flareState.x = lit.x;
+      flareState.y = lit.y;
+    }
+    // Not moved but forgotten: it is only a "how far since we last looked",
+    // and a stale one in the old plane reads as a 200 km jump.
+    streamedFrom = { x: Infinity, y: Infinity };
     coastOrigin = move(coastOrigin);
     // Dropped rather than moved: its rows were filled about the old plane
     // and the rest would be filled about the new one, which would leave a
