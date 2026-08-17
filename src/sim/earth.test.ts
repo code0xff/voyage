@@ -199,9 +199,9 @@ describe('the coarse Earth', () => {
  * The other half of what the patch reads: how deep it is out there.
  *
  * A generated coast has always faded to a 42 m floor, which is a fair shelf
- * and a lie two thousand kilometres from anywhere -- it says the boat may
- * anchor in the middle of the Pacific. The coarse grid is far too blunt for a
- * sounding near a shore, and exactly good enough for this.
+ * and a lie two thousand kilometres from anywhere: every ocean on the planet
+ * sounded like one. The coarse grid is far too blunt for a sounding near a
+ * shore, and exactly good enough for this.
  */
 describe('how deep it is out there', () => {
   it('reads the abyssal ocean as kilometres and the shelf as metres', () => {

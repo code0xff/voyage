@@ -652,9 +652,9 @@ describe('a coast conditioned on a real shoreline', () => {
   });
 
   it('lets the source say how deep the ocean is', () => {
-    // 42 m is a fair shelf and a lie in mid-ocean: it says the boat may
-    // anchor two thousand kilometres from anywhere. Where the source carries
-    // the real bathymetry, the shelf ramps down to that instead.
+    // 42 m is a fair shelf and a lie in mid-ocean, where it made every
+    // ocean on the planet sound like one. Where the source carries the real
+    // bathymetry, the shelf ramps down to that instead.
     // 35 km is what the Earth's own patch saturates at, so this is the
     // answer the generator really gets in mid-ocean.
     const abyss = { at: () => -35_000, floor: () => 4200 };

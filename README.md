@@ -540,8 +540,8 @@ mean-latitude scaling is not a translation).
 
 It answers a second question with the same read: **how deep it is out there**.
 A generated coast fades to a 42 m floor, which is a fair coastal shelf and a lie
-two thousand kilometres from anywhere — it says the boat may anchor in the
-middle of the Pacific. The shelf stays a shelf, and past everything the
+two thousand kilometres from anywhere: every ocean on the planet sounded like
+one. The shelf stays a shelf, and past everything the
 generator invents (the outer islands reach 16 km) a second, much wider ramp
 takes the ground down to the ocean's own floor by 32 km offshore. The soundings
 are stored as int16 at 20 cm, which reaches 6,553 m.

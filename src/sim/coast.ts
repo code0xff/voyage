@@ -282,8 +282,8 @@ export interface ShoreSource {
    * generate, but without a floor there is simply the `FLOOR` this file has
    * always used. It exists because a source that knows where the land is
    * generally also knows how far down the sea goes, and 42 m of water two
-   * thousand kilometres from anywhere is a sounding nobody should believe --
-   * it says the boat may anchor in the middle of the Pacific.
+   * thousand kilometres from anywhere is a sounding nobody should believe:
+   * every ocean on the planet read as a coastal shelf.
    */
   floor?(x: number, y: number): number;
 }

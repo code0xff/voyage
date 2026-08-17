@@ -1742,8 +1742,7 @@ describe('sailing on the Earth', () => {
   it('gives her the ocean floor when she is out over it', async () => {
     // The stub planet is 4,000 m of water south of 30N. A generated coast
     // fades to 42 m on its own, which is a fair shelf and a lie in
-    // mid-ocean: it says she may anchor two thousand kilometres from
-    // anywhere.
+    // mid-ocean, where it made every ocean sound like one.
     const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
     await Promise.resolve();
     await Promise.resolve();
