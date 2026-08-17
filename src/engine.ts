@@ -689,6 +689,13 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * is a loading screen for 29 MB before anything can be sailed.
    */
   let anchor: LatLon = { ...DEFAULT_ANCHOR };
+  /**
+   * Where the endless coast's plane is pinned, held apart from `anchor` so
+   * that it survives a visit to a surveyed region. Sailing to the Azores and
+   * then looking at Newport for a minute should not put her back off San
+   * Francisco.
+   */
+  let oceanAnchor: LatLon = { ...DEFAULT_ANCHOR };
   let earth: Earth | null = null;
 
   let pendingCoast: {
@@ -777,6 +784,22 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // a coast: with the seed pinned a settings change must not regenerate the
     // place, and with it rolled the same id would otherwise serve last
     // session's shore.
+    /*
+     * Where plane zero is on the Earth, which is a property of the world and
+     * not of the session.
+     *
+     * A surveyed region is a real place with a surveyed centre, and its grid
+     * is laid out about that centre -- so a session at Newport must read out
+     * as Rhode Island. It reported San Francisco for every region, because
+     * the anchor was set once at construction and only ever moved by the
+     * endless coast's own re-pinning. Found by a Codex review, which is the
+     * kind of thing only a reader comparing two subsystems catches: nothing
+     * inside either one was wrong.
+     */
+    const surveyed =
+      current.region && current.region !== COAST_ID ? regionById(current.region) : null;
+    anchor = surveyed ? { ...surveyed.centre } : { ...oceanAnchor };
+
     if (current.region === COAST_ID) {
       wantedRegion = COAST_ID;
       if (regionTerrain?.region.id !== COAST_ID || coastSeed !== current.seed) {
@@ -934,6 +957,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * and nothing would say so.
    */
   function reanchorIfFar(x: number, y: number): void {
+    // Only the endless coast may be re-pinned. A venue and a surveyed region
+    // are fixed terrain laid out in plane metres about their own centre, so
+    // moving the pin under one would leave the survey where it was and carry
+    // the boat back into the middle of it -- a teleport, several miles, in
+    // the one part of the game whose whole claim is that the ground is real.
+    if (current.region !== COAST_ID) return;
     if (Math.hypot(x, y) < REANCHOR_AT) return;
     const from = anchor;
     const to = toLatLon(from, x, y);
@@ -949,6 +978,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     pendingCoast = null;
     snapshot.calls = snapshot.calls.map(move);
     anchor = to;
+    // The ocean's own pin, kept so that visiting a surveyed region and coming
+    // back does not undo the passage that got her here.
+    oceanAnchor = to;
     snapshot.place = { ...anchor };
     rebuildCoastWindow();
   }
@@ -1045,6 +1077,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // three synchronous window builds, about half a second of stalled main
     // thread, at the one moment in a passage when it is guaranteed to happen.
     const { x, y } = state.pos;
+    // Published here as well as after the step below, because this runs on
+    // every path that *puts* her somewhere -- a restart, a settings change, a
+    // region finishing its load -- and each of those left `place` describing
+    // the world she had just left until the next physics step ran.
+    snapshot.place = toLatLon(anchor, x, y);
     slideCoast(x, y);
     if (!field) {
       // Either open water, a venue or a region, and all three are the same job:
@@ -1668,8 +1705,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // shore hears them come up at the rate she is closing it.
     wildlife.update(PHYS_DT, state.pos, query);
 
-    // Where she is, in the only coordinates that survive a re-anchoring.
-    snapshot.place = toLatLon(anchor, state.pos.x, state.pos.y);
 
     flareCooldown = Math.max(0, flareCooldown - PHYS_DT);
     snapshot.flareReady = flareCooldown <= 0;
@@ -1754,6 +1789,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
     diag = step(state, cfg, env, ctl, PHYS_DT, { sea, anchored });
     snapshot.diag = diag;
+
+    // Where she is, in the only coordinates that survive a re-anchoring, and
+    // after the step rather than before it: written first, it described where
+    // she had been at the start of the step, which is the same one-step lie
+    // the diagnostics avoid by being read out here too.
+    snapshot.place = toLatLon(anchor, state.pos.x, state.pos.y);
 
     // Was that a tack, and what did it cost? Fed after `step()` for the same
     // reason the passage's conditions are: this step's angle and speed exist

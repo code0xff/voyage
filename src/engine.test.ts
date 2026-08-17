@@ -165,6 +165,7 @@ import { TIDE_PERIOD } from './sim/current';
 import { LogStoreUnavailable } from './logbook';
 import type { EngineEvent } from './engine';
 import { METRES_PER_DEG_LAT } from './sim/globe';
+import { regionById } from './sim/regions';
 import { ManeuverTracker, type Maneuver } from './sim/maneuver';
 import { offerCalls } from './sim/calls';
 import { anchorage } from './sim/anchorage';
@@ -1653,6 +1654,42 @@ describe('sailing on the Earth', () => {
     // slide added a second window around a point 200 km away and a third to
     // put it back -- three builds of 640,000 samples each, all synchronous.
     expect(builds.mock.calls.length).toBe(1);
+    engine.dispose();
+  });
+
+  it('reads a surveyed region out as the place it really is', () => {
+    // Newport is in Rhode Island whatever ocean she came from. The pin was
+    // set once at construction and only ever moved by the endless coast's
+    // own re-anchoring, so every surveyed region reported San Francisco --
+    // a readout naming the wrong continent, in the one part of the game
+    // whose claim is that the ground is the real ground.
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    engine.advance(0.1);
+    carryTo(engine, 10);
+    const ocean = { ...engine.snapshot.place };
+    regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
+    engine.applySettings(settings({ region: 'newport', venue: '' }));
+    const newport = regionById('newport')!.centre;
+    expect(engine.snapshot.place.lat).toBeCloseTo(newport.lat, 1);
+    expect(engine.snapshot.place.lon).toBeCloseTo(newport.lon, 1);
+    // And back out to the ocean where she left it, not to where the game
+    // opens: the passage that got her to ten north still happened.
+    engine.applySettings(settings({ region: 'coast', randomWorld: false, seed: 13 }));
+    expect(engine.snapshot.place.lat).toBeCloseTo(ocean.lat, 1);
+    expect(engine.snapshot.place.lon).toBeCloseTo(ocean.lon, 1);
+    engine.dispose();
+  });
+
+  it('never re-pins the plane under a surveyed region', () => {
+    // A region's grid is laid out in plane metres about its own centre. Move
+    // the pin under it and the survey stays where it was while the boat is
+    // carried back into the middle of it -- several miles of teleport, and
+    // the terrain would say nothing was wrong.
+    regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
+    const engine = sailing({ region: 'newport', venue: '' });
+    engine.snapshot.state.pos = { x: REANCHOR_AT + 5_000, y: 0 };
+    engine.advance(0.02);
+    expect(engine.snapshot.state.pos.x).toBeGreaterThan(REANCHOR_AT);
     engine.dispose();
   });
 
