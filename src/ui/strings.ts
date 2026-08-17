@@ -127,8 +127,19 @@ export const MENU: Record<string, Phrase> = {
     ko: '겉보기 바람, 돛의 양력, 용골의 횡력, 조파저항을 실제로 계산하는 항해 시뮬레이터입니다. 바람은 장소마다 다르고, 날씨는 스스로 변하며, 육지는 당신의 바람을 빼앗습니다.',
   },
   resume: { en: 'Resume', ko: '돌아가기' },
-  putToSea: { en: 'Put to sea', ko: '출항' },
+  putToSea: { en: 'New voyage', ko: '새로운 항해' },
   putToSeaHint: { en: 'a new world, and time to sail it', ko: '새로운 바다, 그리고 항해할 시간' },
+  /**
+   * The two doors, and the reason there are two.
+   *
+   * The button used to say "a new world, and time to sail it" over a game
+   * that had quietly resumed the last position -- the words and the deed
+   * were opposites, and the only way to find out which was true was to sail
+   * and recognise the coast. A remembered position nobody can see is the
+   * same as no remembered position, which is how it was put: 그걸 사람들이
+   * 어떻게 알아.
+   */
+  sailOn: { en: 'Sail on', ko: '이어서 출항' },
   adjust: { en: 'Adjust', ko: '설정' },
   /**
    * The names of the screens behind the menu, used as their headings.
@@ -249,6 +260,12 @@ export const KEYS: [string, Phrase][] = [
   ['U', { en: 'fire a flare — night is when it earns it', ko: '조명탄 — 밤에 진가를 발휘' }],
   ['Esc', { en: 'this menu', ko: '이 메뉴' }],
 ];
+
+/** "off Cádiz": where she takes her departure from, in one phrase. */
+export const offWater = (name: string): Phrase => ({
+  en: `off ${name}`,
+  ko: `${name} 앞바다`,
+});
 
 /**
  * The world's departures, keyed by `sim/waters.ts`. Names as a chart writes
@@ -632,16 +649,7 @@ export const WORLD: Record<string, Phrase> = {
     en: 'Where the land is comes from a four-arc-minute map of the planet — about seven kilometres a cell — so the passage, the distance and the landfall are the real Earth’s. The beach you anchor off is drawn from the seed below: a plausible coast in the right place, not the coast that is there.',
     ko: '육지의 위치는 4분각(약 7 km) 지구 지형도에서 가져옵니다. 그래서 항로와 거리, 랜드폴은 실제 지구의 것입니다. 다만 정박하는 해변의 생김새는 아래 시드에서 그려집니다. 제자리에 있는 그럴듯한 해안이지, 실제로 그곳에 있는 해안은 아닙니다.',
   },
-  /**
-   * The carried position. Named "resume" rather than "last position" because
-   * what it answers is where the *next* departure opens, which is the only
-   * reason a player is reading it.
-   */
-  resumeFrom: { en: 'Sails from', ko: '다음 출항' },
-  departure: { en: 'Take departure', ko: '출항지' },
-  /** Shown when the carried position is not one of the listed waters. */
-  departureAtSea: { en: 'At sea', ko: '바다 위' },
-  resumeForget: { en: 'Start over', ko: '처음 위치로' },
+  departure: { en: 'New voyage from', ko: '새 항해 출항지' },
   surveyedLead: { en: 'Surveyed.', ko: '실측 데이터.' },
   surveyedBody: { en: 'The coastline and the depths are', ko: '해안선과 수심의 출처는' },
   surveyedCaveat: {

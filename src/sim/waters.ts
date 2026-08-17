@@ -78,6 +78,16 @@ export const waterById = (id: string): Water | null =>
 export const AT_WATER = 2000;
 
 /**
+ * m. How near counts as being able to *name* a position by a departure.
+ *
+ * Wider than `AT_WATER` by a lot, and for a different job: this one is the
+ * menu saying where she would carry on from, and "off Cádiz" should still be
+ * the answer after a day's sailing along that coast. Beyond it she is at sea
+ * and the honest label is her latitude and longitude.
+ */
+export const NEAR_WATER = 100_000;
+
+/**
  * The departure a position is at, or null out at sea.
  *
  * Compared in degrees rather than through a great circle: the list is
@@ -87,10 +97,21 @@ export const AT_WATER = 2000;
  */
 export function waterAt(place: LatLon, within = AT_WATER): Water | null {
   const perDeg = 111_195;
+  let best: Water | null = null;
+  let closest = within;
   for (const w of WATERS) {
     const dLat = (w.place.lat - place.lat) * perDeg;
     const dLon = (w.place.lon - place.lon) * perDeg * Math.cos((place.lat * Math.PI) / 180);
-    if (Math.hypot(dLat, dLon) <= within) return w;
+    // The *nearest* rather than the first that qualifies. At the spawn radius
+    // it makes no difference -- no two departures are within fifty kilometres
+    // of each other -- but the menu names her position at a hundred, and at
+    // that width two can qualify at once. First-past-the-post would then name
+    // her by whichever happens to sit earlier in the list.
+    const away = Math.hypot(dLat, dLon);
+    if (away <= closest) {
+      closest = away;
+      best = w;
+    }
   }
-  return null;
+  return best;
 }

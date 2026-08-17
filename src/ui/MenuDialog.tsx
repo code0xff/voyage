@@ -38,6 +38,7 @@ import {
   REGION_BRIEF,
   SETTINGS_UI,
   TABS,
+  offWater,
   WATER_NAME,
   WEATHER,
   WORLD,
@@ -54,10 +55,9 @@ import { VENUES, venueById } from "@/sim/venues";
 import { REGIONS, placeName, regionById } from "@/sim/regions";
 import { COAST_ID, COAST_NAME } from "@/sim/coast";
 import { formatLatLon } from "@/sim/globe";
-import { loadReckoning } from "@/reckoning";
-import { WATERS, waterAt, waterById } from "@/sim/waters";
+import { loadUnderway } from "@/underway";
+import { AT_WATER, NEAR_WATER, WATERS, waterAt, waterById } from "@/sim/waters";
 import { beltAt } from "@/sim/climate";
-import type { LatLon } from "@/sim/globe";
 import { Logbook } from "./Logbook";
 import { SailingGuide } from "./SailingGuide";
 import { Credits } from "./Credits";
@@ -258,67 +258,38 @@ function EngineLoadNotice({
 }
 
 /**
- * Where the next departure opens: the position she carries, and the list of
- * places she can ask to start from instead.
+ * Where a *new* voyage sets out from.
  *
- * The list is the door into the planet. An ocean that may be entered at any
- * point is an ocean with no doors at all, and a player who wants to sail the
- * Cape has otherwise to spend a fortnight getting there -- so the ten waters
- * in `sim/waters.ts` are offered outright, each named with the belt it sits
- * in, because the belt is the thing that makes one of them a different sail
- * from another.
+ * A plain setting, and only that. What it is not is the position a voyage in
+ * progress carries: those answer different questions -- "start a new one,
+ * from here" and "sail on from where I got to" -- and a player uses both.
+ * Holding them in one field meant choosing the Cape and then starting a new
+ * voyage put you back off San Francisco, and an hour's sailing quietly
+ * replaced the departure you had chosen.
  *
- * The position is read when the dialog renders rather than watched. The
- * engine writes it every half minute of sailing, and this is a menu: it is
- * read while the boat is standing still.
+ * The list is the door into the planet: an ocean that may be entered at any
+ * point is an ocean with no doors, and a player who wants to sail the Cape
+ * should not have to spend a fortnight getting there. Each is named with the
+ * belt it sits in, because the belt is what makes one of them a different
+ * sail from another.
  */
-function Departure({ onChoose }: { onChoose: (place: LatLon | null) => void }) {
+function Departure({ value, onChoose }: { value: string; onChoose: (id: string) => void }) {
   const t = useT();
-  const [place, setPlace] = useState<LatLon | null>(() => loadReckoning());
-  const here = place ? waterAt(place) : null;
   return (
-    <div className="flex flex-col gap-1.5 pt-0.5">
-      <div className="grid grid-cols-[104px_1fr] items-center gap-3">
-        <span className="text-[11px] text-muted-foreground">{t(WORLD.departure)}</span>
-        <Select
-          value={here ? here.id : ""}
-          onValueChange={(id) => {
-            const water = waterById(id);
-            if (!water) return;
-            onChoose(water.place);
-            setPlace(water.place);
-          }}
-        >
-          <SelectTrigger className="h-8">
-            <SelectValue placeholder={t(WORLD.departureAtSea)} />
-          </SelectTrigger>
-          <SelectContent>
-            {WATERS.map((w) => (
-              <SelectItem key={w.id} value={w.id}>
-                {t(WATER_NAME[w.id])} — {t(BELT[beltAt(w.place.lat)])}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      {place && (
-        <div className="flex items-center justify-between gap-2">
-          <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-            {t(WORLD.resumeFrom)} {formatLatLon(place)}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-[10px]"
-            onClick={() => {
-              onChoose(null);
-              setPlace(null);
-            }}
-          >
-            {t(WORLD.resumeForget)}
-          </Button>
-        </div>
-      )}
+    <div className="grid grid-cols-[104px_1fr] items-center gap-3 pt-0.5">
+      <span className="text-[11px] text-muted-foreground">{t(WORLD.departure)}</span>
+      <Select value={value} onValueChange={onChoose}>
+        <SelectTrigger className="h-8">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {WATERS.map((w) => (
+            <SelectItem key={w.id} value={w.id}>
+              {t(WATER_NAME[w.id])} — {t(BELT[beltAt(w.place.lat)])}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
@@ -328,7 +299,6 @@ export function MenuDialog({
   onOpenChange,
   settings,
   onSettings,
-  onPutToSea,
   canResume,
   logbook,
   logVersion,
@@ -340,13 +310,13 @@ export function MenuDialog({
   onRetryEngine,
   regionStatus,
   onRetryRegion,
-  onDeparture,
+  onNewVoyage,
+  onSailOn,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   settings: Settings;
   onSettings: (s: Settings) => void;
-  onPutToSea: () => void;
   canResume: boolean;
   logbook: LogStore;
   /** Bumped whenever a passage is written, so the log reloads instead of polling. */
@@ -361,8 +331,10 @@ export function MenuDialog({
   onRetryEngine: () => void;
   regionStatus: RegionLoadStatus;
   onRetryRegion: () => void;
-  /** Choose where the next departure opens, or null for where the game opens. */
-  onDeparture: (place: LatLon | null) => void;
+  /** Put to sea from the chosen departure, forgetting where she got to. */
+  onNewVoyage: () => void;
+  /** Put to sea in the world of the last voyage, where it left off. */
+  onSailOn: () => void;
 }) {
   const [tab, setTab] = useState("world");
   const [helpTab, setHelpTab] = useState("sailing");
@@ -398,6 +370,54 @@ export function MenuDialog({
   // Read only when `view` is not "play", which the title branch below enforces;
   // the map has no entry for it and needs none.
   const heading = view === "play" ? MENU.settings : SCREEN_TITLE[view];
+  /*
+   * What the two doors say, worked out once.
+   *
+   * Only on the Earth: it is the one world where "where she got to" means
+   * anything. A surveyed region opens where it opens and the island field is
+   * nowhere at all, so there both doors would be the same door -- and only
+   * one is shown.
+   */
+  const onEarth = settings.region === COAST_ID;
+  const from = waterById(settings.departure);
+  const startsFrom = onEarth && from ? t(offWater(t(WATER_NAME[from.id]))) : null;
+  /*
+   * The voyage waiting to be carried on, and where it is.
+   *
+   * Every world keeps one: the Earth by latitude and longitude, and a
+   * surveyed region or the island field by the plane metres their own
+   * ground is laid out in. A region is small only in kilometres -- twenty of
+   * them takes longer to look at properly than anyone sails in one sitting.
+   *
+   * Named by the departure she is nearest, and by her position when she is
+   * near none. A region names itself, because the region *is* the place.
+   */
+  const carried = loadUnderway();
+  const near = carried?.place ? waterAt(carried.place, NEAR_WATER) : null;
+  const sailsFrom = !carried
+    ? ''
+    : near
+      ? t(offWater(t(WATER_NAME[near.id])))
+      : carried.place
+        ? formatLatLon(carried.place)
+        : (regionById(carried.region)?.name ?? t(MENU.openSea));
+  /*
+   * Not offered when it would be the same door twice: a voyage still sitting
+   * at the departure a new one would start from is a new one.
+   *
+   * Compared against *that* departure and not against any -- the first
+   * version asked only whether she was near some water on the list, so a
+   * voyage resumed in the Korea Strait was hidden because the Korea Strait is
+   * on the list, whatever the new-voyage picker said.
+   */
+  const at = carried?.place ? waterAt(carried.place, AT_WATER * 4) : null;
+  const sameDoor =
+    carried !== null &&
+    carried.region === settings.region &&
+    (carried.place
+      ? from !== null && at?.id === from.id
+      : Math.hypot(carried.pos?.x ?? 0, carried.pos?.y ?? 0) < AT_WATER);
+  const sailsOn = carried !== null && !sameDoor;
 
   /**
    * The newest passage, or null while the store has not answered and whenever
@@ -545,17 +565,34 @@ export function MenuDialog({
               </Button>
             )}
             <div className="space-y-2">
+              {/* Two doors, and each says where it goes. One of them used to
+                  be both: the button said "a new world, and time to sail it"
+                  over a game that had quietly resumed the last position, so
+                  the words and the deed were opposites and there was no way
+                  to tell short of sailing and recognising the coast. */}
+              {sailsOn && (
+                <Button
+                  className="w-full justify-between"
+                  onClick={onSailOn}
+                  disabled={!regionReady || engineError}
+                >
+                  <span className="flex items-center gap-2">
+                    <Compass /> {t(MENU.sailOn)}
+                  </span>
+                  <span className="truncate pl-3 font-normal opacity-60">{sailsFrom}</span>
+                </Button>
+              )}
               <Button
-                variant={canResume ? "secondary" : "default"}
+                variant={canResume || sailsOn ? "secondary" : "default"}
                 className="w-full justify-between"
-                onClick={onPutToSea}
+                onClick={onNewVoyage}
                 disabled={!regionReady || engineError}
               >
                 <span className="flex items-center gap-2">
                   <Compass /> {t(MENU.putToSea)}
                 </span>
-                <span className="font-normal opacity-60">
-                  {t(MENU.putToSeaHint)}
+                <span className="truncate pl-3 font-normal opacity-60">
+                  {startsFrom ?? t(MENU.putToSeaHint)}
                 </span>
               </Button>
               {settings.region && (
@@ -828,7 +865,7 @@ export function MenuDialog({
                   <span className="text-info">{t(WORLD.earthLead)}</span>{" "}
                   {t(WORLD.earthBody)}
                 </p>
-                <Departure onChoose={onDeparture} />
+                <Departure value={settings.departure} onChoose={(id) => set("departure", id)} />
               </>
             ) : settings.region ? (
               <>

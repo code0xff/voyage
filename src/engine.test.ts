@@ -122,16 +122,17 @@ vi.mock('./sim/anchorage', async (importActual) => {
  * what it writes as she sails.
  */
 const kept = vi.hoisted(() => ({
-  stored: null as { lat: number; lon: number; at: number } | null,
+  stored: null as Record<string, unknown> | null,
   writes: 0,
 }));
-vi.mock('./reckoning', () => ({
-  loadReckoning: () => kept.stored,
-  saveReckoning: (place: { lat: number; lon: number }) => {
-    kept.stored = { ...place, at: 1 };
+vi.mock('./underway', async (importActual) => ({
+  ...(await importActual<typeof import('./underway')>()),
+  loadUnderway: () => kept.stored,
+  saveUnderway: (row: Record<string, unknown>) => {
+    kept.stored = { ...row, at: 1 };
     kept.writes++;
   },
-  clearReckoning: () => {
+  clearUnderway: () => {
     kept.stored = null;
   },
 }));
@@ -1057,6 +1058,11 @@ describe('engine', () => {
    */
   it('sails the same passage twice from a seed, and a different one from another', () => {
     const sail = (seed: number) => {
+      // Each one a new voyage. The engine carries where she got to across
+      // sessions now, so a second `sail(4711)` would otherwise open where the
+      // first one finished and the seed would look non-deterministic when it
+      // is the memory doing its job.
+      kept.stored = null;
       const engine = sailing({ seed });
       engine.advance(120);
       const s = engine.snapshot;
@@ -1158,6 +1164,11 @@ describe('engine', () => {
     const expected = `${fresh.snapshot.state.pos.x}:${fresh.snapshot.state.heading}:${fresh.snapshot.weather.state.rain}`;
     fresh.dispose();
 
+    // A new voyage rather than a resumed one: the engine now carries where
+    // she got to across sessions, so without this the second engine would
+    // open where the first one finished -- which is the feature working, and
+    // not what this test is about.
+    kept.stored = null;
     const reused = sailing({ seed: 4711 });
     reused.advance(400); // a long passage first, in this same pinned world
     const before = reused.snapshot.session;
@@ -1531,6 +1542,19 @@ describe('the flare', () => {
 });
 
 /**
+ * A stored voyage on the Earth, as the engine would have written it. The
+ * tests below all sail seed 13 on the coast, so the world is theirs.
+ */
+function storedOn(place: { lat: number; lon: number }, seed = 13) {
+  return { region: 'coast', venue: '', seed, place, pos: null, at: 1 };
+}
+
+/** What the row says her position was, whichever coordinate its world uses. */
+function storedPlace() {
+  return kept.stored?.place as { lat: number; lon: number } | null;
+}
+
+/**
  * The boat's place, asserted to exist. Every test that uses it is sailing a
  * world that is on the Earth -- the endless coast or a surveyed region -- so
  * a null here is a failure and not a case to handle.
@@ -1759,7 +1783,7 @@ describe('sailing on the Earth', () => {
     // reopened off San Francisco has had a passage taken away from her, and
     // a circumnavigation becomes impossible in principle rather than merely
     // long.
-    kept.stored = { lat: -33.5, lon: 18.4, at: 1 };
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 });
     const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
     engine.advance(0.5);
     // Off the Cape, where the row says, and not off the Golden Gate.
@@ -1772,12 +1796,12 @@ describe('sailing on the Earth', () => {
     carryTo(engine, -20);
     engine.advance(31);
     expect(kept.writes).toBeGreaterThan(0);
-    expect(kept.stored!.lat).toBeCloseTo(-20, 1);
+    expect(storedPlace()!.lat).toBeCloseTo(-20, 1);
     engine.dispose();
   });
 
   it('takes a departure the player chose, and forgets one on request', () => {
-    kept.stored = { lat: -33.5, lon: 18.4, at: 1 };
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 });
     const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
     engine.advance(0.5);
     // Choosing one writes it down at once -- a tab closed straight after
@@ -1786,8 +1810,8 @@ describe('sailing on the Earth', () => {
     // Antigua on purpose, and from the Cape on purpose: the two are in
     // different belts, so the wind she opens in says which pin was used.
     const antigua = waterById('antigua')!;
-    engine.setDeparture(antigua.place);
-    expect(kept.stored!.lat).toBeCloseTo(antigua.place.lat, 3);
+    engine.sailFrom({ place: antigua.place });
+    expect(storedPlace()!.lat).toBeCloseTo(antigua.place.lat, 3);
     expect(placeOf(engine).lat).toBeCloseTo(-33.5, 1);
     engine.putToSea();
     engine.advance(0.5);
@@ -1802,7 +1826,7 @@ describe('sailing on the Earth', () => {
     expect(twd).toBeGreaterThan(20);
     expect(twd).toBeLessThan(100);
 
-    engine.setDeparture(null);
+    engine.sailFrom(null);
     expect(kept.stored).toBeNull();
     // Not a teleport: she is still where she is until she next puts to sea.
     expect(placeOf(engine).lat).toBeCloseTo(antigua.place.lat, 1);
@@ -1817,11 +1841,11 @@ describe('sailing on the Earth', () => {
     // departure is chosen puts her current position straight back over the
     // choice -- within half a minute for the throttle, or the moment the tab
     // goes away. "Start over" survived exactly thirty seconds.
-    kept.stored = { lat: -33.5, lon: 18.4, at: 1 };
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 });
     const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
     engine.advance(0.5);
 
-    engine.setDeparture(null);
+    engine.sailFrom(null);
     expect(kept.stored).toBeNull();
     engine.advance(61);
     expect(kept.stored, 'the throttle wrote over it').toBeNull();
@@ -1832,11 +1856,11 @@ describe('sailing on the Earth', () => {
     const antigua = waterById('antigua')!;
     const second = sailing({ region: 'coast', randomWorld: false, seed: 13 });
     second.advance(0.5);
-    second.setDeparture(antigua.place);
+    second.sailFrom({ place: antigua.place });
     second.advance(61);
     second.dispose();
-    expect(kept.stored!.lat).toBeCloseTo(antigua.place.lat, 3);
-    expect(kept.stored!.lon).toBeCloseTo(antigua.place.lon, 3);
+    expect(storedPlace()!.lat).toBeCloseTo(antigua.place.lat, 3);
+    expect(storedPlace()!.lon).toBeCloseTo(antigua.place.lon, 3);
   });
 
   it('points her at the land she has come to see', async () => {
@@ -1895,7 +1919,7 @@ describe('sailing on the Earth', () => {
     // pond and float her in it, which is worse than failing because it looks
     // like it worked. The stub planet is land north of 30N.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    kept.stored = { lat: 45, lon: -100, at: 1 };
+    kept.stored = storedOn({ lat: 45, lon: -100 });
     const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
     await Promise.resolve();
     await Promise.resolve();
@@ -1925,11 +1949,11 @@ describe('sailing on the Earth', () => {
     const doc = globalThis.document as unknown as { visibilityState: string };
     doc.visibilityState = 'hidden';
     for (const fn of listeners.get('visibilitychange') ?? []) fn({});
-    expect(kept.stored!.lat, 'hiding the tab').toBeCloseTo(-20, 1);
+    expect(storedPlace()!.lat, 'hiding the tab').toBeCloseTo(-20, 1);
 
     kept.stored = null;
     for (const fn of listeners.get('pagehide') ?? []) fn({});
-    expect(kept.stored!.lat, 'leaving the page').toBeCloseTo(-20, 1);
+    expect(storedPlace()!.lat, 'leaving the page').toBeCloseTo(-20, 1);
     doc.visibilityState = 'visible';
     engine.dispose();
   });
@@ -1940,10 +1964,10 @@ describe('sailing on the Earth', () => {
     // settings edit -- read it and carried her there without a departure:
     // several thousand kilometres, silently, in the path whose comment
     // promises it is not a teleport.
-    kept.stored = { lat: -33.5, lon: 18.4, at: 1 };
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 });
     const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
     engine.advance(0.5);
-    engine.setDeparture(waterById('antigua')!.place);
+    engine.sailFrom({ place: waterById('antigua')!.place });
     // A settings change that rebuilds the world, without putting to sea.
     engine.applySettings(settings({ region: 'coast', randomWorld: false, seed: 77 }));
     engine.advance(0.5);
@@ -1951,15 +1975,39 @@ describe('sailing on the Earth', () => {
     engine.dispose();
   });
 
-  it('keeps no position for a world that is not on the Earth', () => {
-    // A surveyed region is a real place but it is not *her* place on the
-    // ocean, and the island field is nowhere at all. A write from either
-    // would move the ocean under a boat that was never in it.
+  it('remembers a world that is not on the Earth by its plane metres', () => {
+    // Every world is worth carrying now, and that was asked for in as many
+    // words: a surveyed region is small only in kilometres, and twenty of
+    // them takes longer to look at properly than anyone sails in one sitting.
+    // What changes is the coordinate. The Earth's plane is re-pinned under
+    // her every 200 km, so its metres mean nothing tomorrow and it is
+    // remembered by latitude and longitude; every other world has a plane
+    // nailed down, and there the metres are exactly right.
     regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
     const engine = sailing({ region: 'newport', venue: '' });
-    engine.advance(61);
-    expect(kept.writes).toBe(0);
-    expect(kept.stored).toBeNull();
+    engine.advance(0.5);
+    engine.snapshot.state.pos = { x: 2200, y: -1400 };
+    engine.advance(31);
+    expect(kept.stored, 'nothing was written').not.toBeNull();
+    expect(kept.stored!.region).toBe('newport');
+    expect(kept.stored!.place, 'a region has no place on the plane it is drawn in').toBeNull();
+    const pos = kept.stored!.pos as { x: number; y: number };
+    // Within a couple of hundred metres: she is sailing while the throttle
+    // waits, so the row is where she was when it fired and not where she was
+    // put.
+    expect(Math.hypot(pos.x - 2200, pos.y + 1400)).toBeLessThan(300);
+    engine.dispose();
+  });
+
+  it('opens a fixed-plane world where she left off in it', () => {
+    // And the other half: a row with plane metres puts her back at them,
+    // ninety metres downwind of where she was rather than of the origin.
+    regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
+    kept.stored = { region: 'newport', venue: '', seed: 13, place: null, pos: { x: 4000, y: 1500 }, at: 1 };
+    const engine = sailing({ region: 'newport', venue: '', seed: 13, randomWorld: false });
+    engine.advance(0.5);
+    const pos = engine.snapshot.state.pos;
+    expect(Math.hypot(pos.x - 4000, pos.y - 1500)).toBeLessThan(200);
     engine.dispose();
   });
 

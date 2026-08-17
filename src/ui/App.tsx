@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Engine, RegionLoadStatus } from "@/engine";
 import { loadSettings, saveSettings, type Settings } from "@/settings";
 import { regionById } from "@/sim/regions";
-import type { LatLon } from "@/sim/globe";
 import { venueById } from "@/sim/venues";
 import { EngineProvider } from "./engine-context";
 import { LangProvider } from "./i18n";
@@ -10,7 +9,9 @@ import { Instruments } from "./Instruments";
 import { PolarCard } from "./PolarCard";
 import { MenuDialog } from "./MenuDialog";
 import { logbook } from "@/logbook";
-import { clearReckoning, saveReckoning } from "@/reckoning";
+import { clearUnderway, loadUnderway, saveUnderway } from "@/underway";
+import { waterById } from "@/sim/waters";
+import { COAST_ID } from "@/sim/coast";
 import { HintBar } from "./HintBar";
 import { BinocularMask } from "./BinocularMask";
 import { MinimapCard } from "./MinimapCard";
@@ -306,17 +307,22 @@ export function App() {
    */
   const flash = useRef<HTMLDivElement>(null);
 
-  const putToSea = useCallback(() => {
+  /**
+   * @param world the settings to sail, when they are not the ones React has
+   * caught up with yet. "Sail on" moves the world to the voyage being
+   * resumed and puts to sea in the same breath, and `settingsRef` is only
+   * refreshed when the render after `setSettings` lands -- so without this it
+   * re-applied the old ones and rolled a new seed over the world it had just
+   * been asked to restore.
+   */
+  const putToSea = useCallback((world?: Settings) => {
     primeAudio();
     if (!engine) {
       pendingStart.current = true;
       return;
     }
-    engine.applySettings(settingsRef.current);
-    if (
-      settingsRef.current.region &&
-      engine.snapshot.regionStatus !== "ready"
-    ) {
+    engine.applySettings(world ?? settingsRef.current);
+    if ((world ?? settingsRef.current).region && engine.snapshot.regionStatus !== "ready") {
       setRegionStatus(engine.snapshot.regionStatus);
       setMenuOpen(true);
       return;
@@ -331,24 +337,58 @@ export function App() {
   }, [engine]);
 
   /**
-   * Choose where the next departure opens, or null to go back to where the
-   * game opens. Not a teleport -- she stays where she is until she next puts
-   * to sea -- so the menu says "from the next departure".
+   * Start a new voyage: from the chosen departure, forgetting where the last
+   * one got to.
+   *
+   * The store is written here as well as in the engine, because the menu can
+   * be open before the engine exists -- it is loaded on a dynamic import, and
+   * the dialog is up first. The engine's own call was optional-chained away
+   * in that window, so the position was never changed and the engine, when it
+   * finished loading, read the old one and put her back where she had been.
    */
-  const setDeparture = useCallback(
-    (place: LatLon | null) => {
-      // Written here as well as in the engine, because the menu can be open
-      // before the engine exists -- it is loaded on a dynamic import, and the
-      // dialog is up first. The engine's own call was optional-chained away
-      // in that window, so the row was never cleared: "start over" hid the
-      // line, the engine finished loading, read the untouched row, and put
-      // her back where she had been. A review found it.
-      if (place) saveReckoning(place);
-      else clearReckoning();
-      engine?.setDeparture(place);
-    },
-    [engine],
-  );
+  const newVoyage = useCallback(() => {
+    const s = settingsRef.current;
+    // Where a new voyage begins: the chosen departure on the Earth, and the
+    // world's own opening position anywhere else.
+    const from = s.region === COAST_ID ? (waterById(s.departure)?.place ?? null) : null;
+    if (from) saveUnderway({ region: s.region, venue: s.venue, seed: s.seed, place: from, pos: null });
+    else clearUnderway();
+    engine?.sailFrom(from ? { place: from } : null);
+    putToSea();
+  }, [engine, putToSea]);
+
+  /**
+   * Sail on: the world the last voyage was in, at the seed it was drawn from
+   * and the place she had got to.
+   *
+   * The settings are moved to that world first, because the menu may have
+   * been used to look at somewhere else since -- and the seed is pinned,
+   * since a resumed voyage under a new seed is a different coast, and in the
+   * island field a different sea altogether. Pinning it turns "a new world
+   * every time" off, which is a visible change to a setting the player owns:
+   * it is the honest one, because from here on she *is* sailing that world,
+   * and the menu shows it as pinned rather than hiding it.
+   *
+   * The new settings are handed to `putToSea` as well as written, because
+   * `settingsRef` only catches up on the render after `setSettings` -- so
+   * without it the launch re-applied the old ones and rolled a new seed over
+   * the world it had just been asked to restore. Seen in the browser: the
+   * boat arrived in the right place under the wrong coast.
+   */
+  const sailOn = useCallback(() => {
+    const row = loadUnderway();
+    if (!row) return;
+    const next: Settings = {
+      ...settingsRef.current,
+      region: row.region,
+      venue: row.venue,
+      seed: row.seed,
+      randomWorld: false,
+    };
+    applySettings(next);
+    engine?.sailFrom({ place: row.place, pos: row.pos });
+    putToSea(next);
+  }, [applySettings, engine, putToSea]);
 
   // A reload, because it is the only thing that recovers -- see `loadEngine`.
   const retryEngine = useCallback(() => {
@@ -498,7 +538,6 @@ export function App() {
           onOpenChange={onMenuOpenChange}
           settings={settings}
           onSettings={applySettings}
-          onPutToSea={putToSea}
           canResume={started}
           logbook={logbook}
           logVersion={logVersion}
@@ -510,7 +549,8 @@ export function App() {
           onRetryEngine={retryEngine}
           regionStatus={regionStatus}
           onRetryRegion={retryRegion}
-          onDeparture={setDeparture}
+          onNewVoyage={newVoyage}
+          onSailOn={sailOn}
         />
       </div>
     </LangProvider>

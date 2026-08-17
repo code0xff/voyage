@@ -8,6 +8,7 @@ import { venueById, type Venue } from './sim/venues';
 import { detectLang, type Lang } from './i18n';
 import { regionById, type Region } from './sim/regions';
 import { COAST_ID } from './sim/coast';
+import { waterById } from './sim/waters';
 
 /**
  * Player settings, persisted to localStorage.
@@ -128,6 +129,17 @@ export interface Settings {
    * settled on 8x gets 8x.
    */
   binocularPower: number;
+  /**
+   * Which of the world's waters a *new* voyage sets out from, by id.
+   *
+   * Held apart from the position a voyage in progress carries (see
+   * `reckoning.ts`), because they answer different questions and a player
+   * uses both: "sail on from where I got to" and "start a new one, from
+   * here". One field for both meant choosing the Cape and then starting a
+   * new voyage put you back off San Francisco, or sailing for an hour
+   * quietly replaced the departure you had chosen.
+   */
+  departure: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -151,6 +163,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // Overwritten by `loadSettings` on a first run, which asks the browser.
   lang: 'en',
   binocularPower: 3,
+  departure: 'golden-gate',
 };
 
 const KEY = 'voyage.settings.v2';
@@ -204,6 +217,10 @@ export function loadSettings(): Settings {
       // Clamped to the same range the wheel allows, so a hand-edited file
       // cannot open the game at a power the control could never reach.
       binocularPower: num(o.binocularPower, DEFAULT_SETTINGS.binocularPower, 3, 12),
+      // Checked against the list rather than merely for being a string: an id
+      // from an older build, or a hand-edited one, must fall back to where the
+      // game opens instead of leaving a new voyage with nowhere to start.
+      departure: waterById(String(o.departure)) ? String(o.departure) : DEFAULT_SETTINGS.departure,
     };
   } catch {
     return { ...DEFAULT_SETTINGS, lang: detectLang() };

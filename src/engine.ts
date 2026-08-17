@@ -15,7 +15,7 @@ import { venueById } from './sim/venues';
 import { regionById, type Region } from './sim/regions';
 import { RegionTerrain } from './sim/region-terrain';
 import { loadEarth, loadRegion } from './terrain-load';
-import { clearReckoning, loadReckoning, saveReckoning } from './reckoning';
+import { clearUnderway, loadUnderway, sameWorld, saveUnderway } from './underway';
 import { passageInfo, type PassageInfo, type PassageRecord } from './sim/passage';
 import { anchorage, type Anchorage } from './sim/anchorage';
 import {
@@ -302,15 +302,15 @@ export interface Engine {
   /** Development hook, exposed on window. */
   advance(seconds: number, rudder?: number): void;
   /**
-   * Choose where the next departure opens: one of the world's waters, or
-   * null to forget the remembered position and open where the game opens.
+   * Where the next departure is taken from: a place on the Earth, a position
+   * in a fixed plane, or null for wherever the world opens.
    *
    * Deliberately not a teleport. She is still where she is until she next
    * puts to sea -- a menu that moved the boat under the player while they
    * were reading it would be a worse answer than one that waits -- and the
    * menu that offers this says so.
    */
-  setDeparture(place: LatLon | null): void;
+  sailFrom(spot: { place?: LatLon | null; pos?: Vec2 | null } | null): void;
 }
 
 const PHYS_DT = 1 / 120;
@@ -632,9 +632,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * from and then killed by the operating system never fires anything else.
    * Both may fire more than once and the write is idempotent.
    */
-  const keepOnLeaving = () => keepPlace();
+  const keepOnLeaving = () => keepUnderway();
   const keepOnHiding = () => {
-    if (document.visibilityState === 'hidden') keepPlace();
+    if (document.visibilityState === 'hidden') keepUnderway();
   };
   window.addEventListener('pagehide', keepOnLeaving);
   document.addEventListener('visibilitychange', keepOnHiding);
@@ -742,10 +742,20 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * the rest of the session instead of teleporting her home on every
    * restart. `forgetPlace` is the only thing that puts it back.
    */
-  const remembered = loadReckoning();
+  const stored = loadUnderway();
+  /**
+   * The stored voyage, but only if it is the world these settings would
+   * sail. A row from a different region, or the same one under another seed,
+   * is a different world: resuming its coordinates there would put her at
+   * some arbitrary spot in a sea she has never seen. The menu's "sail on"
+   * changes the settings to match the row first, which is what makes that
+   * button mean what it says.
+   */
+  const remembered =
+    stored && sameWorld(stored, settings) ? stored : null;
   /** A fresh copy each time: two pins that shared one object would be one pin. */
   const opening = (): LatLon =>
-    remembered ? { lat: remembered.lat, lon: remembered.lon } : { ...DEFAULT_ANCHOR };
+    remembered?.place ? { ...remembered.place } : { ...DEFAULT_ANCHOR };
   let anchor: LatLon = opening();
   /**
    * Where the endless coast's plane is pinned, held apart from `anchor` so
@@ -758,7 +768,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let oceanPos: Vec2 = { x: 0, y: 0 };
   /** Whether the world she is in now is a surveyed one. */
   let inSurveyed = false;
-  /** s of sailing since the position was last written down; see `keepPlace`. */
+  /** s of sailing since the voyage was last written down; see `keepUnderway`. */
   let sinceSaved = 0;
   /**
    * Where the player has asked the *next* departure to open, if they have
@@ -770,6 +780,17 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * path whose comment promises it is not a teleport.
    */
   let departure: LatLon | null = null;
+  /**
+   * Where a departure is taken from in a world whose plane never moves -- a
+   * surveyed region, a venue, the island field.
+   *
+   * The Earth carries its position as a latitude and longitude because its
+   * plane is re-pinned under the boat every 200 km; everywhere else the plane
+   * is nailed down and metres from its origin are the honest form. Both end
+   * up in the same place: `placeAtStart` puts her ninety metres downwind of
+   * *this*, rather than of the origin.
+   */
+  let base: Vec2 = remembered?.pos ? { ...remembered.pos } : { x: 0, y: 0 };
   /**
    * Whether her position is still being written down.
    *
@@ -966,7 +987,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
             // kilometres off is scenery and one a few hundred metres away is a
             // decision, so the sea is otherwise left to put land wherever it
             // falls -- that is the point of an endless one.
-            keepClear: [{ x: -up.x * 90, y: -up.y * 90 }],
+            keepClear: [{ x: base.x - up.x * 90, y: base.y - up.y * 90 }],
             clearance: 130,
           })
         : null;
@@ -1054,19 +1075,28 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * frame. Also on the way out, so quitting deliberately keeps the last of
    * it.
    *
-   * Only where there is a position to keep: a surveyed region and the island
-   * field are not places on the Earth, and writing one from either would
-   * move the ocean under a boat that was never in it.
+   * Every world, because every world has somewhere she got to. The Earth is
+   * remembered by latitude and longitude, since its plane moves under her;
+   * everywhere else by plane metres, which is what that world is laid out in.
+   * A surveyed region is small only in kilometres -- twenty of them takes
+   * longer to look at properly than anyone sails in one sitting.
    */
-  function keepPlace(): void {
-    if (!keeping || current.region !== COAST_ID || !snapshot.place) return;
+  function keepUnderway(): void {
+    if (!keeping) return;
     // Not while she is on the bottom. A position with no water under it is
     // one she cannot be put back into: the next session would open aground,
     // or -- worse, because it hides it -- afloat in the pond the spawn
     // clearing digs out of whatever it lands on. Nothing is written until
     // she is off it again, so the last good position stands.
     if (snapshot.clearance <= 0) return;
-    saveReckoning(snapshot.place);
+    const onEarth = current.region === COAST_ID;
+    saveUnderway({
+      region: current.region,
+      venue: current.venue,
+      seed: current.seed,
+      place: onEarth ? snapshot.place : null,
+      pos: onEarth ? null : { ...state.pos },
+    });
     sinceSaved = 0;
   }
 
@@ -1196,7 +1226,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
          */
         if (remembered && loaded.isLand(oceanAnchor)) {
           console.warn('the remembered position is on land; starting over', oceanAnchor);
-          clearReckoning();
+          clearUnderway();
           oceanAnchor = { ...DEFAULT_ANCHOR };
           pinForWorld();
           state.pos = { x: 0, y: 0 };
@@ -1626,7 +1656,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // and the auto-reef, starting from an honest average, takes it from
     // there.
     const ready = prepareDeparture(CRUISER, wind.meanEnv(DEFAULT_ENV), heading);
-    spawn = { x: -up.x * 90, y: -up.y * 90 };
+    // Ninety metres downwind of where this world's departure is taken from:
+    // the plane's origin normally, and where she left off in a world she is
+    // sailing on from.
+    spawn = { x: base.x - up.x * 90, y: base.y - up.y * 90 };
     state = initialState({
       pos: { ...spawn },
       heading,
@@ -2158,7 +2191,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // the diagnostics avoid by being read out here too.
     snapshot.place = placeOf(state.pos.x, state.pos.y);
     sinceSaved += PHYS_DT;
-    if (sinceSaved >= KEEP_PLACE_EVERY) keepPlace();
+    if (sinceSaved >= KEEP_PLACE_EVERY) keepUnderway();
 
     // Was that a tack, and what did it cost? Fed after `step()` for the same
     // reason the passage's conditions are: this step's angle and speed exist
@@ -2539,15 +2572,29 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     press: (key) => input.inject(key),
     recomputePolar: () => schedulePolar(0),
     resize: () => view.resize(),
-    setDeparture(place) {
-      if (place) saveReckoning(place);
-      else clearReckoning();
+    sailFrom(spot) {
+      // Written down at once. A tab closed straight after choosing must not
+      // lose the choice, and the menu can be open before the engine exists,
+      // so the two write the same row rather than one trusting the other.
+      if (spot?.place || spot?.pos) {
+        saveUnderway({
+          region: current.region,
+          venue: current.venue,
+          seed: current.seed,
+          place: spot.place ?? null,
+          pos: spot.pos ?? null,
+        });
+      } else {
+        clearUnderway();
+      }
       // Held for the next departure rather than applied to this session's
       // pin: she is still where she is, which is what the menu says.
-      departure = place ? { lat: place.lat, lon: place.lon } : { ...DEFAULT_ANCHOR };
+      departure = spot?.place ? { ...spot.place } : { ...DEFAULT_ANCHOR };
+      base = spot?.pos ? { ...spot.pos } : { x: 0, y: 0 };
       // And nothing more is written down until she takes it. The record is
       // one row, so going on recording this session would put her current
-      // position back over the choice within the half minute.
+      // position back over the choice within the half minute -- which is how
+      // "start over" used to undo itself thirty seconds later.
       keeping = false;
       sinceSaved = 0;
     },
@@ -2555,7 +2602,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     dispose() {
       // Quitting deliberately keeps the last of it; the throttle above may
       // be twenty-nine seconds from its next write.
-      keepPlace();
+      keepUnderway();
       disposed = true;
       window.removeEventListener('pagehide', keepOnLeaving);
       document.removeEventListener('visibilitychange', keepOnHiding);
