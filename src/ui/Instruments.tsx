@@ -7,14 +7,42 @@ import { cn } from '@/lib/utils';
 import { RAD, clamp, compassVec, wrap2Pi } from '@/sim/math';
 import { CRUISER } from '@/sim/config';
 import { msToKnots } from '@/sim/units';
+import { formatLatLon } from '@/sim/globe';
 import { phaseName, formatClock } from '@/sim/sky';
 import { pace } from '@/sim/polar';
 import { useT } from './i18n';
-import { ALERT, DAY_PHASE, PANEL, WEATHER, lull, maneuverReport, puff, shift, shoal } from './strings';
+import { ALERT, BELT, DAY_PHASE, PANEL, WEATHER, lull, maneuverReport, puff, shift, shoal } from './strings';
 import type { Snapshot } from '@/engine';
 import { useEngineFrame, useReadout } from './engine-context';
 import { TelemetryCard } from './TelemetryCard';
 import { useRef } from 'react';
+
+/**
+ * Where she is on the Earth, and which sea that makes it.
+ *
+ * The whole point of opening the planet, in one line: a latitude is not
+ * trivia here, it is the thing that decides what the wind does. Reading
+ * "the trades" beside 15 degrees north is the difference between sailing
+ * a big map and sailing an ocean that has parts.
+ *
+ * The belt is silent in a surveyed region and at a venue, because those
+ * places keep their own conditions and naming a belt there would describe a
+ * wind nobody is feeling. Written per frame outside React like every other
+ * readout -- it changes in the last digit at walking pace, but it changes
+ * every step, and this panel's rule is that nothing per-frame goes through
+ * the reconciler.
+ */
+function Fix() {
+  const t = useT();
+  const where = useReadout<HTMLSpanElement>((s) => formatLatLon(s.place));
+  const belt = useReadout<HTMLSpanElement>((s) => (s.belt ? t(BELT[s.belt]) : ''));
+  return (
+    <div className="mt-2 flex items-baseline justify-between gap-2">
+      <span ref={where} className="font-mono text-[10.5px] tabular-nums text-muted-foreground" />
+      <span ref={belt} className="truncate text-[10.5px] text-muted-foreground" />
+    </div>
+  );
+}
 
 /** One label/value row. The value is written per frame, outside React. */
 function Gauge({
@@ -543,6 +571,8 @@ export function Instruments({ compact = false }: { compact?: boolean }) {
           read={(s) => (s.depth === Infinity ? '∞' : s.depth.toFixed(0))}
         />
       </div>
+
+      <Fix />
 
       <Separator className="my-2.5" />
       <Helm />

@@ -2,6 +2,7 @@ import type { Phrase } from '@/i18n';
 import type { AnchorProblem } from '@/sim/anchorage';
 import type { WeatherKind } from '@/sim/weather';
 import type { DayPhase } from '@/sim/sky';
+import type { Belt } from '@/sim/climate';
 
 /**
  * Interface copy, in both languages.
@@ -248,6 +249,22 @@ export const KEYS: [string, Phrase][] = [
   ['U', { en: 'fire a flare — night is when it earns it', ko: '조명탄 — 밤에 진가를 발휘' }],
   ['Esc', { en: 'this menu', ko: '이 메뉴' }],
 ];
+
+/**
+ * The wind belts, in the words a pilot chart uses.
+ *
+ * Here rather than in `sim/climate.ts` so that there is one place a name is
+ * written and it is the place that knows the reader's language. The sim
+ * decides *which* belt she is in; what it is called is a matter for the
+ * screen.
+ */
+export const BELT: Record<Belt, Phrase> = {
+  doldrums: { en: 'the doldrums', ko: '적도 무풍대' },
+  trades: { en: 'the trades', ko: '무역풍대' },
+  horse: { en: 'the horse latitudes', ko: '아열대 고압대' },
+  westerlies: { en: 'the westerlies', ko: '편서풍대' },
+  polar: { en: 'the polar easterlies', ko: '극동풍대' },
+};
 
 export const WEATHER: Record<WeatherKind, Phrase> = {
   clear: { en: 'Clear', ko: '맑음' },

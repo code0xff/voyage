@@ -210,14 +210,5 @@ export function climateSpeed(settingMs: number, climate: Climate): number {
   return clamp(settingMs * ratio, 1 * KNOT, 45 * KNOT);
 }
 
-/** For a readout: the belt's own name, in the words a pilot chart uses. */
-export const BELT_NAME: Record<Belt, string> = {
-  doldrums: 'the doldrums',
-  trades: 'the trades',
-  horse: 'the horse latitudes',
-  westerlies: 'the westerlies',
-  polar: 'the polar easterlies',
-};
-
 /** Degrees, exported so a test can walk the seams rather than guess them. */
 export const BELT_EDGES = [5, 28, 34, 62] as const;
