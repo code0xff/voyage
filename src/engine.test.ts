@@ -278,9 +278,17 @@ beforeEach(() => {
   };
   // `Input` watches for the tab going away, so that keys are not left held.
   (globalThis as Record<string, unknown>).document = {
-    addEventListener: () => {},
+    // Recorded like the window's, so a test can hide the page the way a
+    // browser does: it is the only way the position is written when a tab
+    // is closed, and nothing else exercises that path.
+    addEventListener: (type: string, fn: (e: unknown) => void) => {
+      const same = listeners.get(type) ?? [];
+      same.push(fn);
+      listeners.set(type, same);
+    },
     removeEventListener: () => {},
     hidden: false,
+    visibilityState: 'visible',
   };
   (globalThis as Record<string, unknown>).requestAnimationFrame = (cb: FrameRequestCallback) => {
     frames.push(cb);
@@ -1829,6 +1837,32 @@ describe('sailing on the Earth', () => {
     second.dispose();
     expect(kept.stored!.lat).toBeCloseTo(antigua.place.lat, 3);
     expect(kept.stored!.lon).toBeCloseTo(antigua.place.lon, 3);
+  });
+
+  it('writes her position down when the page goes away', () => {
+    // `dispose` is reached from React's unmount and from a hot reload, and
+    // from nothing a player ever does -- so closing the tab or reloading
+    // lost up to half a minute of sailing, which on the Earth is the
+    // difference between resuming where you were and resuming where you
+    // were before the last leg.
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    engine.advance(0.5);
+    carryTo(engine, -20);
+    engine.advance(1);
+    kept.stored = null;
+    kept.writes = 0;
+    // Well inside the throttle: nothing has been written yet.
+    expect(kept.stored).toBeNull();
+    const doc = globalThis.document as unknown as { visibilityState: string };
+    doc.visibilityState = 'hidden';
+    for (const fn of listeners.get('visibilitychange') ?? []) fn({});
+    expect(kept.stored!.lat, 'hiding the tab').toBeCloseTo(-20, 1);
+
+    kept.stored = null;
+    for (const fn of listeners.get('pagehide') ?? []) fn({});
+    expect(kept.stored!.lat, 'leaving the page').toBeCloseTo(-20, 1);
+    doc.visibilityState = 'visible';
+    engine.dispose();
   });
 
   it('does not move her when she chooses where to sail from next', () => {

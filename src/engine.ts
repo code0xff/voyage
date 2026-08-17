@@ -614,6 +614,30 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   window.addEventListener('pointerdown', kickAudio);
   sound.enabled = settings.sound;
 
+  /**
+   * Write her position down when the page is going away.
+   *
+   * `dispose` alone was not enough and the commit that introduced it said
+   * otherwise: it is reached from React's unmount and from a hot reload, and
+   * from nothing a player ever does. Closing the tab and reloading -- the
+   * actual ways of quitting -- ran neither, so up to half a minute of
+   * sailing was lost every time, which on the Earth is the difference
+   * between resuming where you were and resuming where you were before the
+   * last leg.
+   *
+   * `pagehide` rather than `beforeunload`, because `beforeunload` is
+   * unreliable on mobile and disqualifies the page from the back/forward
+   * cache; `visibilitychange` beside it, because a tab that is switched away
+   * from and then killed by the operating system never fires anything else.
+   * Both may fire more than once and the write is idempotent.
+   */
+  const keepOnLeaving = () => keepPlace();
+  const keepOnHiding = () => {
+    if (document.visibilityState === 'hidden') keepPlace();
+  };
+  window.addEventListener('pagehide', keepOnLeaving);
+  document.addEventListener('visibilitychange', keepOnHiding);
+
   // --- Polar ----------------------------------------------------------------
   //
   // Solved on a worker. It takes about 1.2 seconds, measured, and used to take
@@ -2447,6 +2471,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       // be twenty-nine seconds from its next write.
       keepPlace();
       disposed = true;
+      window.removeEventListener('pagehide', keepOnLeaving);
+      document.removeEventListener('visibilitychange', keepOnHiding);
       cancelAnimationFrame(raf);
       input.dispose();
       sound.dispose();
