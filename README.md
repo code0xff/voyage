@@ -935,7 +935,26 @@ meaning anything.
 - **No time compression at sea.** The clock speeds up — day and night, the
   weather, the sea building — but the boat does not. A circumnavigation is
   therefore possible in the world and impossible in practice: 32,000 km at six
-  knots is 120 days of real time, and nothing shortens it.
+  knots is 120 days of real time, and nothing shortens it. The eleven
+  departures are the answer to "let me sail that sea", and they are enough for
+  it; crossing the ocean between two of them is a separate feature that has
+  not been built.
+
+  **Shrinking the planet is not the alternative it looks like.** A 1:20 Earth
+  does not just move the coasts closer, it shrinks *them*: the four-arc-minute
+  grid becomes 350 m a cell, and the Strait of Gibraltar is 700 m wide instead
+  of 14 km. The boat also sails in real m/s from real physics, so a scaled map
+  would leave the logbook's distances, the ETA and the polar describing a world
+  the boat is not in — one of the two would have to be a lie.
+
+  If it is ever wanted, the shape it should take is already here: `solvePolar`
+  gives the steady-state speed at a wind angle, and *that is the same physics'
+  own solution*. Offshore, the boat can be advanced along her polar in
+  minute-long steps with the wind and weather still running, and dropped back
+  into the 120 Hz model when land is near or the helm is taken. Running the
+  existing integrator faster is not an option: 500× is 60,000 steps a second,
+  and enlarging `dt` instead breaks it, because the roll period is about a
+  second.
 - **No ice, and a wall at 89.5°.** The Arctic reads as open water, because the
   grid is surface elevation and sea ice is not in it — so the polar easterlies
   can be sailed in a way they cannot be sailed. The plane's latitude is clamped
