@@ -604,7 +604,7 @@ export class SoundEngine {
    * speed-of-sound honesty as the whale's blow below, and just as free.
    *
    * Deliberately quiet for what it is. A real parachute rocket is an event;
-   * this one happens beside your ear every couple of minutes, and the light
+   * this one happens beside your ear once a minute, and the light
    * is the show.
    */
   flare(popAfter: number): void {

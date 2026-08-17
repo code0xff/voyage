@@ -1486,7 +1486,7 @@ describe('the flare', () => {
     engine.dispose();
   });
 
-  it('is one every couple of minutes, not a pocketful', () => {
+  it('is one a minute, not a pocketful', () => {
     const engine = sailing({});
     engine.advance(0.1);
     press('u');

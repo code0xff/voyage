@@ -203,7 +203,7 @@ function StateKey({
  * The chart's recentre-button bargain: a control that appears when it means
  * something and is simply absent when it does not. A flare at noon is a spark
  * nobody can see, so by day the strip closes over the gap; from dusk the key
- * stands, and dims for the two minutes the locker takes to produce another.
+ * stands, and dims for the minute the locker takes to produce another.
  */
 function FlareKey() {
   const engine = useEngine();

@@ -187,7 +187,7 @@ export interface Snapshot {
    * Seconds until the next flare, published only for a few seconds after a
    * press that the cooldown refused -- the keyboard's answer to the touch
    * row's dimmed key. A silently ignored key reads as a broken one; null
-   * the rest of the time, so the hint bar is not nagged for two minutes.
+   * the rest of the time, so the hint bar is not nagged for the whole wait.
    */
   flareWait: number | null;
   /** Whether the helmsman has the glasses up. */
@@ -379,7 +379,7 @@ const MAX_CATCHUP = 0.25;
  * hardcoded copy would quietly stop covering the burn the day it is retuned
  * -- the shark's dive taught that lesson twice.
  */
-export const FLARE_COOLDOWN = 120;
+export const FLARE_COOLDOWN = 60;
 export const FLARE_RISE = 3;
 export const FLARE_BURN = 32;
 /**
@@ -2353,7 +2353,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (input.wasPressed('h')) cyclePilot(pilot, state.heading, wrapPi(env.twd - state.heading));
     if (input.wasPressed('c')) view.toggleCamera();
     if (input.wasPressed('l')) snapshot.lightsOn = !snapshot.lightsOn;
-    // One flare every couple of minutes. The press during the wait is not
+    // One flare a minute. The press during the wait is not
     // taken -- a flare is not a thing a locker holds hundreds of -- but it
     // is *answered*: three seconds of the hint bar saying how long, because
     // a key that does nothing silently reads as a key that is broken.
