@@ -75,6 +75,79 @@ describe('the wind belts', () => {
     expect(knots(climateAt(15).tws)).toBeGreaterThan(knots(climateAt(31).tws) * 1.5);
   });
 
+  it('has no step in it anywhere, at any latitude', () => {
+    /*
+     * The one below walks the belt edges, which is where a step was expected
+     * -- and a review found one at 3 degrees, where nothing was expected at
+     * all: inside the doldrums every component was zero and the bearing fell
+     * through to due north, then snapped 66 degrees the moment a boat crossed
+     * out of them.
+     *
+     * So this walks the whole globe, and it tests continuity the only way
+     * that cannot be argued with: a continuous function's worst jump halves
+     * when the step halves, and a discontinuity's does not. That also lets
+     * the honest fast rotation at the subtropical ridge through -- the wind
+     * there really does swing round through south as the ridge is crossed,
+     * over 7 knots of breeze -- while still failing a genuine jump.
+     */
+    const worst = (step: number) => {
+      let most = 0;
+      for (let lat = -90; lat + step <= 90; lat += step) {
+        const a = deg(climateAt(lat).twd);
+        const b = deg(climateAt(lat + step).twd);
+        most = Math.max(most, Math.abs(((a - b + 540) % 360) - 180));
+      }
+      return most;
+    };
+    const coarse = worst(0.2);
+    const fine = worst(0.1);
+    expect(fine).toBeLessThan(coarse * 0.65);
+    // And nothing anywhere turns the wind right round in six miles.
+    expect(fine).toBeLessThan(60);
+  });
+
+  it('blows from the east where the two trades meet', () => {
+    // The doldrums are where the north-east and the south-east trades
+    // cancel, so what is left is easterly -- and it must arrive there by
+    // swinging through, not by falling back to a default. It read due north
+    // for the whole belt before a review asked.
+    expect(deg(climateAt(0).twd)).toBeCloseTo(90, 0);
+    expect(deg(climateAt(2).twd)).toBeGreaterThan(70);
+    expect(deg(climateAt(2).twd)).toBeLessThan(90);
+    expect(deg(climateAt(-2).twd)).toBeGreaterThan(90);
+    expect(deg(climateAt(-2).twd)).toBeLessThan(110);
+  });
+
+  it('turns the polar easterlies round with the hemisphere', () => {
+    // North-east in the north and south-east in the south, like the trades
+    // and for the same reason: the surface flow runs away from the pole. The
+    // meridional term was missing outright, so both poles blew due east.
+    const north = deg(climateAt(75).twd);
+    const south = deg(climateAt(-75).twd);
+    expect(north).toBeGreaterThan(30);
+    expect(north).toBeLessThan(85);
+    expect(south).toBeGreaterThan(95);
+    expect(south).toBeLessThan(150);
+    // Mirrored about due east, to within a degree.
+    expect(Math.abs(north + south - 180)).toBeLessThan(1);
+  });
+
+  it('gives the south its extra wind in the westerlies and nowhere else', () => {
+    // The Southern Ocean is the model's single asymmetry. Applied to the
+    // whole blended term it also fell on the horse latitudes underneath,
+    // which made the southern subtropical high blow a quarter harder than
+    // the northern one -- a claim no pilot chart makes, and the opposite of
+    // what this file says about itself.
+    for (const lat of [0, 10, 20, 25, 31]) {
+      expect(knots(climateAt(lat).tws), `${lat} vs ${-lat}`).toBeCloseTo(
+        knots(climateAt(-lat).tws),
+        6,
+      );
+    }
+    // And in the westerlies proper it is there, a quarter of it.
+    expect(knots(climateAt(-50).tws) / knots(climateAt(50).tws)).toBeCloseTo(1.25, 2);
+  });
+
   it('changes belt without a step in the wind', () => {
     // The seams are days of sailing, not lines: crossing one, neither the
     // speed nor the direction may jump. Walked at a tenth of a degree --

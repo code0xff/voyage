@@ -566,13 +566,16 @@ the weather still deciding what today does on top of it.
 | trades | 5-28° | NE (north), SE (south) | 15 kn |
 | horse latitudes | 28-34° | — | 6 kn |
 | westerlies | 34-62° | W, backing NW | 22 kn, ×1.25 in the south |
-| polar easterlies | 62-90° | E | 11 kn |
+| polar easterlies | 62-90° | NE (north), SE (south) | 11 kn |
 
 Blended along the latitude with overlapping smoothsteps rather than branched on,
 so crossing 30° is a day of the wind swinging and easing rather than a line where
 it changes. The direction is built as *how much comes from the east* and *how
 much from the north* and turned into a bearing only at the end, which is what
-keeps it continuous across the equator, where the meridional lean changes sign.
+keeps it continuous across the equator, where the meridional lean changes sign
+— it fades through zero over the ITCZ's own five degrees rather than flipping,
+so the doldrums blow from due east, which is what the two trades leave when they
+cancel.
 The Southern Ocean is the one asymmetry: nothing is in its way, so the same belt
 that gives Biscay a gale gives Cape Horn a bigger one.
 

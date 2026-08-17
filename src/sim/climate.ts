@@ -125,15 +125,33 @@ export function beltAt(lat: number): Belt {
  */
 export function climateAt(lat: number): Climate {
   const a = Math.abs(lat);
-  const hemisphere = lat >= 0 ? 1 : -1;
 
   /*
    * How much of each belt is in force here. Overlapping smoothsteps, so the
    * seams are days of sailing rather than lines.
    */
-  const trade = smoothstep(3, 8, a) * (1 - smoothstep(26, 33, a));
+  const trade = 1 - smoothstep(26, 33, a);
   const westerly = smoothstep(29, 38, a) * (1 - smoothstep(58, 66, a));
   const polar = smoothstep(60, 68, a);
+
+  /*
+   * Which way the meridional lean points, and how much of it there is.
+   *
+   * It was the bare hemisphere, +1 or -1, and that put a step in the middle
+   * of the ocean. The trade term used to fade out below 3 degrees as well, so
+   * inside the doldrums every component was zero and the bearing fell through
+   * to due north -- then snapped to 66 degrees the moment a boat crossed 3N,
+   * and to 114 across 3S. A review found it; the model's own docblock had
+   * promised no steps anywhere.
+   *
+   * Both halves are fixed by the same thing. The easterly influence now runs
+   * all the way to the equator, so the direction is never undefined, and the
+   * lean fades through the convergence instead of flipping: at the equator it
+   * is zero and the wind is due east, which is what the two trades left over
+   * when they cancel. Five degrees is the ITCZ's own half-width, the same
+   * scale the calm belt is drawn on.
+   */
+  const lean = clamp(lat / 5, -1, 1);
 
   /*
    * The wind's direction, built as "how much of it comes from the east" and
@@ -149,23 +167,38 @@ export function climateAt(lat: number): Climate {
    * from the west. The meridional lean is the surface flow of each cell:
    * the trades run *toward* the equator, so they come from the pole side --
    * north in the northern hemisphere -- and the westerlies run poleward, so
-   * they come from the equator side. Both flip with the hemisphere, which
-   * is the whole reason this is built in components and turned into a
-   * bearing only at the end.
+   * they come from the equator side. The polar easterlies lean like the
+   * trades, from the pole side, which is what makes them north-east in the
+   * north and south-east in the south rather than due east everywhere; that
+   * term was missing and a review caught it. All of them flip with the
+   * hemisphere, which is the whole reason this is built in components and
+   * turned into a bearing only at the end.
    */
   const fromEast = trade - westerly + polar * 0.8;
-  const fromNorth = (trade * 0.45 - westerly * 0.25) * hemisphere;
+  const fromNorth = (trade * 0.45 - westerly * 0.25 + polar * 0.35) * lean;
 
   const belt = beltAt(lat);
-  // Speed follows the same blends, so the calms between belts are real
-  // places with a width rather than lines on a chart.
+  /*
+   * Speed follows the same blends, so the calms between belts are real places
+   * with a width rather than lines on a chart.
+   *
+   * `strength` is how far into the westerlies this latitude is, and it is
+   * what the southern boost rides on -- not the whole term. Applied to the
+   * term, as it was, the 1.25 also fell on the horse latitudes underneath it
+   * and made the southern subtropical high blow 7.5 knots against the
+   * northern 6, which contradicts both the pilot chart and this file's own
+   * claim that the westerlies are the single asymmetry. A review caught it by
+   * comparing 31 north against 31 south.
+   */
+  const strength = smoothstep(31, 42, a);
+  const south = lat < 0 ? 1 + (SOUTHERN_WESTERLIES - 1) * strength : 1;
   const knots =
     lerp(SPEED.doldrums, SPEED.trades, smoothstep(2, 10, a)) *
       (1 - smoothstep(24, 31, a)) +
-    lerp(SPEED.horse, SPEED.westerlies, smoothstep(31, 42, a)) *
+    lerp(SPEED.horse, SPEED.westerlies, strength) *
       smoothstep(24, 31, a) *
       (1 - smoothstep(60, 68, a)) *
-      (lat < 0 ? SOUTHERN_WESTERLIES : 1) +
+      south +
     SPEED.polar * smoothstep(60, 68, a);
 
   return {
