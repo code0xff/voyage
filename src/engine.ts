@@ -1273,6 +1273,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (venueChanged) {
       const arriving = regionById(s.region)?.conditions ?? venueById(s.venue);
       if (arriving) wind.baseTwd = arriving.windTwd;
+      // And arriving on the Earth brings the belt's, on exactly the same
+      // argument. Without this, switching to the planet mid-session left her
+      // sailing the last world's breeze while the ease crept toward the belt
+      // over four minutes -- the panel naming the westerlies over a wind
+      // still blowing from the north. Guarded by `venueChanged` like the
+      // line above, so Q/E and a later slider edit are not undone.
+      else if (s.region === COAST_ID) {
+        wind.baseTwd = climateAt(toLatLon(oceanAnchor, state.pos.x, state.pos.y).lat).twd;
+      }
     }
 
     wind.baseTws = windMs(s) * weather.state.windScale;

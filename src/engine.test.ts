@@ -1856,6 +1856,25 @@ describe('the wind belts', () => {
     engine.dispose();
   });
 
+  it('brings the belt with her when she arrives on the Earth', () => {
+    // Puget Sound's own breeze is from 350 -- near north, and nothing like
+    // the westerly the default anchor sits under. Switching worlds is
+    // arriving somewhere, so the wind must be the new place's at once: eased
+    // instead, the first four minutes of the Earth were sailed in Puget
+    // Sound's wind while the panel named the westerlies over it. Seen in the
+    // browser before it was seen in a test.
+    regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
+    const engine = sailing({ region: 'puget-sound', venue: '' });
+    engine.advance(0.5);
+    expect(deg(engine.snapshot.wind.baseTwd)).toBeCloseTo(350, 0);
+    engine.applySettings(settings({ region: 'coast', randomWorld: false, seed: 13 }));
+    engine.advance(0.1);
+    const twd = deg(engine.snapshot.wind.baseTwd);
+    expect(twd).toBeGreaterThan(230);
+    expect(twd).toBeLessThan(290);
+    engine.dispose();
+  });
+
   it('leaves a surveyed region alone', () => {
     // Those places were laid out around a particular breeze; a belt reaching
     // in to turn it would undo the thing that makes them worth sailing. Shown
