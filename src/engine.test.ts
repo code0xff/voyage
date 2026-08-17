@@ -1683,11 +1683,18 @@ describe('sailing on the Earth', () => {
     const newport = regionById('newport')!.centre;
     expect(placeOf(engine).lat).toBeCloseTo(newport.lat, 1);
     expect(placeOf(engine).lon).toBeCloseTo(newport.lon, 1);
-    // And back out to the ocean where she left it, not to where the game
-    // opens: the passage that got her to ten north still happened.
+    // Sail about in the region -- her plane metres there mean something
+    // else entirely -- and then go back out to the ocean.
+    engine.snapshot.state.pos = { x: 6000, y: -4000 };
+    engine.advance(0.1);
     engine.applySettings(settings({ region: 'coast', randomWorld: false, seed: 13 }));
-    expect(placeOf(engine).lat).toBeCloseTo(ocean.lat, 1);
-    expect(placeOf(engine).lon).toBeCloseTo(ocean.lon, 1);
+    engine.advance(0.1);
+    // Where she left off, not where the game opens and not six kilometres
+    // along: the passage that got her to ten north still happened, and the
+    // region's coordinates did not follow her out.
+    const back = placeOf(engine);
+    expect(Math.abs(back.lat - ocean.lat) * METRES_PER_DEG_LAT).toBeLessThan(50);
+    expect(Math.abs(back.lon - ocean.lon) * METRES_PER_DEG_LAT).toBeLessThan(50);
     engine.dispose();
   });
 

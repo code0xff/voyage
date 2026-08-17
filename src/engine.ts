@@ -701,6 +701,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * Francisco.
    */
   let oceanAnchor: LatLon = { ...DEFAULT_ANCHOR };
+  /** Where she was on the ocean when she last left it; see `rebuildWorld`. */
+  let oceanPos: Vec2 = { x: 0, y: 0 };
+  /** Whether the world she is in now is a surveyed one. */
+  let inSurveyed = false;
   /**
    * Where this session began, in plane metres, so the coast generator can
    * keep that one spot clear of its own inventions. Carried across a
@@ -823,6 +827,21 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
      */
     const surveyed =
       current.region && current.region !== COAST_ID ? regionById(current.region) : null;
+    /*
+     * Leaving the ocean, her place in it is put away with the pin; coming
+     * back, both are taken out again.
+     *
+     * Plane metres mean different things in the two worlds -- one is
+     * measured from a pin that follows her round the planet, the other from
+     * a surveyed grid's centre -- so a position carried across unchanged is
+     * a different place on the Earth at each end. Without this, an hour in
+     * the ocean followed by a look at Newport and back put her some
+     * kilometres from where she had left off, silently. The pin alone was
+     * not enough, which is what a review pointed out.
+     */
+    if (surveyed && !inSurveyed) oceanPos = { ...state.pos };
+    if (!surveyed && inSurveyed) state.pos = { ...oceanPos };
+    inSurveyed = !!surveyed;
     anchor = surveyed ? { ...surveyed.centre } : { ...oceanAnchor };
 
     if (current.region === COAST_ID) {
