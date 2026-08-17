@@ -51,6 +51,7 @@ import {
   wrap2Pi,
   wrapPi,
   approachAngle,
+  TAU,
   type Vec2,
 } from './sim/math';
 import { msToKnots } from './sim/units';
@@ -1088,6 +1089,60 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   /**
+   * m offshore the departure looks for land when deciding which way to point
+   * her. Past the coast generator's own invention, inside the window she can
+   * see: what it is looking for is which side the mainland is on, and that
+   * is a question about kilometres.
+   */
+  const LANDFALL_LOOK = 6000;
+
+  /**
+   * Which way she is pointing when the lines are slipped.
+   *
+   * A beam reach either way -- a hundred degrees off the wind, which is what
+   * `departure.ts` trims her for and a good point of sail to be handed. The
+   * only choice here is *which* beam reach, and it used to be the same one
+   * always. On the Earth that turned out to matter: the departures stand
+   * four kilometres off a real coast, and pointing her at random put the
+   * land astern as often as not -- so a session at the Korea Strait opened
+   * looking north at an empty sea with Tsushima a mile behind the transom,
+   * and there was no telling where you were.
+   *
+   * So of the two, take the one with the land nearer the bow. It costs
+   * nothing -- both are the same angle to the same wind -- and it means the
+   * first thing on screen is the thing that says where this is.
+   *
+   * Asked of the Earth's own shoreline rather than of the terrain, because
+   * the terrain for where she is about to be put has not been built yet;
+   * this runs before `streamWorld`. Where there is no planet yet, or no land
+   * within reach of the patch, the old fixed choice stands.
+   */
+  function departureHeading(): number {
+    const port = wrap2Pi(wind.baseTwd - 100 * DEG);
+    const starboard = wrap2Pi(wind.baseTwd + 100 * DEG);
+    const shore = shoreFor({ x: 0, y: 0 });
+    if (!shore) return starboard;
+    // Which way the land lies: the direction the signed distance grows
+    // fastest, sampled round a circle rather than differentiated, because a
+    // chamfer field is flat wherever the patch saturates and a gradient of
+    // nothing has no direction.
+    let best = -Infinity;
+    let bearing = 0;
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * TAU;
+      const at = shore.at(Math.sin(a) * LANDFALL_LOOK, Math.cos(a) * LANDFALL_LOOK);
+      if (at > best) {
+        best = at;
+        bearing = a;
+      }
+    }
+    // Still all sea out to the horizon: nothing to point at.
+    if (best <= -LANDFALL_LOOK) return starboard;
+    const off = (h: number) => Math.abs(wrapPi(bearing - h));
+    return off(port) < off(starboard) ? port : starboard;
+  }
+
+  /**
    * Where she is on the Earth, or null in a world that is not on it.
    *
    * The island field is an invented ocean and a venue is an invented place:
@@ -1557,7 +1612,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     snapshot.flareWait = null;
 
     const up = compassVec(wind.baseTwd);
-    const heading = wrap2Pi(wind.baseTwd + 100 * DEG);
+    const heading = departureHeading();
     // Re-derived here because the physics loop's own refresh has not run yet:
     // `newSession` reseeds the weather, and a departure prepared for the old
     // session's wind scale would be trimmed for weather she is not in.

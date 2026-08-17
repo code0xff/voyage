@@ -180,7 +180,7 @@ import { coastHeightField } from './sim/coast';
 import { DEFAULT_SETTINGS, type Settings } from './settings';
 import { WhaleField } from './sim/whales';
 import { SharkField } from './sim/sharks';
-import { DEG, wrapPi } from './sim/math';
+import { DEG, RAD, wrapPi } from './sim/math';
 import { TIDE_PERIOD } from './sim/current';
 import { LogStoreUnavailable } from './logbook';
 import type { EngineEvent } from './engine';
@@ -1837,6 +1837,34 @@ describe('sailing on the Earth', () => {
     second.dispose();
     expect(kept.stored!.lat).toBeCloseTo(antigua.place.lat, 3);
     expect(kept.stored!.lon).toBeCloseTo(antigua.place.lon, 3);
+  });
+
+  it('points her at the land she has come to see', async () => {
+    // Both beam reaches are the same angle to the same wind, so which one
+    // she takes is free -- and it decides whether the first thing on screen
+    // is the coast or an empty horizon. Pointed at random, a session opened
+    // with the land astern as often as not, which is the whole of what a
+    // departure is for.
+    //
+    // The stub planet is land north of 30N, so a boat put just south of
+    // that shoreline must leave with the land forward of the beam.
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    await Promise.resolve();
+    await Promise.resolve();
+    engine.advance(0.5);
+    // Ask the stub where its own waterline is, then stand four kilometres
+    // south of it -- the departures' own distance.
+    const planet = stubEarth();
+    let shoreLat = 29;
+    while (!planet.isLand({ lat: shoreLat, lon: -122.65 }) && shoreLat < 33) shoreLat += 0.005;
+    carryTo(engine, shoreLat - 4_000 / METRES_PER_DEG_LAT);
+    engine.putToSea();
+    engine.advance(0.5);
+    // The land is north of her. Forward of the beam means within ninety
+    // degrees of the bow.
+    const off = Math.abs(wrapPi(0 - engine.snapshot.state.heading)) * RAD;
+    expect(off, `heading ${(engine.snapshot.state.heading * RAD).toFixed(0)}°`).toBeLessThan(90);
+    engine.dispose();
   });
 
   it('will not write down a position she is aground at', async () => {
