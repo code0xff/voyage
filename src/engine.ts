@@ -1059,6 +1059,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    */
   function keepPlace(): void {
     if (!keeping || current.region !== COAST_ID || !snapshot.place) return;
+    // Not while she is on the bottom. A position with no water under it is
+    // one she cannot be put back into: the next session would open aground,
+    // or -- worse, because it hides it -- afloat in the pond the spawn
+    // clearing digs out of whatever it lands on. Nothing is written until
+    // she is off it again, so the last good position stands.
+    if (snapshot.clearance <= 0) return;
     saveReckoning(snapshot.place);
     sinceSaved = 0;
   }
@@ -1117,6 +1123,31 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
         fetchingEarth = false;
         if (disposed) return;
         earth = loaded;
+        /*
+         * The one thing the stored row cannot check for itself: whether the
+         * position it names is at sea.
+         *
+         * `reckoning.ts` can hold a row inside the world and reject one that
+         * is not a pair of numbers, but only the planet knows that 40N 100W
+         * is Nebraska -- and it arrives a second after the engine does. A
+         * row the game wrote is always afloat; a hand-edited one need not
+         * be, and the coast generator would dutifully dig it a pond and
+         * float her in it, which is worse than failing because it looks
+         * like it worked.
+         *
+         * Checked once, on arrival, and only against the row that was read
+         * at startup: by any later point she has sailed, and moving her then
+         * would be a teleport rather than a guard.
+         */
+        if (remembered && loaded.isLand(oceanAnchor)) {
+          console.warn('the remembered position is on land; starting over', oceanAnchor);
+          clearReckoning();
+          oceanAnchor = { ...DEFAULT_ANCHOR };
+          pinForWorld();
+          state.pos = { x: 0, y: 0 };
+          spawn = { x: 0, y: 0 };
+          snapshot.place = placeOf(0, 0);
+        }
         rebuildCoastWindow();
       },
       (err) => {

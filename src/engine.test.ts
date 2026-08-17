@@ -1839,6 +1839,47 @@ describe('sailing on the Earth', () => {
     expect(kept.stored!.lon).toBeCloseTo(antigua.place.lon, 3);
   });
 
+  it('will not write down a position she is aground at', async () => {
+    // A position with no water under it is one she cannot be put back into.
+    // The next session would open aground -- or, worse because it hides it,
+    // afloat in the pond the spawn clearing digs out of whatever it lands
+    // on. The last good position has to stand instead.
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    await Promise.resolve();
+    await Promise.resolve();
+    engine.advance(0.5);
+    // Carried into the middle of the stub planet's continent, which is all
+    // land north of 30N -- so this is her genuinely on the bottom rather
+    // than a number poked into the snapshot, which the next physics step
+    // would have written back over anyway.
+    carryTo(engine, 45);
+    kept.stored = null;
+    engine.advance(31);
+    expect(engine.snapshot.clearance).toBeLessThanOrEqual(0);
+    expect(kept.stored, 'wrote a position with no water under it').toBeNull();
+    engine.dispose();
+  });
+
+  it('starts over rather than opening from a position on land', async () => {
+    // Only the planet knows that 40N 100W is Nebraska, and it arrives a
+    // second after the engine does. A row the game wrote is always afloat; a
+    // hand-edited one need not be, and the coast generator would dig it a
+    // pond and float her in it, which is worse than failing because it looks
+    // like it worked. The stub planet is land north of 30N.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    kept.stored = { lat: 45, lon: -100, at: 1 };
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    await Promise.resolve();
+    await Promise.resolve();
+    engine.advance(0.5);
+    expect(kept.stored, 'the bad row is forgotten').toBeNull();
+    // And she is where the game opens, not in the middle of a continent.
+    expect(placeOf(engine).lat).toBeCloseTo(37.78, 1);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+    engine.dispose();
+  });
+
   it('writes her position down when the page goes away', () => {
     // `dispose` is reached from React's unmount and from a hot reload, and
     // from nothing a player ever does -- so closing the tab or reloading
