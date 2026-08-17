@@ -710,6 +710,13 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * re-pin.
    */
   let spawn: Vec2 = { x: 0, y: 0 };
+  /**
+   * rad the player has turned the wind with Q/E, held apart from the wind
+   * itself so the belt's ease cannot undo it. Cleared with the world: a new
+   * sea is a new wind, and a shift asked for in the last one is not an
+   * opinion about this one.
+   */
+  let windShift = 0;
   let earth: Earth | null = null;
   /** True while the planet is on the wire, so a retry cannot start a second one. */
   let fetchingEarth = false;
@@ -1294,6 +1301,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // arranged for one wind and sailed in another. Only on arrival, so that
     // Q/E still work afterwards and a later edit does not undo them.
     if (venueChanged) {
+      windShift = 0;
       const arriving = regionById(s.region)?.conditions ?? venueById(s.venue);
       if (arriving) wind.baseTwd = arriving.windTwd;
       // And arriving on the Earth brings the belt's, on exactly the same
@@ -1461,6 +1469,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // gradually, but a session opening in the trades must open with the
     // trades blowing -- otherwise she is trimmed and reefed at the dock for
     // a wind that spends the next four minutes swinging out from under her.
+    windShift = 0;
     // The plane's origin, not where she is: `placeAtStart` is about to put
     // her within ninety metres of it.
     const opening = beltFor(0, 0);
@@ -1692,7 +1701,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       wind.baseTws = meanTws(state.pos.x, state.pos.y);
       // Eased rather than set: the wind must swing as she sails into the
       // next belt, not snap when a smoothstep crosses a half.
-      wind.baseTwd = approachAngle(wind.baseTwd, climate.twd, CLIMATE_TAU, PHYS_DT);
+      wind.baseTwd = approachAngle(
+        wind.baseTwd,
+        wrap2Pi(climate.twd + windShift),
+        CLIMATE_TAU,
+        PHYS_DT,
+      );
       wind.gustiness = climate.gustiness * weather.state.gustScale;
       snapshot.belt = climate.belt;
     } else {
@@ -2168,7 +2182,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     }
 
     if (input.windShift !== 0) {
-      wind.baseTwd = wrap2Pi(wind.baseTwd + input.windShift * 25 * DEG * wall);
+      const turn = input.windShift * 25 * DEG * wall;
+      wind.baseTwd = wrap2Pi(wind.baseTwd + turn);
+      // Remembered, not just applied. On the Earth the mean wind is eased
+      // toward the belt's every step, so a shift written straight into
+      // `baseTwd` was quietly wound back out again -- four time constants
+      // after the key came up, 98% of it was gone. Q/E now moves the boat's
+      // wind *relative to* the belt, which is what a player asking for a
+      // different beat means by it, and the belt still decides the rest.
+      windShift = wrapPi(windShift + turn);
       waves.setFromWind(wind.baseTws * current.seaScale, wind.baseTwd);
     }
   }

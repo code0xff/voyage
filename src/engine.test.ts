@@ -1896,6 +1896,33 @@ describe('the wind belts', () => {
     engine.dispose();
   });
 
+  it('keeps a wind shift the player asked for', () => {
+    // Q/E turns the mean wind, and on the Earth the mean wind is eased
+    // toward the belt's every step -- so a shift written straight into it
+    // was quietly wound back out: four time constants after the key came up,
+    // 98% of it was gone, and the documented control did nothing lasting.
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    engine.advance(0.1);
+    const before = deg(engine.snapshot.wind.baseTwd);
+    // Held, not tapped: it is an axis, and one frame of it is one frame's
+    // worth of turn.
+    for (const fn of listeners.get('keydown') ?? []) {
+      fn({ key: 'q', repeat: false, preventDefault: () => {} });
+    }
+    frame(2);
+    for (const fn of listeners.get('keyup') ?? []) fn({ key: 'q', preventDefault: () => {} });
+    engine.advance(0.1);
+    const shifted = deg(engine.snapshot.wind.baseTwd);
+    const asked = Math.abs(((shifted - before + 540) % 360) - 180);
+    expect(asked).toBeGreaterThan(10);
+    // Twenty minutes later -- five of the ease's time constants -- it is
+    // still there. The belt has not taken it back.
+    engine.advance(1200);
+    const later = deg(engine.snapshot.wind.baseTwd);
+    expect(Math.abs(((later - shifted + 540) % 360) - 180)).toBeLessThan(3);
+    engine.dispose();
+  });
+
   it('leaves a surveyed region alone', () => {
     // Those places were laid out around a particular breeze; a belt reaching
     // in to turn it would undo the thing that makes them worth sailing. Shown
