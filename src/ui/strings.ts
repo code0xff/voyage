@@ -197,6 +197,7 @@ export const MENU: Record<string, Phrase> = {
 export const TABS: Record<string, Phrase> = {
   world: { en: 'World', ko: '월드' },
   conditions: { en: 'Conditions', ko: '조건' },
+  quests: { en: 'Quests', ko: '퀘스트' },
   log: { en: 'Log', ko: '항해일지' },
   sailing: { en: 'Sailing', ko: '항해' },
   controls: { en: 'Controls', ko: '조작' },
@@ -524,6 +525,58 @@ export const TOUCH: Record<string, Phrase> = {
   lights: { en: 'Navigation lights', ko: '항해등' },
   sails: { en: 'Hand or set sail', ko: '돛 걷기/펴기' },
   menu: { en: 'Menu', ko: '메뉴' },
+};
+
+/**
+ * The quest screens. Two of them, and the split is deliberate: a pack is
+ * somebody else's file that changes what the game notices, which is a
+ * setting; what you have done with it is a record, and records have their
+ * own screen here.
+ */
+export const QUEST: Record<string, Phrase> = {
+  title: { en: 'Quests', ko: '퀘스트' },
+  see: { en: 'See the quests', ko: '퀘스트 보기' },
+  /** The read-only screen with nothing to read. */
+  noPacks: {
+    en: 'No quest packs installed. Settings → Quests will take one.',
+    ko: '설치된 퀘스트 팩이 없습니다. 설정 → 퀘스트에서 추가할 수 있습니다.',
+  },
+  /** The settings tab. */
+  install: { en: 'Install a pack', ko: '팩 설치' },
+  installed: { en: 'Installed', ko: '설치됨' },
+  remove: { en: 'Remove', ko: '삭제' },
+  packNote: {
+    en: 'A pack is a JSON file of things worth doing. It can only ever notice what you have already sailed — nothing in one is run, and installing one cannot change how the boat behaves.',
+    ko: '퀘스트 팩은 해볼 만한 일들을 적어둔 JSON 파일입니다. 이미 항해한 것을 알아챌 뿐이며, 팩 안의 무엇도 실행되지 않고 배의 거동을 바꾸지 못합니다.',
+  },
+  /** Completions. */
+  done: { en: 'Completed', ko: '완료' },
+  forget: { en: 'Forget what was noticed', ko: '달성 기록 지우기' },
+  atSea: { en: 'at sea', ko: '바다 위' },
+  thisPassage: { en: 'this passage', ko: '이 항해' },
+  allTold: { en: 'all told', ko: '누계' },
+  /** Where she was when it completed was not water. */
+  aground: { en: 'aground', ko: '좌초' },
+  /** Why a pack was refused, by `PackProblem.kind`. */
+  notAPack: { en: 'That is not a quest pack.', ko: '퀘스트 팩 파일이 아닙니다.' },
+  formatTooNew: {
+    en: 'That pack was written for a later version of the game.',
+    ko: '이 팩은 더 나중 버전용으로 작성되었습니다.',
+  },
+  noQuests: { en: 'That pack has no quests in it.', ko: '퀘스트가 하나도 없습니다.' },
+  duplicateId: { en: 'Two quests in that pack share an id.', ko: '같은 id를 쓰는 퀘스트가 있습니다.' },
+  unknownFact: {
+    en: 'That pack asks about something this version does not measure:',
+    ko: '이 버전이 측정하지 않는 값을 묻고 있습니다:',
+  },
+  unknownField: {
+    en: 'That pack uses something this version does not know:',
+    ko: '이 버전이 모르는 항목이 있습니다:',
+  },
+  emptyBound: { en: 'A condition in that pack has no limit in it:', ko: '범위가 비어 있는 조건이 있습니다:' },
+  emptyAsk: { en: 'A quest in that pack asks for nothing.', ko: '아무 조건도 없는 퀘스트가 있습니다.' },
+  noName: { en: 'A quest in that pack has no English name.', ko: '영문 이름이 없는 퀘스트가 있습니다.' },
+  badNear: { en: 'A place in that pack is not a place.', ko: '좌표가 올바르지 않습니다.' },
 };
 
 export const LOG: Record<string, Phrase> = {

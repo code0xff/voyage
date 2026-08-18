@@ -171,6 +171,15 @@ export interface Snapshot {
    * there would be a claim about a wind nobody is feeling.
    */
   belt: Belt | null;
+  /**
+   * What the quests have noticed, live.
+   *
+   * Published rather than left in the store, because the store is written on
+   * a thirty-second throttle: a screen reading it would show a quest as
+   * outstanding for half a minute after it completed, which is exactly the
+   * half minute the player is most likely to go and look.
+   */
+  quests: QuestState;
   /** Whether the boat is showing her lights. */
   lightsOn: boolean;
   /**
@@ -623,6 +632,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // is not on the Earth must never carry a position at all.
     place: null,
     belt: null,
+    quests: emptyQuestState(),
     lightsOn: true,
     flare: null,
     flareReady: true,
@@ -1216,8 +1226,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
     const step = watch(questPacks, sample, questState, Date.now());
     questState = step.state;
+    snapshot.quests = questState;
     questsDirty = true;
     for (const done of step.completed) emit({ type: 'quest', id: done.id, completion: done.completion });
+    // A completion is written down at once rather than left to the throttle.
+    // The throttle is there for the tallies, which move every few seconds and
+    // are worth nothing to anyone half a minute later; a completion is rare,
+    // and the half minute after one is exactly when a player goes to look at
+    // it. Left to the throttle, the screen showed it as still outstanding.
+    if (step.completed.length > 0) keepQuests();
   }
 
   /** Write the watcher's state down, if it has anything new to say. */
@@ -2666,7 +2683,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     ([packs, saved]) => {
       if (disposed) return;
       questPacks = packs;
-      if (saved) questState = saved;
+      if (saved) {
+        questState = saved;
+        snapshot.quests = saved;
+      }
     },
     (err) => console.error('could not load the quests', err),
   );

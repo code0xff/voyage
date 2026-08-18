@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   BookOpen,
   Compass,
+  Flag,
   LifeBuoy,
   SlidersHorizontal,
   Waves,
@@ -35,6 +36,7 @@ import {
   MENU,
   islandCount,
   PANEL,
+  QUEST,
   REGION_BRIEF,
   SETTINGS_UI,
   TABS,
@@ -59,6 +61,7 @@ import { loadUnderway } from "@/underway";
 import { AT_WATER, NEAR_WATER, WATERS, waterAt, waterById } from "@/sim/waters";
 import { beltAt } from "@/sim/climate";
 import { Logbook } from "./Logbook";
+import { QuestPacks, Quests } from "./Quests";
 import { SailingGuide } from "./SailingGuide";
 import { Credits } from "./Credits";
 import type { LogStore } from "@/logbook";
@@ -120,7 +123,7 @@ function Slider({
 const TAB_TRIGGER = "flex-1 gap-1.5 [&_svg]:size-3.5 [&_svg]:shrink-0";
 
 /** Where the dialog is: the front page, or one of the three places it leads to. */
-type View = "play" | "settings" | "help" | "log";
+type View = "play" | "settings" | "help" | "log" | "quests";
 
 /**
  * What each screen is called.
@@ -146,6 +149,7 @@ const SCREEN_TITLE: Record<Exclude<View, "play">, Phrase> = {
   settings: MENU.settings,
   help: MENU.help,
   log: TABS.log,
+  quests: QUEST.title,
 };
 
 /**
@@ -337,6 +341,8 @@ export function MenuDialog({
   onSailOn: () => void;
 }) {
   const [tab, setTab] = useState("world");
+  /** Bumped when a pack is installed or removed, so the screen reloads. */
+  const [questVersion, setQuestVersion] = useState(0);
   const [helpTab, setHelpTab] = useState("sailing");
   /**
    * The dialog is a menu and the places it leads to.
@@ -701,6 +707,17 @@ export function MenuDialog({
               </button>
             )}
 
+            {/* Beside the logbook, because it answers the same kind of
+                question -- what have I done -- and belongs nowhere near the
+                buttons that put her to sea. */}
+            <button
+              type="button"
+              onClick={() => setView("quests")}
+              className="block w-full rounded-md px-1 py-1 text-left text-[10px] leading-relaxed text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <span className="text-foreground">{t(QUEST.see)} →</span>
+            </button>
+
             {/* Here rather than at the top of the dialog, where it started.
                 Up there it sat above "Put to sea" -- the most prominent slot in
                 the menu given to the quietest message in it, and a message
@@ -756,6 +773,12 @@ export function MenuDialog({
             </TabsTrigger>
             <TabsTrigger value="conditions" className={TAB_TRIGGER}>
               <Wind /> {t(TABS.conditions)}
+            </TabsTrigger>
+            {/* A pack is somebody else's file that changes what the game
+                notices, which makes it a setting and not a record. What you
+                have *done* with one is the screen behind "See the quests". */}
+            <TabsTrigger value="quests" className={TAB_TRIGGER}>
+              <Flag /> {t(TABS.quests)}
             </TabsTrigger>
           </TabsList>
 
@@ -1121,7 +1144,11 @@ export function MenuDialog({
             </p>
           </TabsContent>
 
-          {/* Under the settings tabs and not inside either of them:
+          <TabsContent value="quests" className="mt-4">
+            <QuestPacks onChanged={() => setQuestVersion((v) => v + 1)} />
+          </TabsContent>
+
+          {/* Under the settings tabs and not inside any of them:
               attribution is not a setting, but this is the screen someone
               opens looking for what a game is made of. */}
           <Credits />
@@ -1178,6 +1205,12 @@ export function MenuDialog({
               onChanged={onLogChanged}
             />
         </div>
+
+        {/* Read-only, and the same shape as the logbook for the same reason:
+            one thing, no strip. Mounted only while it is open, so it reads
+            the store when it is looked at rather than holding a copy that
+            goes stale while she sails. */}
+        {view === "quests" && <Quests version={questVersion} />}
       </div>
     </Dialog>
   );
