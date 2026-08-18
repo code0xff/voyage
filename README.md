@@ -5,7 +5,7 @@ apparent wind, sail lift and induced drag, keel side force, wave-making
 resistance, added resistance in waves, and a six-degree-of-freedom hull response.
 
 The wind varies from place to place and drifts downwind, the weather turns on
-its own, the sun rises and sets, and islands steal your breeze and ground you if
+its own, the sun rises and sets, and the land steals your breeze and grounds you if
 you cut the corner. The ocean has no edge: keep sailing and new land keeps
 coming over the horizon.
 
@@ -79,7 +79,7 @@ src/view/    3D rendering
   water      wave surface (GPU vertex shader, land shelter included), and the
              flat sea that carries it on to the horizon
   skydome    sky gradient and sun glow
-  islands    land meshes, sampled from the same elevation field
+  region-mesh land tiles, sampled from the same elevation field the boat grounds on
   eye        where the camera is and which way it faces, for both views
   creature   what the animal views share: scale, waterline, wave slope, disposal
   whale      humpback: dive cycle, blow and the footprint it leaves
@@ -611,7 +611,7 @@ the wave model is restricted to a sum of sines whose parameters fit in uniforms.
 Anything else drawn on the water reads it through `Water.surfaceHeight`, which
 is that same formula plus the two things the shader does to it and the boat
 never sees: the fade that flattens the grid towards its edge, and the land
-shelter. A whale lying on the swell in an island's lee would otherwise be
+shelter. A whale lying on the swell in the lee of a headland would otherwise be
 riding a sea nobody is drawing.
 
 ### 11. Integration
@@ -837,7 +837,7 @@ meaning anything.
   re-aiming at something slower than itself always closes. Preventing that would
   need the animal able to outrun you, or a collision model, and neither is worth
   it for a thing you have to go out of your way to see.
-- The sun is not astronomical, and islands shadow the wind without bending it
+- The sun is not astronomical, and land shadows the wind without bending it
   around headlands. Both are deliberate: see AGENTS.md.
 - **The planet is a coastline and a climate, not a world.** The Earth decides
   where the land is and the latitude decides what the wind does; nothing else
