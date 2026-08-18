@@ -169,6 +169,22 @@ Everything inside one scope is **and**. To say **or**, use `any`:
 
 `name` needs an `en`; every other language is optional and falls back to it.
 
+## The pack that ships, and the guide in the game
+
+One pack comes with the game -- `src/sim/starter.ts`, six things a beginner
+does anyway -- and it is installed into the store on the first run like any
+other pack, so it can be removed and stays removed. It is a TypeScript
+constant rather than a file under `public/` for three reasons: it needs no
+network, it is typechecked against `QuestPack`, and the example file the game
+hands out is that object serialised, so the example and the pack the game runs
+cannot drift apart.
+
+The same reasoning covers the in-game guide, under **Help → Packs**: its two
+code blocks are generated from that pack, and `pack-guide-strings.test.ts`
+compares its lists of belts, weathers, worlds and facts against the ones
+`readPack` accepts. This document is the design and the *why*; that guide is
+the reference a player can read without leaving the game.
+
 ## What is deliberately not in it
 
 - **No rewards.** Completing a quest gives nothing but the fact of it. A game
