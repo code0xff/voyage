@@ -34,9 +34,13 @@ export const STARTER_PACK: QuestPack = {
     {
       id: 'first',
       name: { en: 'Her first passage', ko: '첫 항해' },
+      // A passage is not "she moved": it begins when she is pointed at
+      // somewhere and completes when the anchor goes down there. The note
+      // said weigh, sail, anchor -- which is a thing you can do all evening
+      // without ever completing this.
       note: {
-        en: 'Weigh anchor, sail somewhere, and anchor again. That is a passage.',
-        ko: '닻을 올리고, 어딘가로 항해하고, 다시 닻을 내리면 한 항해입니다.',
+        en: 'Point her at somewhere on the chart, sail there, and let go the anchor.',
+        ko: '해도에서 목적지를 정하고, 거기까지 항해해서, 그곳에 닻을 내리면 한 항해입니다.',
       },
       ask: { total: { facts: { passages: { atLeast: 1 } } } },
     },
@@ -87,9 +91,11 @@ export const STARTER_PACK: QuestPack = {
     {
       id: 'close',
       name: { en: 'Close inshore', ko: '해안 가까이' },
+      // `atMost` includes its end, so fifteen metres exactly completes this.
+      // Saying "less than" was a note that disagreed with its own quest.
       note: {
-        en: 'Under way in less than fifteen metres of water. Watch the depth.',
-        ko: '수심 15 m 미만에서 항해 중. 수심계를 보세요.',
+        en: 'Under way in fifteen metres of water or less. Watch the depth.',
+        ko: '수심 15 m 이하에서 항해 중. 수심계를 보세요.',
       },
       ask: { now: { facts: { depth: { atMost: 15 }, speed: { atLeast: 2 } } } },
     },
