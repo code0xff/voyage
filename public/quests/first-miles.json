@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "id": "first-miles",
   "name": "First miles",
   "author": "voyage",
@@ -10,10 +10,14 @@
         "en": "Her first passage",
         "ko": "첫 항해"
       },
-      "ask": {},
-      "counting": {
-        "kind": "passages",
-        "needs": 1
+      "ask": {
+        "total": {
+          "facts": {
+            "passages": {
+              "atLeast": 1
+            }
+          }
+        }
       }
     },
     {
@@ -23,9 +27,11 @@
         "ko": "한 항해에 50해리"
       },
       "ask": {
-        "facts": {
-          "miles": {
-            "atLeast": 50
+        "passage": {
+          "facts": {
+            "miles": {
+              "atLeast": 50
+            }
           }
         }
       }
@@ -36,31 +42,94 @@
         "en": "A thousand miles in the book",
         "ko": "누적 1,000해리"
       },
-      "ask": {},
-      "counting": {
-        "kind": "total",
-        "fact": "miles",
-        "needs": 1000
+      "ask": {
+        "total": {
+          "facts": {
+            "miles": {
+              "atLeast": 1000
+            }
+          }
+        }
       }
     },
     {
       "id": "night",
       "name": {
-        "en": "Sailed through the night",
-        "ko": "밤을 지나 항해"
+        "en": "Sailing after dark",
+        "ko": "해가 진 뒤의 항해"
+      },
+      "note": {
+        "en": "Under way between ten at night and three in the morning.",
+        "ko": "밤 10시에서 새벽 3시 사이에 항해 중."
       },
       "ask": {
-        "throughTheNight": true
+        "any": [
+          {
+            "now": {
+              "facts": {
+                "hour": {
+                  "atLeast": 22
+                }
+              }
+            }
+          },
+          {
+            "now": {
+              "facts": {
+                "hour": {
+                  "atMost": 3
+                }
+              }
+            }
+          }
+        ],
+        "now": {
+          "facts": {
+            "speed": {
+              "atLeast": 2
+            }
+          }
+        }
       }
     },
     {
       "id": "fog",
       "name": {
-        "en": "A passage made in fog",
+        "en": "Sailing in fog",
         "ko": "안개 속 항해"
       },
       "ask": {
-        "weather": "fog"
+        "now": {
+          "weather": "fog",
+          "facts": {
+            "speed": {
+              "atLeast": 2
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "close",
+      "name": {
+        "en": "Close inshore",
+        "ko": "해안 가까이"
+      },
+      "note": {
+        "en": "Under way in less than fifteen metres of water. Watch the depth.",
+        "ko": "수심 15 m 미만에서 항해 중. 수심계를 보세요."
+      },
+      "ask": {
+        "now": {
+          "facts": {
+            "depth": {
+              "atMost": 15
+            },
+            "speed": {
+              "atLeast": 2
+            }
+          }
+        }
       }
     }
   ]

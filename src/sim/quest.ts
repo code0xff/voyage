@@ -1,131 +1,132 @@
-import { beltAt } from './climate';
-import { msToKnots } from './units';
-import type { PassageRecord } from './passage';
+import type { LatLon } from './globe';
 
 /**
- * Quests, as data anyone can write.
+ * Quests: things worth doing, written as data by anyone.
  *
- * The physics is the platform and this is the content layer: a pack is a
- * JSON file of things worth doing, and a player installs one the way they
- * would install a map. That is the part of this project a community can
- * actually make -- nobody is going to contribute a hull model, and everybody
- * has an opinion about what is worth sailing to.
+ * The design and the format are set out in `docs/quests.md`. The two
+ * decisions that shape this file:
  *
- * **Not missions.** There is no accepting one, no failing one and no clock.
- * A quest is a description of something that would have been worth doing,
- * and it completes when the logbook shows it was done -- so playing is the
- * only way to make progress and there is never a wrong thing to be carrying.
- * That is also what makes a pack safe to install from a stranger: it can
- * only ever *notice*.
+ * **Data, never code.** A quest carrying an expression would mean that
+ * installing someone's file runs their program in your browser. The
+ * vocabulary is closed -- named facts, two bounds, one combinator -- and a
+ * pack naming anything this build does not know is refused when it is
+ * installed rather than sitting in the list quietly never completing.
  *
- * **Data, never code.** This is the security decision the format is built
- * around. A quest that carried an expression -- a formula, a predicate, a
- * script -- would mean that installing someone's file runs their program in
- * your browser. So the vocabulary is closed: a fixed set of facts about a
- * passage, a fixed set of comparisons, and nothing else. A pack naming a
- * fact this build does not know is *rejected when it is installed*, with the
- * name of the thing it wanted, rather than quietly never completing.
+ * **Watched while sailing, not read out of the logbook.** A logbook entry is
+ * a summary: it knows where a passage began and ended, and cannot know that
+ * she passed within twenty miles of the Horn on the way. Every interesting
+ * quest is about something that happened *during* a passage, so the engine
+ * samples the world every few seconds and hands it here.
  *
- * **What can be asked about is what was measured.** Every fact below is a
- * field the passage log already wrote down while the physics was running --
- * distance, the wind she was out in, how far she was laid over, what she
- * saw, where she was. Nothing here measures anything; it reads. That is why
- * a quest cannot be gamed by a pack author: they are choosing which true
- * things to point at, not defining truth.
- *
- * Pure and headless like the rest of `src/sim`: packs in, progress out.
+ * Pure and headless like the rest of `src/sim`: samples and tallies in,
+ * tallies and completions out. It keeps no state of its own and reads no
+ * clock -- the caller stamps completions with the time.
  */
 
 /** The format this build writes and understands. */
-export const QUEST_FORMAT = 1;
+export const QUEST_FORMAT = 2;
 
-/** A number a fact is held against. At least one bound must be given. */
+/** A number held between bounds. At least one end must be given. */
 export interface Bound {
   atLeast?: number;
   atMost?: number;
 }
 
-/**
- * The facts a quest may ask about, and the shape of the answer.
- *
- * Deliberately a list rather than a path into the record: a quest asking for
- * `sightings.whales` would be reaching into a data structure it does not own,
- * and the day that structure changes every pack in the world breaks. These
- * names are a contract.
- */
-export type FactName =
-  /** Sailed on the passage, nautical miles. */
-  | 'miles'
-  /** How long it took, hours. */
-  | 'hours'
-  /** Average speed over the ground, knots. */
-  | 'avgSpeed'
-  /** The best she made, knots. */
-  | 'topSpeed'
-  /** Mean true wind she was out in, knots. */
+/** What is true at this instant. */
+export type NowFact =
+  /** True wind she is in, knots. */
   | 'wind'
-  /** The steepest she was laid over, degrees. */
+  /** How far she is laid over, degrees, unsigned. */
   | 'heel'
-  /** The biggest significant wave height she was in, metres. */
+  /** Significant wave height, metres. */
   | 'sea'
-  /** How far south she got, degrees. Negative north of the equator. */
+  /** Over the ground, knots. */
+  | 'speed'
+  /** Under the keel, metres. */
+  | 'depth'
+  /** The world clock, 0 to 24. */
+  | 'hour'
+  | 'latitude'
+  | 'longitude'
+  /** How far south or north she is, degrees. Negative the other way. */
   | 'south'
-  /** And north, likewise. */
-  | 'north'
-  /** Whales and sharks seen, counted as encounters rather than as steps. */
+  | 'north';
+
+/** What has piled up, over a passage or over all of them. */
+export type TallyFact =
+  | 'miles'
+  | 'hours'
   | 'whales'
   | 'sharks'
-  /** Photographs taken on the passage. */
   | 'photographs'
-  /** Track over straight line: 1.0 is a ruled line, 1.4 is a beat. */
-  | 'wandering';
+  /** Distinct wind belts sailed through -- the one a summary could not give. */
+  | 'belts'
+  /** Completed passages. Only ever counted over `total`. */
+  | 'passages';
 
-/**
- * What a quest asks of one passage.
- *
- * `all` of these must hold on the *same* passage -- which is the only way to
- * ask for something interesting ("thirty knots and still on her feet") and
- * the reason a quest is not simply a list of separate conditions.
- */
-export interface Ask {
-  /** A measured number, held between bounds. */
-  facts?: Partial<Record<FactName, Bound>>;
-  /** The weather it was mostly made in. */
-  weather?: string;
-  /** The wind belt either end of it was in. */
+export const NOW_FACTS: NowFact[] = [
+  'wind',
+  'heel',
+  'sea',
+  'speed',
+  'depth',
+  'hour',
+  'latitude',
+  'longitude',
+  'south',
+  'north',
+];
+
+export const TALLY_FACTS: TallyFact[] = [
+  'miles',
+  'hours',
+  'whales',
+  'sharks',
+  'photographs',
+  'belts',
+  'passages',
+];
+
+/** Somewhere on the Earth, and how near counts as being there. */
+export interface Near {
+  lat: number;
+  lon: number;
+  /** Nautical miles. */
+  within: number;
+}
+
+export interface NowAsk {
+  facts?: Partial<Record<NowFact, Bound>>;
+  near?: Near;
   belt?: string;
-  /** True if the two ends are on opposite sides of the equator. */
-  crossedTheLine?: boolean;
-  /** True if it began before dark and ended after it. */
-  throughTheNight?: boolean;
-  /** The world it was sailed in: a region id, or '' for the island field. */
+  weather?: string;
   region?: string;
 }
 
-/** How the asks add up across a logbook. */
-export type Counting =
-  /** One passage answers the whole ask. The usual kind. */
-  | { kind: 'once' }
-  /** A number totalled over every passage that answers the ask. */
-  | { kind: 'total'; fact: FactName; needs: number }
-  /** How many passages answered it. */
-  | { kind: 'passages'; needs: number }
-  /** Distinct wind belts touched by the passages that answered it. */
-  | { kind: 'belts'; needs: number };
-
-/** One thing worth doing. */
-export interface Quest {
-  /** Unique inside its pack; the pack's id is prefixed on install. */
-  id: string;
-  /** What to call it, per language. `en` is required as the fallback. */
-  name: Record<string, string>;
-  /** One line on what it is, optional. */
-  note?: Record<string, string>;
-  ask: Ask;
-  counting?: Counting;
+export interface TallyAsk {
+  facts?: Partial<Record<TallyFact, Bound>>;
 }
 
-/** A file of them. */
+/**
+ * What a quest asks. Everything named must hold at the same sample, which is
+ * what lets one say "a hundred miles into this passage, and standing in past
+ * the Horn". `any` is the only way to say *or*.
+ */
+export interface Ask {
+  now?: NowAsk;
+  passage?: TallyAsk;
+  total?: TallyAsk;
+  any?: Ask[];
+}
+
+export interface Quest {
+  id: string;
+  /** Per language. `en` is required and is what every other falls back to. */
+  name: Record<string, string>;
+  note?: Record<string, string>;
+  ask: Ask;
+}
+
 export interface QuestPack {
   format: number;
   id: string;
@@ -134,160 +135,232 @@ export interface QuestPack {
   quests: Quest[];
 }
 
-/** Where a quest stands. */
-export interface Progress {
-  id: string;
-  at: number;
-  needs: number;
-  done: boolean;
-  /** ms since the epoch of the passage that completed it, or null. */
-  doneAt: number | null;
+/**
+ * One look at the world, taken every few seconds.
+ *
+ * The instantaneous values are what they say. The counted ones are *since
+ * the last sample*, so the watcher can add them up without the engine
+ * keeping a second set of books.
+ */
+export interface Sample {
+  /** Where she is, or null in a world that is not on the Earth. */
+  place: LatLon | null;
+  /** The wind belt she is in, or null where the belts do not apply. */
+  belt: string | null;
+  weather: string;
+  /** The world: a region id, or '' for the island field. */
+  region: string;
+  wind: number;
+  heel: number;
+  sea: number;
+  speed: number;
+  depth: number;
+  hour: number;
+  /** Since the previous sample. */
+  miles: number;
+  hours: number;
+  whales: number;
+  sharks: number;
+  photographs: number;
+  /** True on the sample where a passage begins, and where one completes. */
+  passageBegan?: boolean;
+  passageFinished?: boolean;
 }
 
-const NM = 1852;
-const RAD = 180 / Math.PI;
+/** What has piled up. */
+export interface Tally {
+  miles: number;
+  hours: number;
+  whales: number;
+  sharks: number;
+  photographs: number;
+  /** Kept as the set itself, because "how many" cannot be added up blindly. */
+  belts: string[];
+  passages: number;
+}
 
-/**
- * The facts, read off a record.
- *
- * `undefined` means the record cannot say -- it was written before the field
- * existed, or in a world that has no answer. That is different from zero and
- * is kept different all the way through: a quest asking for whales is not
- * *failed* by an old passage that never counted them, it simply learns
- * nothing from it.
- */
-const FACTS: Record<FactName, (p: PassageRecord) => number | undefined> = {
-  miles: (p) => p.distance / NM,
-  hours: (p) => p.duration / 3600,
-  avgSpeed: (p) => msToKnots(p.avgSog),
-  topSpeed: (p) => msToKnots(p.maxSog),
-  wind: (p) => p.windKnots,
-  heel: (p) => (p.maxHeel === undefined ? undefined : p.maxHeel * RAD),
-  sea: (p) => p.maxSea,
-  south: (p) =>
-    p.fromPlace && p.toPlace ? Math.max(-p.fromPlace.lat, -p.toPlace.lat) : undefined,
-  north: (p) =>
-    p.fromPlace && p.toPlace ? Math.max(p.fromPlace.lat, p.toPlace.lat) : undefined,
-  whales: (p) => p.sightings?.whales,
-  sharks: (p) => p.sightings?.sharks,
-  photographs: (p) => p.photographs,
-  // Guarded rather than left to divide by zero: a passage that went nowhere
-  // has no shape, and `Infinity` compared against a bound is a quest
-  // completing on a boat that never moved.
-  wandering: (p) => (p.direct > 0 ? p.distance / p.direct : undefined),
-};
+/** Everything the watcher remembers between samples. */
+export interface QuestState {
+  passage: Tally;
+  total: Tally;
+  /** Quest id to when it completed, ms since the epoch. */
+  done: Record<string, number>;
+}
 
-export const FACT_NAMES = Object.keys(FACTS) as FactName[];
+const emptyTally = (): Tally => ({
+  miles: 0,
+  hours: 0,
+  whales: 0,
+  sharks: 0,
+  photographs: 0,
+  belts: [],
+  passages: 0,
+});
 
-/** Every belt the passage's two ends were in. */
-function beltsOf(p: PassageRecord): string[] {
-  const seen: string[] = [];
-  for (const place of [p.fromPlace, p.toPlace]) {
-    if (!place) continue;
-    const belt = beltAt(place.lat);
-    if (!seen.includes(belt)) seen.push(belt);
+export const emptyQuestState = (): QuestState => ({
+  passage: emptyTally(),
+  total: emptyTally(),
+  done: {},
+});
+
+const EARTH_NM = 60; // nautical miles in a degree of latitude, near enough
+
+/** Nautical miles between two places, flat-Earth over the short distances asked about. */
+function milesApart(a: LatLon, b: LatLon): number {
+  const dLat = (a.lat - b.lat) * EARTH_NM;
+  const dLon = (a.lon - b.lon) * EARTH_NM * Math.cos(((a.lat + b.lat) / 2) * (Math.PI / 180));
+  return Math.hypot(dLat, dLon);
+}
+
+function held(value: number | undefined, bound: Bound): boolean {
+  if (value === undefined) return false;
+  if (bound.atLeast !== undefined && value < bound.atLeast) return false;
+  if (bound.atMost !== undefined && value > bound.atMost) return false;
+  return true;
+}
+
+function nowValue(fact: NowFact, s: Sample): number | undefined {
+  switch (fact) {
+    case 'wind':
+      return s.wind;
+    case 'heel':
+      return s.heel;
+    case 'sea':
+      return s.sea;
+    case 'speed':
+      return s.speed;
+    case 'depth':
+      return s.depth;
+    case 'hour':
+      return s.hour;
+    // A world that is not on the Earth has no latitude, and a quest asking
+    // for one there is not failed so much as unanswerable -- which comes to
+    // the same thing here: it does not hold.
+    case 'latitude':
+      return s.place?.lat;
+    case 'longitude':
+      return s.place?.lon;
+    case 'south':
+      return s.place ? -s.place.lat : undefined;
+    case 'north':
+      return s.place?.lat;
   }
-  return seen;
+}
+
+const tallyValue = (fact: TallyFact, t: Tally): number =>
+  fact === 'belts' ? t.belts.length : t[fact];
+
+function nowHolds(ask: NowAsk, s: Sample): boolean {
+  for (const [fact, bound] of Object.entries(ask.facts ?? {})) {
+    if (!held(nowValue(fact as NowFact, s), bound as Bound)) return false;
+  }
+  if (ask.near) {
+    if (!s.place) return false;
+    if (milesApart(s.place, ask.near) > ask.near.within) return false;
+  }
+  if (ask.belt !== undefined && s.belt !== ask.belt) return false;
+  if (ask.weather !== undefined && s.weather !== ask.weather) return false;
+  if (ask.region !== undefined && s.region !== ask.region) return false;
+  return true;
+}
+
+function tallyHolds(ask: TallyAsk, t: Tally): boolean {
+  for (const [fact, bound] of Object.entries(ask.facts ?? {})) {
+    if (!held(tallyValue(fact as TallyFact, t), bound as Bound)) return false;
+  }
+  return true;
+}
+
+/** Does the whole ask hold at this sample? */
+export function asks(ask: Ask, s: Sample, state: QuestState): boolean {
+  if (ask.any) {
+    if (!ask.any.some((branch) => asks(branch, s, state))) return false;
+  }
+  if (ask.now && !nowHolds(ask.now, s)) return false;
+  if (ask.passage && !tallyHolds(ask.passage, state.passage)) return false;
+  if (ask.total && !tallyHolds(ask.total, state.total)) return false;
+  // An ask with nothing in it holds, and is refused at install for exactly
+  // that reason -- see `readPack`.
+  return true;
 }
 
 /**
- * Does this passage answer the ask?
+ * Fold one sample in, and say what completed on it.
  *
- * `undefined` for "this record cannot say", which is not the same as `false`
- * -- the caller uses it to leave an old passage out of a total rather than
- * counting it as a zero.
+ * The tallies are advanced first, so a quest asking for a hundred miles is
+ * answered by the sample that carries the hundredth -- not by the one after
+ * it. Completions are stamped by the caller's clock, because `src/sim` does
+ * not have one.
  */
-function answers(p: PassageRecord, ask: Ask): boolean | undefined {
-  let knowable = true;
-  for (const [name, bound] of Object.entries(ask.facts ?? {})) {
-    const value = FACTS[name as FactName]?.(p);
-    if (value === undefined) {
-      knowable = false;
-      continue;
-    }
-    if (bound.atLeast !== undefined && value < bound.atLeast) return false;
-    if (bound.atMost !== undefined && value > bound.atMost) return false;
-  }
-  if (ask.region !== undefined && p.venue !== ask.region) return false;
-  if (ask.weather !== undefined) {
-    if (p.weather === undefined) knowable = false;
-    else if (p.weather !== ask.weather) return false;
-  }
-  if (ask.belt !== undefined) {
-    const belts = beltsOf(p);
-    if (belts.length === 0) knowable = false;
-    else if (!belts.includes(ask.belt)) return false;
-  }
-  if (ask.crossedTheLine !== undefined) {
-    if (!p.fromPlace || !p.toPlace) knowable = false;
-    else if (p.fromPlace.lat * p.toPlace.lat < 0 !== ask.crossedTheLine) return false;
-  }
-  if (ask.throughTheNight !== undefined) {
-    if (p.startHour === undefined || p.endHour === undefined) knowable = false;
-    else {
-      // The world clock wraps, so a passage that ran past midnight ends on a
-      // smaller number than it began. Sailed into the dark counts either way.
-      const night = p.endHour < p.startHour || (p.startHour < 20 && p.endHour > 20);
-      if (night !== ask.throughTheNight) return false;
-    }
-  }
-  return knowable ? true : undefined;
-}
-
-/**
- * Where every quest in these packs stands, given this logbook.
- *
- * Nothing is stored: the logbook is the record and this is a function of it,
- * so deleting a passage takes back what it completed and no flag anywhere can
- * drift from the book.
- *
- * Oldest first inside, whatever order the store hands over, so `doneAt` is
- * the passage that *completed* it rather than the newest one that would have.
- */
-export function questProgress(
+export function watch(
   packs: readonly QuestPack[],
-  records: readonly PassageRecord[],
-): Progress[] {
-  const sailed = [...records].sort((a, b) => a.startedAt - b.startedAt);
-  const out: Progress[] = [];
+  sample: Sample,
+  state: QuestState,
+  at: number,
+): { state: QuestState; completed: string[] } {
+  const passage: Tally = sample.passageBegan ? emptyTally() : { ...state.passage, belts: [...state.passage.belts] };
+  const total: Tally = { ...state.total, belts: [...state.total.belts] };
 
+  for (const t of [passage, total]) {
+    t.miles += sample.miles;
+    t.hours += sample.hours;
+    t.whales += sample.whales;
+    t.sharks += sample.sharks;
+    t.photographs += sample.photographs;
+    if (sample.belt && !t.belts.includes(sample.belt)) t.belts.push(sample.belt);
+  }
+  if (sample.passageFinished) total.passages += 1;
+
+  const next: QuestState = { passage, total, done: { ...state.done } };
+  const completed: string[] = [];
   for (const pack of packs) {
     for (const quest of pack.quests) {
-      const counting: Counting = quest.counting ?? { kind: 'once' };
-      const needs = counting.kind === 'once' ? 1 : counting.needs;
-      let at = 0;
-      let doneAt: number | null = null;
-      const belts = new Set<string>();
-
-      for (const p of sailed) {
-        if (answers(p, quest.ask) !== true) continue;
-        if (counting.kind === 'once') at = 1;
-        else if (counting.kind === 'passages') at += 1;
-        else if (counting.kind === 'total') at += FACTS[counting.fact](p) ?? 0;
-        else {
-          for (const b of beltsOf(p)) belts.add(b);
-          at = belts.size;
-        }
-        if (doneAt === null && at >= needs) doneAt = p.startedAt;
-      }
-
-      out.push({ id: `${pack.id}.${quest.id}`, at, needs, done: doneAt !== null, doneAt });
+      const id = `${pack.id}.${quest.id}`;
+      if (next.done[id] !== undefined) continue;
+      if (!asks(quest.ask, sample, next)) continue;
+      next.done[id] = at;
+      completed.push(id);
     }
   }
-  return out;
+  return { state: next, completed };
+}
+
+/**
+ * How far along a quest is, for a bar that can move.
+ *
+ * Only the counted asks can answer this -- "within fifty miles of the Horn"
+ * is a yes or a no and pretending otherwise would be a bar that sits at zero
+ * and then jumps. The first counted bound found is the one reported, which
+ * is the one a quest of that shape is really about.
+ */
+export function questProgress(
+  quest: Quest,
+  state: QuestState,
+): { at: number; needs: number } | null {
+  for (const [scope, tally] of [
+    ['passage', state.passage],
+    ['total', state.total],
+  ] as const) {
+    const ask = quest.ask[scope];
+    for (const [fact, bound] of Object.entries(ask?.facts ?? {})) {
+      const needs = (bound as Bound).atLeast;
+      if (needs !== undefined) {
+        return { at: Math.min(tallyValue(fact as TallyFact, tally), needs), needs };
+      }
+    }
+  }
+  return null;
 }
 
 /**
  * What was wrong with a pack, in a form the screen can translate.
  *
- * A reason rather than a boolean, because "this file was refused" with no
- * more than that is the worst possible answer to someone who has just
- * written a quest and is trying to find out why it does not work.
+ * A reason rather than a boolean, because "refused" with nothing more is the
+ * worst possible answer to someone who has just written a quest and is
+ * trying to find out why it does not work.
  */
 export interface PackProblem {
-  /** Which check failed. */
   kind:
-    | 'notJson'
     | 'notAPack'
     | 'formatTooNew'
     | 'noQuests'
@@ -295,40 +368,98 @@ export interface PackProblem {
     | 'unknownFact'
     | 'unknownField'
     | 'emptyBound'
-    | 'noName';
-  /** The quest it was found in, where that narrows it down. */
+    | 'emptyAsk'
+    | 'noName'
+    | 'badNear';
   quest?: string;
-  /** The name it did not recognise, for the kinds that have one. */
   named?: string;
 }
 
-const ASK_FIELDS = [
-  'facts',
-  'weather',
-  'belt',
-  'crossedTheLine',
-  'throughTheNight',
-  'region',
-];
-const COUNTING_KINDS = ['once', 'total', 'passages', 'belts'];
+const ASK_SCOPES = ['now', 'passage', 'total', 'any'];
+const NOW_FIELDS = ['facts', 'near', 'belt', 'weather', 'region'];
+
+type Refusal = PackProblem | null;
+
+function checkBounds(
+  facts: Record<string, unknown>,
+  allowed: readonly string[],
+  quest: string,
+): Refusal {
+  for (const [fact, bound] of Object.entries(facts)) {
+    if (!allowed.includes(fact)) return { kind: 'unknownFact', quest, named: fact };
+    const b = bound as Bound | null;
+    // A bound with neither end holds everything, which is a quest that
+    // completes on the first sample and reads like a mistake because it is.
+    if (!b || typeof b !== 'object' || (b.atLeast === undefined && b.atMost === undefined)) {
+      return { kind: 'emptyBound', quest, named: fact };
+    }
+  }
+  return null;
+}
+
+/** One ask, and everything nested inside it. */
+function checkAsk(ask: unknown, quest: string): Refusal {
+  if (typeof ask !== 'object' || ask === null) return { kind: 'notAPack', quest };
+  const a = ask as Record<string, unknown>;
+  const fields = Object.keys(a);
+  // An ask that asks nothing completes on the first sample, which is never
+  // what anyone meant to write.
+  if (fields.length === 0) return { kind: 'emptyAsk', quest };
+  for (const field of fields) {
+    if (!ASK_SCOPES.includes(field)) return { kind: 'unknownField', quest, named: field };
+  }
+  if (a.now !== undefined) {
+    if (typeof a.now !== 'object' || a.now === null) return { kind: 'notAPack', quest };
+    const now = a.now as Record<string, unknown>;
+    for (const field of Object.keys(now)) {
+      if (!NOW_FIELDS.includes(field)) return { kind: 'unknownField', quest, named: field };
+    }
+    const bad = checkBounds((now.facts ?? {}) as Record<string, unknown>, NOW_FACTS, quest);
+    if (bad) return bad;
+    if (now.near !== undefined) {
+      const near = now.near as Near | null;
+      const ok =
+        near &&
+        typeof near === 'object' &&
+        [near.lat, near.lon, near.within].every((v) => typeof v === 'number' && Number.isFinite(v)) &&
+        Math.abs(near.lat) <= 90 &&
+        Math.abs(near.lon) <= 180 &&
+        near.within > 0;
+      if (!ok) return { kind: 'badNear', quest };
+    }
+  }
+  for (const scope of ['passage', 'total'] as const) {
+    if (a[scope] === undefined) continue;
+    if (typeof a[scope] !== 'object' || a[scope] === null) return { kind: 'notAPack', quest };
+    const t = a[scope] as Record<string, unknown>;
+    for (const field of Object.keys(t)) {
+      if (field !== 'facts') return { kind: 'unknownField', quest, named: field };
+    }
+    const bad = checkBounds((t.facts ?? {}) as Record<string, unknown>, TALLY_FACTS, quest);
+    if (bad) return bad;
+    // `passages` counts completed passages, which only ever means the whole
+    // book: a passage cannot contain a number of passages.
+    if (scope === 'passage' && (t.facts as Record<string, unknown>)?.passages !== undefined) {
+      return { kind: 'unknownFact', quest, named: 'passages' };
+    }
+  }
+  if (a.any !== undefined) {
+    if (!Array.isArray(a.any) || a.any.length === 0) return { kind: 'emptyAsk', quest };
+    for (const branch of a.any) {
+      const bad = checkAsk(branch, quest);
+      if (bad) return bad;
+    }
+  }
+  return null;
+}
 
 /**
  * Read a pack, or say what is wrong with it.
  *
  * This is the security boundary, and the reason the format has no
- * expressions in it: everything below is a check that a *name* is one this
- * build knows. Nothing is ever evaluated, so the worst a hostile file can do
- * is be refused.
- *
- * Refused loudly and at *install* time, never at sailing time. A pack that
- * asked for a fact this build does not have would otherwise sit in the list
- * quietly never completing, and the author would have no way to tell that
- * from a quest that is merely hard.
- *
- * Unknown *fields* are refused too, rather than ignored. Ignoring them is how
- * a pack written for a later build half-works here -- some quests completing
- * and some silently unreachable -- and half-working is worse than refused for
- * a thing whose whole job is to be trusted.
+ * expressions in it: everything below checks that a *name* is one this build
+ * knows. Nothing is ever evaluated, so the worst a hostile file can do is be
+ * refused.
  */
 export function readPack(raw: unknown): { pack: QuestPack } | { problem: PackProblem } {
   if (typeof raw !== 'object' || raw === null) return { problem: { kind: 'notAPack' } };
@@ -346,38 +477,12 @@ export function readPack(raw: unknown): { pack: QuestPack } | { problem: PackPro
     if (typeof q?.id !== 'string' || !q.id) return { problem: { kind: 'notAPack' } };
     if (seen.has(q.id)) return { problem: { kind: 'duplicateId', quest: q.id } };
     seen.add(q.id);
-    // English is the fallback every screen can fall back *to*, so a pack
-    // without it has quests that cannot be named at all in some languages.
     const name = q.name as Record<string, string> | undefined;
     if (!name || typeof name.en !== 'string' || !name.en) {
       return { problem: { kind: 'noName', quest: q.id } };
     }
-    const ask = q.ask as Record<string, unknown> | undefined;
-    if (typeof ask !== 'object' || ask === null) return { problem: { kind: 'notAPack', quest: q.id } };
-    for (const field of Object.keys(ask)) {
-      if (!ASK_FIELDS.includes(field)) {
-        return { problem: { kind: 'unknownField', quest: q.id, named: field } };
-      }
-    }
-    for (const [fact, bound] of Object.entries((ask.facts ?? {}) as Record<string, Bound>)) {
-      if (!FACT_NAMES.includes(fact as FactName)) {
-        return { problem: { kind: 'unknownFact', quest: q.id, named: fact } };
-      }
-      // A bound with neither end holds everything, which is a quest that
-      // completes on the first passage and reads like a mistake because it is.
-      if (bound?.atLeast === undefined && bound?.atMost === undefined) {
-        return { problem: { kind: 'emptyBound', quest: q.id, named: fact } };
-      }
-    }
-    const counting = q.counting as Record<string, unknown> | undefined;
-    if (counting) {
-      if (typeof counting.kind !== 'string' || !COUNTING_KINDS.includes(counting.kind)) {
-        return { problem: { kind: 'unknownField', quest: q.id, named: String(counting.kind) } };
-      }
-      if (counting.kind === 'total' && !FACT_NAMES.includes(counting.fact as FactName)) {
-        return { problem: { kind: 'unknownFact', quest: q.id, named: String(counting.fact) } };
-      }
-    }
+    const bad = checkAsk(q.ask, q.id);
+    if (bad) return { problem: bad };
   }
-  return { pack: raw as QuestPack };
+  return { pack: raw as unknown as QuestPack };
 }

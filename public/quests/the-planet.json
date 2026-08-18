@@ -1,23 +1,9 @@
 {
-  "format": 1,
+  "format": 2,
   "id": "the-planet",
   "name": "The whole planet",
   "author": "voyage",
   "quests": [
-    {
-      "id": "line",
-      "name": {
-        "en": "Crossed the line",
-        "ko": "적도 통과"
-      },
-      "note": {
-        "en": "One end of a passage north of the equator and the other south of it.",
-        "ko": "한 항해의 한쪽 끝은 적도 북쪽, 다른 쪽은 남쪽."
-      },
-      "ask": {
-        "crossedTheLine": true
-      }
-    },
     {
       "id": "every-belt",
       "name": {
@@ -25,13 +11,17 @@
         "ko": "모든 바람대"
       },
       "note": {
-        "en": "The doldrums, the trades, the horse latitudes, the westerlies and the polar easterlies. The last of them is past sixty degrees.",
+        "en": "The doldrums, the trades, the horse latitudes, the westerlies and the polar easterlies. The last is past sixty degrees.",
         "ko": "무풍대, 무역풍대, 아열대 고압대, 편서풍대, 극동풍대. 마지막 하나는 위도 60도 너머입니다."
       },
-      "ask": {},
-      "counting": {
-        "kind": "belts",
-        "needs": 5
+      "ask": {
+        "total": {
+          "facts": {
+            "belts": {
+              "atLeast": 5
+            }
+          }
+        }
       }
     },
     {
@@ -41,10 +31,12 @@
         "ko": "적도 무풍대의 정체"
       },
       "ask": {
-        "belt": "doldrums",
-        "facts": {
-          "avgSpeed": {
-            "atMost": 3
+        "now": {
+          "belt": "doldrums",
+          "facts": {
+            "speed": {
+              "atMost": 2
+            }
           }
         }
       }
@@ -56,13 +48,54 @@
         "ko": "무역풍 활주"
       },
       "ask": {
-        "belt": "trades",
-        "facts": {
-          "miles": {
-            "atLeast": 30
-          },
-          "wandering": {
-            "atMost": 1.15
+        "now": {
+          "belt": "trades",
+          "facts": {
+            "speed": {
+              "atLeast": 6
+            }
+          }
+        },
+        "passage": {
+          "facts": {
+            "miles": {
+              "atLeast": 30
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "gibraltar",
+      "name": {
+        "en": "The Strait of Gibraltar",
+        "ko": "지브롤터 해협"
+      },
+      "ask": {
+        "now": {
+          "near": {
+            "lat": 35.95,
+            "lon": -5.6,
+            "within": 25
+          }
+        }
+      }
+    },
+    {
+      "id": "equator",
+      "name": {
+        "en": "On the line",
+        "ko": "적도 위"
+      },
+      "ask": {
+        "now": {
+          "facts": {
+            "north": {
+              "atMost": 0.5
+            },
+            "south": {
+              "atMost": 0.5
+            }
           }
         }
       }
