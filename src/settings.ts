@@ -5,7 +5,6 @@ import type { Vec2 } from './sim/math';
 import { setDriftVec } from './sim/current';
 import { TIDE_PERIOD } from './sim/current';
 import { detectLang, type Lang } from './i18n';
-import { regionById, type Region } from './sim/regions';
 import { COAST_ID } from './sim/coast';
 import { waterById } from './sim/waters';
 
@@ -184,15 +183,10 @@ export function loadSettings(): Settings {
       timeScale: num(o.timeScale, DEFAULT_SETTINGS.timeScale, 0, 600),
       weatherMode: mode,
       islandCount: Math.round(num(o.islandCount, DEFAULT_SETTINGS.islandCount, 0, 10)),
-      // Checked against the list rather than trusted: a stored id for a region
-      // that no longer ships must not strand the player in a world with no
-      // land the engine can load. The generated coast is the one id that is
-      // not on the list and still always buildable -- it needs no file, only
-      // the seed stored two lines down.
-      region:
-        typeof o.region === 'string' && (regionById(o.region) || o.region === COAST_ID)
-          ? o.region
-          : DEFAULT_SETTINGS.region,
+      // Not trusted: a stored id for one of the surveyed regions that used to
+      // ship must not strand the player in a world with no land the engine can
+      // build. Two ids are left -- the Earth, and '' for the island field.
+      region: o.region === COAST_ID ? COAST_ID : DEFAULT_SETTINGS.region,
       cruise: typeof o.cruise === 'boolean' ? o.cruise : DEFAULT_SETTINGS.cruise,
       seed: Math.round(num(o.seed, DEFAULT_SETTINGS.seed, 1, 2 ** 31)),
       randomWorld:
@@ -233,33 +227,7 @@ export const windKn = (ms: number): number => msToKnots(ms);
  */
 export const currentVec = (s: Settings): Vec2 => setDriftVec(s.setDeg, s.driftKnots);
 
-/**
- * Settings for sailing a region: its conditions written into the player's own.
- *
- * Written in rather than overridden: every slider then keeps showing what is
- * actually being sailed and stays live, instead of displaying one thing while
- * the world does another. One source of truth is the point -- held apart, the
- * wind slider would read 12 knots while the boat sailed in 20, and the player
- * would be adjusting a number nothing was listening to.
- *
- * The land is not among them. A region brings a surveyed coast and no islands,
- * and the two cannot coexist: the island slider stands down.
- */
-export function withRegion(s: Settings, r: Region): Settings {
-  return {
-    ...s,
-    region: r.id,
-    islandCount: 0,
-    windKnots: r.conditions.windKnots,
-    gustiness: r.conditions.gustiness,
-    seaScale: r.conditions.seaScale,
-    setDeg: r.conditions.setDeg,
-    driftKnots: r.conditions.driftKnots,
-    startHour: r.conditions.startHour,
-  };
-}
-
-/** Leaving a region for the open ocean. Conditions stay as they were left. */
+/** Leaving the Earth for the open ocean. Conditions stay as they were left. */
 export const withoutRegion = (s: Settings): Settings => ({ ...s, region: '' });
 
 /**

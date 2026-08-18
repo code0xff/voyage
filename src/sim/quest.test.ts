@@ -239,13 +239,12 @@ describe('reading a pack from a stranger', () => {
       named: 'weather foggy',
     });
     expect(problemOf(withAsk({ now: { belt: 'roaring-forties' } }))?.kind).toBe('unknownName');
-    expect(problemOf(withAsk({ now: { region: 'sf-harbour' } }))?.kind).toBe('unknownName');
+    expect(problemOf(withAsk({ now: { region: 'sf-bay' } }))?.kind).toBe('unknownName');
     // Written out rather than imported, because these are the names a pack
     // author types: a test that asked the module for its own list would pass
     // whatever the list said, including an empty one.
     expect(problemOf(withAsk({ now: { weather: 'fog' } }))).toBeNull();
     expect(problemOf(withAsk({ now: { belt: 'westerlies' } }))).toBeNull();
-    expect(problemOf(withAsk({ now: { region: 'sf-bay' } }))).toBeNull();
     // The two worlds that are not surveyed regions: the island field, and
     // the open Earth.
     expect(problemOf(withAsk({ now: { region: '' } }))).toBeNull();

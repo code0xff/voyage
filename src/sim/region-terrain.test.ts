@@ -1,70 +1,96 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { HeightField, heightFieldFromBytes } from './heightfield';
+import { HeightField } from './heightfield';
 import { EDGE_FADE, RegionTerrain } from './region-terrain';
-import { REGIONS, regionById } from './regions';
-import { worldFromLatLon } from './geo';
+import { coastHeightField } from './coast';
 import { DEG, RAD } from './math';
 import { CRUISER } from './config';
-import { CurrentField, setDriftVec } from './current';
-import { dot, compassVec } from './math';
-import { msToKnots } from './units';
 
-const region = regionById('sf-bay');
-if (!region) throw new Error('sf-bay region is missing');
+/**
+ * `RegionTerrain` itself: the class every world in this game is made of.
+ *
+ * It was tested against San Francisco Bay, because a surveyed square was the
+ * only thing that filled it. Those regions are gone and the generated coast is
+ * the one caller left -- so the fixture is a coast, and what is asserted here
+ * is what the *class* owes rather than where Alcatraz is. `coast.test.ts`
+ * holds the claims about the coast itself.
+ *
+ * Land and water are found by looking rather than written down: a seed is
+ * entitled to move its own shoreline, and a test that named a point would be
+ * asserting against the generator's last run instead of against the class.
+ */
+const { region, height } = coastHeightField(7);
+const terrain = new RegionTerrain(region, height);
 
-const raw = readFileSync('public/terrain/sf-bay.bin');
-const terrain = new RegionTerrain(
-  region,
-  heightFieldFromBytes(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength), region),
-);
-const at = (lat: number, lon: number) => worldFromLatLon(region, lat, lon);
-/** The breeze the city front is known for. */
+/** A wind to sweep the shelter with; nothing here depends on which. */
 const WESTERLY = 262 * DEG;
 
+/** The first point of open water and of dry ground the field can be found to hold. */
+function find(want: 'water' | 'land'): { x: number; y: number } {
+  const half = (region.grid.width * region.grid.cell) / 2 - 500;
+  for (let y = -half; y <= half; y += 250) {
+    for (let x = -half; x <= half; x += 250) {
+      const e = height.elevationAt(x, y);
+      if (want === 'water' ? e < -20 : e > 5) return { x, y };
+    }
+  }
+  throw new Error(`this coast has no ${want}`);
+}
+
+const water = find('water');
+const land = find('land');
+
+/** Water with the beach close aboard, for the tests that need a lee. */
+function beside(): { x: number; y: number } {
+  const half = (region.grid.width * region.grid.cell) / 2 - 500;
+  let best = water;
+  let closest = Infinity;
+  for (let y = -half; y <= half; y += 250) {
+    for (let x = -half; x <= half; x += 250) {
+      if (height.elevationAt(x, y) > -6) continue;
+      const d = terrain.distanceToShore(x, y);
+      if (d > 0 && d < closest) {
+        closest = d;
+        best = { x, y };
+      }
+    }
+  }
+  return best;
+}
+
 describe('depth and grounding', () => {
-  it('floats the boat in the channels and grounds her on the islands', () => {
-    const gate = at(37.8199, -122.4783);
-    const rock = at(37.8267, -122.423); // Alcatraz
-    expect(terrain.isAground(gate.x, gate.y, CRUISER.draft)).toBe(false);
-    expect(terrain.isAground(rock.x, rock.y, CRUISER.draft)).toBe(true);
+  it('floats her in the deep water and grounds her on the land', () => {
+    expect(terrain.isAground(water.x, water.y, CRUISER.draft)).toBe(false);
+    expect(terrain.isAground(land.x, land.y, CRUISER.draft)).toBe(true);
   });
 
-  it('grounds her on the Berkeley flats, which is the point of them', () => {
-    // Under two metres over a good deal of it, and this boat draws more.
-    const p = at(37.86, -122.33);
-    expect(terrain.depthAt(p.x, p.y)).toBeLessThan(CRUISER.draft + 1);
-  });
-
-  it('agrees with the raster inside the survey', () => {
-    const p = at(37.83, -122.41);
-    expect(terrain.depthAt(p.x, p.y)).toBeCloseTo(-terrain.height.elevationAt(p.x, p.y), 6);
+  it('agrees with the field inside the survey', () => {
+    expect(terrain.depthAt(water.x, water.y)).toBeCloseTo(
+      -terrain.height.elevationAt(water.x, water.y),
+      6,
+    );
   });
 });
 
 describe('the shore', () => {
-  it('is far away in the middle of the bay and close alongside an island', () => {
-    const mid = at(37.83, -122.41);
-    const beside = at(37.8267, -122.4265); // just west of Alcatraz
-    expect(terrain.distanceToShore(mid.x, mid.y)).toBeGreaterThan(
-      terrain.distanceToShore(beside.x, beside.y),
-    );
-    expect(terrain.distanceToShore(beside.x, beside.y)).toBeLessThan(500);
-  });
-
-  it('is negative inland, so the field is signed and continuous', () => {
-    const inland = at(37.7749, -122.4394); // well into San Francisco
-    expect(terrain.distanceToShore(inland.x, inland.y)).toBeLessThan(0);
+  it('is signed: positive at sea, negative inland', () => {
+    expect(terrain.distanceToShore(water.x, water.y)).toBeGreaterThan(0);
+    expect(terrain.distanceToShore(land.x, land.y)).toBeLessThan(0);
   });
 
   it('points at the shore it is actually near', () => {
-    // A boat just west of Alcatraz should be told the beach is to the east.
-    const p = at(37.8267, -122.4265);
-    const b = terrain.bearingToShore(p.x, p.y);
+    // Walked in from the water towards the land it was found beside: whatever
+    // the bearing is, stepping that way must get closer to the beach.
+    const b = terrain.bearingToShore(water.x, water.y);
     expect(b).not.toBeNull();
-    const deg = (((b as number) * RAD) % 360 + 360) % 360;
-    expect(deg).toBeGreaterThan(45);
-    expect(deg).toBeLessThan(135);
+    const before = terrain.distanceToShore(water.x, water.y);
+    const step = 300;
+    const after = terrain.distanceToShore(
+      water.x + Math.sin(b as number) * step,
+      water.y + Math.cos(b as number) * step,
+    );
+    expect(after).toBeLessThan(before);
+    // And it is a compass bearing, not a plane angle in disguise.
+    expect(Math.abs((b as number) * RAD)).toBeLessThanOrEqual(360);
   });
 
   it('has nothing to say off the chart', () => {
@@ -74,26 +100,17 @@ describe('the shore', () => {
 });
 
 describe('shelter through the query interface', () => {
-  it('blows through the Gate and parks you behind Angel Island', () => {
-    const gate = at(37.8199, -122.4783);
-    const angel = at(37.8609, -122.4326);
-    const lee = { x: angel.x + 1980, y: angel.y + 278 };
-    expect(terrain.windExposure(gate.x, gate.y, WESTERLY)).toBeGreaterThan(0.95);
-    expect(terrain.windExposure(lee.x, lee.y, WESTERLY)).toBeLessThan(0.7);
-  });
-
   it('rebuilds itself when the wind moves, without being told to', () => {
-    const angel = at(37.8609, -122.4326);
-    // The lee of Angel Island, and the water the same distance the other way.
-    const east = { x: angel.x + 1980, y: angel.y + 278 };
-    const west = { x: angel.x - 1980, y: angel.y - 278 };
-    expect(terrain.windExposure(east.x, east.y, WESTERLY)).toBeLessThan(
-      terrain.windExposure(west.x, west.y, WESTERLY),
-    );
-    const easterly = 82 * DEG;
-    expect(terrain.windExposure(west.x, west.y, easterly)).toBeLessThan(
-      terrain.windExposure(east.x, east.y, easterly),
-    );
+    // Taken from the shore itself rather than from a guessed point: `inshore`
+    // is water with land close by, and the bearing says which way. Blowing
+    // *from* the land it must be sheltered, and from the opposite side open --
+    // and the field has to notice the shift on its own.
+    const inshore = beside();
+    const toLand = terrain.bearingToShore(inshore.x, inshore.y) as number;
+    const offshore = terrain.windExposure(inshore.x, inshore.y, toLand);
+    const onshore = terrain.windExposure(inshore.x, inshore.y, toLand + Math.PI);
+    expect(offshore).toBeLessThan(onshore);
+    expect(onshore).toBeGreaterThan(0.9);
   });
 });
 
@@ -144,20 +161,35 @@ describe('sailing off the chart', () => {
    * agreement that can be checked, and the constant is imported by both.
    */
   it('fades over exactly the distance the shader is given', () => {
-    const y = terrain.height.halfHeight;
-    const twd = WESTERLY;
-    const atEdge = terrain.waveShelter(-3000, y - 1, twd);
+    // On a field built for it: a wall of land along the north edge and water
+    // under it, so the water at the boundary is certainly sheltered. Taken
+    // from a coast instead, this asserted nothing the day the seed put open
+    // water at that edge -- which is how a test blesses a bug.
+    const spec = {
+      id: 'wall',
+      name: 'Wall',
+      grid: { width: 64, height: 64, cell: 100, unit: 1 },
+      source: 'a test',
+    };
+    const samples = new Int16Array(64 * 64).fill(-20);
+    // Land down to three rows short of the southern edge, so the strip of
+    // water at that edge is in its lee and nothing else.
+    for (let i = 0; i < 64 * 61; i++) samples[i] = 60;
+    const walled = new RegionTerrain(spec, new HeightField(samples, spec));
+    const northerly = 0;
+    const y = -walled.height.halfHeight;
+    const atEdge = walled.waveShelter(0, y + 1, northerly);
     // Sheltered water, or this proves nothing about a blend towards open sea.
     expect(atEdge).toBeLessThan(0.6);
 
     // Just outside, still essentially what the boat felt a metre back.
-    expect(terrain.waveShelter(-3000, y + 1, twd)).toBeCloseTo(atEdge, 2);
+    expect(walled.waveShelter(0, y - 1, northerly)).toBeCloseTo(atEdge, 2);
     // Half way through the band, half way to open sea.
-    const half = terrain.waveShelter(-3000, y + EDGE_FADE / 2, twd);
+    const half = walled.waveShelter(0, y - EDGE_FADE / 2, northerly);
     expect(half).toBeCloseTo(atEdge + (1 - atEdge) * 0.5, 2);
     // And fully open at the end of it, not before.
-    expect(terrain.waveShelter(-3000, y + EDGE_FADE * 0.99, twd)).toBeLessThan(1);
-    expect(terrain.waveShelter(-3000, y + EDGE_FADE, twd)).toBeCloseTo(1, 6);
+    expect(walled.waveShelter(0, y - EDGE_FADE * 0.99, northerly)).toBeLessThan(1);
+    expect(walled.waveShelter(0, y - EDGE_FADE, northerly)).toBeCloseTo(1, 6);
   });
 
   it('is still finite a very long way out', () => {
@@ -252,186 +284,5 @@ describe('the shelter texture, as the shader will read it', () => {
     // Zero fetch is the floor on both sides, and fully capped fetch is 1.
     expect(Math.max(0.05, Math.sqrt(0))).toBeCloseTo(0.05, 10);
     expect(Math.max(0.05, Math.sqrt(255 / 255))).toBeCloseTo(1, 10);
-  });
-});
-
-/**
- * The decision San Francisco is known for, now over surveyed water.
- *
- * This was the `sf` venue's test and it is the reason that venue existed: a
- * hard summer westerly over a foul flood, so the beat out towards the Gate is
- * into the tide, and the way to sail it is to work the shallow water along the
- * city shore -- which costs wind and eventually the bottom.
- *
- * It moves here with the place. The venue drew its shore from seven circles and
- * a uniform shelf slope, so the inshore lane was as deep as someone decided it
- * should be; here it is as deep as it is, and the trade is a real one.
- */
-describe('the city front, and the price of the inshore lane', () => {
-  const c = region.conditions;
-  const currents = new CurrentField({
-    peak: setDriftVec(c.setDeg, c.driftKnots),
-    fullDepth: c.fullDepth,
-  });
-  currents.terrain = terrain;
-  /** Upwind: the direction the beat has to make good. */
-  const up = compassVec(c.windTwd);
-  /** Knots of stream against the beat. Positive is foul. */
-  const foul = (p: { x: number; y: number }) => msToKnots(-dot(currents.sample(p), up));
-
-  /*
-   * Three points on one transect in towards the city shore, chosen by walking
-   * the real soundings rather than by picking coordinates that sounded right --
-   * which is how the first draft of this test put the inshore lane on a beach.
-   *
-   * 37.812: 17 m, well out.        37.808: 5.4 m, the lane.
-   * 37.807: dry. The shoal is a hundred metres past the lane, not a slope
-   * someone chose the gradient of, and that is the whole difference between
-   * this and the venue it replaces.
-   */
-  const offshore = at(37.812, -122.44);
-  const inshore = at(37.808, -122.44);
-  const tooFar = at(37.807, -122.44);
-
-  it('sets the flood against the beat, which is the whole point of the place', () => {
-    // The regression the venue carried: an ebb runs out of the Gate within
-    // twenty degrees of the way a westerly makes you beat, so it would carry
-    // the boat towards the mark and leave nothing to escape.
-    expect(foul(offshore)).toBeGreaterThan(1.2);
-  });
-
-  it('offers real shelter from the tide inshore', () => {
-    // 1.4 kn foul out here, a fifth of that in the lane: nearly slack water.
-    expect(foul(inshore)).toBeLessThan(foul(offshore) - 1);
-  });
-
-  /*
-   * And charges for it. A lane that were only better would not be a decision,
-   * it would be the answer, and the place would be a straight line.
-   */
-  it('charges depth for the tide it saves', () => {
-    expect(terrain.depthAt(inshore.x, inshore.y)).toBeLessThan(
-      terrain.depthAt(offshore.x, offshore.y) - 5,
-    );
-  });
-
-  it('keeps the lane afloat, and puts the ground just past it', () => {
-    expect(terrain.isAground(inshore.x, inshore.y, CRUISER.draft)).toBe(false);
-    expect(terrain.isAground(tooFar.x, tooFar.y, CRUISER.draft)).toBe(true);
-  });
-});
-
-/**
- * What each region is *for*, as a property rather than a description.
- *
- * Six regions is well past the point where "they are all different" needs
- * checking rather than asserting. Each was chosen because it is extreme on one
- * measured axis, and each of those is a number this holds.
- *
- * Two of the six were chosen *against* an argument that measurement refused.
- * Maine was going to be Penobscot Bay proper, because the Camden Hills stand
- * 398 m off the water and should make the biggest lee in the project; the
- * shelter field put it last of three, and San Francisco first by a factor of
- * four. What survived measurement there was pilotage, so Merchant Row shipped
- * instead. Three further candidates -- Long Island Sound, Charleston and
- * Biscayne Bay -- were baked and dropped for being extreme on nothing, or on
- * nothing but absences. Those reasons are recorded in `regions.ts`.
- *
- * Assertions are ratios and orderings rather than the measured figures, because
- * a resurvey is entitled to move a raster a little and must not be made to look
- * like a regression when it does.
- */
-describe('the regions are each for something different', () => {
-  const load = (id: string) => {
-    const r = regionById(id);
-    if (!r) throw new Error(`${id} region is missing`);
-    const raw = readFileSync(`public${r.raster}`);
-    const field = heightFieldFromBytes(
-      raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
-      r,
-    );
-    return new RegionTerrain(r, field);
-  };
-
-  /**
-   * Sampled on a 100 m lattice: four times the grid, and far finer than any of
-   * the differences being measured. Every region is profiled in one pass
-   * because the claims are all comparative.
-   */
-  const profile = (id: string) => {
-    const t = load(id);
-    const span = 800 * 25;
-    let sailable = 0;
-    let tight = 0;
-    let shoal = 0;
-    let cells = 0;
-    const depths: number[] = [];
-    for (let y = -span / 2; y <= span / 2; y += 100) {
-      for (let x = -span / 2; x <= span / 2; x += 100) {
-        cells++;
-        const d = t.depthAt(x, y);
-        if (d <= 0) continue;
-        depths.push(d);
-        if (d <= CRUISER.draft + 1) {
-          shoal++;
-          continue;
-        }
-        sailable++;
-        if (t.distanceToShore(x, y) < 200) tight++;
-      }
-    }
-    depths.sort((a, b) => a - b);
-    return {
-      median: depths[Math.floor(depths.length / 2)],
-      tight: tight / sailable,
-      shoal: shoal / cells,
-    };
-  };
-
-  const p = Object.fromEntries(
-    REGIONS.map((r) => [r.id, profile(r.id)]),
-  ) as Record<string, ReturnType<typeof profile>>;
-  const others = (id: string) => REGIONS.filter((r) => r.id !== id).map((r) => p[r.id]);
-
-  it('puts the boat close aboard far more often at Merchant Row', () => {
-    // The claim the region was chosen on: 16% against 8% and 9% at the time.
-    for (const o of others('merchant-row')) {
-      expect(p['merchant-row'].tight).toBeGreaterThan(o.tight * 1.5);
-    }
-  });
-
-  it('gives Puget Sound water no other region comes close to', () => {
-    // 85 m median against 20 m for the next deepest: depth never decides there.
-    for (const o of others('puget-sound')) {
-      expect(p['puget-sound'].median).toBeGreaterThan(o.median * 2.5);
-    }
-  });
-
-  it('leaves the least water under her at Chesapeake Bay', () => {
-    // The opposite pole to Puget Sound, and the most water too shoal to sail.
-    for (const o of others('chesapeake')) {
-      expect(p['chesapeake'].median).toBeLessThan(o.median);
-      expect(p['chesapeake'].shoal).toBeGreaterThan(o.shoal);
-    }
-  });
-
-  it('gives Buzzards Bay the most water it can actually sail', () => {
-    const span = 800 * 25;
-    const sailableFraction = (id: string) => {
-      const t = load(id);
-      let cells = 0;
-      let sail = 0;
-      for (let y = -span / 2; y <= span / 2; y += 100) {
-        for (let x = -span / 2; x <= span / 2; x += 100) {
-          cells++;
-          if (t.depthAt(x, y) > CRUISER.draft + 1) sail++;
-        }
-      }
-      return sail / cells;
-    };
-    const bb = sailableFraction('buzzards-bay');
-    for (const r of REGIONS) {
-      if (r.id !== 'buzzards-bay') expect(bb).toBeGreaterThan(sailableFraction(r.id));
-    }
   });
 });

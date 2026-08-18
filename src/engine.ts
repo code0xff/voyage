@@ -11,9 +11,8 @@ import { polarStale, type Polar } from './sim/polar';
 import { createPolarSolver } from './polar-solver';
 import { WindField } from './sim/wind';
 import { CurrentField, DEFAULT_FULL_DEPTH, tideRate } from './sim/current';
-import { regionById, type Region } from './sim/regions';
 import { RegionTerrain } from './sim/region-terrain';
-import { loadEarth, loadRegion } from './terrain-load';
+import { loadEarth } from './terrain-load';
 import { clearUnderway, loadUnderway, sameWorld, saveUnderway } from './underway';
 import { questStore } from './quests-store';
 import {
@@ -93,7 +92,6 @@ import { Telemetry } from './view/telemetry';
  * rarely -- menus and settings.
  */
 
-export type RegionLoadStatus = 'none' | 'loading' | 'ready' | 'error';
 
 export interface Snapshot {
   state: BoatState;
@@ -134,8 +132,6 @@ export interface Snapshot {
    * that only `Terrain` has. When a region is loaded, `terrain` is empty.
    */
   region: RegionTerrain | null;
-  /** Whether the selected surveyed region is ready to sail. */
-  regionStatus: RegionLoadStatus;
   sky: SkyState;
   weather: Weather;
   polar: Polar | null;
@@ -276,8 +272,6 @@ export type EngineEvent =
   | { type: 'quest'; id: string; completion: Completion }
   /** A fresh world was rolled. The settings hold the seed so it can be sailed again. */
   | { type: 'world'; seed: number }
-  /** The surveyed region changed loading state. */
-  | { type: 'region'; id: string; status: RegionLoadStatus }
   /**
    * A completed passage could not be persisted locally.
    *
@@ -300,8 +294,6 @@ export interface Engine {
   startAudio(): void;
   /** Start a fresh session: a new world, and the boat put to sea in it. */
   putToSea(): void;
-  /** Retry loading the selected surveyed region after a failed request. */
-  retryRegion(): void;
   /** Point her at somewhere, or pass null to just go sailing. */
   setDestination(pos: Vec2 | null): void;
   setPaused(paused: boolean): void;
@@ -621,7 +613,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     terrain: EMPTY_TERRAIN,
     chart: EMPTY_TERRAIN,
     region: null,
-    regionStatus: 'none',
     sky: skyState(hour),
     weather,
     polar: null,
@@ -742,7 +733,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * comes back is dropped unless it is still the one wanted.
    */
   let regionTerrain: RegionTerrain | null = null;
-  let wantedRegion = '';
   /**
    * Which seed the installed coast was generated from. The region id alone
    * cannot say: every generated coast is `COAST_ID`, so without this a rolled
@@ -813,16 +803,14 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     remembered?.place ? { ...remembered.place } : { ...DEFAULT_ANCHOR };
   let anchor: LatLon = opening();
   /**
-   * Where the endless coast's plane is pinned, held apart from `anchor` so
-   * that it survives a visit to a surveyed region. Sailing to the Azores and
-   * then looking at Newport for a minute should not put her back off San
-   * Francisco.
+   * Where the endless coast's plane is pinned.
+   *
+   * Held apart from `anchor` because `anchor` is what everything else reads
+   * and this is where the world says it should be; `pinForWorld` copies one
+   * to the other. They were two answers when there were worlds that pinned
+   * their own plane.
    */
   let oceanAnchor: LatLon = opening();
-  /** Where she was on the ocean when she last left it; see `rebuildWorld`. */
-  let oceanPos: Vec2 = { x: 0, y: 0 };
-  /** Whether the world she is in now is a surveyed one. */
-  let inSurveyed = false;
   /** s of sailing since the voyage was last written down; see `keepUnderway`. */
   let sinceSaved = 0;
   /**
@@ -912,8 +900,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     samples: Int16Array;
     row: number;
   } | null = null;
-  /** Prevent a rebuild during one request from starting a second fetch. */
-  let loadingRegion = '';
   /**
    * What the physics actually asks. Whichever of the region and the island
    * terrain is in force, so that no query site has to know which world it is
@@ -966,59 +952,24 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     snapshot.flareReady = true;
     snapshot.flareWait = null;
 
-    // A region sets the tidal band too. Its stream is as much a part of the
-    // place as its coast -- at San Francisco it is the whole game -- and
-    // leaving fullDepth at the open-ocean default would run the tide flat out
-    // right up to the beach and delete the inshore lane.
-    const conditioned = regionById(current.region)?.conditions;
-    currents.fullDepth = conditioned ? conditioned.fullDepth : DEFAULT_FULL_DEPTH;
+    // The tide runs at its open-water depth everywhere now. It used to be a
+    // surveyed region's to set -- its stream is as much a part of a place as
+    // its coast -- and with those gone there is one band and no place to
+    // override it from.
+    currents.fullDepth = DEFAULT_FULL_DEPTH;
 
-    // A surveyed region is the third kind of world, and the only one that has
-    // to be fetched. It is installed when it arrives; until then the session
-    // stays paused and the menu explains why it cannot yet be sailed.
-    //
-    // The generated coast is the fourth, and it goes through this same gate as
-    // a region that is computed instead of fetched: everything downstream --
-    // the shelter sweep, the field texture, the meshes, the chart -- reads a
-    // RegionTerrain and never asks where its samples came from. Ready
-    // synchronously, since about 190 ms of generation at Put to sea needs no
-    // loading screen. Cached against the seed that built it, not merely against being
-    // a coast: with the seed pinned a settings change must not regenerate the
-    // place, and with it rolled the same id would otherwise serve last
-    // session's shore.
     /*
-     * Where plane zero is on the Earth, which is a property of the world and
-     * not of the session. See `pinForWorld`.
-     *
-     * A surveyed region is a real place with a surveyed centre, and its grid
-     * is laid out about that centre -- so a session at Newport must read out
-     * as Rhode Island. It reported San Francisco for every region, because
-     * the anchor was set once at construction and only ever moved by the
-     * endless coast's own re-pinning. Found by a Codex review, which is the
-     * kind of thing only a reader comparing two subsystems catches: nothing
-     * inside either one was wrong.
+     * The coast is built, not fetched: everything downstream -- the shelter
+     * sweep, the field texture, the meshes, the chart -- reads a
+     * `RegionTerrain` and never asks where its samples came from. Ready
+     * synchronously, since about 190 ms of generation at Put to sea needs no
+     * loading screen. Cached against the seed that built it, so a settings
+     * change with the seed pinned does not regenerate the place and a rolled
+     * seed does not serve last session's shore.
      */
-    const surveyed =
-      current.region && current.region !== COAST_ID ? regionById(current.region) : null;
-    /*
-     * Leaving the ocean, her place in it is put away with the pin; coming
-     * back, both are taken out again.
-     *
-     * Plane metres mean different things in the two worlds -- one is
-     * measured from a pin that follows her round the planet, the other from
-     * a surveyed grid's centre -- so a position carried across unchanged is
-     * a different place on the Earth at each end. Without this, an hour in
-     * the ocean followed by a look at Newport and back put her some
-     * kilometres from where she had left off, silently. The pin alone was
-     * not enough, which is what a review pointed out.
-     */
-    if (surveyed && !inSurveyed) oceanPos = { ...state.pos };
-    if (!surveyed && inSurveyed) state.pos = { ...oceanPos };
-    inSurveyed = !!surveyed;
     pinForWorld();
 
     if (current.region === COAST_ID) {
-      wantedRegion = COAST_ID;
       wantEarth();
       if (regionTerrain?.region.id !== COAST_ID || coastSeed !== current.seed) {
         // Windowed about the boat, not the origin: a rebuild can happen
@@ -1032,21 +983,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
         coastOrigin = coast.origin;
         pendingCoast = null;
       }
-      loadingRegion = '';
-      publishRegionStatus(COAST_ID, 'ready');
     } else {
-      const region = regionById(current.region);
-      wantedRegion = region ? region.id : '';
-      if (!region) {
-        regionTerrain = null;
-        loadingRegion = '';
-        publishRegionStatus('', 'none');
-      } else if (regionTerrain?.region.id === region.id) {
-        loadingRegion = '';
-        publishRegionStatus(region.id, 'ready');
-      } else {
-        requestRegion(region);
-      }
+      regionTerrain = null;
     }
 
     const up = compassVec(wind.baseTwd);
@@ -1073,51 +1011,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     published = false;
     streamedFrom = { x: Infinity, y: Infinity };
     streamWorld(state.pos.x, state.pos.y);
-  }
-
-  function publishRegionStatus(id: string, status: RegionLoadStatus): void {
-    if (wantedRegion !== id) return;
-    snapshot.regionStatus = status;
-    emit({ type: 'region', id, status });
-  }
-
-  function requestRegion(region: Region): void {
-    if (loadingRegion === region.id && snapshot.regionStatus === 'loading') return;
-
-    loadingRegion = region.id;
-    regionTerrain = null;
-    published = false;
-    publishRegionStatus(region.id, 'loading');
-
-    void loadRegion(region).then(
-      (loaded) => {
-        // Dropped unless it is still the region wanted: a megabyte in flight
-        // is long enough for the player to have changed their mind, and the
-        // late arrival would otherwise overwrite the choice they made second.
-        if (disposed || wantedRegion !== loaded.region.id) return;
-        loadingRegion = '';
-        regionTerrain = loaded;
-        published = false;
-        // Install it before announcing readiness. Closing the menu in response
-        // to the event must never reveal one frame of the placeholder ocean.
-        streamWorld(state.pos.x, state.pos.y);
-        // And the cruise's hand with it. The deal that ran when this load
-        // began was judged against the placeholder ocean -- a review traced
-        // every path that resumes into a freshly loaded region arriving with
-        // an empty hand that nothing ever re-dealt.
-        dealCalls();
-        publishRegionStatus(region.id, 'ready');
-      },
-      (err) => {
-        if (disposed || wantedRegion !== region.id) return;
-        loadingRegion = '';
-        regionTerrain = null;
-        published = false;
-        streamWorld(state.pos.x, state.pos.y);
-        console.error('could not load the region', err);
-        publishRegionStatus(region.id, 'error');
-      },
-    );
   }
 
   /**
@@ -1258,9 +1151,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * round over the next four minutes.
    */
   function pinForWorld(): void {
-    const surveyed =
-      current.region && current.region !== COAST_ID ? regionById(current.region) : null;
-    anchor = surveyed ? { ...surveyed.centre } : { ...oceanAnchor };
+    anchor = { ...oceanAnchor };
   }
 
   /**
@@ -1322,13 +1213,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    *
    * The island field is an invented ocean: printing a real latitude and
    * longitude over it is a false claim of exactly the kind this project does
-   * not make elsewhere. The endless coast
-   * is the planet and a surveyed region is a real place, and those two get a
-   * position.
+   * not make elsewhere. The endless coast is the planet, and it gets one.
    */
   function placeOf(x: number, y: number): LatLon | null {
-    const real = current.region === COAST_ID || !!regionById(current.region);
-    return real ? toLatLon(anchor, x, y) : null;
+    return current.region === COAST_ID ? toLatLon(anchor, x, y) : null;
   }
 
   /**
@@ -1662,16 +1550,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     view.setTerrain(terrain, new Terrain(visible));
   }
 
-  function retryRegion(): void {
-    // The planet counts as part of the world to retry: it is fetched on the
-    // same connection and fails for the same reasons.
-    wantEarth();
-    const region = regionById(current.region);
-    if (!region) return;
-    wantedRegion = region.id;
-    requestRegion(region);
-    streamWorld(state.pos.x, state.pos.y);
-  }
 
   const ctl: Controls = { rudder: 0, sheet: 0, twist: 0, autoTrim: true };
   const reefState: ReefState = { reef: 0, jibFurl: 0, timer: 0 };
@@ -1705,21 +1583,16 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       view.setBinocularPower(s.binocularPower);
     }
 
-    // Arriving at a surveyed region brings its breeze with it: its land is
-    // laid out around that direction, so a place picked mid-session was
-    // otherwise arranged for one wind and sailed in another. Only on arrival,
+    // Arriving on the Earth brings the belt's wind with it. Only on arrival,
     // so that Q/E still work afterwards and a later edit does not undo them.
     if (regionChanged) {
       windShift = 0;
-      const arriving = regionById(s.region)?.conditions;
-      if (arriving) wind.baseTwd = arriving.windTwd;
-      // And arriving on the Earth brings the belt's, on exactly the same
-      // argument. Without this, switching to the planet mid-session left her
-      // sailing the last world's breeze while the ease crept toward the belt
-      // over four minutes -- the panel naming the westerlies over a wind
-      // still blowing from the north. Guarded by `regionChanged` like the
-      // line above, so Q/E and a later slider edit are not undone.
-      else if (s.region === COAST_ID) {
+      // Without this, switching to the planet mid-session left her sailing the
+      // last world's breeze while the ease crept toward the belt over four
+      // minutes -- the panel naming the westerlies over a wind still blowing
+      // from the north. Guarded by `regionChanged`, so Q/E and a later slider
+      // edit are not undone.
+      if (s.region === COAST_ID) {
         wind.baseTwd = climateAt(toLatLon(oceanAnchor, state.pos.x, state.pos.y).lat).twd;
       }
     }
@@ -1869,14 +1742,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // engine was built, so the Start hour setting did nothing after the first
     // load and every session began wherever the last one's clock had wandered to.
     hour = current.startHour;
-    // So does the wind's direction in a surveyed region. It has no slider --
-    // the land is laid out around it, and a beat that started on a random
-    // bearing would put the course somewhere the place was not designed for. Free to shift with
-    // Q/E afterwards, like anywhere else.
-    const place = regionById(current.region)?.conditions;
-    if (place) wind.baseTwd = place.windTwd;
-    // And so does the belt's, out on the open coast, where there is no
-    // surveyed place to say what the wind does. *Snapped* here rather than eased: the ease
+    // So does the wind's direction on the open coast, where the belt says what
+    // the wind does. *Snapped* here rather than eased: the ease
     // below exists so a boat sailing north into the westerlies finds them
     // gradually, but a session opening in the trades must open with the
     // trades blowing -- otherwise she is trimmed and reefed at the dock for
@@ -2045,7 +1912,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   function putToSea(): void {
-    if (current.region && snapshot.regionStatus !== 'ready') return;
     newSession();
     placeAtStart();
   }
@@ -2728,7 +2594,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       void sound.start();
     },
     putToSea,
-    retryRegion,
     setDestination,
     setPaused(p) {
       paused = p;

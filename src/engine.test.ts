@@ -22,7 +22,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const sceneCalls: { render: number } = { render: 0 };
-const regionLoad = vi.hoisted(() => vi.fn());
 const earthLoad = vi.hoisted(() => vi.fn());
 const logAdd = vi.hoisted(() => vi.fn<(record: unknown) => Promise<void>>());
 /**
@@ -100,7 +99,7 @@ vi.mock('./view/telemetry', () => ({
  * file. The stub is land in the northern half and sea in the southern, so
  * "is there a coast here" has a knowable answer.
  */
-vi.mock('./terrain-load', () => ({ loadRegion: regionLoad, loadEarth: earthLoad }));
+vi.mock('./terrain-load', () => ({ loadEarth: earthLoad }));
 
 /** IndexedDB. The passage log is asserted through the engine's own event. */
 vi.mock('./sim/anchorage', async (importActual) => {
@@ -210,7 +209,6 @@ import { TIDE_PERIOD } from './sim/current';
 import { LogStoreUnavailable } from './logbook';
 import type { EngineEvent } from './engine';
 import { METRES_PER_DEG_LAT } from './sim/globe';
-import { regionById } from './sim/regions';
 import { waterById } from './sim/waters';
 import { ManeuverTracker, type Maneuver } from './sim/maneuver';
 import { offerCalls } from './sim/calls';
@@ -218,7 +216,6 @@ import { anchorage } from './sim/anchorage';
 import { Earth } from './sim/earth';
 import { CRUISER } from './sim/config';
 import type { PassageRecord } from './sim/passage';
-import type { RegionTerrain } from './sim/region-terrain';
 
 /**
  * A whole planet at one degree a cell: land north of 30N, sea everywhere
@@ -269,7 +266,6 @@ const GLOBALS = ['window', 'document', 'requestAnimationFrame', 'cancelAnimation
 beforeEach(() => {
   frames = [];
   sceneCalls.render = 0;
-  regionLoad.mockReset();
   earthLoad.mockReset();
   earthLoad.mockImplementation(() => Promise.resolve(stubEarth()));
   logAdd.mockReset();
@@ -390,16 +386,6 @@ function sailing(over: Partial<Settings> = {}) {
   return engine;
 }
 
-function deferred<T>(): {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-} {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-}
 
 describe('engine', () => {
   /**
@@ -640,8 +626,7 @@ describe('engine', () => {
     // it reports as a phantom gybe almost at once. The raster load is left
     // pending on purpose: the boat sails on while it waits, which is exactly
     // the resumed-session path this covers.
-    regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
-    engine.applySettings(settings({ region: 'newport' }));
+    engine.applySettings(settings({ region: '', islandCount: 4 }));
     for (let i = 0; i < 30; i++) {
       engine.advance(1);
       expect(engine.snapshot.maneuver).toBeNull();
@@ -720,9 +705,7 @@ describe('engine', () => {
    */
   it('builds a generated coast without fetching anything', () => {
     const engine = createEngine(canvas(), settings({ region: 'coast', randomWorld: false, seed: 546 }));
-    expect(engine.snapshot.regionStatus).toBe('ready');
     expect(engine.snapshot.region?.region.id).toBe('coast');
-    expect(regionLoad).not.toHaveBeenCalled();
     engine.advance(2);
     // The spawn clearing, felt through the whole stack: the depth the hull
     // reads is the generator's water, not Infinity and not a shoal.
@@ -879,92 +862,6 @@ describe('engine', () => {
     for (const call of hand) {
       expect(anchorage(engine.snapshot.chart, CRUISER, call, 0, 0).canAnchor).toBe(true);
     }
-    engine.dispose();
-  });
-
-  /**
-   * A hand dealt while a surveyed region was still loading was judged against
-   * the placeholder ocean, and nothing ever dealt again -- a review traced
-   * every resume-into-a-loaded-region path arriving with an empty hand. The
-   * install handler deals now, and the proof is in the arguments: the deal
-   * after the install is judged against the region itself.
-   */
-  it('re-deals the hand once a surveyed region finishes loading', async () => {
-    const pending = deferred<RegionTerrain>();
-    regionLoad.mockReturnValue(pending.promise);
-    callsOverride.hand = [{ x: 5, y: -95 }];
-    const engine = createEngine(
-      canvas(),
-      settings({ region: 'sf-bay', cruise: true }),
-    );
-    const spy = offerCalls as ReturnType<typeof vi.fn>;
-    const before = spy.mock.calls.length;
-
-    pending.resolve({ region: { id: 'sf-bay' } } as RegionTerrain);
-    await pending.promise;
-    await Promise.resolve();
-
-    expect(spy.mock.calls.length).toBeGreaterThan(before);
-    expect(spy.mock.calls.at(-1)![0]).toBe(engine.snapshot.region);
-    engine.dispose();
-  });
-
-  it('waits for a surveyed region before allowing a new session', async () => {
-    const pending = deferred<RegionTerrain>();
-    regionLoad.mockReturnValue(pending.promise);
-
-    const engine = createEngine(
-      canvas(),
-      settings({ region: 'sf-bay' }),
-    );
-    const initialSession = engine.snapshot.session;
-
-    expect(engine.snapshot.regionStatus).toBe('loading');
-    engine.putToSea();
-    expect(engine.snapshot.session).toBe(initialSession);
-
-    pending.resolve({ region: { id: 'sf-bay' } } as RegionTerrain);
-    await pending.promise;
-    await Promise.resolve();
-
-    expect(engine.snapshot.regionStatus).toBe('ready');
-    expect(engine.snapshot.region).not.toBeNull();
-    engine.putToSea();
-    expect(engine.snapshot.session).toBe(initialSession + 1);
-    expect(regionLoad).toHaveBeenCalledTimes(1);
-    engine.dispose();
-  });
-
-  it('exposes a failed region load and retries it', async () => {
-    const pending = deferred<RegionTerrain>();
-    regionLoad
-      .mockRejectedValueOnce(new Error('test raster failure'))
-      .mockReturnValueOnce(pending.promise);
-
-    const engine = createEngine(
-      canvas(),
-      settings({ region: 'sf-bay' }),
-    );
-    const statuses: string[] = [];
-    engine.onEvent((event) => {
-      if (event.type === 'region') statuses.push(event.status);
-    });
-
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(engine.snapshot.regionStatus).toBe('error');
-    expect(statuses).toContain('error');
-    expect(engine.snapshot.region).toBeNull();
-
-    engine.retryRegion();
-    expect(engine.snapshot.regionStatus).toBe('loading');
-    expect(regionLoad).toHaveBeenCalledTimes(2);
-
-    pending.resolve({ region: { id: 'sf-bay' } } as RegionTerrain);
-    await pending.promise;
-    await Promise.resolve();
-    expect(engine.snapshot.regionStatus).toBe('ready');
-    expect(engine.snapshot.region).not.toBeNull();
     engine.dispose();
   });
 
@@ -1750,49 +1647,6 @@ describe('sailing on the Earth', () => {
     engine.dispose();
   });
 
-  it('reads a surveyed region out as the place it really is', () => {
-    // Newport is in Rhode Island whatever ocean she came from. The pin was
-    // set once at construction and only ever moved by the endless coast's
-    // own re-anchoring, so every surveyed region reported San Francisco --
-    // a readout naming the wrong continent, in the one part of the game
-    // whose claim is that the ground is the real ground.
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
-    engine.advance(0.1);
-    carryTo(engine, 10);
-    const ocean = { ...placeOf(engine) };
-    regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
-    engine.applySettings(settings({ region: 'newport' }));
-    const newport = regionById('newport')!.centre;
-    expect(placeOf(engine).lat).toBeCloseTo(newport.lat, 1);
-    expect(placeOf(engine).lon).toBeCloseTo(newport.lon, 1);
-    // Sail about in the region -- her plane metres there mean something
-    // else entirely -- and then go back out to the ocean.
-    engine.snapshot.state.pos = { x: 6000, y: -4000 };
-    engine.advance(0.1);
-    engine.applySettings(settings({ region: 'coast', randomWorld: false, seed: 13 }));
-    engine.advance(0.1);
-    // Where she left off, not where the game opens and not six kilometres
-    // along: the passage that got her to ten north still happened, and the
-    // region's coordinates did not follow her out.
-    const back = placeOf(engine);
-    expect(Math.abs(back.lat - ocean.lat) * METRES_PER_DEG_LAT).toBeLessThan(50);
-    expect(Math.abs(back.lon - ocean.lon) * METRES_PER_DEG_LAT).toBeLessThan(50);
-    engine.dispose();
-  });
-
-  it('never re-pins the plane under a surveyed region', () => {
-    // A region's grid is laid out in plane metres about its own centre. Move
-    // the pin under it and the survey stays where it was while the boat is
-    // carried back into the middle of it -- several miles of teleport, and
-    // the terrain would say nothing was wrong.
-    regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
-    const engine = sailing({ region: 'newport' });
-    engine.snapshot.state.pos = { x: REANCHOR_AT + 5_000, y: 0 };
-    engine.advance(0.02);
-    expect(engine.snapshot.state.pos.x).toBeGreaterThan(REANCHOR_AT);
-    engine.dispose();
-  });
-
   it('gives no position to a world that is not on the Earth', () => {
     // The island field is an invented ocean. Printing a real latitude and
     // longitude over it would be a false claim of exactly the kind this
@@ -2010,13 +1864,12 @@ describe('sailing on the Earth', () => {
     // her every 200 km, so its metres mean nothing tomorrow and it is
     // remembered by latitude and longitude; every other world has a plane
     // nailed down, and there the metres are exactly right.
-    regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
-    const engine = sailing({ region: 'newport' });
+    const engine = sailing({ region: '', islandCount: 4 });
     engine.advance(0.5);
     engine.snapshot.state.pos = { x: 2200, y: -1400 };
     engine.advance(31);
     expect(kept.stored, 'nothing was written').not.toBeNull();
-    expect(kept.stored!.region).toBe('newport');
+    expect(kept.stored!.region).toBe('');
     expect(kept.stored!.place, 'a region has no place on the plane it is drawn in').toBeNull();
     const pos = kept.stored!.pos as { x: number; y: number };
     // Within a couple of hundred metres: she is sailing while the throttle
@@ -2029,9 +1882,8 @@ describe('sailing on the Earth', () => {
   it('opens a fixed-plane world where she left off in it', () => {
     // And the other half: a row with plane metres puts her back at them,
     // ninety metres downwind of where she was rather than of the origin.
-    regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
-    kept.stored = { region: 'newport', seed: 13, place: null, pos: { x: 4000, y: 1500 }, at: 1 };
-    const engine = sailing({ region: 'newport', seed: 13, randomWorld: false });
+    kept.stored = { region: '', seed: 13, place: null, pos: { x: 4000, y: 1500 }, at: 1 };
+    const engine = sailing({ region: '', seed: 13, randomWorld: false });
     engine.advance(0.5);
     const pos = engine.snapshot.state.pos;
     expect(Math.hypot(pos.x - 4000, pos.y - 1500)).toBeLessThan(200);
@@ -2041,8 +1893,7 @@ describe('sailing on the Earth', () => {
   it('fetches the planet only where it is used, and again if it fails', async () => {
     // 29 MB on the wire, so it is not fetched for a session in Newport --
     // whose ground is surveyed, and which never asks the globe anything.
-    regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
-    const inRegion = sailing({ region: 'newport' });
+    const inRegion = sailing({ region: '' });
     expect(earthLoad).not.toHaveBeenCalled();
     inRegion.dispose();
 
@@ -2302,16 +2153,14 @@ describe('the wind belts', () => {
   }, 30_000);
 
   it('brings the belt with her when she arrives on the Earth', () => {
-    // Puget Sound's own breeze is from 350 -- near north, and nothing like
-    // the westerly the default anchor sits under. Switching worlds is
-    // arriving somewhere, so the wind must be the new place's at once: eased
-    // instead, the first four minutes of the Earth were sailed in Puget
-    // Sound's wind while the panel named the westerlies over it. Seen in the
-    // browser before it was seen in a test.
-    regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
-    const engine = sailing({ region: 'puget-sound' });
+    // Switching worlds is arriving somewhere, so the wind must be the new
+    // place's at once: eased instead, the first four minutes of the Earth
+    // were sailed in the last world's wind while the panel named the
+    // westerlies over it. Seen in the browser before it was seen in a test.
+    // The island field is the world she arrives from, where the wind is
+    // whatever the player set and nothing to do with a belt.
+    const engine = sailing({ region: '' });
     engine.advance(0.5);
-    expect(deg(engine.snapshot.wind.baseTwd)).toBeCloseTo(350, 0);
     engine.applySettings(settings({ region: 'coast', randomWorld: false, seed: 13 }));
     engine.advance(0.1);
     const twd = deg(engine.snapshot.wind.baseTwd);
@@ -2349,21 +2198,6 @@ describe('the wind belts', () => {
     // test above: it fits in the default five seconds here and not
     // necessarily on a loaded runner, and a timeout is not a finding.
   }, 30_000);
-
-  it('leaves a surveyed region alone', () => {
-    // Those places were laid out around a particular breeze; a belt reaching
-    // in to turn it would undo the thing that makes them worth sailing. Shown
-    // by taking a session that *does* have a belt and moving it, so that a
-    // deleted branch cannot pass on the strength of the field starting null.
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
-    engine.advance(0.5);
-    expect(engine.snapshot.belt).not.toBeNull();
-    regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
-    engine.applySettings(settings({ region: 'sf-bay' }));
-    engine.advance(0.5);
-    expect(engine.snapshot.belt).toBeNull();
-    engine.dispose();
-  });
 });
 
 /**

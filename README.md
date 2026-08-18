@@ -34,7 +34,7 @@ npm run check:base -- dist /voyage/    # nothing still points at the root
 
 The check is worth running because that mistake is invisible at the root, which
 is where everyone develops: the models, the attribution notices and the
-surveyed rasters are fetched at runtime, so the bundler never sees those paths
+planet's raster are fetched at runtime, so the bundler never sees those paths
 and cannot correct them. `.github/workflows/deploy.yml` does both on request.
 
 Contributing? Read [AGENTS.md](AGENTS.md) first. Known limitations and designs
@@ -67,7 +67,7 @@ src/sim/     pure physics core -- no Three.js, no React, no browser APIs
   passage    where you are bound: bearing, VMC, ETA and the course to steer
   anchorage  whether a spot will hold her
   current    tidal streams as a function of position
-  regions    bounded pieces of real coast, surveyed
+  regions    what a height-field world is, and what a passage's place was called
   globe      the tangent plane <-> latitude and longitude, and great circles
   earth      the coarse planet, asked one question: where is the land
   climate    what the latitude does to the wind -- the belts a pilot chart has
@@ -193,95 +193,34 @@ measured from the session's start hour, which the player can lengthen, shorten
 or switch off. What there is no model of is the *height*: see the deliberate
 simplifications.
 
-### 1c. Regions
+### 1c. One world, and the six that were retired
 
-A region is a bounded piece of a **real coast**, sailed freely, where the shape
-of the land is genuinely that place. Six ship, each 20 km square at 25 m:
+The Earth is the only world with land in it now. Six **surveyed regions** used
+to ship beside it — twenty kilometres square at 25 m, from NOAA NCEI's CUDEM
+1/9 arc-second topobathymetry — San Francisco Bay, Newport, Merchant Row, Puget
+Sound, Chesapeake Bay and Buzzards Bay. Each was chosen for being extreme on a
+measured axis, the survey of nine US coasts that picked them is written up in
+[docs/real-map.md](docs/real-map.md), and the rasters are in the history of this
+repository.
 
-| | | asks |
-|---|---|---|
-| **San Francisco Bay** | the Golden Gate to the Berkeley flats | where is the tide, and where is the bottom |
-| **Newport** | the East Passage out into Rhode Island Sound | where is the breeze, and when do you leave shelter |
-| **Merchant Row** | Stonington, the islands below it, the north of Isle au Haut | which side of the island do you take |
-| **Puget Sound** | Elliott Bay, Bainbridge, the main basin | nothing about the bottom — only the breeze under the bluffs |
-| **Chesapeake Bay** | Annapolis, the Severn, the Bay Bridge | how do you find pressure before you find the mud |
-| **Buzzards Bay** | Woods Hole, Vineyard Sound, the Elizabeth Islands | how much of a hard breeze and a hard tide can you hold |
+They were removed because of what they turned out to be, which is the part
+worth recording. **They bought a true bottom and not a chart.** The chart draws
+land and one contour — the water shallower than your own draft — so a surveyed
+shoal was something you struck rather than something you planned around; there
+are no soundings, no buoys, no leading marks; and the stream, at San Francisco
+the whole point of the place, does not turn with a tide this simulator does not
+have. Twenty kilometres of measured ground under a boat that cannot read it is
+a great deal of machinery for one decision.
 
-**Each is extreme on some measured axis, and that is the entry requirement.**
+What the Earth answers instead is *where*: the passage, the bearing, the
+distance, the landfall, the belt and the ocean floor offshore, all of it real.
+What it invents is the shoreline inside the right gulf, at anything finer than
+the planet's 7 km cell. Those are different questions, and the second one is
+the game this is.
 
-| | land | sailable | too shoal | close aboard | wind deficit | median depth |
-|---|---|---|---|---|---|---|
-| San Francisco Bay | 41% | 47% | 13% | 7% | **0.173** | 11 m |
-| Newport | 43% | 53% | 4% | 8% | 0.041 | 16 m |
-| Merchant Row | 29% | 65% | 5% | **15%** | 0.067 | 20 m |
-| Puget Sound | 45% | 52% | 3% | 8% | 0.100 | **85 m** |
-| Chesapeake Bay | 34% | 48% | **18%** | 2% | 0.025 | **6 m** |
-| Buzzards Bay | 18% | **78%** | 3% | 3% | 0.015 | 14 m |
-
-*Close aboard* is the share of sailable water within 200 m of a shore; *wind
-deficit* is the mean loss to land shadow at the prevailing wind. Both are
-computed from the committed rasters, and `region-terrain.test.ts` holds each
-region to the axis it was chosen for.
-
-**Measurement has overruled the plan twice.** Maine was going to be Penobscot
-Bay proper, because the Camden Hills stand 398 m off the water and should make
-the biggest lee here; it measured *last* of three at 0.038, and never beat 0.098
-under any wind it plausibly gets. The region moved some 18 km east to the water
-where the archipelago is. Then a survey of nine US coasts baked six and kept
-three: **Long Island Sound** was extreme on nothing, **Charleston** was
-Chesapeake with less tide than Buzzards Bay, and **Biscayne Bay** was extreme on
-four axes that were all absences. San Diego, the Channel Islands and Chicago
-never got as far as a bake — see the data note below.
-
-The land and the depths are surveyed, not sketched. They come from NOAA NCEI's
-CUDEM 1/9 arc-second topobathymetry — one continuous measured surface carrying
-the hills and the sea floor together — baked to a committed raster by
-`scripts/fetch-terrain.ts`. The Gate is 100 m deep because it is. Checked
-against the chart by latitude and longitude: Alcatraz 39 m, Angel Island 180 m,
-Raccoon Strait −20 m, the Berkeley flats −2.6 m. And at Newport: Beavertail
-8.1 m, the East Passage entrance −55 m where it scours between the headlands,
-the West Passage −15 m at the same latitude, Newport Harbour −7.4 m. And at
-Merchant Row: Champlain Mountain on Isle au Haut 163 m, the East Penobscot Bay
-channel −96 m, the water among the islands −9 to −13 m. Puget Sound drops from
-the Magnolia bluff at 128 m to −284 m in the main basin inside two kilometres.
-
-**Still not a chart.** 25 m between soundings, no height of tide, and the grid
-is UTM so bearings are grid bearings — how far off true depends on where the
-region sits in its zone, from 0.2° at Merchant Row to 1.55° at Newport, which is
-furthest from its central meridian. Do not take a boat anywhere on it.
-
-**And only where there is a survey.** CUDEM is the reason the depths are real,
-and it does not reach everywhere: the DEM mosaic returns nothing better than
-ETOPO at ~450 m over San Diego and the Channel Islands, which under a 25 m grid
-would be an invented coastline. The Great Lakes have their own product, but a
-lake surface sits at 176 m of elevation and every depth here is measured from
-zero. Those are gaps in the data, not in the ambition.
-
-Shelter is *data*, not a formula, and this is what a fixed region buys. Fetch
-and wind shadow are swept over the whole grid once per two degrees of wind
-shift, in 16 ms, and the water shader samples that same field as a texture. The
-hand-copied GLSL that had to be kept in step with the TypeScript is gone for a
-region: the shader is not a copy of the model, it reads the model's output.
-
-The conditions are a different matter and are labelled apart. The prevailing
-breeze and the stream on `Region.conditions` are the broad, well-known character
-of the place, not a climatological mean or a tidal diamond. A real one would be
-worth having; inventing one and writing it down beside real soundings would be
-worse than admitting the sketch.
-
-**The city front** is the decision the tidal field exists for. A hard summer
-westerly, a flood setting east against it, and the beat has to go out into both.
-Measured on the surveyed water: 1.4 knots of foul stream offshore in 17 m
-against 0.2 knots in the lane at 5 m, with the ground a hundred metres past it.
-That is the shape of a decision — a lane that were only better would be the
-answer, not a choice. The set is the flood and not the ebb deliberately: an ebb
-runs out of the Gate within twenty degrees of the way a westerly makes you beat,
-so it would carry the boat towards the mark and leave nothing to escape.
-
-Venues — named places sketched from overlapping circles — were the earlier
-answer. San Francisco was the only one, the surveyed region is the same water,
-and the code is gone: a type with no entries and no way to select one is not a
-feature, it is a thing a reader has to work out is dead.
+`Region` survives as a type because the generated coast is one: a name, a grid
+and where its samples came from, read by the same `HeightField` and
+`RegionTerrain` the surveyed rasters went through.
 
 ### 2. Sails
 
@@ -491,7 +430,7 @@ instead of thinning out to 2.5 km, which is a long way downwind of anywhere.
 
 The generated coast keeps the no-edge promise by a different mechanism. Its
 ground is a pure function of world position and seed, sampled into the same
-20 km height-field window a surveyed region uses — and the engine re-bakes that
+20 km height-field window the surveyed regions used — and the engine re-bakes that
 window about the boat as she sails along the shore, a few raster rows per
 physics step (the full field is a measured ~190 ms, too much for one frame).
 Windows are pinned to a shared 25 m world lattice, so any two of the same seed
@@ -528,8 +467,8 @@ conditioned on it.
 That division is worth being plain about. Sail from Gibraltar to the Canaries
 and the passage, the bearing, the distance and the landfall are the real Earth's.
 The beach you anchor off is invented — a plausible coast in the right place, not
-the coast that is there. The six surveyed regions remain the only places where
-the ground itself is true, and they say so.
+the coast that is there, and the menu says so. Six surveyed squares used to be
+the exception; see 1c for what they were and why they went.
 
 Eleven **departures** are offered outright — the Golden Gate, Cádiz, the Cape of
 Good Hope, the Korea Strait, Sydney, Cape Horn, Antigua, Oahu, Reykjanes,
@@ -606,9 +545,7 @@ that gives Biscay a gale gives Cape Horn a bigger one.
 The player's wind slider is scaled, not replaced. It sets what trade-wind
 strength means and every belt is relative to it, so 25 knots is still a hard sail
 everywhere and the doldrums are still the softest place they can be. Direction is
-taken outright — a compass bearing has no slider to honour. Surveyed regions
-keep their own conditions untouched: their land was laid out around a
-particular breeze.
+taken outright — a compass bearing has no slider to honour.
 
 ### 8. Time of day and weather
 

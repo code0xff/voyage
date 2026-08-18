@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { HeightField } from '../sim/heightfield';
 import { RegionTerrain } from '../sim/region-terrain';
-import { regionById } from '../sim/regions';
+import { coastRegion } from '../sim/coast';
 import { FIELD_DEPTH, SEG, SIZE, createWater, fieldGlsl, ringGeometry } from './water';
 
 /**
@@ -135,8 +135,7 @@ describe('the far sea ring', () => {
 
 /** A small raster whose north and south edges have deliberately different depths. */
 function textureTerrain(): RegionTerrain {
-  const source = regionById('sf-bay');
-  if (!source) throw new Error('sf-bay region is missing');
+  const source = coastRegion(1);
   const region = {
     ...source,
     id: 'water-test',
@@ -185,8 +184,7 @@ describe('the surveyed water texture', () => {
   });
 
   it('keeps the shelter and depth channels independent when the wind updates', () => {
-    const source = regionById('sf-bay');
-    if (!source) throw new Error('sf-bay region is missing');
+    const source = coastRegion(1);
     const region = {
       ...source,
       id: 'water-shelter-test',
@@ -242,8 +240,7 @@ describe('the surveyed water texture', () => {
  */
 describe('the water texture of a moved window', () => {
   it('bakes the field where the window sits, and says so in the uniform', () => {
-    const source = regionById('sf-bay');
-    if (!source) throw new Error('sf-bay region is missing');
+    const source = coastRegion(1);
     const region = {
       ...source,
       id: 'water-origin-test',

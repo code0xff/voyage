@@ -2,14 +2,13 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { HeightField } from '../sim/heightfield';
 import { RegionTerrain } from '../sim/region-terrain';
-import { regionById } from '../sim/regions';
+import { coastRegion } from '../sim/coast';
 import { skyState } from '../sim/sky';
 import { createRegionView } from './region-mesh';
 
 /** A compact surveyed coast, large enough to exercise the real tile builder. */
 function meshTerrain(): RegionTerrain {
-  const source = regionById('sf-bay');
-  if (!source) throw new Error('sf-bay region is missing');
+  const source = coastRegion(1);
   const region = {
     ...source,
     id: 'region-mesh-test',
@@ -91,8 +90,7 @@ describe('surveyed region mesh', () => {
  */
 describe('a moved window', () => {
   it('lays its tiles about the window, not the world origin', () => {
-    const source = regionById('sf-bay');
-    if (!source) throw new Error('sf-bay region is missing');
+    const source = coastRegion(1);
     const region = {
       ...source,
       id: 'region-mesh-origin-test',

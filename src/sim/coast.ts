@@ -59,40 +59,21 @@ const GRID = { width: 800, height: 800, cell: 25, unit: 0.2 } as const;
 /**
  * The Region record a generated coast sails under.
  *
- * Most of a `Region` is provenance — where on Earth, who surveyed it, what the
- * licence obliges — and a generated coast has honest answers for none of that,
- * so the fields say so rather than inventing a place. `centre` and `utmZone`
- * are zeroed: they are display metadata for real places and nothing reads them
- * for this one. `conditions` are neutral and deliberately unreachable — the
- * engine looks conditions up through `regionById`, which does not know this
- * id, so a generated coast keeps the player's own wind and tide sliders, like
- * the open ocean it replaces and unlike a surveyed place, which brings its
- * own weather because the land was laid out around it.
+ * A `Region` is now the description of a heightfield world and nothing else --
+ * a name, a grid and where the samples came from -- which is exactly what a
+ * generated coast can answer honestly. It used to carry a survey's provenance,
+ * its licence, its UTM zone and the breeze its land was laid out around, and
+ * this function had to answer all four with `'Nowhere on Earth'` and a zero.
+ *
+ * `source` carries the seed because the chart caches its painted raster
+ * against that string: two seeds are two coasts and must not share an entry.
  */
 export function coastRegion(seed: number): Region {
   return {
     id: COAST_ID,
     name: COAST_NAME,
-    area: 'Nowhere on Earth',
-    brief: 'A mainland drawn from this seed: bays, headlands and islets no chart has.',
-    centre: { lat: 0, lon: 0 },
-    utmZone: 0,
     grid: GRID,
-    // Never fetched: the engine generates this region's samples instead. Empty
-    // rather than a fake path, so a loader handed it by mistake fails loudly.
-    raster: '',
     source: `Procedurally generated, seed ${seed}`,
-    licence: '',
-    conditions: {
-      windTwd: 0,
-      windKnots: 12,
-      gustiness: 0.45,
-      seaScale: 1,
-      setDeg: 90,
-      driftKnots: 0,
-      fullDepth: 25,
-      startHour: 9,
-    },
   };
 }
 

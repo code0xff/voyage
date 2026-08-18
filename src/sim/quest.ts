@@ -1,7 +1,6 @@
 import { BELTS } from './climate';
 import { COAST_ID } from './coast';
 import type { LatLon } from './globe';
-import { REGIONS } from './regions';
 import { WEATHER_KINDS } from './weather';
 
 /**
@@ -454,14 +453,14 @@ const NOW_FIELDS = ['facts', 'near', 'belt', 'weather', 'region'];
  * the promise in `docs/quests.md` untrue for exactly the fields whose
  * spelling nobody can guess.
  *
- * The worlds are the two unsurveyed ones plus every surveyed region: '' is
- * the island field and `COAST_ID` the open Earth, which is what
- * `Settings.region` holds for each.
+ * The worlds are the two `Settings.region` can hold: '' is the island field
+ * and `COAST_ID` the open Earth. It was a longer list while the six surveyed
+ * regions shipped.
  */
 const NAMED: Record<string, readonly string[]> = {
   belt: BELTS,
   weather: WEATHER_KINDS,
-  region: ['', COAST_ID, ...REGIONS.map((r) => r.id)],
+  region: ['', COAST_ID],
 };
 
 type Refusal = PackProblem | null;

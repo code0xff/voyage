@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BELTS } from '@/sim/climate';
 import { COAST_ID } from '@/sim/coast';
-import { REGIONS } from '@/sim/regions';
 import { WEATHER_KINDS } from '@/sim/weather';
 import { NOW_FACTS, QUEST_FORMAT, TALLY_FACTS, readPack } from '@/sim/quest';
 import { PACK_GUIDE_NAMES, PACK_GUIDE_NOW, PACK_GUIDE_TALLIES } from './pack-guide-strings';
@@ -79,7 +78,7 @@ describe('the quest pack guide', () => {
     const listed = (field: string) => quoted(meaningOf(PACK_GUIDE_NAMES, field)!.en).sort();
     expect(listed('belt')).toEqual([...BELTS].sort());
     expect(listed('weather')).toEqual([...WEATHER_KINDS].sort());
-    expect(listed('region')).toEqual(['""', COAST_ID, ...REGIONS.map((r) => r.id)].sort());
+    expect(listed('region')).toEqual(['""', COAST_ID].sort());
     expect(PACK_GUIDE_NOW.terms?.map((t) => t.term).sort()).toEqual([...NOW_FACTS].sort());
     expect(PACK_GUIDE_TALLIES.terms?.map((t) => t.term).sort()).toEqual([...TALLY_FACTS].sort());
   });

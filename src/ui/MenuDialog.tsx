@@ -38,7 +38,6 @@ import {
   islandCount,
   PANEL,
   QUEST,
-  REGION_BRIEF,
   SETTINGS_UI,
   TABS,
   offWater,
@@ -48,11 +47,10 @@ import {
 } from "./strings";
 import {
   withCoast,
-  withRegion,
   withoutRegion,
   type Settings,
 } from "@/settings";
-import { REGIONS, placeName, regionById } from "@/sim/regions";
+import { placeName } from "@/sim/regions";
 import { COAST_ID, COAST_NAME } from "@/sim/coast";
 import { formatLatLon } from "@/sim/globe";
 import { loadUnderway } from "@/underway";
@@ -66,7 +64,6 @@ import { Credits } from "./Credits";
 import type { LogStore } from "@/logbook";
 import type { PassageRecord } from "@/sim/passage";
 import { formatDistance, formatDuration, formatWhen } from "@/sim/units";
-import type { RegionLoadStatus } from "@/engine";
 
 /** A labelled range control. Sliders read better than numeric inputs for conditions. */
 function Slider({
@@ -199,36 +196,6 @@ function LastPassage({ p, onOpen }: { p: PassageRecord; onOpen: () => void }) {
   );
 }
 
-function RegionLoadNotice({
-  status,
-  onRetry,
-}: {
-  status: RegionLoadStatus;
-  onRetry: () => void;
-}) {
-  const t = useT();
-  if (status === "none" || status === "ready") return null;
-  const failed = status === "error";
-  return (
-    <div
-      role={failed ? "alert" : "status"}
-      aria-live="polite"
-      className={`mt-3 flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-[11px] leading-relaxed ${
-        failed
-          ? "border-warning/40 bg-warning/10 text-warning"
-          : "border-info/40 bg-info/10 text-info"
-      }`}
-    >
-      <span>{t(failed ? WORLD.regionLoadFailed : WORLD.regionLoading)}</span>
-      {failed && (
-        <Button variant="outline" size="sm" className="shrink-0" onClick={onRetry}>
-          {t(WORLD.retryRegion)}
-        </Button>
-      )}
-    </div>
-  );
-}
-
 function EngineLoadNotice({
   loading,
   failed,
@@ -312,8 +279,6 @@ export function MenuDialog({
   engineLoading,
   engineError,
   onRetryEngine,
-  regionStatus,
-  onRetryRegion,
   onNewVoyage,
   onSailOn,
 }: {
@@ -342,8 +307,6 @@ export function MenuDialog({
   engineLoading: boolean;
   engineError: boolean;
   onRetryEngine: () => void;
-  regionStatus: RegionLoadStatus;
-  onRetryRegion: () => void;
   /** Put to sea from the chosen departure, forgetting where she got to. */
   onNewVoyage: () => void;
   /** Put to sea in the world of the last voyage, where it left off. */
@@ -377,7 +340,6 @@ export function MenuDialog({
   const [view, setView] = useState<View>("play");
   const t = useT();
   const lang = useLang();
-  const regionReady = !settings.region || regionStatus === "ready";
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) =>
     onSettings({ ...settings, [k]: v });
 
@@ -415,7 +377,7 @@ export function MenuDialog({
       ? t(offWater(t(WATER_NAME[near.id])))
       : carried.place
         ? formatLatLon(carried.place)
-        : (regionById(carried.region)?.name ?? t(MENU.openSea));
+        : t(MENU.openSea);
   /*
    * Not offered when it would be the same door twice: a voyage still sitting
    * at the departure a new one would start from is a new one.
@@ -571,7 +533,7 @@ export function MenuDialog({
               <Button
                 className="mb-2 w-full justify-between"
                 onClick={() => onOpenChange(false)}
-                disabled={!regionReady || engineError}
+                disabled={engineError}
               >
                 <span className="flex items-center gap-2">
                   <Anchor /> {t(MENU.resume)}
@@ -589,7 +551,7 @@ export function MenuDialog({
                 <Button
                   className="w-full justify-between"
                   onClick={onSailOn}
-                  disabled={!regionReady || engineError}
+                  disabled={engineError}
                 >
                   <span className="flex items-center gap-2">
                     <Compass /> {t(MENU.sailOn)}
@@ -601,7 +563,7 @@ export function MenuDialog({
                 variant={canResume || sailsOn ? "secondary" : "default"}
                 className="w-full justify-between"
                 onClick={onNewVoyage}
-                disabled={!regionReady || engineError}
+                disabled={engineError}
               >
                 <span className="flex items-center gap-2">
                   <Compass /> {t(MENU.putToSea)}
@@ -610,9 +572,6 @@ export function MenuDialog({
                   {startsFrom ?? t(MENU.putToSeaHint)}
                 </span>
               </Button>
-              {settings.region && (
-                <RegionLoadNotice status={regionStatus} onRetry={onRetryRegion} />
-              )}
               <EngineLoadNotice
                 loading={engineLoading}
                 failed={engineError}
@@ -635,13 +594,8 @@ export function MenuDialog({
                   {/* A surveyed place sets the island count to zero because it
                       brings its own land, so reading "open sea" off that field
                       alone announced San Francisco as an empty ocean. */}
-                  {settings.region
-                    ? // The lookup does not know the generated coast, and the
-                      // fallback announced it as the open sea -- the same
-                      // mislabelling the comment above records.
-                      settings.region === COAST_ID
-                      ? COAST_NAME
-                      : (regionById(settings.region)?.name ?? t(MENU.openSea))
+                  {settings.region === COAST_ID
+                    ? COAST_NAME
                     : settings.islandCount === 0
                       ? t(MENU.openSea)
                       : t(islandCount(settings.islandCount))}
@@ -824,24 +778,13 @@ export function MenuDialog({
                 {t(WORLD.where)}
               </span>
               <Select
-                value={
-                  settings.region
-                    ? settings.region === COAST_ID
-                      ? COAST_ID
-                      : `region:${settings.region}`
-                    : "open"
-                }
+                value={settings.region === COAST_ID ? COAST_ID : "open"}
                 onValueChange={(v) => {
                   // Before the open-water fallthrough: an unprefixed value it
                   // does not recognise clears the world, which is exactly what
                   // must not happen to a coast someone just picked.
                   if (v === COAST_ID) {
                     onSettings(withCoast(settings));
-                    return;
-                  }
-                  if (v.startsWith("region:")) {
-                    const region = regionById(v.slice(7));
-                    if (region) onSettings(withRegion(settings, region));
                     return;
                   }
                   // Picking a place writes its conditions into the settings
@@ -855,17 +798,9 @@ export function MenuDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="open">{t(WORLD.openOcean)}</SelectItem>
-                  {/* Beside the open ocean rather than among the surveyed
-                      places: both are procedural, and the tag carries the
-                      claim about how true the land is. */}
                   <SelectItem value={COAST_ID}>
                     {COAST_NAME} — {t(WORLD.earthTag)}
                   </SelectItem>
-                  {REGIONS.map((r) => (
-                    <SelectItem key={r.id} value={`region:${r.id}`}>
-                      {r.name} — {t(WORLD.surveyedTag)}
-                    </SelectItem>
-                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -882,22 +817,6 @@ export function MenuDialog({
                   {t(WORLD.earthBody)}
                 </p>
                 <Departure value={settings.departure} onChoose={(id) => set("departure", id)} />
-              </>
-            ) : settings.region ? (
-              <>
-                <p className="text-[10px] leading-relaxed text-muted-foreground">
-                  {REGION_BRIEF[settings.region]
-                    ? t(REGION_BRIEF[settings.region])
-                    : regionById(settings.region)?.brief}
-                  <br />
-                  <span className="text-success">
-                    {t(WORLD.surveyedLead)}
-                  </span>{" "}
-                  {t(WORLD.surveyedBody)}{" "}
-                  {regionById(settings.region)?.source}
-                  {t(WORLD.surveyedCaveat)}
-                </p>
-                <RegionLoadNotice status={regionStatus} onRetry={onRetryRegion} />
               </>
             ) : (
               <Slider

@@ -1,5 +1,25 @@
 # Sailing a map of a real place
 
+> **Retired.** The six surveyed regions were built, shipped, and removed again
+> in favour of one world: the Earth. This document is kept whole, as the design
+> and the evidence behind a thing that existed, because the measurements in it
+> were expensive and are still true — nine US coasts surveyed, six baked, three
+> dropped — and because the machinery it describes is what the generated coast
+> still runs on.
+>
+> **Why they went**, in one paragraph, since the rest of this document argues
+> the other way. A 25 m survey bought a true bottom and not a chart: the chart
+> draws land and one contour, at your own draft, so a surveyed shoal was
+> something you struck rather than something you planned around; there are no
+> soundings, no buoys and no leading marks; and the stream — at San Francisco
+> the whole point of the place — does not turn, because there is no tide in
+> this simulator. Twenty kilometres of measured ground under a boat that cannot
+> read it is a great deal of machinery for one decision. The Earth answers
+> *where* instead, and that turned out to be the game.
+>
+> The rasters and `scripts/fetch-terrain.ts` are in the history of the
+> repository. Everything below is as it was written.
+
 The goal: a bounded region of a real coast, sailed freely, where the shape of
 the land is genuinely that place rather than a suggestion of it.
 
@@ -291,4 +311,33 @@ circles remain, and they no longer do. It is still in `Terrain` for the
 procedural ocean, which is built from circles and always will be.
 
 Passages logged under the old `sf` id resolve forward to the region, so the
-logbook does not forget where anyone has been.
+logbook does not forget where anyone has been. (And now that the regions are
+gone too, `regions.ts` keeps all seven names for the same reason.)
+
+---
+
+## The three that were baked and not kept
+
+Recorded because "we looked at it" is worth as much as "we shipped it", and
+because the next person to want a US region should not re-survey these from
+scratch. All were measured on the same axes as the table above.
+
+- **Long Island Sound (west, off Norwalk).** Extreme on nothing. Land 24%,
+  sailable 71%, 2% of it close aboard, wind deficit 0.016, median depth 17 m,
+  11 knots, a knot of stream. Every one of those sits inside the range the six
+  shipped regions already covered. A square, not a region.
+- **Charleston.** Median depth 6 m and 14% too shoal to sail, which is
+  Chesapeake; its only distinction was 1.6 knots of stream, which is less than
+  Buzzards Bay's 2. Dominated on both axes it might have won on.
+- **Biscayne Bay.** Extreme on four axes and all of them absences: the least
+  land at 9%, the least shelter at 0.006, the least close-aboard water at 1%,
+  and the least stream at half a knot, over a median depth of 4 m. Being the
+  emptiest square measured is not a reason to sail it.
+
+Three more never got as far as a bake, for want of data rather than character.
+The DEM mosaic has no CUDEM over **San Diego** or the **Channel Islands** --
+both return ETOPO at 15 arc-seconds, roughly 450 m, which would be an invented
+coastline under a 25 m grid. **Chicago** returns a Great Lakes product rather
+than ETOPO, but a lake surface sits at 176 m of elevation and every depth in
+this project is measured from zero, so a Great Lakes region would need a datum
+offset `Region` never had.

@@ -110,14 +110,12 @@ misspelled `"weather": "foggy"` is not a hard quest, it is an impossible one.
 |---|---|
 | `belt` | `doldrums` `trades` `horse` `westerlies` `polar` |
 | `weather` | `clear` `fair` `overcast` `rain` `squall` `shower` `fog` |
-| `region` | `""` every sea that is neither — the seeded islands, open water, a venue — `coast` the open Earth, or a surveyed one: `sf-bay` `newport` `merchant-row` `puget-sound` `chesapeake` `buzzards-bay` |
+| `region` | `coast` the open Earth, or `""` the seeded islands and open water |
 
-One impossible combination the reader cannot catch, because both names are
-real: **a belt is only named on the open Earth.** Everywhere else the mean
-wind is the player's own setting, and calling that "the westerlies" would be a
-lie — `beltFor` returns null off `COAST_ID`. So a `region` and a `belt` in one
-ask never complete. Latitude, `south`/`north` and `near` do work in a surveyed
-region, which is a real place with a real position.
+**A belt, a latitude and `near` are answered on the open Earth and nowhere
+else.** The island field is an invented ocean: it has no position, and its mean
+wind is the player's own setting, which calling "the westerlies" would be a lie
+-- `beltFor` returns null off `COAST_ID`.
 
 ### `passage` and `total`
 

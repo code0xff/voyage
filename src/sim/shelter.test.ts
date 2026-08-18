@@ -1,9 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { HeightField, heightFieldFromBytes } from './heightfield';
+import { HeightField } from './heightfield';
 import { ShelterField } from './shelter';
-import { regionById, type Region } from './regions';
-import { worldFromLatLon } from './geo';
+import type { Region } from './regions';
 import { DEG } from './math';
 
 /**
@@ -17,24 +15,8 @@ import { DEG } from './math';
 const PLAIN: Region = {
   id: 'plain',
   name: 'Plain',
-  area: '',
-  brief: '',
-  centre: { lat: 0, lon: 0 },
-  utmZone: 31,
   grid: { width: 400, height: 400, cell: 25, unit: 1 },
-  raster: '',
-  source: '',
-  licence: '',
-  conditions: {
-    windTwd: 0,
-    windKnots: 12,
-    gustiness: 0.4,
-    seaScale: 1,
-    setDeg: 90,
-    driftKnots: 0,
-    fullDepth: 20,
-    startHour: 12,
-  },
+  source: 'a test',
 };
 
 const W = PLAIN.grid.width;
@@ -296,61 +278,5 @@ describe('bounds', () => {
         expect(s).toBeLessThanOrEqual(1);
       }
     }
-  });
-});
-
-/**
- * The same field over the real place, where the answers can be argued about
- * from local knowledge rather than from the fixture.
- */
-describe('San Francisco Bay in the summer westerly', () => {
-  const region = regionById('sf-bay');
-  if (!region) throw new Error('sf-bay region is missing');
-  const raw = readFileSync('public/terrain/sf-bay.bin');
-  const height = heightFieldFromBytes(
-    raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
-    region,
-  );
-  const field = new ShelterField(height, region.grid.width, region.grid.height, region.grid.cell);
-  // The breeze the city front is known for: hard, from a little south of west.
-  field.update(262 * DEG);
-
-  const at = (lat: number, lon: number) => worldFromLatLon(region, lat, lon);
-
-  it('blows through the Gate unhindered', () => {
-    const p = at(37.8199, -122.4783);
-    expect(field.windExposureAt(p.x, p.y)).toBeGreaterThan(0.95);
-    expect(field.waveShelterAt(p.x, p.y)).toBeGreaterThan(0.9);
-  });
-
-  it('parks you in the lee of Angel Island', () => {
-    // Two kilometres downwind of the summit, which is a real and painful place
-    // to be on this course.
-    const s = at(37.8609, -122.4326);
-    const p = { x: s.x + 1980, y: s.y + 278 };
-    expect(field.windExposureAt(p.x, p.y)).toBeLessThan(0.7);
-  });
-
-  it('gives Angel Island a longer lee than Alcatraz, because it is taller', () => {
-    const angel = at(37.8609, -122.4326);
-    const alcatraz = at(37.8267, -122.423);
-    const downwind = (p: { x: number; y: number }, d: number) => ({
-      x: p.x + 0.99 * d,
-      y: p.y + 0.139 * d,
-    });
-    const a = downwind(angel, 2500);
-    const b = downwind(alcatraz, 2500);
-    expect(field.windExposureAt(a.x, a.y)).toBeLessThan(field.windExposureAt(b.x, b.y));
-  });
-
-  it('shelters the water under the city shore', () => {
-    // Tucked in east of the city, downwind of a mile of San Francisco.
-    const p = at(37.8, -122.375);
-    expect(field.waveShelterAt(p.x, p.y)).toBeLessThan(0.6);
-  });
-
-  it('lets the sea build across the central bay', () => {
-    const p = at(37.83, -122.41);
-    expect(field.fetchAt(p.x, p.y)).toBeGreaterThan(3000);
   });
 });
