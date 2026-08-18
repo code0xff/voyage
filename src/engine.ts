@@ -334,6 +334,16 @@ export interface Engine {
    * menu that offers this says so.
    */
   sailFrom(spot: { place?: LatLon | null; pos?: Vec2 | null } | null): void;
+  /**
+   * Read the installed quest packs again.
+   *
+   * The packs are fetched once when the engine starts, which is right for a
+   * list that only a person changes -- but a person changes it from a menu
+   * that is open over a running engine. Without this, a pack installed while
+   * sailing notices nothing until the page is reloaded, and one removed goes
+   * on completing quests and writing them down. Both were true.
+   */
+  reloadQuests(): void;
 }
 
 const PHYS_DT = 1 / 120;
@@ -2679,17 +2689,25 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * moment, which is a better answer than a loading screen in front of a
    * boat. A refusal is silence -- losing quests costs a list, not a voyage.
    */
-  void Promise.all([questStore.packs(), questStore.state()]).then(
-    ([packs, saved]) => {
-      if (disposed) return;
-      questPacks = packs;
-      if (saved) {
-        questState = saved;
-        snapshot.quests = saved;
-      }
-    },
-    (err) => console.error('could not load the quests', err),
-  );
+  function loadQuests(withState: boolean): void {
+    void Promise.all([questStore.packs(), withState ? questStore.state() : null]).then(
+      ([packs, saved]) => {
+        if (disposed) return;
+        questPacks = packs;
+        // Only at startup. Re-reading the state on an install would throw
+        // away whatever the watcher has counted since -- the store is up to
+        // thirty seconds behind by design, and the engine is the one holding
+        // the truth.
+        if (saved) {
+          questState = saved;
+          snapshot.quests = saved;
+        }
+      },
+      (err) => console.error('could not load the quests', err),
+    );
+  }
+
+  loadQuests(true);
 
   applySettings(settings);
   rebuildWorld();
@@ -2762,6 +2780,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     press: (key) => input.inject(key),
     recomputePolar: () => schedulePolar(0),
     resize: () => view.resize(),
+    reloadQuests: () => loadQuests(false),
     sailFrom(spot) {
       // Written down at once. A tab closed straight after choosing must not
       // lose the choice, and the menu can be open before the engine exists,

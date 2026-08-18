@@ -286,6 +286,14 @@ export function App() {
    */
   const bumpLog = useCallback(() => setLogVersion((v) => v + 1), []);
 
+  /**
+   * The engine holds its own copy of the installed packs, so the menu has to
+   * tell it when that list changes. Nothing here waits for it: the store is
+   * already written by the time this runs, and the engine's next look is two
+   * seconds away.
+   */
+  const reloadQuests = useCallback(() => engine?.reloadQuests(), [engine]);
+
   const applySettings = useCallback(
     (next: Settings) => {
       setSettings(next);
@@ -542,6 +550,7 @@ export function App() {
           logbook={logbook}
           logVersion={logVersion}
           onLogChanged={bumpLog}
+          onPacksChanged={reloadQuests}
           logbookError={logbookError}
           logbookUnavailable={logbookUnavailable}
           engineLoading={engineLoading}

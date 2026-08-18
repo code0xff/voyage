@@ -2449,6 +2449,38 @@ describe('watching quests while she sails', () => {
     engine.dispose();
   });
 
+  it('takes a pack installed while she is sailing, and drops one removed', async () => {
+    // The engine holds its own copy of the list, and the menu that changes
+    // that list is open over a running engine. Both halves were broken: an
+    // installed pack noticed nothing until the page was reloaded, and a
+    // removed one went on completing quests and writing them down.
+    quests.packs = [pack({ total: { facts: { miles: { atLeast: 0.05 } } } })];
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    await settle();
+    const seen: string[] = [];
+    engine.onEvent((e) => {
+      if (e.type === 'quest') seen.push(e.id);
+    });
+    // Not yet: a twentieth of a mile is more than three seconds of sailing.
+    engine.advance(3);
+    expect(seen).toEqual([]);
+
+    // Removed, and told about it. What she sails from here must not count.
+    quests.packs = [];
+    engine.reloadQuests();
+    await settle();
+    engine.advance(120);
+    expect(seen, 'completed a quest from a pack that had been removed').toEqual([]);
+
+    // And the other way: installed mid-passage, and noticed without a reload.
+    quests.packs = [pack({ now: { facts: { speed: { atLeast: 0.5 } } } })];
+    engine.reloadQuests();
+    await settle();
+    engine.advance(10);
+    expect(seen).toEqual(['p.q']);
+    engine.dispose();
+  });
+
   it('writes what it noticed down, and keeps it on the way out', async () => {
     quests.packs = [pack({ now: { facts: { speed: { atLeast: 0.5 } } } })];
     const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });

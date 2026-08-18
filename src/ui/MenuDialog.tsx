@@ -309,6 +309,7 @@ export function MenuDialog({
   logbook,
   logVersion,
   onLogChanged,
+  onPacksChanged,
   logbookError,
   logbookUnavailable,
   engineLoading,
@@ -329,6 +330,15 @@ export function MenuDialog({
   logVersion: number;
   /** Called when the log panel writes to the store, so `logVersion` can follow. */
   onLogChanged: () => void;
+  /**
+   * Somebody has installed or removed a quest pack.
+   *
+   * The engine reads the packs once when it starts, and this menu is open
+   * over a running engine -- so without telling it, an installed pack
+   * notices nothing until the page is reloaded and a removed one goes on
+   * completing quests.
+   */
+  onPacksChanged: () => void;
   logbookError: boolean;
   /** The store never opened. A standing fact, said once and quietly. */
   logbookUnavailable: boolean;
@@ -1147,7 +1157,12 @@ export function MenuDialog({
           </TabsContent>
 
           <TabsContent value="quests" className="mt-4">
-            <QuestPacks onChanged={() => setQuestVersion((v) => v + 1)} />
+            <QuestPacks
+              onChanged={() => {
+                setQuestVersion((v) => v + 1);
+                onPacksChanged();
+              }}
+            />
           </TabsContent>
 
           {/* Under the settings tabs and not inside any of them:
