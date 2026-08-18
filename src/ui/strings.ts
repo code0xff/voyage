@@ -585,6 +585,10 @@ export const QUEST: Record<string, Phrase> = {
     ko: '이 버전에 없는 바람대·날씨·바다 이름을 쓰고 있습니다:',
   },
   emptyBound: { en: 'A condition in that pack has no limit in it:', ko: '범위가 비어 있는 조건이 있습니다:' },
+  badBound: {
+    en: 'A condition in that pack is one no number could ever be inside:',
+    ko: '어떤 값도 들어갈 수 없는 조건이 있습니다:',
+  },
   emptyAsk: { en: 'A quest in that pack asks for nothing.', ko: '아무 조건도 없는 퀘스트가 있습니다.' },
   noName: { en: 'A quest in that pack has no English name.', ko: '영문 이름이 없는 퀘스트가 있습니다.' },
   badNear: { en: 'A place in that pack is not a place.', ko: '좌표가 올바르지 않습니다.' },

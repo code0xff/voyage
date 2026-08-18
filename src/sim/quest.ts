@@ -431,6 +431,7 @@ export interface PackProblem {
     | 'unknownField'
     | 'unknownName'
     | 'emptyBound'
+    | 'badBound'
     | 'emptyAsk'
     | 'noName'
     | 'badNear';
@@ -477,6 +478,17 @@ function checkBounds(
     // completes on the first sample and reads like a mistake because it is.
     if (!b || typeof b !== 'object' || (b.atLeast === undefined && b.atMost === undefined)) {
       return { kind: 'emptyBound', quest, named: fact };
+    }
+    // And one no number can be inside is the mirror of that mistake: it never
+    // completes, and nothing on any screen can tell the author why. `"10"` is
+    // the same defect arriving by another road -- it compares by coercion, so
+    // it half-works, which is worse.
+    const ends = [b.atLeast, b.atMost].filter((v) => v !== undefined);
+    if (!ends.every((v) => typeof v === 'number' && Number.isFinite(v))) {
+      return { kind: 'badBound', quest, named: fact };
+    }
+    if (b.atLeast !== undefined && b.atMost !== undefined && b.atLeast > b.atMost) {
+      return { kind: 'badBound', quest, named: fact };
     }
   }
   return null;

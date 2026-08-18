@@ -263,6 +263,22 @@ describe('reading a pack from a stranger', () => {
     expect(problemOf(withAsk({ now: { facts: { wind: null } } }))?.kind).toBe('emptyBound');
   });
 
+  it('refuses a bound no number could be inside', () => {
+    // The mirror of the empty bound: it never completes, and nothing on any
+    // screen can tell the author why. A quoted number is the same defect by
+    // another road -- it compares by coercion, so it half-works.
+    expect(problemOf(withAsk({ now: { facts: { wind: { atLeast: 30, atMost: 20 } } } }))).toEqual({
+      kind: 'badBound',
+      quest: 'q',
+      named: 'wind',
+    });
+    for (const bad of [{ atLeast: '10' }, { atMost: null }, { atLeast: Infinity }, { atMost: NaN }]) {
+      expect(problemOf(withAsk({ now: { facts: { wind: bad } } })), JSON.stringify(bad)).not.toBeNull();
+    }
+    // The ends may meet: "exactly ten" is a bound, not a mistake.
+    expect(problemOf(withAsk({ now: { facts: { wind: { atLeast: 10, atMost: 10 } } } }))).toBeNull();
+  });
+
   it('refuses a place that is not one', () => {
     for (const near of [
       { lat: 91, lon: 0, within: 10 },
