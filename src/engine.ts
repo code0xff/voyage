@@ -427,8 +427,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   // Seeded, which it was not. The fifth argument has a default and nobody was
   // passing it, so the gusts and the shifts were laid out identically in every
   // session anyone has ever sailed -- the same puff in the same place off the
-  // same headland, for ever. In a surveyed region, where the land cannot vary,
-  // that left the seed with nothing to change but the weather's rolls.
+  // same headland, for ever.
   const wind = new WindField(windMs(settings), 0, settings.gustiness, undefined, settings.seed);
   const currents = new CurrentField({ peak: currentVec(settings) });
   const waves = new WaveField(windMs(settings), 0);
@@ -970,11 +969,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * frame. Also on the way out, so quitting deliberately keeps the last of
    * it.
    *
-   * Every world, because every world has somewhere she got to. The Earth is
-   * remembered by latitude and longitude, since its plane moves under her;
-   * everywhere else by plane metres, which is what that world is laid out in.
-   * A surveyed region is small only in kilometres -- twenty of them takes
-   * longer to look at properly than anyone sails in one sitting.
+   * By latitude and longitude, since the plane moves under her.
    */
   function keepUnderway(): void {
     if (!keeping) return;
@@ -1060,8 +1055,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   /**
    * Point the plane's pin at the world she is in.
    *
-   * A surveyed region is laid out about its own surveyed centre; the endless
-   * Earth is pinned wherever she got to. Called from `rebuildWorld`, which
+   * One answer now -- wherever she got to -- and a function all the same,
+   * because *when* it is called is the whole point. Called from `rebuildWorld`, which
    * is late -- and from `newSession` *before* it reads the opening wind,
    * which is the whole reason it is a function: choosing a departure and
    * putting to sea gave her the belt of the place she had just left, because
@@ -1247,11 +1242,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * and nothing would say so.
    */
   function reanchorIfFar(x: number, y: number): void {
-    // Only the endless coast may be re-pinned. A surveyed region is fixed
-    // terrain laid out in plane metres about its own centre, so moving the
-    // pin under one would leave the survey where it was and carry
-    // the boat back into the middle of it -- a teleport, several miles, in
-    // the one part of the game whose whole claim is that the ground is real.
     if (Math.hypot(x, y) < REANCHOR_AT) return;
     const from = anchor;
     const to = toLatLon(from, x, y);
@@ -1284,9 +1274,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     pendingCoast = null;
     snapshot.calls = snapshot.calls.map(move);
     anchor = to;
-    // The ocean's own pin, kept so that visiting a surveyed region and coming
-    // back does not undo the passage that got her here. Its own copy, so the
-    // two can never be moved by one assignment.
+    // The ocean's own pin. Its own copy, so the two can never be moved by one
+    // assignment; they were two answers when there were two kinds of world.
     oceanAnchor = { ...to };
     snapshot.place = placeOf(state.pos.x, state.pos.y);
     rebuildCoastWindow();

@@ -4,13 +4,14 @@ import type { Region } from './regions';
 import { compassAngle } from './math';
 
 /**
- * A surveyed region, answering the questions the rest of the simulator asks of
- * ground.
+ * The land, answering the questions the rest of the simulator asks of ground.
  *
- * `Terrain` answers them from a list of circles; this answers them from a
- * raster and a swept shelter field. Everything upstream -- the wind, the tide,
- * the anchorage judge, the boat's depth under the keel -- asks through
- * `TerrainQuery` and does not know or care which it is holding.
+ * It answers them from a sampled height field and a swept shelter field. It
+ * was written for the surveyed regions, whose rasters were baked from a
+ * survey, and it is what the generated coast runs on now -- the samples are
+ * built rather than fetched and nothing downstream can tell. Everything
+ * upstream -- the wind, the tide, the anchorage judge, the boat's depth under
+ * the keel -- asks through `TerrainQuery`.
  *
  * ## What is precomputed, and why
  *

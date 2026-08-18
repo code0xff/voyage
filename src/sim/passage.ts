@@ -181,7 +181,14 @@ export interface PassageRecord {
   direct: number;
   avgSog: number;
   maxSog: number;
-  /** Venue id, or '' in the open ocean. */
+  /**
+   * Where it was sailed, as an id.
+   *
+   * Named for the sketched venues that were the only answer when the field was
+   * written; it has held a surveyed region's id and holds the Earth's now.
+   * `placeName` resolves every id that has ever been written into it, because
+   * a logbook outlives the list it was written against.
+   */
   venue: string;
   /** Mean true wind while under way, knots. */
   windKnots: number;

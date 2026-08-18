@@ -113,9 +113,8 @@ bank, and an instrument that blinked on and off with the depth would be worse
 than either steady answer.
 
 **What it costs, and it is not small.** `TGT` and `POL` are what turn a trim
-into a verdict, and the surveyed regions -- which is most of the interesting
-sailing here -- are places with a stream. Anyone who turns the tide on loses the
-one instrument that says whether they are sailing well.
+into a verdict, and the stream is a setting anyone may turn on anywhere.
+Whoever does loses the one instrument that says whether they are sailing well.
 
 **What it would take.** The polar solved *with* the stream, which is a different
 solve: it becomes a function of wind speed, stream speed and the angle between
@@ -184,6 +183,7 @@ Land blocks the wind and shelters the sea; it does not refract the breeze around
 a headland or accelerate it through a gap. Parking in a lee is the dominant
 effect by a wide margin, and this is documented in the README as deliberate.
 
-It matters more for a surveyed region than it did for procedural islands,
-because real places are known for exactly these effects. It is the single
-largest gap between a region and the place it is named after.
+It mattered more for the surveyed regions than for invented land, because real
+places are known for exactly these effects, and it was the largest gap between
+a region and the place it was named after. With those retired it is a gap
+between the generated coast and a coast, which is a smaller claim.

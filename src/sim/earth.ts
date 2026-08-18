@@ -15,8 +15,8 @@ import { METRES_PER_DEG_LAT, toLatLon, wrapLon, type LatLon } from './globe';
  * half is which. Sail from Gibraltar to the Canaries and the passage, the
  * bearing, the distance and the landfall are the real Earth's. The beach you
  * anchor off is invented -- a plausible coast in the right place, not the
- * coast that is there. Six surveyed regions remain the only places where the
- * ground itself is true, and they say so.
+ * coast that is there, and the menu says so. Six surveyed squares were the
+ * exception until they were retired; see `docs/real-map.md`.
  *
  * Pure and headless like everything in `src/sim`: the raster is handed in,
  * already loaded, exactly as `HeightField` takes a region's.

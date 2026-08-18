@@ -3,12 +3,12 @@ import type { RegionTerrain } from '../sim/region-terrain';
 import type { SkyState } from '../sim/sky';
 
 /**
- * The land of a surveyed region, as a grid of tiles.
+ * The land, as a grid of tiles.
  *
- * `islands.ts` builds one polar mesh per circle, dense at the shoreline where
- * the shape is and sparse inland. A coast has no centre to be polar about, so
- * this tiles the square instead -- but it is the same idea underneath and the
- * same guarantee: every vertex comes from the very `elevationAt` the physics
+ * The islands that preceded it were one polar mesh per circle, dense at the
+ * shoreline where the shape was and sparse inland. A coast has no centre to be
+ * polar about, so this tiles the square instead -- and it keeps the guarantee
+ * that mattered: every vertex comes from the very `elevationAt` the physics
  * grounds the boat on, so the beach you can see is the beach you run onto.
  *
  * ## Only where there is land

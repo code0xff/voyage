@@ -5,8 +5,8 @@
  * imported, so Vite never sees those strings and never rewrites them. Written
  * as `/assets/...` they resolve against the origin, which is right when the app
  * is served from the root and wrong everywhere else -- on a project page at
- * `example.github.io/voyage/` every model, every attribution notice and all six
- * surveyed regions come back as the index page or a 404.
+ * `example.github.io/voyage/` every model, every attribution notice and the
+ * planet's own raster come back as the index page or a 404.
  *
  * `BASE_URL` is what Vite substitutes for the `base` it was built with, and it
  * always ends in a slash.

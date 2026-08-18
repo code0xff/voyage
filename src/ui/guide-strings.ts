@@ -90,8 +90,8 @@ export const GUIDE: GuideSection[] = [
     title: { en: 'Water and tide', ko: '수심과 조류' },
     paragraphs: [
       {
-        en: 'Depth is real and so is the bottom: she draws 1.8 m and will stop hard on anything shallower. In a surveyed region the chart is the same data the hull grounds on, so the shoal you can see is the one you will touch.',
-        ko: '수심도 바닥도 진짜입니다. 이 배는 1.8 m를 먹으므로 그보다 얕은 곳에서는 그대로 얹힙니다. 측량된 지역에서는 차트가 선체를 좌초시키는 바로 그 데이터이므로, 화면에서 보이는 여울이 실제로 부딪히는 여울입니다.',
+        en: 'Depth is real and so is the bottom: she draws 1.8 m and will stop hard on anything shallower. The chart is drawn from the same ground the hull grounds on, so the shoal you can see is the one you will touch.',
+        ko: '수심도 바닥도 진짜입니다. 이 배는 1.8 m를 먹으므로 그보다 얕은 곳에서는 그대로 얹힙니다. 차트는 선체를 좌초시키는 바로 그 지형에서 그려지므로, 화면에서 보이는 여울이 실제로 부딪히는 여울입니다.',
       },
       {
         en: 'When a tide runs, **SOG** and **COG** part company with BSP and HDG — she is being carried sideways as well as driven forward. Point at a mark and the tide will set you off it; the chart’s arrows show which way. Working the shallows to escape a foul tide is the oldest trick there is, and it costs breeze and eventually the keel.',

@@ -786,7 +786,7 @@ coefficient curves are in `src/sim/tables.ts`. The loop:
 3. compare against a real yacht polar
 4. only then start the dev server and check the feel
 
-Player-facing conditions (wind, sea state, tidal set and drift, region) live in
+Player-facing conditions (wind, sea state, tidal set and drift, the departure) live in
 `src/settings.ts`, deliberately separate from the physics constants. Mixing them would mean the
 boat's performance changed whenever a setting moved, and the polar would stop
 meaning anything.

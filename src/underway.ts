@@ -3,17 +3,13 @@ import { clampLat, wrapLon, type LatLon } from './sim/globe';
 /**
  * The voyage she is on, carried from one session to the next.
  *
- * The planet made this necessary and then the rest of the game asked for it
- * too. An endless coast that regenerated around the origin every time had
- * nothing worth remembering, but the moment the land became the Earth, a boat
- * that reached the Azores and reopened off San Francisco had had a passage
- * taken away from her. The same is true of the island field, which is just as
- * endless and just as reproducible from its seed -- and of a surveyed region,
- * which is small only in kilometres: twenty of them takes longer to look at
- * properly than anyone sails in one sitting.
+ * The planet made this necessary. An endless coast that regenerated around the
+ * origin every time had nothing worth remembering, but the moment the land
+ * became the Earth, a boat that reached the Azores and reopened off San
+ * Francisco had had a passage taken away from her.
  *
- * So the row is the *voyage* and not merely a position: which world, which
- * seed, and where in it. Restoring all four is what lets "sail on" mean what
+ * So the row is the *voyage* and not merely a position: which seed, and where
+ * she had got to in it. Restoring both is what lets "sail on" mean what
  * it says even after the menu has been used to look at somewhere else.
  *
  * **A place, and only a place.** Not the trim, not the heading, not the hour,
@@ -21,14 +17,13 @@ import { clampLat, wrapLon, type LatLon } from './sim/globe';
  * sea already sailing, trimmed and reefed for the conditions of the moment
  * (see `prepareDeparture`) -- and restoring an exact instant would fight that
  * rather than extend it. What is carried is what a session cannot re-derive:
- * which sea she is in, and where she had got to in it.
+ * the sea she is in, and where she had got to in it.
  *
- * Two coordinates because there are two kinds of world. The endless coast is
- * pinned to a tangent plane that *moves* -- every 200 km the origin is
- * re-pinned under the boat -- so its plane metres mean nothing tomorrow and
- * the honest form is a latitude and longitude. Every other world has a plane
- * that never moves, and there the plane metres are exactly right. Each row
- * carries whichever its world uses.
+ * A latitude and longitude, and never plane metres, because the Earth's
+ * tangent plane *moves* -- every 200 km the origin is re-pinned under the boat
+ * -- so its metres mean nothing tomorrow. Rows once carried plane metres too,
+ * for the worlds whose plane never moved; those worlds are gone and such a row
+ * is refused, because there is nowhere left to put her.
  *
  * localStorage rather than IndexedDB, deliberately, and the rule in AGENTS.md
  * is the reason: the logbook lives in IndexedDB because it *accumulates*.

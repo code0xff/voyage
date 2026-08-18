@@ -80,8 +80,8 @@ const rippleGlsl = /* glsl */ `
 `;
 
 /**
- * The uniforms that describe the world's land, and the two conversions into a
- * surveyed region's raster.
+ * The uniforms that describe the land, and the two conversions into the
+ * field's raster.
  *
  * Split out because three separate things need them -- the wave shelter, the
  * shoal tint, and the vertex displacement that reads the shelter -- and until
@@ -150,10 +150,10 @@ export const fieldGlsl = /* glsl */ `
  * It declares its own uniforms, so neither shader may declare them again. That
  * is safe because both materials are built on the *same* uniforms object.
  *
- * Two sources, because there are two kinds of world. A surveyed region reads
- * the depth straight off the field texture, so the pale water is where the
- * water really is shallow; the procedural ocean has only circles, so it fades
- * out over 110 m from each island's edge.
+ * The depth is read straight off the field texture, so the pale water is
+ * where the water really is shallow. There was a second source while the
+ * island field existed -- circles, faded out over 110 m from each edge -- and
+ * it is exactly the kind of second opinion this file's scars are about.
  */
 const shoalGlsl = /* glsl */ `
   float shoalAt(vec2 simP) {
@@ -575,7 +575,7 @@ export interface Water {
     flashColor: THREE.Color,
   ): void;
   /**
-   * Install a surveyed region, or null for the procedural ocean.
+   * Install the land, or null before the first window is built.
    *
    * While one is installed the shader reads its shelter and its depth out of a
    * texture instead of recomputing the circle model, which is what finally ends

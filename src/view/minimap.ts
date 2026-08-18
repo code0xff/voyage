@@ -33,7 +33,7 @@ import { token } from '../ui/tokens';
  * The ranges the chart cycles through, m from the centre to the edge.
  *
  * The first three are pilotage scales -- what is close enough to hit. The last
- * two arrived with the surveyed regions and are passage scales: a 20 km bay
+ * two arrived with the surveyed regions and are passage scales: a 20 km window
  * cannot be planned on a 1200 m chart, where the Golden Gate is off the edge
  * from the city front and the only thing visible is the water already under
  * the keel.
@@ -187,8 +187,8 @@ export function clampChartCentre(want: Vec2, boat: Vec2, rangeIndex: number): Ve
  * far corner inside the window.
  *
  * Then 2500 and 5000 were added beneath it for the surveyed regions, which
- * bring their own coast and never had the problem -- and the comment was left
- * alone, so the procedural ocean quietly got the failure the comment had
+ * brought their own coast and never had the problem -- and the comment was
+ * left alone, so the island field quietly got the failure the comment had
  * predicted. At 5 km the chart held five islands of the fifty-four inside its
  * own frame.
  *
