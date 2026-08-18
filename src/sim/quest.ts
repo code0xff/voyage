@@ -179,12 +179,42 @@ export interface Tally {
   passages: number;
 }
 
+/**
+ * What was true when a quest completed.
+ *
+ * The evidence, and not merely the verdict. Storing "done" alone would keep
+ * the conclusion and throw away everything that supports it -- and a moment
+ * is exactly the thing that cannot be recovered afterwards, which is the
+ * whole reason any of this is stored at all. Kept, it reads back as a
+ * logbook entry rather than as a tick: *round the Horn, 55°58'S 67°16'W, at
+ * three in the morning, thirty-four knots and six metres of sea.*
+ *
+ * The per-interval counts of the sample are dropped on purpose. They say
+ * what happened in the last few seconds, which describes the interval and
+ * not the moment; what she had piled up by then is kept instead, whole.
+ */
+export interface Completion {
+  /** ms since the epoch, from the caller's clock. */
+  at: number;
+  /** Where she was, and what the world was doing. */
+  moment: Moment;
+  /** What she had run up by then, this passage and altogether. */
+  passage: Tally;
+  total: Tally;
+}
+
+/** The instantaneous half of a sample: what is true now, with no deltas. */
+export type Moment = Omit<
+  Sample,
+  'miles' | 'hours' | 'whales' | 'sharks' | 'photographs' | 'passageBegan' | 'passageFinished'
+>;
+
 /** Everything the watcher remembers between samples. */
 export interface QuestState {
   passage: Tally;
   total: Tally;
-  /** Quest id to when it completed, ms since the epoch. */
-  done: Record<string, number>;
+  /** Quest id to what was true when it completed. */
+  done: Record<string, Completion>;
 }
 
 const emptyTally = (): Tally => ({
@@ -202,6 +232,22 @@ export const emptyQuestState = (): QuestState => ({
   total: emptyTally(),
   done: {},
 });
+
+/** The sample without its deltas; see `Completion`. */
+function momentOf(s: Sample): Moment {
+  return {
+    place: s.place ? { ...s.place } : null,
+    belt: s.belt,
+    weather: s.weather,
+    region: s.region,
+    wind: s.wind,
+    heel: s.heel,
+    sea: s.sea,
+    speed: s.speed,
+    depth: s.depth,
+    hour: s.hour,
+  };
+}
 
 const EARTH_NM = 60; // nautical miles in a degree of latitude, near enough
 
@@ -297,7 +343,7 @@ export function watch(
   sample: Sample,
   state: QuestState,
   at: number,
-): { state: QuestState; completed: string[] } {
+): { state: QuestState; completed: { id: string; completion: Completion }[] } {
   const passage: Tally = sample.passageBegan ? emptyTally() : { ...state.passage, belts: [...state.passage.belts] };
   const total: Tally = { ...state.total, belts: [...state.total.belts] };
 
@@ -312,14 +358,22 @@ export function watch(
   if (sample.passageFinished) total.passages += 1;
 
   const next: QuestState = { passage, total, done: { ...state.done } };
-  const completed: string[] = [];
+  const completed: { id: string; completion: Completion }[] = [];
   for (const pack of packs) {
     for (const quest of pack.quests) {
       const id = `${pack.id}.${quest.id}`;
       if (next.done[id] !== undefined) continue;
       if (!asks(quest.ask, sample, next)) continue;
-      next.done[id] = at;
-      completed.push(id);
+      const completion: Completion = {
+        at,
+        moment: momentOf(sample),
+        // Copied rather than referenced: the tallies go on changing, and a
+        // record of a moment that quietly kept counting would be no record.
+        passage: { ...passage, belts: [...passage.belts] },
+        total: { ...total, belts: [...total.belts] },
+      };
+      next.done[id] = completion;
+      completed.push({ id, completion });
     }
   }
   return { state: next, completed };

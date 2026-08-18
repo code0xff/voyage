@@ -45,6 +45,15 @@ what she has done since the last sample — and hands it to a pure function
 along with the tallies so far. Nothing about the boat is stored to make this
 work; the watcher keeps its own counts.
 
+**What a completion keeps.** Not a tick. A quest that completes records the
+moment it completed in: where she was, what the wind and the sea were doing,
+the world clock, and what she had run up by then. A moment is the one thing
+that cannot be recovered afterwards -- which is the whole reason anything is
+stored -- so storing the verdict without the evidence would be keeping the
+least useful half. Read back, it is a logbook entry rather than a checkbox:
+*round the Horn, 55°58'S 67°16'W, at three in the morning, thirty-four knots
+and six metres of sea.*
+
 **The cost, stated plainly.** Because a moment is only true while it is
 happening, a completed quest has to be *recorded*: once she has sailed on,
 nothing proves she was ever there. So quest progress is stored, unlike the

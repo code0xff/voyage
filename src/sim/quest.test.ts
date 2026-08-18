@@ -64,7 +64,7 @@ function sail(p: QuestPack, samples: Sample[]): { done: string[]; state: QuestSt
     at += 2000;
     const step = watch([p], s, state, at);
     state = step.state;
-    done.push(...step.completed);
+    done.push(...step.completed.map((c) => c.id));
   }
   return { done, state };
 }
@@ -352,5 +352,60 @@ describe('the packs that ship with it', () => {
         expect(state.done[id] !== undefined, `${id} was never completed`).toBe(true);
       }
     }
+  });
+});
+
+describe('what a completion remembers', () => {
+  it('keeps the evidence, not only the verdict', () => {
+    // A moment is the one thing that cannot be recovered afterwards, which
+    // is the whole reason anything is stored -- so storing "done" alone
+    // would keep the conclusion and throw away everything supporting it.
+    const p = pack({ now: { near: { lat: -55.98, lon: -67.27, within: 50 } } });
+    let state = emptyQuestState();
+    state = watch([p], sample({ miles: 40, passageBegan: true }), state, 1).state;
+    const step = watch(
+      [p],
+      sample({
+        place: { lat: -55.9, lon: -67.3 },
+        belt: 'westerlies',
+        weather: 'squall',
+        wind: 34,
+        sea: 6,
+        heel: 28,
+        hour: 3.2,
+        miles: 10,
+        // A fresh passage taken from there, so the two tallies say different
+        // things and the test can tell them apart.
+        passageBegan: true,
+      }),
+      state,
+      1_700_000_000_000,
+    );
+    const [{ id, completion }] = step.completed;
+    expect(id).toBe('test.q');
+    expect(completion.at).toBe(1_700_000_000_000);
+    // Where she was and what it was doing.
+    expect(completion.moment.place!.lat).toBeCloseTo(-55.9, 6);
+    expect(completion.moment.wind).toBe(34);
+    expect(completion.moment.sea).toBe(6);
+    expect(completion.moment.hour).toBeCloseTo(3.2, 6);
+    // And what she had run up by then -- this passage, and altogether.
+    expect(completion.passage.miles).toBeCloseTo(10, 6);
+    expect(completion.total.miles).toBeCloseTo(50, 6);
+    // The per-interval counts are not in it: they describe the interval and
+    // not the moment.
+    expect('miles' in completion.moment).toBe(false);
+  });
+
+  it('does not go on counting after the moment it recorded', () => {
+    // A record of a moment that quietly kept up with the tallies would be
+    // no record at all.
+    const p = pack({ now: { facts: { wind: { atLeast: 30 } } } });
+    let state = emptyQuestState();
+    state = watch([p], sample({ wind: 34, miles: 10 }), state, 1).state;
+    const then = state.done['test.q'];
+    state = watch([p], sample({ miles: 90 }), state, 2).state;
+    expect(then.total.miles).toBeCloseTo(10, 6);
+    expect(state.total.miles).toBeCloseTo(100, 6);
   });
 });
