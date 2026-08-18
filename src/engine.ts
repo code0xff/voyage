@@ -16,6 +16,15 @@ import { regionById, type Region } from './sim/regions';
 import { RegionTerrain } from './sim/region-terrain';
 import { loadEarth, loadRegion } from './terrain-load';
 import { clearUnderway, loadUnderway, sameWorld, saveUnderway } from './underway';
+import { questStore } from './quests-store';
+import {
+  emptyQuestState,
+  watch,
+  type Completion,
+  type QuestPack,
+  type QuestState,
+  type Sample,
+} from './sim/quest';
 import { passageInfo, type PassageInfo, type PassageRecord } from './sim/passage';
 import { anchorage, type Anchorage } from './sim/anchorage';
 import {
@@ -252,6 +261,11 @@ export type EngineEvent =
    * a translated name there and none here.
    */
   | { type: 'photo'; blob: Blob }
+  /**
+   * A quest noticed something. Carries what was true at that moment, so a
+   * notice can say where it happened without going back to the store.
+   */
+  | { type: 'quest'; id: string; completion: Completion }
   /** A fresh world was rolled. The settings hold the seed so it can be sailed again. */
   | { type: 'world'; seed: number }
   /** The surveyed region changed loading state. */
@@ -339,6 +353,24 @@ const CLIMATE_TAU = 240;
  * never in a frame's way.
  */
 const KEEP_PLACE_EVERY = 30;
+/**
+ * s of sailing between looks at the world for the quests, in *world* time.
+ *
+ * Two, and the number is a compromise with a shape worth stating. The
+ * narrowest thing a quest can ask about is a place -- and the tightest place
+ * anyone would write is a strait a mile or two across, which she crosses in
+ * a quarter of an hour at six knots. Two seconds cannot miss that. What two
+ * seconds *can* miss is a spike: a gust that touched thirty-five knots
+ * between samples was not seen. That is the honest trade, and it is the
+ * right way round -- a quest is a thing you did, and a thing that lasted
+ * under two seconds is not one.
+ *
+ * World seconds rather than real ones, so the interval does not change
+ * underfoot when the clock is sped up: at sixty times, two world seconds is
+ * a thirtieth of a second of play, which is one look every other frame and
+ * far too many. See where it is used.
+ */
+const WATCH_EVERY = 2;
 /**
  * How far the boat must travel before the island window is re-collected, m.
  * The window reaches kilometres, so being a hundred metres late to load an
@@ -632,9 +664,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * from and then killed by the operating system never fires anything else.
    * Both may fire more than once and the write is idempotent.
    */
-  const keepOnLeaving = () => keepUnderway();
+  const keepOnLeaving = () => {
+    keepUnderway();
+    keepQuests();
+  };
   const keepOnHiding = () => {
-    if (document.visibilityState === 'hidden') keepUnderway();
+    if (document.visibilityState === 'hidden') {
+      keepUnderway();
+      keepQuests();
+    }
   };
   window.addEventListener('pagehide', keepOnLeaving);
   document.addEventListener('visibilitychange', keepOnHiding);
@@ -821,6 +859,32 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let earth: Earth | null = null;
   /** True while the planet is on the wire, so a retry cannot start a second one. */
   let fetchingEarth = false;
+
+  /**
+   * The quests, and what they have noticed.
+   *
+   * Both arrive on a promise and neither is waited for: a session that opens
+   * before the packs have loaded simply notices nothing for a moment, which
+   * is a better answer than a loading screen in front of a boat.
+   */
+  let questPacks: QuestPack[] = [];
+  let questState: QuestState = emptyQuestState();
+  /** s of sailing since the last look; see `WATCH_EVERY`. */
+  let sinceWatched = 0;
+  /** Deltas piling up between looks: what she has done since the last one. */
+  const sinceLook = { miles: 0, hours: 0, whales: 0, sharks: 0, photographs: 0 };
+  /** Set on the sample that follows a passage beginning or ending. */
+  let passageBegan = false;
+  let passageFinished = false;
+  /** True while the state has changes not yet written down. */
+  let questsDirty = false;
+  /**
+   * The last encounter counted, so one that lasts several minutes is counted
+   * once. The passage log does this by id in a set; here a single id is
+   * enough, because the fields never publish two at a time.
+   */
+  let seenWhale = 0;
+  let seenShark = 0;
 
   let pendingCoast: {
     origin: { x: number; y: number };
@@ -1098,6 +1162,69 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       pos: onEarth ? null : { ...state.pos },
     });
     sinceSaved = 0;
+  }
+
+  /**
+   * Take one look at the world for the quests, and write down what it saw.
+   *
+   * The deltas are handed over and cleared here rather than kept by the
+   * watcher, so that `sim/quest.ts` stays a function of what it is given --
+   * it has no clock, no boat and no memory beyond the tallies it is passed.
+   */
+  function lookForQuests(): void {
+    if (questPacks.length === 0) {
+      // Nothing installed: the counts would only pile up unseen, and a
+      // player who installs a pack tomorrow should not be handed credit for
+      // today. Cleared rather than kept.
+      sinceLook.miles = 0;
+      sinceLook.hours = 0;
+      sinceLook.whales = 0;
+      sinceLook.sharks = 0;
+      sinceLook.photographs = 0;
+      passageBegan = false;
+      passageFinished = false;
+      return;
+    }
+    const sample: Sample = {
+      place: snapshot.place,
+      belt: snapshot.belt,
+      weather: weather.state.kind,
+      region: current.region,
+      wind: msToKnots(env.tws),
+      heel: Math.abs(state.heel) * RAD,
+      sea: sea.h13,
+      speed: diag ? msToKnots(diag.sog) : 0,
+      // The depth she is actually over. Open water reports no bottom at all,
+      // and a quest asking to be in ten metres must not be answered by one.
+      depth: snapshot.depth === Infinity ? Number.MAX_SAFE_INTEGER : snapshot.depth,
+      hour,
+      miles: sinceLook.miles,
+      hours: sinceLook.hours,
+      whales: sinceLook.whales,
+      sharks: sinceLook.sharks,
+      photographs: sinceLook.photographs,
+      passageBegan,
+      passageFinished,
+    };
+    sinceLook.miles = 0;
+    sinceLook.hours = 0;
+    sinceLook.whales = 0;
+    sinceLook.sharks = 0;
+    sinceLook.photographs = 0;
+    passageBegan = false;
+    passageFinished = false;
+
+    const step = watch(questPacks, sample, questState, Date.now());
+    questState = step.state;
+    questsDirty = true;
+    for (const done of step.completed) emit({ type: 'quest', id: done.id, completion: done.completion });
+  }
+
+  /** Write the watcher's state down, if it has anything new to say. */
+  function keepQuests(): void {
+    if (!questsDirty) return;
+    questsDirty = false;
+    void questStore.save(questState);
   }
 
   /**
@@ -1823,6 +1950,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // passage to somewhere the player changed their mind about is not a passage,
     // and a logbook of them would be worth nothing.
     log = pos ? new PassageLog({ ...state.pos }, pos, Date.now(), snapshot.place) : null;
+    // The quests count a passage the same way the logbook does -- from the
+    // moment she is pointed at somewhere -- so that "fifty miles between
+    // anchors" means the same thing on both screens.
+    if (pos) passageBegan = true;
     destination = pos;
     snapshot.destination = pos;
     // Cleared immediately rather than left to the next step, so a readout that
@@ -1847,6 +1978,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (!log || !destination) return;
     if (Math.hypot(state.pos.x - destination.x, state.pos.y - destination.y) > ARRIVED) return;
 
+    passageFinished = true;
     const record = log.finish(
       // crypto.randomUUID is the browser's, so it stays out of the sim core --
       // which is also why PassageLog takes an id rather than making one.
@@ -2192,7 +2324,22 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // the diagnostics avoid by being read out here too.
     snapshot.place = placeOf(state.pos.x, state.pos.y);
     sinceSaved += PHYS_DT;
-    if (sinceSaved >= KEEP_PLACE_EVERY) keepUnderway();
+    if (sinceSaved >= KEEP_PLACE_EVERY) {
+      keepUnderway();
+      keepQuests();
+    }
+
+    // What she has done since the last look. Distance from the ground speed
+    // rather than from the position, because a re-anchoring moves the plane
+    // under her and a difference of coordinates would read as a leap.
+    const world = PHYS_DT * current.timeScale;
+    if (diag) sinceLook.miles += (diag.sog * PHYS_DT) / 1852;
+    sinceLook.hours += PHYS_DT / 3600;
+    sinceWatched += world;
+    if (sinceWatched >= WATCH_EVERY) {
+      sinceWatched = 0;
+      lookForQuests();
+    }
 
     // Was that a tack, and what did it cost? Fed after `step()` for the same
     // reason the passage's conditions are: this step's angle and speed exist
@@ -2250,6 +2397,13 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       for (const whale of whales.events) log.sight('whales', whale.id);
       for (const shark of sharks.events) log.sight('sharks', shark.id);
     }
+    // The quests count the same encounters, and count them whether or not a
+    // passage is being logged: a whale seen while pottering about is still a
+    // whale seen.
+    for (const whale of whales.events) if (whale.id !== seenWhale) sinceLook.whales += 1;
+    for (const shark of sharks.events) if (shark.id !== seenShark) sinceLook.sharks += 1;
+    seenWhale = whales.events[0]?.id ?? seenWhale;
+    seenShark = sharks.events[0]?.id ?? seenShark;
 
     // Worked from what the boat is actually doing over the ground, so it costs
     // one call a step rather than being recomputed by every readout that wants
@@ -2502,6 +2656,21 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     });
   }
 
+  /*
+   * The quests, fetched once and installed when they land. Nothing waits for
+   * them: a session that opens before they arrive notices nothing for a
+   * moment, which is a better answer than a loading screen in front of a
+   * boat. A refusal is silence -- losing quests costs a list, not a voyage.
+   */
+  void Promise.all([questStore.packs(), questStore.state()]).then(
+    ([packs, saved]) => {
+      if (disposed) return;
+      questPacks = packs;
+      if (saved) questState = saved;
+    },
+    (err) => console.error('could not load the quests', err),
+  );
+
   applySettings(settings);
   rebuildWorld();
   // Build the initial paused scene even when a surveyed raster is still in
@@ -2604,6 +2773,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       // Quitting deliberately keeps the last of it; the throttle above may
       // be twenty-nine seconds from its next write.
       keepUnderway();
+      keepQuests();
       disposed = true;
       window.removeEventListener('pagehide', keepOnLeaving);
       document.removeEventListener('visibilitychange', keepOnHiding);

@@ -137,6 +137,30 @@ vi.mock('./underway', async (importActual) => ({
   },
 }));
 
+/**
+ * The quests' own store, mocked so the engine can be watched without an
+ * IndexedDB. The cell is the whole of it: what is installed, and what the
+ * watcher has written down.
+ */
+const quests = vi.hoisted(() => ({
+  packs: [] as unknown[],
+  saved: null as unknown,
+  writes: 0,
+}));
+vi.mock('./quests-store', () => ({
+  questStore: {
+    packs: async () => quests.packs,
+    state: async () => quests.saved,
+    install: async () => {},
+    remove: async () => {},
+    save: async (s: unknown) => {
+      quests.saved = s;
+      quests.writes++;
+    },
+    forget: async () => {},
+  },
+}));
+
 vi.mock('./logbook', async (importActual) => ({
   ...(await importActual<typeof import('./logbook')>()),
   logbook: { add: logAdd, all: async () => [], clear: async () => undefined },
@@ -252,6 +276,9 @@ beforeEach(() => {
   logAdd.mockResolvedValue(undefined);
   kept.stored = null;
   kept.writes = 0;
+  quests.packs = [];
+  quests.saved = null;
+  quests.writes = 0;
   anchorAnywhere.on = false;
   capture.blob = null;
   callsOverride.hand = null;
@@ -2335,6 +2362,101 @@ describe('the wind belts', () => {
     engine.applySettings(settings({ region: 'sf-bay', venue: '' }));
     engine.advance(0.5);
     expect(engine.snapshot.belt).toBeNull();
+    engine.dispose();
+  });
+});
+
+/**
+ * The quests, as the engine watches them.
+ *
+ * What is being asserted here is the wiring and not the rules -- those are
+ * `sim/quest.test.ts`, headless and thorough. What only the engine can get
+ * wrong is *what it puts in the sample*: a look that reported the wrong wind,
+ * or that never happened, or that counted the same whale twice.
+ */
+describe('watching quests while she sails', () => {
+  const pack = (ask: unknown) => ({
+    format: 2,
+    id: 'p',
+    name: 'Pack',
+    quests: [{ id: 'q', name: { en: 'A quest' }, ask }],
+  });
+
+  /** Let the packs land, which they do on a promise. */
+  const settle = async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  };
+
+  it('notices nothing at all until a pack is installed', async () => {
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    await settle();
+    engine.advance(30);
+    expect(quests.writes, 'wrote state with no packs installed').toBe(0);
+    engine.dispose();
+  });
+
+  it('looks at the world as she sails, and completes what it sees', async () => {
+    // The wind is whatever the belt is doing, so this asks for something the
+    // engine must actually report: she is on the Earth, in a region that is
+    // the endless coast, making way.
+    quests.packs = [pack({ now: { region: 'coast', facts: { speed: { atLeast: 0.5 } } } })];
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    await settle();
+    const seen: string[] = [];
+    engine.onEvent((e) => {
+      if (e.type === 'quest') seen.push(e.id);
+    });
+    engine.advance(10);
+    expect(seen).toEqual(['p.q']);
+    engine.dispose();
+  });
+
+  it('carries the moment into the completion, from the engine and not from nothing', async () => {
+    quests.packs = [pack({ now: { facts: { depth: { atLeast: 1 } } } })];
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    await settle();
+    let completion: { moment: { place: unknown; depth: number } } | null = null;
+    engine.onEvent((e) => {
+      if (e.type === 'quest') completion = e.completion as typeof completion;
+    });
+    engine.advance(10);
+    expect(completion).not.toBeNull();
+    // The place is the engine's own, and the depth is the water she is over
+    // rather than a stand-in for it.
+    expect(completion!.moment.place).not.toBeNull();
+    expect(completion!.moment.depth).toBeGreaterThan(1);
+    engine.dispose();
+  });
+
+  it('adds up the miles she actually sails', async () => {
+    // A tally rather than a moment, and the one the engine has to get right:
+    // the distance comes from her speed over the ground, because taking it
+    // from the position would read a re-anchoring as a two-hundred-kilometre
+    // leap.
+    quests.packs = [pack({ total: { facts: { miles: { atLeast: 0.02 } } } })];
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    await settle();
+    const seen: string[] = [];
+    engine.onEvent((e) => {
+      if (e.type === 'quest') seen.push(e.id);
+    });
+    // Two seconds of world time is the interval; at six knots a hundredth of
+    // a mile takes a few seconds more.
+    engine.advance(30);
+    expect(seen).toEqual(['p.q']);
+    engine.dispose();
+  });
+
+  it('writes what it noticed down, and keeps it on the way out', async () => {
+    quests.packs = [pack({ now: { facts: { speed: { atLeast: 0.5 } } } })];
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    await settle();
+    engine.advance(31);
+    expect(quests.writes).toBeGreaterThan(0);
+    const state = quests.saved as { done: Record<string, unknown> };
+    expect(Object.keys(state.done)).toEqual(['p.q']);
     engine.dispose();
   });
 });

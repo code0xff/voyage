@@ -367,8 +367,12 @@ export function watch(
       const completion: Completion = {
         at,
         moment: momentOf(sample),
-        // Copied rather than referenced: the tallies go on changing, and a
-        // record of a moment that quietly kept counting would be no record.
+        // Copied, though the tallies above are already rebuilt on every
+        // sample and nothing mutates them in place -- so this is insurance
+        // and not the thing that makes the record hold still. Said plainly
+        // because a comment claiming to prevent a hazard that does not exist
+        // is how the next reader is taught to fear the wrong thing: deleting
+        // these two spreads changes no test.
         passage: { ...passage, belts: [...passage.belts] },
         total: { ...total, belts: [...total.belts] },
       };
