@@ -1,12 +1,6 @@
 import * as THREE from 'three';
 import { MAX_WAVES, type WaveField } from '../sim/waves';
-import {
-  EMPTY_TERRAIN,
-  MAX_ACTIVE_ISLANDS,
-  WAKE_FADE,
-  WAKE_MAX,
-  type Terrain,
-} from '../sim/terrain';
+
 import { EDGE_FADE, type RegionTerrain } from '../sim/region-terrain';
 import type { SkyState } from '../sim/sky';
 import { compassVec, smoothstep } from '../sim/math';
@@ -33,12 +27,6 @@ import { compassVec, smoothstep } from '../sim/math';
 // under the far corner of this grid has to be one the island window can answer.
 export const SIZE = 900;
 export const SEG = 300; // subdivisions -> 3 m per cell
-/**
- * The island window is defined by the physics, not here: the shader has to loop
- * over exactly the islands the boat feels, or the flat water and the flat ride
- * would be in different places.
- */
-const MAX_ISLANDS = MAX_ACTIVE_ISLANDS;
 
 /**
  * Depth, in metres, that the field texture's green channel stores as 1.0.
@@ -105,7 +93,6 @@ const rippleGlsl = /* glsl */ `
 // Exported for the tripwire in water.test.ts -- the one consumer besides the
 // two shaders that inline it.
 export const fieldGlsl = /* glsl */ `
-  uniform vec4 uIslands[${MAX_ISLANDS}]; // x, y, radius, landmass id + 1
   uniform sampler2D uField;              // r = wave shelter, g = depth
   uniform vec3 uRegion;                  // halfWidth, halfHeight, 1 if loaded
   // Where the field's centre sits in the world -- zero for every surveyed
@@ -170,25 +157,13 @@ export const fieldGlsl = /* glsl */ `
  */
 const shoalGlsl = /* glsl */ `
   float shoalAt(vec2 simP) {
-    float shoal = 0.0;
-    float beyond = uRegion.z > 0.5 ? regionFade(simP) : 0.0;
-    if (uRegion.z > 0.5 && beyond < 1.0) {
-      // Faded out over the same band as the shelter, so the shoal shading does
-      // not run on past the edge of the data that justified it.
-      float depth = texture2D(uField, clamp(fieldUv(simP), 0.0, 1.0)).g * ${FIELD_DEPTH.toFixed(1)};
-      shoal = (1.0 - smoothstep(0.0, ${SHOAL_DEPTH.toFixed(1)}, depth)) * (1.0 - beyond);
-    } else {
-      // Break rather than continue: the slots are filled from zero, so the
-      // first empty one is the end. This runs over most of the sea now rather
-      // than over the grid alone, and an open ocean with three islands in the
-      // window should cost three iterations and not sixteen.
-      for (int i = 0; i < ${MAX_ISLANDS}; i++) {
-        if (uIslands[i].w < 0.5) break;
-        float d = distance(simP, uIslands[i].xy) - uIslands[i].z;
-        shoal = max(shoal, 1.0 - smoothstep(0.0, 110.0, max(d, 0.0)));
-      }
-    }
-    return shoal;
+    if (uRegion.z < 0.5) return 0.0;
+    float beyond = regionFade(simP);
+    if (beyond >= 1.0) return 0.0;
+    // Faded out over the same band as the shelter, so the shoal shading does
+    // not run on past the edge of the data that justified it.
+    float depth = texture2D(uField, clamp(fieldUv(simP), 0.0, 1.0)).g * ${FIELD_DEPTH.toFixed(1)};
+    return (1.0 - smoothstep(0.0, ${SHOAL_DEPTH.toFixed(1)}, depth)) * (1.0 - beyond);
   }
 
   // Shoal water is paler. It is also where you run aground, so this doubles as
@@ -263,50 +238,18 @@ const shelterGlsl = /* glsl */ `
     // physics reads -- so this is not a copy of the model, it *is* the model's
     // output. The duplication below survives only for the procedural ocean,
     // where there is no field to sample and the islands are the whole world.
-    if (uRegion.z > 0.5) {
-      float beyond = regionFade(p);
-      if (beyond >= 1.0) return 1.0;
-      // Clamped, so a point in the fade band reads the edge of the field --
-      // which is what RegionTerrain does, its sampler clamping the same way.
-      vec2 uv = clamp(fieldUv(p), 0.0, 1.0);
-      // The texture carries capped fetch, not shelter, so the root is taken
-      // here -- see ShelterField.shelterInputAt. Storing shelter would have the
-      // hardware interpolate a square root while the physics takes the root of
-      // an interpolation, which are not the same number.
-      float inside = max(0.05, sqrt(texture2D(uField, uv).r));
-      return inside + (1.0 - inside) * beyond;
-    }
-
-    float shelter = 1.0;
-    float groupMax = 0.0;
-    float group = -1.0;
-    for (int i = 0; i < ${MAX_ISLANDS}; i++) {
-      // Break rather than continue on an empty slot: they are filled from zero,
-      // so the first empty one is the end. Skipping instead cost every eligible
-      // far-sea fragment the full sixteen iterations -- which mattered little
-      // while only the grid's vertices ran this and matters now that most of
-      // the water's pixels do. The trailing close below is unaffected: the
-      // slots this used to walk past were all empty.
-      if (uIslands[i].w < 0.5) break;
-      if (uIslands[i].w != group) {
-        shelter *= 1.0 - groupMax;
-        groupMax = 0.0;
-        group = uIslands[i].w;
-      }
-      vec2 d = p - uIslands[i].xy;
-      float along = dot(d, uDownwind);
-      if (along <= 0.0) continue;
-      if (along > ${WAKE_MAX.toFixed(1)}) continue;
-      float across = abs(d.x * uDownwind.y - d.y * uDownwind.x);
-      float halfWidth = uIslands[i].z * 1.15 + along * 0.1;
-      if (across > halfWidth) continue;
-      float taper = 1.0 - smoothstep(${WAKE_FADE.toFixed(1)}, ${WAKE_MAX.toFixed(1)}, along);
-      float decay = exp(-along / (uIslands[i].z * 9.0 + 200.0)) * taper;
-      float edge = 1.0 - pow(across / halfWidth, 2.0);
-      groupMax = max(groupMax, 0.9 * decay * edge);
-    }
-    shelter *= 1.0 - groupMax; // the last landmass has no successor to close it
-    return max(0.05, shelter);
+    if (uRegion.z < 0.5) return 1.0;
+    float beyond = regionFade(p);
+    if (beyond >= 1.0) return 1.0;
+    // Clamped, so a point in the fade band reads the edge of the field --
+    // which is what RegionTerrain does, its sampler clamping the same way.
+    vec2 uv = clamp(fieldUv(p), 0.0, 1.0);
+    // The texture carries capped fetch, not shelter, so the root is taken
+    // here -- see ShelterField.shelterInputAt. Storing shelter would have the
+    // hardware interpolate a square root while the physics takes the root of
+    // an interpolation, which are not the same number.
+    float inside = max(0.05, sqrt(texture2D(uField, uv).r));
+    return inside + (1.0 - inside) * beyond;
   }
 `;
 
@@ -633,7 +576,6 @@ export interface Water {
     /** What that flash warms the sea toward -- amber for a flare, blue for a bolt. */
     flashColor: THREE.Color,
   ): void;
-  setTerrain(terrain: Terrain): void;
   /**
    * Install a surveyed region, or null for the procedural ocean.
    *
@@ -721,15 +663,11 @@ export function createWater(): Water {
     waveA.push(new THREE.Vector4());
     waveB.push(new THREE.Vector2());
   }
-  const islands: THREE.Vector4[] = [];
-  for (let i = 0; i < MAX_ISLANDS; i++) islands.push(new THREE.Vector4(0, 0, 1, 0));
-
   const uniforms = {
     uTime: { value: 0 },
     uOrigin: { value: new THREE.Vector2() },
     uWaveA: { value: waveA },
     uWaveB: { value: waveB },
-    uIslands: { value: islands },
     uDownwind: { value: new THREE.Vector2(0, -1) },
     uSteep: { value: 0.55 },
     uDeep: { value: new THREE.Color(0x17293b) },
@@ -761,7 +699,6 @@ export function createWater(): Water {
   let originX = 0;
   let originY = 0;
   let currentTwd = 0;
-  let physicsTerrain: Terrain = EMPTY_TERRAIN;
 
   const mat = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader });
   const mesh = new THREE.Mesh(geo, mat);
@@ -793,19 +730,6 @@ export function createWater(): Water {
     setFlare(simX, simY, level, altitude) {
       uniforms.uFlare.value.set(simX, simY, level, altitude);
     },
-    setTerrain(terrain) {
-      physicsTerrain = terrain;
-      for (let i = 0; i < MAX_ISLANDS; i++) {
-        const isl = terrain.islands[i];
-        // w is the landmass id plus one, so that zero can still mean "no island
-        // here". Uploaded in Terrain's order, which it sorts by landmass --
-        // waveShelter() in the shader walks the list and closes a group off at
-        // each change, and that is only right while a landmass is contiguous.
-        if (isl) islands[i].set(isl.pos.x, isl.pos.y, isl.radius, terrain.landGroup[i] + 1);
-        else islands[i].set(0, 0, 1, 0);
-      }
-    },
-
     setRegion(next) {
       region = next;
       if (field) {
@@ -959,9 +883,7 @@ export function createWater(): Water {
       const dx = Math.abs(x - originX);
       const dy = Math.abs(y - originY);
       const edge = Math.max(dx, dy) / SIZE;
-      const shelter = region
-        ? region.waveShelter(x, y, currentTwd)
-        : physicsTerrain.waveShelter(x, y, currentTwd);
+      const shelter = region ? region.waveShelter(x, y, currentTwd) : 1;
       const fade = (1 - smoothstep(0.28, 0.49, edge)) * shelter;
 
       // No case for "beyond the grid" any more, and that is the point rather

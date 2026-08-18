@@ -5,13 +5,11 @@ import { clamp, compassVec, side, approach} from '../sim/math';
 import { REEF_AREA_FACTOR } from '../sim/sailplan';
 import { ADVECTION, type WindField } from '../sim/wind';
 import type { WaveField } from '../sim/waves';
-import type { Terrain } from '../sim/terrain';
 import type { RegionTerrain } from '../sim/region-terrain';
 import { createRegionView } from './region-mesh';
 import { rainbowStrength, type SkyState } from '../sim/sky';
 import type { WeatherState } from '../sim/weather';
 import { createWater } from './water';
-import { createIslandView } from './islands';
 import { createRain } from './rain';
 import { createSkyDome } from './skydome';
 import { createBoatLights, lampLevel } from './lights';
@@ -104,12 +102,7 @@ export interface FrameInput {
 
 export interface SceneView {
   render(f: FrameInput): void;
-  /**
-   * @param physics the island window the boat feels, shared with the water shader
-   * @param visible the wider window that is merely drawn, out to the fog
-   */
-  setTerrain(physics: Terrain, visible: Terrain): void;
-  /** Install a surveyed region, or null for the procedural ocean. */
+  /** Install the land, or null before the first window is built. */
   setRegion(terrain: RegionTerrain | null): void;
   toggleCamera(): void;
   /**
@@ -365,11 +358,6 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   scene.add(water.far);
   scene.add(water.mesh);
 
-  const islandView = createIslandView();
-  scene.add(islandView.group);
-  // A region and the procedural islands are mutually exclusive -- one is a
-  // surveyed place and the other is an endless sea -- so whichever is not in
-  // use simply holds no meshes and costs nothing.
   const regionView = createRegionView();
   scene.add(regionView.group);
 
@@ -720,7 +708,6 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       lift,
       liftColor,
     );
-    islandView.update(sky);
     regionView.update(state.pos.x, state.pos.y, sky);
 
 
@@ -1104,10 +1091,6 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       regionView.setRegion(terrain);
       water.setRegion(terrain);
     },
-    setTerrain(physics, visible) {
-      islandView.setTerrain(visible);
-      water.setTerrain(physics);
-    },
     dispose() {
       // Before anything else: whoever is waiting on a photograph is waiting on
       // a frame that is no longer coming.
@@ -1119,7 +1102,6 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
       flareView.dispose();
       orbit.dispose();
       water.dispose();
-      islandView.dispose();
       regionView.dispose();
       whaleView.dispose();
       sharkView.dispose();

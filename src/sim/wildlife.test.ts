@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { FLOCK_DURATION_MAX, FLOCK_DURATION_MIN, Wildlife } from './wildlife';
-import { Terrain, type Island } from './terrain';
+import type { TerrainQuery } from './terrain';
+import { openWater, roundIsland } from './land.fixture';
 
-const OPEN = new Terrain([]);
-const island = (x: number, y: number): Island => ({
-  pos: { x, y },
-  radius: 200,
-  height: 70,
-  seed: 3,
-});
+const OPEN = openWater();
+const island = (x: number, y: number) => ({ x, y });
 
 /** Sit a boat somewhere for a while and collect what it heard. */
-function calls(seed: number, terrain: Terrain, at: { x: number; y: number }, seconds = 600) {
+function calls(
+  seed: number,
+  terrain: TerrainQuery,
+  at: { x: number; y: number },
+  seconds = 600,
+) {
   const w = new Wildlife(seed);
   const boat = { ...at };
   const heard: { x: number; y: number }[] = [];
@@ -25,7 +26,7 @@ function calls(seed: number, terrain: Terrain, at: { x: number; y: number }, sec
 describe('gulls', () => {
   it('keeps a visible flock observable, nearby and separated from the next one', () => {
     const wildlife = new Wildlife(17);
-    const land = new Terrain([island(0, 0)]);
+    const land = roundIsland({ centre: island(0, 0) });
     const boat = { x: 350, y: 0 };
     const step = 0.25;
     let elapsed = 0;
@@ -71,7 +72,7 @@ describe('gulls', () => {
     const record = (at: { x: number; y: number }, step: number) => {
       const wildlife = new Wildlife(17);
       const seen: string[] = [];
-      const land = new Terrain([island(0, 0)]);
+      const land = roundIsland({ centre: island(0, 0) });
       for (let t = 0; t < 600; t += step) {
         wildlife.update(step, at, land);
         for (const flock of wildlife.flocks) {
@@ -98,7 +99,7 @@ describe('gulls', () => {
     // what this pins is that the step size cannot change where one ends up.
     // It guards the day something here does start to move, and it already
     // catches a spawn whose draws depend on how the time was sliced.
-    const cadenceLand = new Terrain([island(0, 0)]);
+    const cadenceLand = roundIsland({ centre: island(0, 0) });
     const advance = (wildlife: Wildlife, step: number, seconds: number) => {
       for (let elapsed = 0; elapsed < seconds - step / 2; elapsed += step) {
         wildlife.update(step, { x: 350, y: 0 }, cadenceLand);
@@ -138,7 +139,7 @@ describe('gulls', () => {
    * constants they would assert that the flock has however many groups it has.
    */
   it('builds a flock from several groups that are mixed rather than in step', () => {
-    const land = new Terrain([island(0, 0)]);
+    const land = roundIsland({ centre: island(0, 0) });
     const wildlife = new Wildlife(17);
     const boat = { x: 350, y: 0 };
     const seen: (typeof wildlife.flocks)[number][] = [];
@@ -189,12 +190,12 @@ describe('gulls', () => {
   });
 
   it('replays exactly from a seed', () => {
-    const land = new Terrain([island(0, 0)]);
+    const land = roundIsland({ centre: island(0, 0) });
     expect(calls(11, land, { x: 420, y: 0 })).toEqual(calls(11, land, { x: 420, y: 0 }));
   });
 
   it('gives different seeds different birds', () => {
-    const land = new Terrain([island(0, 0)]);
+    const land = roundIsland({ centre: island(0, 0) });
     expect(calls(11, land, { x: 420, y: 0 })).not.toEqual(calls(9812, land, { x: 420, y: 0 }));
   });
 
@@ -203,7 +204,7 @@ describe('gulls', () => {
    * it up. Silent offshore, frequent close in.
    */
   it('calls near a shore and not in open water', () => {
-    const land = new Terrain([island(0, 0)]);
+    const land = roundIsland({ centre: island(0, 0) });
     // 260 m off the beach of a 200 m island, and half a sea away from it.
     expect(calls(33, land, { x: 460, y: 0 }).length).toBeGreaterThan(0);
     expect(calls(33, land, { x: 4000, y: 0 }).length).toBe(0);
@@ -211,7 +212,7 @@ describe('gulls', () => {
   });
 
   it('gets busier the closer in you are', () => {
-    const land = new Terrain([island(0, 0)]);
+    const land = roundIsland({ centre: island(0, 0) });
     const far = calls(7, land, { x: 850, y: 0 }).length;
     const near = calls(7, land, { x: 260, y: 0 }).length;
     expect(near).toBeGreaterThan(far);
@@ -225,7 +226,7 @@ describe('gulls', () => {
    * the same seed sound different depending on what you had sailed before it.
    */
   it('restarts its stream on reseed, so a seed sounds the same however it is reached', () => {
-    const land = new Terrain([island(0, 0)]);
+    const land = roundIsland({ centre: island(0, 0) });
     const at = { x: 420, y: 0 };
 
     const reused = new Wildlife(9812);
@@ -244,7 +245,7 @@ describe('gulls', () => {
 
   /** A pending call must not be heard in the world that replaced it. */
   it('drops any event still in hand when it is reseeded', () => {
-    const land = new Terrain([island(0, 0)]);
+    const land = roundIsland({ centre: island(0, 0) });
     const w = new Wildlife(12);
     for (let t = 0; t < 900 && w.events.length === 0; t += 0.25) {
       w.update(0.25, { x: 350, y: 0 }, land);
@@ -257,7 +258,7 @@ describe('gulls', () => {
   /** A call has to come from somewhere a bird could be, not from the masthead. */
   it('places calls off the boat, between it and the land', () => {
     const boat = { x: 350, y: 0 };
-    const heard = calls(12, new Terrain([island(0, 0)]), boat, 900);
+    const heard = calls(12, roundIsland({ centre: island(0, 0) }), boat, 900);
     expect(heard.length).toBeGreaterThan(0);
     for (const pos of heard) {
       expect(Math.hypot(pos.x - boat.x, pos.y - boat.y)).toBeGreaterThan(10);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { compassVec } from './math';
-import { EMPTY_TERRAIN, Terrain, type TerrainQuery } from './terrain';
+import { EMPTY_TERRAIN, type TerrainQuery } from './terrain';
+import { roundIsland } from './land.fixture';
 import { DIVE_DURATION, ENCOUNTER_DURATION, SharkField } from './sharks';
 
 const STEP = 0.25;
@@ -89,7 +90,7 @@ describe('sharks', () => {
   });
 
   it('stays in water it could swim in', () => {
-    const land = new Terrain([{ pos: { x: 0, y: 0 }, radius: 200, height: 70, seed: 3 }]);
+    const land = roundIsland();
     // Offshore of a 200 m island, so the whole spawn arc is over real water.
     const seen = record(11, land, { x: 600, y: 0 });
     expect(seen.length).toBeGreaterThan(0);

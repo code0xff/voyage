@@ -4,7 +4,7 @@ import { initialState, step, type Controls, type SeaState } from './boat';
 import { DEG, RAD, type Vec2 } from './math';
 import { CurrentField, SLACK, TIDE_PERIOD, tideRate } from './current';
 import { solveOne } from './polar';
-import { Terrain } from './terrain';
+import { roundIsland } from './land.fixture';
 import { knotsToMs, msToKnots } from './units';
 
 /**
@@ -190,7 +190,7 @@ describe('current', () => {
  */
 describe('current field', () => {
   /** A bank of land at the origin, so there is somewhere shallow to hide. */
-  const shore = new Terrain([{ pos: { x: 0, y: 0 }, radius: 300, height: 40, seed: 5 }]);
+  const shore = roundIsland({ radius: 300, height: 40 });
 
   const field = (peak: Vec2, fullDepth = 14) => {
     const f = new CurrentField({ peak, fullDepth });
@@ -214,8 +214,13 @@ describe('current field', () => {
   it('gives up in the shallows, so there is slack water to use inshore', () => {
     const f = field({ x: 1.5, y: 0 });
     const offshore = Math.hypot(f.sample({ x: 4000, y: 0 }).x, f.sample({ x: 4000, y: 0 }).y);
-    const inshore = f.rateAt(0, 380); // just outside the shoreline, over the shelf
-    expect(inshore).toBeLessThan(0.75);
+    // Over the shelf, and said as a depth rather than as a distance from a
+    // centre: which radius is shallow is the fixture's business and has
+    // changed under this test once already.
+    const p = { x: 0, y: 340 };
+    expect(shore.depthAt(p.x, p.y), 'the probe is not in shallow water').toBeLessThan(8);
+    const inshore = f.rateAt(p.x, p.y);
+    expect(inshore).toBeLessThan(offshore * 0.5);
     expect(inshore).toBeGreaterThan(0);
     expect(offshore).toBeGreaterThan(1.4);
   });

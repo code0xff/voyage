@@ -1,6 +1,5 @@
 import type { BoatState } from '../sim/boat';
-import { CHART_RANGE, MAX_ISLAND_RADIUS, Terrain, sameIslands, type Island } from '../sim/terrain';
-import { CRUISER } from '../sim/config';
+import { CHART_RANGE } from '../sim/terrain';
 import type { RegionTerrain } from '../sim/region-terrain';
 import type { WindField } from '../sim/wind';
 import { clamp, compassVec, type Vec2 } from '../sim/math';
@@ -100,14 +99,6 @@ const GRID = [100, 200, 500] as const;
  */
 const PAN_AT = 0.55;
 
-/**
- * How far a chart's own drawing reaches past an island's centre, m.
- *
- * A shape is traced outwards from the centre, so land whose centre sits outside
- * the disc still puts a coast inside it. `traceOutline` marches to exactly this
- * for the largest island the field makes.
- */
-export const ISLAND_DRAW_REACH = MAX_ISLAND_RADIUS * 1.45 + CRUISER.draft * 14 + 30;
 
 /**
  * How far the chart may be dragged off the boat at this range, m.
@@ -125,7 +116,7 @@ export const ISLAND_DRAW_REACH = MAX_ISLAND_RADIUS * 1.45 + CRUISER.draft * 14 +
  */
 export function maxChartOffset(rangeIndex: number): number {
   const range = RANGES[rangeIndex] ?? RANGES[0];
-  return Math.max(range * PAN_AT, CHART_RANGE - range - ISLAND_DRAW_REACH);
+  return Math.max(range * PAN_AT, CHART_RANGE - range);
 }
 
 /**
@@ -221,8 +212,6 @@ const WIND_CELLS = 28;
  * follows. A grid this size is a tidal atlas page; twice it is a texture.
  */
 const TIDE_CELLS = 7;
-/** Bearings used to trace a coastline. */
-const BEARINGS = 36;
 /** Redraw interval for the wind layer, ms. It advects far too slowly to need 60 Hz. */
 const WIND_INTERVAL = 120;
 
@@ -233,18 +222,7 @@ const TRACK_STEP = 12;
 export interface MinimapInput {
   state: BoatState;
   wind: WindField;
-  terrain: Terrain;
-  /**
-   * The land to draw: the same sea as `terrain`, but out as far as this chart
-   * can be zoomed rather than as far as the boat can feel.
-   *
-   * The two are different windows on purpose. `terrain` stops at ACTIVE_RANGE
-   * because nothing beyond it can change what the boat does, which is exactly
-   * the wrong bound for a chart -- at the 5 km range that window covers 45% of
-   * the radius, and the chart drew open water over the rest.
-   */
-  chart: Terrain;
-  /** The surveyed region, or null in the procedural ocean. */
+  /** The land to draw, sampled. Null only before the first window is built. */
   region: RegionTerrain | null;
   /** Depth the hull needs, m. The shoal contour is drawn at exactly this. */
   draft: number;
@@ -383,18 +361,6 @@ function drawRegion(
   ctx.drawImage(chartCanvas, 0, 0, size, size);
 }
 
-/** Shore and safe-water radius at each bearing, both measured from the centre. */
-interface Outline {
-  shore: Float32Array;
-  safe: Float32Array;
-  /**
-   * The neighbours this shape was traced with. elevationAt() merges islands
-   * that share a shelf, so an outline is a function of them too, and one keyed
-   * on its island alone goes stale the moment a neighbour loads or drops.
-   */
-  deps: readonly Island[];
-}
-
 export interface Minimap {
   draw(ctx: CanvasRenderingContext2D, size: number, input: MinimapInput): void;
   /**
@@ -408,70 +374,7 @@ export interface Minimap {
   centre(): Vec2;
 }
 
-/**
- * Trace an island by marching out along each bearing until the ground drops
- * below sea level, and again until it drops below the boat's draft.
- *
- * elevationAt() takes the highest of every island, so two islands close enough
- * to share a shelf trace as the single piece of land the boat will actually
- * meet.
- */
-function traceOutline(terrain: Terrain, isl: Island, draft: number): Outline {
-  const shore = new Float32Array(BEARINGS);
-  const safe = new Float32Array(BEARINGS);
-  const deps = terrain.islandsAffecting(isl);
-  /*
-   * Sampled against this island and its neighbours alone, not the whole chart.
-   *
-   * `elevationAt` walks every island it is given, so tracing against the full
-   * terrain made this quadratic in how much land is on screen -- fine for the
-   * dozen the physics window holds, and 317 ms for the hundred and twenty a
-   * five-kilometre chart can hold at the thickest island setting.
-   *
-   * The answers are identical, and that is not a hope. `islandsAffecting` is
-   * defined as every island whose ground can reach inside this one's tracing
-   * radius, which is the same claim the outline cache already stakes its
-   * correctness on: `deps` is what a redraw is checked against. Anything
-   * outside it cannot raise the seabed anywhere this march looks.
-   */
-  const local = new Terrain([isl, ...deps]);
-  // Far enough out to clear the shelf: the seabed falls away slowly, so safe
-  // water is a good way beyond the beach.
-  const outer = isl.radius * 1.45 + draft * 14 + 30;
-  const step = outer / 60;
-
-  for (let i = 0; i < BEARINGS; i++) {
-    const a = (i / BEARINGS) * Math.PI * 2;
-    const dx = Math.cos(a);
-    const dy = Math.sin(a);
-    let foundShore = false;
-    // If the march never reaches water -- which happens on the bearing towards
-    // a neighbour close enough to share a shelf -- the honest answer is "land
-    // all the way out". Leaving it at zero would spike the outline back to the
-    // island's centre and draw a bite out of the coast that is not there.
-    shore[i] = outer;
-    safe[i] = outer;
-    for (let r = isl.radius * 0.35; r <= outer; r += step) {
-      const e = local.elevationAt(isl.pos.x + dx * r, isl.pos.y + dy * r);
-      if (!foundShore && e < 0) {
-        shore[i] = r;
-        foundShore = true;
-      }
-      if (foundShore && -e >= draft) {
-        safe[i] = r;
-        break;
-      }
-    }
-  }
-  return { shore, safe, deps };
-}
-
 export function createMinimap(): Minimap {
-  // Outlines are keyed on the island object, which the island field hands back
-  // unchanged for as long as a piece of sea stays loaded. Tracing costs a few
-  // hundred elevation samples and must not happen per frame.
-  const outlines = new Map<Island, Outline>();
-
   // This chart's own raster cache. See ChartCache.
   const chart: ChartCache = { canvas: null, key: '' };
 
@@ -693,39 +596,6 @@ export function createMinimap(): Minimap {
       if (input.region) {
         drawRegion(chart, ctx, input.region, size, centreX, centreY, range, input.draft);
       }
-      for (const isl of input.chart.islands) {
-        let outline = outlines.get(isl);
-        if (!outline || !sameIslands(outline.deps, input.chart.islandsAffecting(isl))) {
-          outline = traceOutline(input.chart, isl, input.draft);
-          outlines.set(isl, outline);
-        }
-        const ring = (radii: Float32Array) => {
-          ctx.beginPath();
-          for (let i = 0; i < BEARINGS; i++) {
-            const a = (i / BEARINGS) * Math.PI * 2;
-            const x = sx(isl.pos.x + Math.cos(a) * radii[i]);
-            const y = sy(isl.pos.y + Math.sin(a) * radii[i]);
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-          }
-          ctx.closePath();
-        };
-        // Shoal first, so the land sits on top of its own shallows.
-        ring(outline.safe);
-        ctx.fillStyle = token('--warning', 0.22);
-        ctx.fill();
-        ring(outline.shore);
-        ctx.fillStyle = token('--muted-foreground', 0.85);
-        ctx.fill();
-      }
-
-      // Drop stale outlines. Islands fall astern for ever in an endless ocean,
-      // and a map that never forgot them would grow all session.
-      if (outlines.size > input.chart.islands.length + 24) {
-        const live = new Set(input.chart.islands);
-        for (const isl of [...outlines.keys()]) if (!live.has(isl)) outlines.delete(isl);
-      }
-
       // --- Tide ---------------------------------------------------------------
       // The stream, as arrows on a grid, in the manner of a tidal atlas. Until
       // now the only way to know a tide was running was to read SOG against BSP

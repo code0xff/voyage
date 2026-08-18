@@ -62,7 +62,7 @@ import {
   type Vec2,
 } from './sim/math';
 import { msToKnots } from './sim/units';
-import { EMPTY_TERRAIN, Terrain, type TerrainQuery } from './sim/terrain';
+import { EMPTY_TERRAIN, type TerrainQuery } from './sim/terrain';
 import { hoursUntilSunset, skyState, type SkyState } from './sim/sky';
 import { Wildlife } from './sim/wildlife';
 import { WhaleField } from './sim/whales';
@@ -100,28 +100,13 @@ export interface Snapshot {
    */
   currents: CurrentField;
   waves: WaveField;
-  terrain: Terrain;
   /**
-   * The same sea, out as far as the chart can be zoomed.
+   * The land, as a sampled height field.
    *
-   * `terrain` is the physics window and stops at ACTIVE_RANGE, which is less
-   * than half the radius of the widest chart -- so a chart drawn from it showed
-   * five islands where fifty-four were, and open water for the rest. This is
-   * the chart's own window and nothing else may read it: it holds land that is
-   * provably too far to be felt, which is exactly what makes it useless to the
-   * physics and necessary to a passage-scale chart.
-   *
-   * Equal to `terrain` when a region is loaded, because a surveyed coast is
-   * not windowed at all -- the whole place is already known.
-   */
-  chart: Terrain;
-  /**
-   * The surveyed region being sailed, or null in the procedural ocean.
-   *
-   * Alongside `terrain` rather than replacing it, because the two are read by
-   * different things: the physics asks whichever of them is installed through
-   * `TerrainQuery`, while the chart and the island meshes want the circle list
-   * that only `Terrain` has. When a region is loaded, `terrain` is empty.
+   * Null only before the first window is built. There were two more fields
+   * here -- a physics window of circle-islands and a wider one for the chart
+   * -- while the island field was a world; the coast is one window that
+   * everything reads.
    */
   region: RegionTerrain | null;
   sky: SkyState;
@@ -590,8 +575,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     wind,
     currents,
     waves,
-    terrain: EMPTY_TERRAIN,
-    chart: EMPTY_TERRAIN,
     region: null,
     sky: skyState(hour),
     weather,
@@ -1421,12 +1404,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       // The stream needs the same land the wind does: it is the depth that
       // decides where it runs, and it must never be reading last world's.
       currents.terrain = query;
-      snapshot.terrain = EMPTY_TERRAIN;
-      // A surveyed coast is not windowed, so the chart wants the same thing
-      // the physics has. The wider window only exists to undo a windowing.
-      snapshot.chart = EMPTY_TERRAIN;
       snapshot.region = regionTerrain;
-      view.setTerrain(EMPTY_TERRAIN, EMPTY_TERRAIN);
       view.setRegion(regionTerrain);
     }
   }

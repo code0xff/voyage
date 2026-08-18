@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CLEARANCE, MAX_DEPTH, MAX_WAY, anchorProblem, anchorage } from './anchorage';
 import { CRUISER } from './config';
-import { Terrain } from './terrain';
+import { roundIsland, openWater } from './land.fixture';
 
 /**
  * An anchorage is a judgement, not a coordinate, and these pin the judgement.
@@ -9,7 +9,7 @@ import { Terrain } from './terrain';
  * finding one is worth doing rather than stopping wherever you happen to be.
  */
 describe('anchorage', () => {
-  const shore = new Terrain([{ pos: { x: 0, y: 0 }, radius: 400, height: 60, seed: 3 }]);
+  const shore = roundIsland({ radius: 400, height: 60 });
   const at = (x: number, y: number, sog = 0) => anchorage(shore, CRUISER, { x, y }, sog, 0);
 
   /**
@@ -86,7 +86,7 @@ describe('anchorage', () => {
   });
 
   it('has nowhere to anchor in an ocean with no bottom', () => {
-    const open = new Terrain([]);
+    const open = openWater();
     const a = anchorage(open, CRUISER, { x: 0, y: 0 }, 0, 0);
     expect(a.holding).toBe('deep');
     expect(a.canAnchor).toBe(false);

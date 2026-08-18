@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_TERRAIN, Terrain, type TerrainQuery } from './terrain';
+import { EMPTY_TERRAIN, type TerrainQuery } from './terrain';
+import { roundIsland } from './land.fixture';
 import { WhaleField } from './whales';
 
 function record(seed: number, terrain: TerrainQuery = EMPTY_TERRAIN) {
@@ -210,9 +211,7 @@ describe('whales', () => {
   });
 
   it('only spawns in water deep enough to remain offshore', () => {
-    const land = new Terrain([
-      { pos: { x: 0, y: 0 }, radius: 200, height: 70, seed: 3 },
-    ]);
+    const land = roundIsland();
     for (const sighting of record(7, land)) {
       expect(land.depthAt(sighting.x, sighting.y)).toBeGreaterThanOrEqual(18);
       expect(land.distanceToShore(sighting.x, sighting.y)).toBeGreaterThanOrEqual(120);

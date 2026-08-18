@@ -347,8 +347,6 @@ export function MinimapCard({
     minimap.current.draw(ctx, size, {
       state: s.state,
       wind: s.wind,
-      terrain: s.terrain,
-      chart: s.chart,
       region: s.region,
       draft: CRUISER.draft,
       range,
