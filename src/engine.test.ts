@@ -2302,6 +2302,38 @@ describe('watching quests while she sails', () => {
     engine.dispose();
   });
 
+  it('counts the first encounter of a new world, whatever the last one ended on', async () => {
+    // The fields restart their ids at 1 with the world. The de-duplication
+    // that keeps a four-minute whale from counting four times remembers the
+    // last id it saw -- so a new world's first whale, id 1 again, was read as
+    // the one already counted and never reached the tally.
+    const whale = {
+      id: 1,
+      pos: { x: 0, y: 0 },
+      heading: 0,
+      size: 15,
+      phase: 'blow',
+      phaseT: 0,
+      seed: 1,
+    } as const;
+    vi.spyOn(WhaleField.prototype, 'update').mockImplementation(function (this: WhaleField) {
+      this.events.length = 0;
+      this.events.push({ ...whale });
+    });
+    quests.packs = [pack({ total: { facts: { whales: { atLeast: 1 } } } })];
+    const engine = sailing({ randomWorld: false, seed: 13 });
+    await settle();
+    engine.advance(10);
+    expect(engine.snapshot.quests.total.whales, 'the first world counted none').toBeGreaterThan(0);
+
+    // A new world, and the same whale over again.
+    engine.putToSea();
+    const before = engine.snapshot.quests.total.whales;
+    engine.advance(10);
+    expect(engine.snapshot.quests.total.whales).toBeGreaterThan(before);
+    engine.dispose();
+  });
+
   it('writes what it noticed down, and keeps it on the way out', async () => {
     quests.packs = [pack({ now: { facts: { speed: { atLeast: 0.5 } } } })];
     const engine = sailing({ randomWorld: false, seed: 13 });

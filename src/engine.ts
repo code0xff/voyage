@@ -1616,7 +1616,17 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     diag = null;
     snapshot.diag = null;
     // And a blow already scheduled belongs to an ocean that no longer exists.
+    // Both queues, which the first version of this missed: `silencePending`
+    // drops what the audio graph is holding, and `pendingThunder` is the
+    // engine's own list of strikes still counting out their distance. Left
+    // standing, a bolt seen in the last world arrived over the new one.
     sound.silencePending();
+    pendingThunder.length = 0;
+    // The sighting ids restart with the fields below, so last world's would
+    // silence the first encounter of this one: a fresh id 1 read as the one
+    // already counted.
+    seenWhale = 0;
+    seenShark = 0;
     sharks.reseed(current.seed);
     // The stream is at its full run again: `hour` has just been put back to the
     // start hour, which is what the tide is measured from. Set here as well as
