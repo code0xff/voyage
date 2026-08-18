@@ -2361,7 +2361,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // under her and a difference of coordinates would read as a leap.
     const world = PHYS_DT * current.timeScale;
     if (diag) sinceLook.miles += (diag.sog * PHYS_DT) / 1852;
-    sinceLook.hours += PHYS_DT / 3600;
+    // Only while she is sailing, which is what the logbook counts and what
+    // the guide says this is. Ungated, a quest asking for hours under way
+    // was answered by anchoring and waiting -- and the distance was no
+    // guard, because a boat at anchor still burns the clock.
+    if (!anchored) sinceLook.hours += PHYS_DT / 3600;
     sinceWatched += world;
     if (sinceWatched >= WATCH_EVERY) {
       sinceWatched = 0;

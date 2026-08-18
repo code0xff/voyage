@@ -2481,6 +2481,35 @@ describe('watching quests while she sails', () => {
     engine.dispose();
   });
 
+  it('does not count the hours she spends at anchor', async () => {
+    // "Hours under way" is what the guide calls it and what the logbook
+    // counts. Ungated, the way to complete one was to anchor and wait --
+    // and the distance tally is no guard, because a boat at anchor still
+    // burns the clock.
+    anchorAnywhere.on = true;
+    quests.packs = [pack({ total: { facts: { hours: { atLeast: 0.004 } } } })];
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    await settle();
+    const seen: string[] = [];
+    engine.onEvent((e) => {
+      if (e.type === 'quest') seen.push(e.id);
+    });
+    press('a');
+    frame(0.1);
+    expect(engine.snapshot.anchored, 'the anchor never went down').toBe(true);
+    // Fifteen seconds is more than the quest asks for, and none of it counts.
+    engine.advance(15);
+    expect(seen, 'counted the hours she lay at anchor').toEqual([]);
+
+    // Weigh, and the same fifteen seconds do count.
+    press('a');
+    frame(0.1);
+    expect(engine.snapshot.anchored).toBe(false);
+    engine.advance(15);
+    expect(seen).toEqual(['p.q']);
+    engine.dispose();
+  });
+
   it('writes what it noticed down, and keeps it on the way out', async () => {
     quests.packs = [pack({ now: { facts: { speed: { atLeast: 0.5 } } } })];
     const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
