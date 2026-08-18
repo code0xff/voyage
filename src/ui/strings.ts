@@ -543,6 +543,11 @@ export const QUEST: Record<string, Phrase> = {
   },
   /** The settings tab. */
   install: { en: 'Install a pack', ko: '팩 설치' },
+  sample: { en: 'Example file', ko: '예시 파일' },
+  sampleNote: {
+    en: 'The example is the pack that ships with the game, exactly as it is: edit it, install it back, and it takes this one\u2019s place.',
+    ko: '예시 파일은 게임에 포함된 팩 그대로입니다. 고쳐서 다시 설치하면 이 팩을 대체합니다.',
+  },
   installed: { en: 'Installed', ko: '설치됨' },
   remove: { en: 'Remove', ko: '삭제' },
   packNote: {

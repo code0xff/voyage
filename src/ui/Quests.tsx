@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ChevronRight, Trash2, Upload } from 'lucide-react';
+import { ChevronRight, Download, Trash2, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { questStore } from '@/quests-store';
 import {
@@ -14,6 +14,8 @@ import {
   type QuestState,
 } from '@/sim/quest';
 import { formatLatLon } from '@/sim/globe';
+import { STARTER_PACK } from '@/sim/starter';
+import { saveFile } from './save-file';
 import { formatWhen } from '@/sim/units';
 import { BELT, QUEST, WEATHER } from './strings';
 import { useLang, useT } from './i18n';
@@ -172,7 +174,33 @@ export function Quests({ version }: { version: number }) {
 }
 
 /**
- * The settings tab: which packs are installed, and the two things that can be
+ * The example file: the pack that ships with the game, serialised.
+ *
+ * Handing out the real thing rather than a written-out sample is the point.
+ * It is the format's documentation, it is a pack that demonstrably installs
+ * -- it is the one the game itself put in -- and because it carries the same
+ * id, an edited copy installed back *replaces* it, which is what someone
+ * learning the format will want to do first.
+ *
+ * A component rather than a function because it is offered in two places: at
+ * the install button, where the decision is made, and in the guide, where
+ * somebody is reading about the format and should not have to go and find it.
+ */
+export function SamplePack() {
+  const t = useT();
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => saveFile('voyage-quest-pack.json', JSON.stringify(STARTER_PACK, null, 2))}
+    >
+      <Download /> {t(QUEST.sample)}
+    </Button>
+  );
+}
+
+/**
+ * The settings tab: which packs are installed, and the things that can be
  * done about it.
  *
  * The note under it is not decoration. Installing a stranger's file is a
@@ -254,6 +282,7 @@ export function QuestPacks({ onChanged }: { onChanged: () => void }) {
             />
           </label>
         </Button>
+        <SamplePack />
       </div>
       {problem && (
         <p className="text-[10px] leading-relaxed text-warning">
@@ -262,7 +291,9 @@ export function QuestPacks({ onChanged }: { onChanged: () => void }) {
           {problem.quest ? ` (${problem.quest})` : ''}
         </p>
       )}
-      <p className="text-[10px] leading-relaxed text-muted-foreground">{t(QUEST.packNote)}</p>
+      <p className="text-[10px] leading-relaxed text-muted-foreground">
+        {t(QUEST.packNote)} {t(QUEST.sampleNote)}
+      </p>
     </div>
   );
 }
