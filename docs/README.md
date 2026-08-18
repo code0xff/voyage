@@ -15,3 +15,6 @@ what was concluded.
 |---|---|
 | [open-questions.md](open-questions.md) | Known limitations, with the measurements behind them |
 | [real-map.md](real-map.md) | Design for sailing a map of a real place |
+| [quests.md](quests.md) | The quest pack format, and what a quest is allowed to be |
+| [keel-sternway.md](keel-sternway.md) | Why she would not steer going astern; kept as the evidence trail |
+| [keel-sternway-resolution.md](keel-sternway-resolution.md) | The force that investigation was missing, and the repair |
