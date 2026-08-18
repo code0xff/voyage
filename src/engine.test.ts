@@ -1643,6 +1643,26 @@ describe('sailing on the Earth', () => {
     engine.dispose();
   });
 
+  it('writes the seed she is actually sailing, not the one before the roll', async () => {
+    // The menu writes the row and then puts to sea; a session that rolls a
+    // new world does it after that, so the row carried the seed from before
+    // the roll. Left to the half-minute throttle, a tab closed inside it
+    // reopened the departure under a coast that had already been replaced.
+    const engine = createEngine(canvas(), settings({ randomWorld: true }));
+    let rolled = 0;
+    engine.onEvent((e) => {
+      if (e.type === 'world') rolled = e.seed;
+    });
+    kept.stored = null;
+    engine.putToSea();
+    // The roll is announced on a microtask; the row is written before that.
+    await Promise.resolve();
+    expect(rolled, 'no world was rolled').toBeGreaterThan(0);
+    expect(kept.stored, 'nothing was written at put-to-sea').not.toBeNull();
+    expect(kept.stored!.seed).toBe(rolled);
+    engine.dispose();
+  });
+
   it('opens where she got to, and writes down where she gets to', () => {
     // The planet made this necessary: a boat that reached the Azores and
     // reopened off San Francisco has had a passage taken away from her, and

@@ -1573,6 +1573,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     callSalt = 0;
     snapshot.callsMade = 0;
     dealCalls();
+    // Written down at once rather than left to the throttle. `newSession`
+    // rolls a new seed when the player has asked for a world every time, and
+    // the row the menu wrote a moment ago carries the seed from *before* the
+    // roll -- so a tab closed inside the next half minute reopened the
+    // departure under a coast that had already been replaced.
+    keepUnderway();
   }
 
   /**
