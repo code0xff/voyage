@@ -1,4 +1,5 @@
 import type { QuestPack, QuestState } from './sim/quest';
+import { STARTER_PACK } from './sim/starter';
 
 /**
  * Where installed packs and what they have noticed are kept.
@@ -20,7 +21,12 @@ import type { QuestPack, QuestState } from './sim/quest';
  */
 
 export interface QuestStore {
-  /** Every installed pack. */
+  /**
+   * Every installed pack, having put the starter one in if this browser has
+   * never held any. Declared here rather than left to the caller because
+   * there are three callers and every one of them wants the same answer;
+   * a later sync adapter owes the same.
+   */
   packs(): Promise<QuestPack[]>;
   /** Add one, or replace the one with the same id. */
   install(pack: QuestPack): Promise<void>;
@@ -39,6 +45,16 @@ const STATE = 'state';
 const VERSION = 1;
 /** The single row the watcher's state lives in. */
 const STATE_KEY = 'state';
+/**
+ * The row that remembers the starter pack has been offered.
+ *
+ * Kept beside the watcher's state rather than in the packs -- the packs are
+ * what is installed, and this is a fact about the browser. It is deliberately
+ * *not* cleared by `forget`: forgetting what was noticed is about the
+ * completions, and a starter pack that reappeared because you cleared your
+ * records would be the game arguing with a decision you made.
+ */
+const SEEDED_KEY = 'starter';
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -109,11 +125,40 @@ const NOTHING: QuestStore = {
 
 /** One refusal is enough; see the logbook's note on the same latch. */
 let refused = false;
+/** And one check per session is enough; the answer cannot change under us. */
+let seeded = false;
+
+/**
+ * Put the starter pack in, once ever in this browser.
+ *
+ * The pack first and the mark second, on purpose: a crash between them costs
+ * a repeated `put` of the same id next time, which is the same row. The other
+ * order would cost the pack entirely.
+ *
+ * The mark is what makes removal stick. Without it the game would put back
+ * the pack a player had just deleted on the next thing that read the list,
+ * which is the most annoying bug this feature could have.
+ */
+async function seedOnce(): Promise<void> {
+  if (seeded) return;
+  const asked = await open();
+  const already = await run<unknown>(asked, STATE, 'readonly', (s) => s.get(SEEDED_KEY));
+  if (already) {
+    seeded = true;
+    return;
+  }
+  const packs = await open();
+  await run(packs, PACKS, 'readwrite', (s) => s.put(STARTER_PACK));
+  const mark = await open();
+  await run(mark, STATE, 'readwrite', (s) => s.put(true, SEEDED_KEY));
+  seeded = true;
+}
 
 export const questStore: QuestStore = {
   async packs() {
     if (refused) return [];
     try {
+      await seedOnce();
       const db = await open();
       return await run<QuestPack[]>(db, PACKS, 'readonly', (s) => s.getAll());
     } catch {

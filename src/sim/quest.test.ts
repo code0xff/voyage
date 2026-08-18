@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { STARTER_PACK } from './starter';
 import {
   QUEST_FORMAT,
   emptyQuestState,
@@ -319,19 +320,36 @@ describe('reading a pack from a stranger', () => {
  * wrong comment. And reading is not enough: a quest asking for something no
  * sample can carry is a promise the game cannot keep, and the only way to
  * notice is to try to complete it.
+ *
+ * The starter pack is read the long way round -- serialised and parsed back
+ * -- because that is the trip it actually makes: it is handed to the player
+ * as a file and installed again through `readPack` like anybody else's. A
+ * TypeScript object that typechecks is not the same claim.
  */
 describe('the packs that ship with it', () => {
   const dir = new URL('../../public/quests/', import.meta.url);
   const files = readdirSync(dir).filter((f) => f.endsWith('.json'));
-  const packs = files.map((f) => {
-    const read = readPack(JSON.parse(readFileSync(new URL(f, dir), 'utf8')));
-    if (!('pack' in read)) throw new Error(`${f}: ${JSON.stringify(read.problem)}`);
-    return read.pack;
-  });
+  const read = (raw: unknown, from: string) => {
+    const got = readPack(raw);
+    if (!('pack' in got)) throw new Error(`${from}: ${JSON.stringify(got.problem)}`);
+    return got.pack;
+  };
+  const packs = [
+    read(JSON.parse(JSON.stringify(STARTER_PACK)), 'the starter pack'),
+    ...files.map((f) => read(JSON.parse(readFileSync(new URL(f, dir), 'utf8')), f)),
+  ];
 
   it('ships some, and reads every one', () => {
     expect(files.length).toBeGreaterThan(0);
-    expect(packs.length).toBe(files.length);
+    expect(packs.length).toBe(files.length + 1);
+  });
+
+  it('hands out a starter pack the game would accept back', () => {
+    // The download is this object serialised, so a player who downloads it,
+    // changes a number and installs it must get a pack -- not a refusal from
+    // the reader about something they never touched.
+    expect(packs[0].id).toBe(STARTER_PACK.id);
+    expect(packs[0].quests.length).toBe(STARTER_PACK.quests.length);
   });
 
   it('can be sailed, every quest of it', () => {
