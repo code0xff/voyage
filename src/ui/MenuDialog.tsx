@@ -35,7 +35,6 @@ import {
   KEYS,
   LOG,
   MENU,
-  islandCount,
   PANEL,
   QUEST,
   SETTINGS_UI,
@@ -46,12 +45,10 @@ import {
   WORLD,
 } from "./strings";
 import {
-  withCoast,
-  withoutRegion,
   type Settings,
 } from "@/settings";
 import { placeName } from "@/sim/regions";
-import { COAST_ID, COAST_NAME } from "@/sim/coast";
+import { COAST_NAME } from "@/sim/coast";
 import { formatLatLon } from "@/sim/globe";
 import { loadUnderway } from "@/underway";
 import { AT_WATER, NEAR_WATER, WATERS, waterAt, waterById } from "@/sim/waters";
@@ -347,37 +344,22 @@ export function MenuDialog({
   // Read only when `view` is not "play", which the title branch below enforces;
   // the map has no entry for it and needs none.
   const heading = view === "play" ? MENU.settings : SCREEN_TITLE[view];
-  /*
-   * What the two doors say, worked out once.
-   *
-   * Only on the Earth: it is the one world where "where she got to" means
-   * anything. A surveyed region opens where it opens and the island field is
-   * nowhere at all, so there both doors would be the same door -- and only
-   * one is shown.
-   */
-  const onEarth = settings.region === COAST_ID;
+  /** What the two doors say, worked out once. */
   const from = waterById(settings.departure);
-  const startsFrom = onEarth && from ? t(offWater(t(WATER_NAME[from.id]))) : null;
+  const startsFrom = from ? t(offWater(t(WATER_NAME[from.id]))) : null;
   /*
    * The voyage waiting to be carried on, and where it is.
    *
-   * Every world keeps one: the Earth by latitude and longitude, and a
-   * surveyed region or the island field by the plane metres their own
-   * ground is laid out in. A region is small only in kilometres -- twenty of
-   * them takes longer to look at properly than anyone sails in one sitting.
-   *
-   * Named by the departure she is nearest, and by her position when she is
-   * near none. A region names itself, because the region *is* the place.
+   * Named by the departure she is nearest, and by her latitude and longitude
+   * when she is near none.
    */
   const carried = loadUnderway();
-  const near = carried?.place ? waterAt(carried.place, NEAR_WATER) : null;
+  const near = carried ? waterAt(carried.place, NEAR_WATER) : null;
   const sailsFrom = !carried
     ? ''
     : near
       ? t(offWater(t(WATER_NAME[near.id])))
-      : carried.place
-        ? formatLatLon(carried.place)
-        : t(MENU.openSea);
+      : formatLatLon(carried.place);
   /*
    * Not offered when it would be the same door twice: a voyage still sitting
    * at the departure a new one would start from is a new one.
@@ -387,13 +369,8 @@ export function MenuDialog({
    * voyage resumed in the Korea Strait was hidden because the Korea Strait is
    * on the list, whatever the new-voyage picker said.
    */
-  const at = carried?.place ? waterAt(carried.place, AT_WATER * 4) : null;
-  const sameDoor =
-    carried !== null &&
-    carried.region === settings.region &&
-    (carried.place
-      ? from !== null && at?.id === from.id
-      : Math.hypot(carried.pos?.x ?? 0, carried.pos?.y ?? 0) < AT_WATER);
+  const at = carried ? waterAt(carried.place, AT_WATER * 4) : null;
+  const sameDoor = carried !== null && from !== null && at?.id === from.id;
   const sailsOn = carried !== null && !sameDoor;
 
   /**
@@ -590,16 +567,7 @@ export function MenuDialog({
                     : t(WEATHER[settings.weatherMode])}{" "}
                   · {formatClock(settings.startHour)}
                 </div>
-                <div>
-                  {/* A surveyed place sets the island count to zero because it
-                      brings its own land, so reading "open sea" off that field
-                      alone announced San Francisco as an empty ocean. */}
-                  {settings.region === COAST_ID
-                    ? COAST_NAME
-                    : settings.islandCount === 0
-                      ? t(MENU.openSea)
-                      : t(islandCount(settings.islandCount))}
-                </div>
+                <div>{COAST_NAME}</div>
               </div>
               {/* Opens on World rather than on whichever tab was last left.
                   This used to be a correction -- the strip held the guide and
@@ -767,77 +735,19 @@ export function MenuDialog({
                 </SelectContent>
               </Select>
             </div>
-            {/*
-              One list, because "where am I sailing" is one question and
-              splitting it across two controls would invite picking two worlds
-              at once. Each entry is tagged by how true its land is, which is
-              the only difference that matters.
-            */}
+            {/* One world, so there is nothing to choose between: what used
+                to be a Where control is now a sentence saying where you are,
+                and the only choice left is which coast to leave from. */}
+            <p className="text-[10px] leading-relaxed text-muted-foreground">
+              {t(WORLD.coastBrief)}
+              <br />
+              <span className="text-info">{t(WORLD.earthLead)}</span>{" "}
+              {t(WORLD.earthBody)}
+            </p>
+            <Departure value={settings.departure} onChoose={(id) => set("departure", id)} />
             <div className="grid grid-cols-[104px_1fr] items-center gap-3">
               <span className="text-[11px] text-muted-foreground">
-                {t(WORLD.where)}
-              </span>
-              <Select
-                value={settings.region === COAST_ID ? COAST_ID : "open"}
-                onValueChange={(v) => {
-                  // Before the open-water fallthrough: an unprefixed value it
-                  // does not recognise clears the world, which is exactly what
-                  // must not happen to a coast someone just picked.
-                  if (v === COAST_ID) {
-                    onSettings(withCoast(settings));
-                    return;
-                  }
-                  // Picking a place writes its conditions into the settings
-                  // rather than overriding them, so every slider below keeps
-                  // showing what is actually being sailed and stays live.
-                  onSettings(withoutRegion(settings));
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="open">{t(WORLD.openOcean)}</SelectItem>
-                  <SelectItem value={COAST_ID}>
-                    {COAST_NAME} — {t(WORLD.earthTag)}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {settings.region === COAST_ID ? (
-              // Its own paragraph, not the surveyed one: the lead under a
-              // surveyed region says the soundings are real, and saying that
-              // over noise would be the exact mislabelling the region docblock
-              // warns against. No load notice either -- nothing is fetched.
-              <>
-                <p className="text-[10px] leading-relaxed text-muted-foreground">
-                  {t(WORLD.coastBrief)}
-                  <br />
-                  <span className="text-info">{t(WORLD.earthLead)}</span>{" "}
-                  {t(WORLD.earthBody)}
-                </p>
-                <Departure value={settings.departure} onChoose={(id) => set("departure", id)} />
-              </>
-            ) : (
-              <Slider
-                label={t(WORLD.islands)}
-                min={0}
-                max={10}
-                step={1}
-                value={settings.islandCount}
-                format={(v) => (v === 0 ? t(MENU.openSea) : `${v}/10`)}
-                onChange={(v) => set("islandCount", v)}
-              />
-            )}
-            <div className="grid grid-cols-[104px_1fr] items-center gap-3">
-              <span className="text-[11px] text-muted-foreground">
-                {t(
-                  settings.region === COAST_ID
-                    ? WORLD.seedCoast
-                    : settings.region
-                      ? WORLD.seedRegion
-                      : WORLD.seed,
-                )}
+                {t(WORLD.seedCoast)}
               </span>
               <div className="flex gap-2">
                 <input
@@ -901,18 +811,11 @@ export function MenuDialog({
               </p>
             )}
             <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
-              {/* Three worlds, three notes. This once read off a field a
-                  surveyed place sets to '' -- so picking a surveyed coast
-                  produced the procedural ocean's copy, promising that islands
-                  would keep coming over the horizon at a place whose coastline
-                  is fixed and measured. The generated coast then wore the
-                  surveyed note for a while, promising the opposite lie: that
-                  the seed does not move a land the seed entirely is. */}
-              {settings.region === COAST_ID
-                ? t(WORLD.coastNote)
-                : settings.region
-                  ? t(WORLD.regionNote)
-                  : t(WORLD.oceanNote)}
+              {/* One world, one note. There were three, chosen off a field
+                  each world set differently, and the wrong one promised
+                  islands over the horizon at a place whose coastline was
+                  fixed and measured. */}
+              {t(WORLD.coastNote)}
             </p>
           </TabsContent>
 

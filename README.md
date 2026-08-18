@@ -54,7 +54,7 @@ src/sim/     pure physics core -- no Three.js, no React, no browser APIs
   boat       state and step(). This one file is the boat
   wind       a wind field that varies with position and drifts downwind
   waves      wind sea, and four-point hull sampling
-  terrain    islands: depth field, wind shadow, wave shelter, grounding
+  terrain    the terrain interface every world answers, and an empty sea
   sky        time of day -- sun position, light and colour palettes
   weather    conditions that evolve on their own
   wildlife   gull calls and occasional seeded coastal flocks
@@ -79,7 +79,7 @@ src/view/    3D rendering
   water      wave surface (GPU vertex shader, land shelter included), and the
              flat sea that carries it on to the horizon
   skydome    sky gradient and sun glow
-  islands    island meshes, sampled from the same elevation field
+  islands    land meshes, sampled from the same elevation field
   eye        where the camera is and which way it faces, for both views
   creature   what the animal views share: scale, waterline, wave slope, disposal
   whale      humpback: dive cycle, blow and the footprint it leaves
@@ -391,10 +391,10 @@ term swamps the rudder at low speed, making the boat impossible to steer.
 
 ### 7. Land
 
-Islands are only worth having if they change how you sail. Three effects make
-them tactical rather than decorative:
+Land is only worth having if it changes how you sail. Three effects make it
+tactical rather than decorative:
 
-- **Wind shadow.** An island steals the wind downwind of it, in a wake that
+- **Wind shadow.** Land steals the wind downwind of it, in a wake that
   spreads and weakens with distance. Sailing into a lee is a real and painful
   mistake. This was nearly free to add, because the wind is already a pure
   function of position — the shadow is one more term composed into
@@ -405,49 +405,26 @@ them tactical rather than decorative:
 - **Grounding.** The seabed shoals towards the shore, and the shallows stop you
   dead. That is what makes cutting a corner a gamble.
 
-Island shapes are analytic — a noise-modulated radius — so every query is a few
-arithmetic operations and the physics can call them at 120 Hz. The meshes are
-built by sampling the very same `elevationAt()` the boat grounds on, and the
-water shader recomputes `waveShelter()` in GLSL, so what you see and what you
-sail through cannot drift apart.
+The land is a height field: the meshes are built by sampling the very same
+`elevationAt()` the boat grounds on, and the water shader reads the shelter the
+physics computed as a texture, so what you see and what you sail through cannot
+drift apart.
 
-**The ocean has no edge.** Islands are not a list generated at the start. The sea
-is divided into cells, and whether a cell holds an island — and what shape it is
-— comes from hashing its coordinates with the world seed. Nothing is stored, so
-the world costs the same whether you sail a mile or fifty, and an island you
-passed an hour ago is still there when you come back to it.
+**The ocean has no edge.** The ground is a pure function of world position and
+seed, so nothing is stored: the world costs the same whether you sail a mile or
+fifty, and a headland you passed an hour ago is still there when you come back
+to it.
 
-The boat, though, is handed a plain finite list: the physics, the water shader
-and the meshes must all agree on the same islands, and a shader cannot hash an
-infinite plane. `IslandField` keeps that list up to date as the boat moves, and
-the window is provably big enough — a wake is over by `WAKE_MAX` from the island
-that casts it, and nothing is asked about the terrain further than `QUERY_REACH`
-from the boat, so land outside the window cannot change any answer. That bound
-is why the wake is faded to exactly zero at the end of its reach rather than
-being left to decay forever: an unbounded tail and a finite window cannot both
-be honest. The cost is that a large island's flat water now ends by 1.5 km
-instead of thinning out to 2.5 km, which is a long way downwind of anywhere.
-
-The generated coast keeps the no-edge promise by a different mechanism. Its
-ground is a pure function of world position and seed, sampled into the same
-20 km height-field window the surveyed regions used — and the engine re-bakes that
-window about the boat as she sails along the shore, a few raster rows per
-physics step (the full field is a measured ~190 ms, too much for one frame).
+It is sampled into a 20 km height-field window — the same one the surveyed
+regions used — and the engine re-bakes that window about the boat as she sails
+along the shore, a few raster rows per physics step (the full field is a
+measured ~190 ms, too much for one frame).
 Windows are pinned to a shared 25 m world lattice, so any two of the same seed
 agree exactly where they overlap: the swap moves the horizon, never the water
 under the keel, and the mainland goes on however far you follow it.
 
-The meshes are drawn from a wider window than the physics uses, out past the fog
-at any visibility, so land is always born unseen rather than appearing out of
-clear air. Nothing in that outer ring affects the boat, so the two windows are
-allowed to differ.
-
-The chart gets a third, wider still, and it is the one that is not about the
-boat at all. `ACTIVE_RANGE` is the right bound for the physics precisely because
-it is the distance past which nothing can be felt — which makes it the wrong
-bound for a chart, whose whole job at a passage scale is water you have not
-reached. Drawn from the physics window, the 5 km range showed five islands of
-the fifty-four inside its own frame and open ocean over the rest of it.
+The chart is drawn wider still, and it is the one thing here that is not about
+the boat: its whole job at a passage scale is water she has not reached.
 `CHART_RANGE` covers the widest range, how far the chart may be held off the
 boat, and how far a coastline is drawn past its own centre; `minimap.test.ts`
 adds those three up from the same constants, so a range added without the sea to

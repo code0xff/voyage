@@ -626,7 +626,7 @@ describe('engine', () => {
     // it reports as a phantom gybe almost at once. The raster load is left
     // pending on purpose: the boat sails on while it waits, which is exactly
     // the resumed-session path this covers.
-    engine.applySettings(settings({ region: '', islandCount: 4 }));
+    engine.applySettings(settings({ seed: 99 }));
     for (let i = 0; i < 30; i++) {
       engine.advance(1);
       expect(engine.snapshot.maneuver).toBeNull();
@@ -704,7 +704,7 @@ describe('engine', () => {
    * flight, and that the boat spawns in the water the generator promised.
    */
   it('builds a generated coast without fetching anything', () => {
-    const engine = createEngine(canvas(), settings({ region: 'coast', randomWorld: false, seed: 546 }));
+    const engine = createEngine(canvas(), settings({ randomWorld: false, seed: 546 }));
     expect(engine.snapshot.region?.region.id).toBe('coast');
     engine.advance(2);
     // The spawn clearing, felt through the whole stack: the depth the hull
@@ -722,13 +722,13 @@ describe('engine', () => {
    * shore.
    */
   it('rolls a new coast with the world, and keeps a pinned one', () => {
-    const pinned = createEngine(canvas(), settings({ region: 'coast', randomWorld: false, seed: 546 }));
+    const pinned = createEngine(canvas(), settings({ randomWorld: false, seed: 546 }));
     const before = pinned.snapshot.region;
     pinned.putToSea();
     expect(pinned.snapshot.region).toBe(before);
     pinned.dispose();
 
-    const rolled = createEngine(canvas(), settings({ region: 'coast', randomWorld: true, seed: 546 }));
+    const rolled = createEngine(canvas(), settings({ randomWorld: true, seed: 546 }));
     const first = rolled.snapshot.region;
     rolled.putToSea();
     expect(rolled.snapshot.region).not.toBe(first);
@@ -750,7 +750,7 @@ describe('engine', () => {
   it('deals a real hand on a coast the moment the cruise begins', () => {
     const engine = createEngine(
       canvas(),
-      settings({ region: 'coast', cruise: true, randomWorld: false, seed: 546 }),
+      settings({ cruise: true, randomWorld: false, seed: 546 }),
     );
     const hand = engine.snapshot.calls;
     expect(hand.length).toBeGreaterThan(0);
@@ -765,7 +765,7 @@ describe('engine', () => {
   it('reads a click near a call as the call itself', () => {
     const engine = createEngine(
       canvas(),
-      settings({ region: 'coast', cruise: true, randomWorld: false, seed: 546 }),
+      settings({ cruise: true, randomWorld: false, seed: 546 }),
     );
     const call = engine.snapshot.calls[0];
     engine.setDestination({ x: call.x + 180, y: call.y - 120 });
@@ -811,12 +811,12 @@ describe('engine', () => {
   it('clears the hand when the cruise is switched off, and re-deals when it returns', () => {
     const engine = createEngine(
       canvas(),
-      settings({ region: 'coast', cruise: true, randomWorld: false, seed: 546 }),
+      settings({ cruise: true, randomWorld: false, seed: 546 }),
     );
     expect(engine.snapshot.calls.length).toBeGreaterThan(0);
-    engine.applySettings(settings({ region: 'coast', cruise: false, randomWorld: false, seed: 546 }));
+    engine.applySettings(settings({ cruise: false, randomWorld: false, seed: 546 }));
     expect(engine.snapshot.calls).toEqual([]);
-    engine.applySettings(settings({ region: 'coast', cruise: true, randomWorld: false, seed: 546 }));
+    engine.applySettings(settings({ cruise: true, randomWorld: false, seed: 546 }));
     expect(engine.snapshot.calls.length).toBeGreaterThan(0);
     engine.dispose();
   });
@@ -844,26 +844,6 @@ describe('engine', () => {
     engine.dispose();
   });
 
-  /**
-   * On the procedural ocean the hand is judged against the chart window, and
-   * this seed is the witness for why. The felt window stops at ACTIVE_RANGE
-   * and the hand reaches past it, and judged against the window, seed 260
-   * offered a call on the unloaded flank of an island -- 4.8 m of water by
-   * the window's answer, dry land once the boat sailed near enough to load
-   * it. Every offered place must survive the widest window's judgement.
-   */
-  it('never offers a port the wider chart knows is dry', () => {
-    const engine = createEngine(
-      canvas(),
-      settings({ islandCount: 4, seed: 260, randomWorld: false, cruise: true }),
-    );
-    const hand = engine.snapshot.calls;
-    expect(hand.length).toBeGreaterThan(0);
-    for (const call of hand) {
-      expect(anchorage(engine.snapshot.chart, CRUISER, call, 0, 0).canAnchor).toBe(true);
-    }
-    engine.dispose();
-  });
 
   /**
    * The loop itself, driven through rAF rather than through `advance()`, since
@@ -915,7 +895,16 @@ describe('engine', () => {
     const whaleSpy = vi.spyOn(WhaleField.prototype, 'update');
     const sharkSpy = vi.spyOn(SharkField.prototype, 'update');
 
-    const engine = sailing({ driftKnots: 4, setDeg: 0 });
+    // The stream has to run *across* her, or her course over the ground and
+    // her heading are the same number and the assertion below proves nothing.
+    // Taken from the boat rather than written down: which way she leaves is
+    // the departure's business and moves when that is retuned.
+    const probe = sailing({ randomWorld: false, seed: 13, driftKnots: 0 });
+    probe.advance(30);
+    const athwart = (probe.snapshot.state.heading * RAD + 90 + 360) % 360;
+    probe.dispose();
+
+    const engine = sailing({ randomWorld: false, seed: 13, driftKnots: 4, setDeg: athwart });
     engine.advance(60);
     engine.dispose();
 
@@ -1058,8 +1047,15 @@ describe('engine', () => {
     const sharkSpy = vi.spyOn(SharkField.prototype, 'update');
 
     // A stream on the beam, so the course she ends the first passage on is
-    // nowhere near any heading she could start the second one with.
-    const engine = sailing({ driftKnots: 4, setDeg: 0 });
+    // nowhere near any heading she could start the second one with. Which way
+    // is across her is taken from the boat, not written down; see the test
+    // above.
+    const probe = sailing({ randomWorld: false, seed: 13, driftKnots: 0 });
+    probe.advance(30);
+    const athwart = (probe.snapshot.state.heading * RAD + 90 + 360) % 360;
+    probe.dispose();
+
+    const engine = sailing({ randomWorld: false, seed: 13, driftKnots: 4, setDeg: athwart });
     engine.advance(60);
     const stale = engine.snapshot.diag!.cog;
 
@@ -1275,7 +1271,7 @@ describe('putting to sea prepared', () => {
  */
 describe('the coast window follows the boat', () => {
   it('re-bakes the window a few kilometres down the shore, seamlessly', { timeout: 120_000 }, () => {
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     const first = engine.snapshot.region;
     expect(first?.height.originX).toBe(0);
     // 199 degrees runs alongshore for this seed, clear of the headland that
@@ -1319,7 +1315,7 @@ describe('the coast window follows the boat', () => {
     // from the pending centre -- same side, inside a naive distance test --
     // and an orphaned fill would install a window centred down the coast of
     // a session that no longer exists.
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     const course = (199 * Math.PI) / 180;
     engine.advance(0.1);
     for (let i = 0; i < 240 && Math.abs(wrapPi(engine.snapshot.state.heading - course)) > 0.06; i++) {
@@ -1362,7 +1358,7 @@ describe('the flare', () => {
   // Keys are consumed by the frame loop, not the physics loop, so each press
   // is followed by a sliver of frames before `advance` carries the clock.
   it('goes up dark, pops into light, and burns out', () => {
-    const engine = sailing({});
+    const engine = sailing();
     engine.advance(0.1);
     press('u');
     frame(0.05);
@@ -1411,7 +1407,7 @@ describe('the flare', () => {
   });
 
   it('is one a minute, not a pocketful', () => {
-    const engine = sailing({});
+    const engine = sailing();
     engine.advance(0.1);
     press('u');
     frame(0.05);
@@ -1447,7 +1443,7 @@ describe('the flare', () => {
   });
 
   it('does not survive a restart, and neither does the wait', () => {
-    const engine = sailing({});
+    const engine = sailing();
     engine.advance(0.1);
     press('u');
     frame(0.05);
@@ -1470,7 +1466,7 @@ describe('the flare', () => {
  * tests below all sail seed 13 on the coast, so the world is theirs.
  */
 function storedOn(place: { lat: number; lon: number }, seed = 13) {
-  return { region: 'coast', seed, place, pos: null, at: 1 };
+  return { seed, place, pos: null, at: 1 };
 }
 
 /** What the row says her position was, whichever coordinate its world uses. */
@@ -1521,7 +1517,7 @@ function carryTo(engine: ReturnType<typeof sailing>, lat: number): void {
  */
 describe('sailing on the Earth', () => {
   it('knows where she is, and moves her there as she sails', () => {
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     const start = { ...placeOf(engine) };
     // The default anchor is off the Golden Gate; a session that opened
     // somewhere else entirely would mean the anchor never reached the
@@ -1545,7 +1541,7 @@ describe('sailing on the Earth', () => {
     // The re-anchoring rule: plane metres are measured from a pin that
     // moves, so everything the session holds in them must be carried across
     // -- and the way to check that is that nothing *on the Earth* moved.
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     engine.advance(0.1);
     const before = { ...placeOf(engine) };
     // Put her most of the way to the trigger rather than sailing it: two
@@ -1591,7 +1587,7 @@ describe('sailing on the Earth', () => {
     // the start of a session, when the two coincide, and a mile out for
     // every mile she sailed. Every window the tests built before this one
     // sat on the pin, which is why a clean self-review passed it.
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     // The planet arrives on a promise. Without this the window is built from
     // the seed alone and the test is about nothing -- which is exactly what
     // the first draft did, and it reported the same land either way.
@@ -1629,7 +1625,7 @@ describe('sailing on the Earth', () => {
   });
 
   it('rebuilds the coast once when the plane is re-pinned, not three times', async () => {
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     await Promise.resolve();
     await Promise.resolve();
     engine.advance(1);
@@ -1647,25 +1643,13 @@ describe('sailing on the Earth', () => {
     engine.dispose();
   });
 
-  it('gives no position to a world that is not on the Earth', () => {
-    // The island field is an invented ocean. Printing a real latitude and
-    // longitude over it would be a false claim of exactly the kind this
-    // project does not make elsewhere -- and the readout hides itself on
-    // this, so a position here would put San Francisco under an ocean that
-    // is nowhere.
-    const engine = sailing({ region: '', islandCount: 4 });
-    engine.advance(0.5);
-    expect(engine.snapshot.place).toBeNull();
-    engine.dispose();
-  });
-
   it('opens where she got to, and writes down where she gets to', () => {
     // The planet made this necessary: a boat that reached the Azores and
     // reopened off San Francisco has had a passage taken away from her, and
     // a circumnavigation becomes impossible in principle rather than merely
     // long.
     kept.stored = storedOn({ lat: -33.5, lon: 18.4 });
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     engine.advance(0.5);
     // Off the Cape, where the row says, and not off the Golden Gate.
     expect(placeOf(engine).lat).toBeCloseTo(-33.5, 1);
@@ -1683,7 +1667,7 @@ describe('sailing on the Earth', () => {
 
   it('takes a departure the player chose, and forgets one on request', () => {
     kept.stored = storedOn({ lat: -33.5, lon: 18.4 });
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     engine.advance(0.5);
     // Choosing one writes it down at once -- a tab closed straight after
     // choosing must not lose the choice -- and it takes effect at the next
@@ -1723,7 +1707,7 @@ describe('sailing on the Earth', () => {
     // choice -- within half a minute for the throttle, or the moment the tab
     // goes away. "Start over" survived exactly thirty seconds.
     kept.stored = storedOn({ lat: -33.5, lon: 18.4 });
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     engine.advance(0.5);
 
     engine.sailFrom(null);
@@ -1735,7 +1719,7 @@ describe('sailing on the Earth', () => {
 
     // The same for a chosen one: it is still the choice a minute later.
     const antigua = waterById('antigua')!;
-    const second = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const second = sailing({ randomWorld: false, seed: 13 });
     second.advance(0.5);
     second.sailFrom({ place: antigua.place });
     second.advance(61);
@@ -1753,7 +1737,7 @@ describe('sailing on the Earth', () => {
     //
     // The stub planet is land north of 30N, so a boat put just south of
     // that shoreline must leave with the land forward of the beam.
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     await Promise.resolve();
     await Promise.resolve();
     engine.advance(0.5);
@@ -1777,7 +1761,7 @@ describe('sailing on the Earth', () => {
     // The next session would open aground -- or, worse because it hides it,
     // afloat in the pond the spawn clearing digs out of whatever it lands
     // on. The last good position has to stand instead.
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     await Promise.resolve();
     await Promise.resolve();
     engine.advance(0.5);
@@ -1801,7 +1785,7 @@ describe('sailing on the Earth', () => {
     // like it worked. The stub planet is land north of 30N.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     kept.stored = storedOn({ lat: 45, lon: -100 });
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     await Promise.resolve();
     await Promise.resolve();
     engine.advance(0.5);
@@ -1819,7 +1803,7 @@ describe('sailing on the Earth', () => {
     // lost up to half a minute of sailing, which on the Earth is the
     // difference between resuming where you were and resuming where you
     // were before the last leg.
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     engine.advance(0.5);
     carryTo(engine, -20);
     engine.advance(1);
@@ -1846,67 +1830,27 @@ describe('sailing on the Earth', () => {
     // several thousand kilometres, silently, in the path whose comment
     // promises it is not a teleport.
     kept.stored = storedOn({ lat: -33.5, lon: 18.4 });
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     engine.advance(0.5);
     engine.sailFrom({ place: waterById('antigua')!.place });
     // A settings change that rebuilds the world, without putting to sea.
-    engine.applySettings(settings({ region: 'coast', randomWorld: false, seed: 77 }));
+    engine.applySettings(settings({ randomWorld: false, seed: 77 }));
     engine.advance(0.5);
     expect(placeOf(engine).lat).toBeCloseTo(-33.5, 1);
     engine.dispose();
   });
 
-  it('remembers a world that is not on the Earth by its plane metres', () => {
-    // Every world is worth carrying now, and that was asked for in as many
-    // words: a surveyed region is small only in kilometres, and twenty of
-    // them takes longer to look at properly than anyone sails in one sitting.
-    // What changes is the coordinate. The Earth's plane is re-pinned under
-    // her every 200 km, so its metres mean nothing tomorrow and it is
-    // remembered by latitude and longitude; every other world has a plane
-    // nailed down, and there the metres are exactly right.
-    const engine = sailing({ region: '', islandCount: 4 });
-    engine.advance(0.5);
-    engine.snapshot.state.pos = { x: 2200, y: -1400 };
-    engine.advance(31);
-    expect(kept.stored, 'nothing was written').not.toBeNull();
-    expect(kept.stored!.region).toBe('');
-    expect(kept.stored!.place, 'a region has no place on the plane it is drawn in').toBeNull();
-    const pos = kept.stored!.pos as { x: number; y: number };
-    // Within a couple of hundred metres: she is sailing while the throttle
-    // waits, so the row is where she was when it fired and not where she was
-    // put.
-    expect(Math.hypot(pos.x - 2200, pos.y + 1400)).toBeLessThan(300);
-    engine.dispose();
-  });
-
-  it('opens a fixed-plane world where she left off in it', () => {
-    // And the other half: a row with plane metres puts her back at them,
-    // ninety metres downwind of where she was rather than of the origin.
-    kept.stored = { region: '', seed: 13, place: null, pos: { x: 4000, y: 1500 }, at: 1 };
-    const engine = sailing({ region: '', seed: 13, randomWorld: false });
-    engine.advance(0.5);
-    const pos = engine.snapshot.state.pos;
-    expect(Math.hypot(pos.x - 4000, pos.y - 1500)).toBeLessThan(200);
-    engine.dispose();
-  });
-
-  it('fetches the planet only where it is used, and again if it fails', async () => {
-    // 29 MB on the wire, so it is not fetched for a session in Newport --
-    // whose ground is surveyed, and which never asks the globe anything.
-    const inRegion = sailing({ region: '' });
-    expect(earthLoad).not.toHaveBeenCalled();
-    inRegion.dispose();
-
-    // And a dropped connection costs this session's geography rather than
+  it('fetches the planet again if it fails', async () => {
+    // A dropped connection costs this session's geography rather than
     // the engine's whole lifetime: the next coast build asks again.
     const failed = vi.spyOn(console, 'error').mockImplementation(() => {});
     earthLoad.mockRejectedValueOnce(new Error('offline'));
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     await Promise.resolve();
     await Promise.resolve();
     expect(earthLoad).toHaveBeenCalledTimes(1);
     expect(failed).toHaveBeenCalled();
-    engine.applySettings(settings({ region: 'coast', randomWorld: false, seed: 99 }));
+    engine.applySettings(settings({ randomWorld: false, seed: 99 }));
     expect(earthLoad).toHaveBeenCalledTimes(2);
     failed.mockRestore();
     engine.dispose();
@@ -1916,7 +1860,7 @@ describe('sailing on the Earth', () => {
     // The stub planet is 4,000 m of water south of 30N. A generated coast
     // fades to 42 m on its own, which is a fair shelf and a lie in
     // mid-ocean, where it made every ocean sound like one.
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     await Promise.resolve();
     await Promise.resolve();
     engine.advance(0.1);
@@ -1940,7 +1884,7 @@ describe('sailing on the Earth', () => {
     // test moves the boat 200 km to reach the trigger and everything really
     // is 200 km behind her afterwards.
     anchorAnywhere.on = true;
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     engine.advance(0.1);
     engine.setDestination({ x: 3000, y: 0 });
     press('u');
@@ -1979,7 +1923,7 @@ describe('sailing on the Earth', () => {
     // could not even be trusted for the first of those until the endpoints
     // were carried across; these two are the ones that answer "where".
     anchorAnywhere.on = true;
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     engine.advance(0.1);
     // Sail first, then take her departure from *there*: `fromPlace` has to be
     // where the passage began and not where the session did.
@@ -2007,7 +1951,7 @@ describe('sailing on the Earth', () => {
     // origin left behind in the old plane it came out as nothing at all,
     // because both ends read as the origin of their own frame.
     anchorAnywhere.on = true;
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     engine.advance(0.1);
     engine.setDestination({ x: REANCHOR_AT + 1, y: 0 });
     engine.advance(1);
@@ -2027,7 +1971,7 @@ describe('sailing on the Earth', () => {
     // default anchor is at 37N -- so a window there must hold land, and one
     // moved deep into the southern ocean must hold none. That is the whole
     // claim: the shoreline the generator used came from the planet.
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     await Promise.resolve();
     await Promise.resolve();
     engine.advance(1);
@@ -2057,7 +2001,7 @@ describe('the wind belts', () => {
   const deg = (r: number) => ((r * 180) / Math.PI + 360) % 360;
 
   it('blows from the east in the trades and from the west down south', () => {
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     engine.advance(0.1);
     carryTo(engine, 15);
     // Put to sea again where she now is: a session opens in the belt it opens
@@ -2092,7 +2036,7 @@ describe('the wind belts', () => {
     // belt, and -- worse -- the *sea* was built from the slider too: a
     // session opening in the doldrums began under a twelve-knot sea over a
     // three-knot wind and could only decay towards the truth.
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     engine.advance(0.1);
     const away = engine.snapshot.waves.sigWaveHeight;
     carryTo(engine, 0);
@@ -2109,7 +2053,7 @@ describe('the wind belts', () => {
   });
 
   it('goes soft in the doldrums', () => {
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     engine.advance(0.1);
     const away = engine.snapshot.wind.baseTws;
     carryTo(engine, 0);
@@ -2124,7 +2068,7 @@ describe('the wind belts', () => {
   });
 
   it('swings into the next belt over a watch, not in a step', () => {
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     engine.advance(0.1);
     carryTo(engine, 12);
     engine.putToSea();
@@ -2152,29 +2096,12 @@ describe('the wind belts', () => {
     // reason that had nothing to do with the wind.
   }, 30_000);
 
-  it('brings the belt with her when she arrives on the Earth', () => {
-    // Switching worlds is arriving somewhere, so the wind must be the new
-    // place's at once: eased instead, the first four minutes of the Earth
-    // were sailed in the last world's wind while the panel named the
-    // westerlies over it. Seen in the browser before it was seen in a test.
-    // The island field is the world she arrives from, where the wind is
-    // whatever the player set and nothing to do with a belt.
-    const engine = sailing({ region: '' });
-    engine.advance(0.5);
-    engine.applySettings(settings({ region: 'coast', randomWorld: false, seed: 13 }));
-    engine.advance(0.1);
-    const twd = deg(engine.snapshot.wind.baseTwd);
-    expect(twd).toBeGreaterThan(230);
-    expect(twd).toBeLessThan(290);
-    engine.dispose();
-  });
-
   it('keeps a wind shift the player asked for', () => {
     // Q/E turns the mean wind, and on the Earth the mean wind is eased
     // toward the belt's every step -- so a shift written straight into it
     // was quietly wound back out: four time constants after the key came up,
     // 98% of it was gone, and the documented control did nothing lasting.
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     engine.advance(0.1);
     const before = deg(engine.snapshot.wind.baseTwd);
     // Held, not tapped: it is an axis, and one frame of it is one frame's
@@ -2224,7 +2151,7 @@ describe('watching quests while she sails', () => {
   };
 
   it('notices nothing at all until a pack is installed', async () => {
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     await settle();
     engine.advance(30);
     expect(quests.writes, 'wrote state with no packs installed').toBe(0);
@@ -2235,8 +2162,8 @@ describe('watching quests while she sails', () => {
     // The wind is whatever the belt is doing, so this asks for something the
     // engine must actually report: she is on the Earth, in a region that is
     // the endless coast, making way.
-    quests.packs = [pack({ now: { region: 'coast', facts: { speed: { atLeast: 0.5 } } } })];
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    quests.packs = [pack({ now: { facts: { speed: { atLeast: 0.5 } } } })];
+    const engine = sailing({ randomWorld: false, seed: 13 });
     await settle();
     const seen: string[] = [];
     engine.onEvent((e) => {
@@ -2249,7 +2176,7 @@ describe('watching quests while she sails', () => {
 
   it('carries the moment into the completion, from the engine and not from nothing', async () => {
     quests.packs = [pack({ now: { facts: { depth: { atLeast: 1 } } } })];
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     await settle();
     let completion: { moment: { place: unknown; depth: number } } | null = null;
     engine.onEvent((e) => {
@@ -2270,7 +2197,7 @@ describe('watching quests while she sails', () => {
     // from the position would read a re-anchoring as a two-hundred-kilometre
     // leap.
     quests.packs = [pack({ total: { facts: { miles: { atLeast: 0.02 } } } })];
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     await settle();
     const seen: string[] = [];
     engine.onEvent((e) => {
@@ -2289,7 +2216,7 @@ describe('watching quests while she sails', () => {
     // installed pack noticed nothing until the page was reloaded, and a
     // removed one went on completing quests and writing them down.
     quests.packs = [pack({ total: { facts: { miles: { atLeast: 0.05 } } } })];
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     await settle();
     const seen: string[] = [];
     engine.onEvent((e) => {
@@ -2322,7 +2249,7 @@ describe('watching quests while she sails', () => {
     // burns the clock.
     anchorAnywhere.on = true;
     quests.packs = [pack({ total: { facts: { hours: { atLeast: 0.004 } } } })];
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     await settle();
     const seen: string[] = [];
     engine.onEvent((e) => {
@@ -2346,7 +2273,7 @@ describe('watching quests while she sails', () => {
 
   it('writes what it noticed down, and keeps it on the way out', async () => {
     quests.packs = [pack({ now: { facts: { speed: { atLeast: 0.5 } } } })];
-    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
     await settle();
     engine.advance(31);
     expect(quests.writes).toBeGreaterThan(0);

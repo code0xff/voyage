@@ -30,7 +30,6 @@ function sample(over: Partial<Sample> = {}): Sample {
     place: { lat: 37.8, lon: -122.6 },
     belt: 'westerlies',
     weather: 'fair',
-    region: 'coast',
     wind: 12,
     heel: 8,
     sea: 1,
@@ -102,13 +101,6 @@ describe('watching a quest while she sails', () => {
     // is exactly what a latitude-only quest could not say.
     const wide = sail(p, [sample({ place: { lat: -55.98, lon: -58 } })]);
     expect(wide.done).toEqual([]);
-  });
-
-  it('has no place at all in a world that is not on the Earth', () => {
-    const p = pack({ now: { near: { lat: 0, lon: 0, within: 100 } } });
-    expect(sail(p, [sample({ place: null })]).done).toEqual([]);
-    const south = pack({ now: { facts: { south: { atLeast: 40 } } } });
-    expect(sail(south, [sample({ place: null })]).done).toEqual([]);
   });
 
   it('adds up what she does, and starts the passage tally again on a new one', () => {
@@ -239,16 +231,13 @@ describe('reading a pack from a stranger', () => {
       named: 'weather foggy',
     });
     expect(problemOf(withAsk({ now: { belt: 'roaring-forties' } }))?.kind).toBe('unknownName');
-    expect(problemOf(withAsk({ now: { region: 'sf-bay' } }))?.kind).toBe('unknownName');
+    // `region` went with the second world: one world is nothing to ask about.
+    expect(problemOf(withAsk({ now: { region: 'coast' } }))?.kind).toBe('unknownField');
     // Written out rather than imported, because these are the names a pack
     // author types: a test that asked the module for its own list would pass
     // whatever the list said, including an empty one.
     expect(problemOf(withAsk({ now: { weather: 'fog' } }))).toBeNull();
     expect(problemOf(withAsk({ now: { belt: 'westerlies' } }))).toBeNull();
-    // The two worlds that are not surveyed regions: the island field, and
-    // the open Earth.
-    expect(problemOf(withAsk({ now: { region: '' } }))).toBeNull();
-    expect(problemOf(withAsk({ now: { region: 'coast' } }))).toBeNull();
   });
 
   it('refuses an ask that asks nothing', () => {

@@ -1,5 +1,4 @@
 import { BELTS } from './climate';
-import { COAST_ID } from './coast';
 import type { LatLon } from './globe';
 import { WEATHER_KINDS } from './weather';
 
@@ -103,7 +102,6 @@ export interface NowAsk {
   near?: Near;
   belt?: string;
   weather?: string;
-  region?: string;
 }
 
 export interface TallyAsk {
@@ -146,13 +144,11 @@ export interface QuestPack {
  * keeping a second set of books.
  */
 export interface Sample {
-  /** Where she is, or null in a world that is not on the Earth. */
-  place: LatLon | null;
-  /** The wind belt she is in, or null where the belts do not apply. */
-  belt: string | null;
+  /** Where she is on the Earth. */
+  place: LatLon;
+  /** The wind belt she is in. */
+  belt: string;
   weather: string;
-  /** The world: a region id, or '' for the island field. */
-  region: string;
   wind: number;
   heel: number;
   sea: number;
@@ -239,10 +235,9 @@ export const emptyQuestState = (): QuestState => ({
 /** The sample without its deltas; see `Completion`. */
 function momentOf(s: Sample): Moment {
   return {
-    place: s.place ? { ...s.place } : null,
+    place: { ...s.place },
     belt: s.belt,
     weather: s.weather,
-    region: s.region,
     wind: s.wind,
     heel: s.heel,
     sea: s.sea,
@@ -282,17 +277,14 @@ function nowValue(fact: NowFact, s: Sample): number | undefined {
       return s.depth;
     case 'hour':
       return s.hour;
-    // A world that is not on the Earth has no latitude, and a quest asking
-    // for one there is not failed so much as unanswerable -- which comes to
-    // the same thing here: it does not hold.
     case 'latitude':
-      return s.place?.lat;
+      return s.place.lat;
     case 'longitude':
-      return s.place?.lon;
+      return s.place.lon;
     case 'south':
-      return s.place ? -s.place.lat : undefined;
+      return -s.place.lat;
     case 'north':
-      return s.place?.lat;
+      return s.place.lat;
   }
 }
 
@@ -303,13 +295,9 @@ function nowHolds(ask: NowAsk, s: Sample): boolean {
   for (const [fact, bound] of Object.entries(ask.facts ?? {})) {
     if (!held(nowValue(fact as NowFact, s), bound as Bound)) return false;
   }
-  if (ask.near) {
-    if (!s.place) return false;
-    if (milesApart(s.place, ask.near) > ask.near.within) return false;
-  }
+  if (ask.near && milesApart(s.place, ask.near) > ask.near.within) return false;
   if (ask.belt !== undefined && s.belt !== ask.belt) return false;
   if (ask.weather !== undefined && s.weather !== ask.weather) return false;
-  if (ask.region !== undefined && s.region !== ask.region) return false;
   return true;
 }
 
@@ -439,7 +427,7 @@ export interface PackProblem {
 }
 
 const ASK_SCOPES = ['now', 'passage', 'total', 'any'];
-const NOW_FIELDS = ['facts', 'near', 'belt', 'weather', 'region'];
+const NOW_FIELDS = ['facts', 'near', 'belt', 'weather'];
 
 /**
  * The three fields that name something instead of measuring it, and every
@@ -453,14 +441,13 @@ const NOW_FIELDS = ['facts', 'near', 'belt', 'weather', 'region'];
  * the promise in `docs/quests.md` untrue for exactly the fields whose
  * spelling nobody can guess.
  *
- * The worlds are the two `Settings.region` can hold: '' is the island field
- * and `COAST_ID` the open Earth. It was a longer list while the six surveyed
- * regions shipped.
+ * `region` was a third until the Earth became the only world: with one world
+ * there is nothing to ask, and a pack naming it is refused as an unknown field
+ * rather than left to match everywhere.
  */
 const NAMED: Record<string, readonly string[]> = {
   belt: BELTS,
   weather: WEATHER_KINDS,
-  region: ['', COAST_ID],
 };
 
 type Refusal = PackProblem | null;

@@ -69,20 +69,9 @@ export const nowhereToAnchor = (why: Phrase): Phrase => ({
 });
 
 /**
- * `4 islands`, assembled per language because Korean puts the counter after the
- * noun. A function for the same reason `holding` is one.
- */
-export const islandCount = (n: number): Phrase => ({
-  // The slider goes down to one, so the singular is reachable. Korean counters
-  // take no singular form, which is half of why this is a function.
-  en: n === 1 ? '1 island' : `${n} islands`,
-  ko: `섬 ${n}개`,
-});
-
-/**
- * What a passage met, one function per animal for the reason `islandCount` is
- * one: Korean puts the counter after the noun and takes no plural, so there is
- * no order both languages can share and no rule to derive one from.
+ * What a passage met, one function per animal: Korean puts the counter after
+ * the noun and takes no plural, so there is no order both languages can share
+ * and no rule to derive one from.
  *
  * Only ever called with a count of one or more -- nothing seen prints nothing
  * at all -- so there is no zero form and it would read badly if there were.
@@ -168,7 +157,6 @@ export const MENU: Record<string, Phrase> = {
   // module fetch, so importing again cannot recover -- only a fresh page can.
   retryEngine: { en: 'Reload the page', ko: '페이지 다시 불러오기' },
   changingWeather: { en: 'changing weather', ko: '변하는 날씨' },
-  openSea: { en: 'open sea', ko: '먼바다' },
   guideLead: { en: 'Never sailed before?', ko: '항해가 처음이신가요?' },
   guideBody: {
     en: 'A boat cannot sail straight at the wind, and that changes everything else. Read the guide →',
@@ -684,10 +672,6 @@ export const steerToHold = (deg: string): Phrase => ({
 
 /** The World tab, where a place is chosen. */
 export const WORLD: Record<string, Phrase> = {
-  where: { en: 'Where', ko: '어디서' },
-  islands: { en: 'Islands', ko: '섬' },
-  openOcean: { en: 'Open ocean (procedural)', ko: '먼바다 (절차적 생성)' },
-  surveyedTag: { en: 'surveyed', ko: '실측' },
   /**
    * The planet's tag and its explanation. The lead is set apart the way the
    * surveyed and sketch leads are, because these tags are claims about how
@@ -710,34 +694,12 @@ export const WORLD: Record<string, Phrase> = {
     ko: '육지의 위치는 4분각(약 7 km) 지구 지형도에서 가져옵니다. 그래서 항로와 거리, 랜드폴은 실제 지구의 것입니다. 다만 정박하는 해변의 생김새는 아래 시드에서 그려집니다. 제자리에 있는 그럴듯한 해안이지, 실제로 그곳에 있는 해안은 아닙니다.',
   },
   departure: { en: 'New voyage from', ko: '새 항해 출항지' },
-  surveyedLead: { en: 'Surveyed.', ko: '실측 데이터.' },
-  surveyedBody: { en: 'The coastline and the depths are', ko: '해안선과 수심의 출처는' },
-  surveyedCaveat: {
-    en: '. Still a simulator and not a chart: 25 m between soundings, and no tide height.',
-    ko: '. 그래도 해도가 아니라 시뮬레이터입니다. 수심점 간격이 25 m이고, 조위는 반영되지 않습니다.',
-  },
-  regionLoading: {
-    en: 'Loading the surveyed coast before you sail it…',
-    ko: '출항하기 전에 실측 해안을 불러오는 중입니다…',
-  },
-  regionLoadFailed: {
-    en: 'The surveyed coast could not be loaded. Try again before sailing.',
-    ko: '실측 해안을 불러오지 못했습니다. 출항하기 전에 다시 시도하세요.',
-  },
-  retryRegion: { en: 'Retry', ko: '다시 시도' },
-  seed: { en: 'World seed', ko: '월드 시드' },
   /**
-   * A region's land is surveyed and cannot vary, so nothing the seed does is
-   * about the world. Calling it the world seed there promises a different
-   * coast and delivers a different Tuesday.
-   */
-  seedRegion: { en: 'Conditions seed', ko: '조건 시드' },
-  /**
-   * And on the Earth it is neither. The planet decides where the land is, so
-   * the seed no longer names a world -- it draws the shoreline's own shape
-   * inside the Earth's coast, stands the islets off it, and runs the puffs
-   * and the weather. Calling it the world seed there promises a different
-   * planet and delivers a different beach.
+   * Not the world seed, which it was called while the seed made worlds. The
+   * planet decides where the land is, so the seed draws the shoreline's own
+   * shape inside the Earth's coast, stands the islets off it, and runs the
+   * puffs and the weather. Calling it the world seed promised a different
+   * planet and delivered a different beach.
    */
   seedCoast: { en: 'Coast seed', ko: '해안 시드' },
   seedNew: { en: 'New each time', ko: '매번 새로' },
@@ -758,14 +720,6 @@ export const WORLD: Record<string, Phrase> = {
   coastNote: {
     en: 'The planet does not move, so the seed is everything on top of it: the shape of the shore, the islets, the puffs and the weather. Pin it to keep a coast worth coming back to.',
     ko: '지구는 시드로 바뀌지 않습니다. 시드가 정하는 것은 그 위의 것들입니다. 해안선의 생김새와 앞바다의 섬, 돌풍과 날씨. 다시 오고 싶은 해안이면 시드를 고정하세요.',
-  },
-  regionNote: {
-    en: 'The coast and the depths here are surveyed and never change — the seed does not move them. What it does set is the sea you sail over them: where the puffs and the shifts fall, and how the weather turns. Pin it to sail the same day twice.',
-    ko: '이곳의 해안과 수심은 실측이라 절대 바뀌지 않습니다 — 시드가 그걸 옮기지는 못합니다. 시드가 정하는 것은 그 위를 지나는 바다입니다: 돌풍과 풍향 변화가 어디에 떨어지는지, 날씨가 어떻게 변해가는지. 같은 하루를 다시 항해하려면 고정하세요.',
-  },
-  oceanNote: {
-    en: 'The ocean has no edge: islands keep coming over the horizon for as long as you sail. Their lee is flat water but almost no wind, and the shoals around them will stop you dead. Pin the seed to sail the same water twice.',
-    ko: '바다에는 끝이 없습니다. 항해하는 한 섬이 계속 수평선 너머에서 나타납니다. 섬 그늘은 물결이 잔잔하지만 바람이 거의 없고, 주변 여울은 배를 그대로 세웁니다. 같은 바다를 다시 항해하려면 시드를 고정하세요.',
   },
   weatherNote2: {
     en: 'Evolving weather is what makes two passages over the same water different. A squall halfway forces a reef and changes which side of the bay pays.',

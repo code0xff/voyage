@@ -120,8 +120,8 @@ export const PACK_GUIDE_NAMES: PackGuideSection = {
       ko: '나머지 셋은 재는 대신 이름을 부릅니다. 그러니 이 버전이 가진 이름이어야 합니다. 잘못 쓴 `"weather": "foggy"`는 어려운 퀘스트가 아니라 불가능한 퀘스트입니다. 그래서 설치할 때 받아주지 않고 거부합니다.',
     },
     {
-      en: 'A wind belt, a latitude and `near` are all answered on the open Earth and nowhere else: the island field is an invented ocean, so it has no position and its wind is the one you set in the conditions.',
-      ko: '바람대와 위도, `near`는 모두 지구 해안선(`coast`)에서만 답이 나옵니다. 섬 바다는 지어낸 바다라 위치가 없고, 바람도 당신이 조건에서 정한 값입니다.',
+      en: 'There is one world — the Earth — so there is no world to ask about, and every belt, latitude and `near` is answered wherever she is.',
+      ko: '세계는 지구 하나뿐이라 어느 바다인지 물을 것이 없고, 바람대와 위도와 `near`는 배가 어디에 있든 답이 나옵니다.',
     },
   ],
   terms: [
@@ -137,13 +137,6 @@ export const PACK_GUIDE_NAMES: PackGuideSection = {
       meaning: {
         en: '`clear` `fair` `overcast` `rain` `squall` `shower` `fog`',
         ko: '`clear` `fair` `overcast` `rain` `squall` `shower` `fog`',
-      },
-    },
-    {
-      term: 'region',
-      meaning: {
-        en: '`coast` the open Earth, or `""` the seeded islands and open water',
-        ko: '`coast`는 지구 해안선, `""`는 시드로 만든 섬 바다와 외해',
       },
     },
   ],

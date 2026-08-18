@@ -1,5 +1,4 @@
 import { clampLat, wrapLon, type LatLon } from './sim/globe';
-import type { Vec2 } from './sim/math';
 
 /**
  * The voyage she is on, carried from one session to the next.
@@ -40,14 +39,10 @@ import type { Vec2 } from './sim/math';
 
 /** The voyage a session was on when it was last written down. */
 export interface Underway {
-  /** Region id, `coast` for the Earth, or '' for the island field. */
-  region: string;
   /** The seed that drew it; a voyage resumed under another seed is another world. */
   seed: number;
-  /** Where she was on the Earth, or null in a world that is not on it. */
-  place: LatLon | null;
-  /** Where she was in plane metres, or null where the plane moves under her. */
-  pos: Vec2 | null;
+  /** Where she was on the Earth. */
+  place: LatLon;
   /** ms since the epoch. The only thing a later sync could resolve on. */
   at: number;
 }
@@ -71,17 +66,14 @@ export function loadUnderway(): Underway | null {
     if (!raw) return null;
     const o = JSON.parse(raw) as Partial<Underway>;
     if (typeof o !== 'object' || o === null) return null;
-    if (typeof o.region !== 'string') return null;
     if (!finite(o.seed) || !finite(o.at)) return null;
-    // One of the two, and it has to be the whole of one: half a coordinate is
-    // a row this game has never written.
-    const place =
-      o.place && finite(o.place.lat) && finite(o.place.lon)
-        ? { lat: clampLat(o.place.lat), lon: wrapLon(o.place.lon) }
-        : null;
-    const pos = o.pos && finite(o.pos.x) && finite(o.pos.y) ? { x: o.pos.x, y: o.pos.y } : null;
-    if (!place && !pos) return null;
-    return { region: o.region, seed: o.seed, place, pos, at: o.at };
+    // The whole of it: half a coordinate is a row this game has never
+    // written. A row carrying only plane metres is one it wrote in a world
+    // that no longer exists -- the island field -- and there is nowhere to put
+    // her, so it is refused like any other row that cannot be sailed.
+    if (!o.place || !finite(o.place.lat) || !finite(o.place.lon)) return null;
+    const place = { lat: clampLat(o.place.lat), lon: wrapLon(o.place.lon) };
+    return { seed: o.seed, place, at: o.at };
   } catch {
     return null;
   }
@@ -98,9 +90,7 @@ export function saveUnderway(voyage: Omit<Underway, 'at'>, at = Date.now()): voi
       KEY,
       JSON.stringify({
         ...voyage,
-        place: voyage.place
-          ? { lat: clampLat(voyage.place.lat), lon: wrapLon(voyage.place.lon) }
-          : null,
+        place: { lat: clampLat(voyage.place.lat), lon: wrapLon(voyage.place.lon) },
         at,
       }),
     );
@@ -119,11 +109,5 @@ export function clearUnderway(): void {
 }
 
 /** Whether a stored voyage is the world these settings would sail. */
-export function sameWorld(
-  voyage: Underway,
-  world: { region: string; seed: number },
-): boolean {
-  return (
-    voyage.region === world.region && voyage.seed === world.seed
-  );
-}
+export const sameWorld = (voyage: Underway, world: { seed: number }): boolean =>
+  voyage.seed === world.seed;

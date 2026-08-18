@@ -5,7 +5,6 @@ import type { Vec2 } from './sim/math';
 import { setDriftVec } from './sim/current';
 import { TIDE_PERIOD } from './sim/current';
 import { detectLang, type Lang } from './i18n';
-import { COAST_ID } from './sim/coast';
 import { waterById } from './sim/waters';
 
 /**
@@ -68,19 +67,6 @@ export interface Settings {
   timeScale: number;
   /** 'auto' lets the weather evolve on its own; anything else pins it. */
   weatherMode: 'auto' | WeatherKind;
-  /** How thickly islands are scattered through the ocean, 0..10. Zero is open water. */
-  islandCount: number;
-  /**
-   * A surveyed region to sail, `COAST_ID` for the Earth, or '' for the
-   * procedural ocean.
-   *
-   * Picking a surveyed one writes its conditions into the settings above
-   * rather than overriding them, so the sliders keep showing what is actually
-   * being sailed and stay adjustable. Only the things that have no slider --
-   * the land, the wind's direction, how far offshore the slack water reaches
-   * -- are read from the place by the engine.
-   */
-  region: string;
   /**
    * Cruising mode: a hand of ports of call stands on the chart, anchoring at
    * one completes it and deals the next. Off is the plain open sailing every
@@ -144,8 +130,6 @@ export const DEFAULT_SETTINGS: Settings = {
   startHour: 9,
   timeScale: 60,
   weatherMode: 'auto',
-  islandCount: 4,
-  region: '',
   cruise: false,
   seed: 20260806,
   randomWorld: true,
@@ -182,11 +166,6 @@ export function loadSettings(): Settings {
       startHour: num(o.startHour, DEFAULT_SETTINGS.startHour, 0, 24),
       timeScale: num(o.timeScale, DEFAULT_SETTINGS.timeScale, 0, 600),
       weatherMode: mode,
-      islandCount: Math.round(num(o.islandCount, DEFAULT_SETTINGS.islandCount, 0, 10)),
-      // Not trusted: a stored id for one of the surveyed regions that used to
-      // ship must not strand the player in a world with no land the engine can
-      // build. Two ids are left -- the Earth, and '' for the island field.
-      region: o.region === COAST_ID ? COAST_ID : DEFAULT_SETTINGS.region,
       cruise: typeof o.cruise === 'boolean' ? o.cruise : DEFAULT_SETTINGS.cruise,
       seed: Math.round(num(o.seed, DEFAULT_SETTINGS.seed, 1, 2 ** 31)),
       randomWorld:
@@ -226,24 +205,6 @@ export const windKn = (ms: number): number => msToKnots(ms);
  * compass-to-vector sign only one caller exercised.
  */
 export const currentVec = (s: Settings): Vec2 => setDriftVec(s.setDeg, s.driftKnots);
-
-/** Leaving the Earth for the open ocean. Conditions stay as they were left. */
-export const withoutRegion = (s: Settings): Settings => ({ ...s, region: '' });
-
-/**
- * Picking the generated coast.
- *
- * Unlike `withRegion` it writes no conditions, because there are none to
- * write: a surveyed place brings the weather its land was laid out around,
- * and a generated coast has no such claim to make. The sliders stay exactly
- * where the player left them, as they do on the open ocean. The island slider
- * stands down the same way, the coast being its own land.
- */
-export const withCoast = (s: Settings): Settings => ({
-  ...s,
-  region: COAST_ID,
-  islandCount: 0,
-});
 
 /**
  * The gap between sightings the fields want, as a multiple of their tuned

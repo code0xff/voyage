@@ -9,7 +9,6 @@ import { MenuDialog } from "./MenuDialog";
 import { logbook } from "@/logbook";
 import { clearUnderway, loadUnderway, saveUnderway } from "@/underway";
 import { waterById } from "@/sim/waters";
-import { COAST_ID } from "@/sim/coast";
 import { HintBar } from "./HintBar";
 import { BinocularMask } from "./BinocularMask";
 import { MinimapCard } from "./MinimapCard";
@@ -169,13 +168,10 @@ export function App() {
             if (ev.type === "photo") {
               // Named for where she was and when, so a folder of these reads as a
               // voyage rather than as `screenshot (14).png`.
-              const s = settingsRef.current;
-              const where =
-                s.region === COAST_ID ? "earth" : "open sea";
               const t = new Date();
               const pad = (n: number) => String(n).padStart(2, "0");
               const stamp = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}-${pad(t.getHours())}${pad(t.getMinutes())}`;
-              const slug = where.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+              const slug = "earth";
               const url = URL.createObjectURL(ev.blob);
               const a = document.createElement("a");
               a.href = url;
@@ -324,10 +320,9 @@ export function App() {
    */
   const newVoyage = useCallback(() => {
     const s = settingsRef.current;
-    // Where a new voyage begins: the chosen departure on the Earth, and the
-    // world's own opening position anywhere else.
-    const from = s.region === COAST_ID ? (waterById(s.departure)?.place ?? null) : null;
-    if (from) saveUnderway({ region: s.region, seed: s.seed, place: from, pos: null });
+    // Where a new voyage begins: the departure chosen in the settings.
+    const from = waterById(s.departure)?.place ?? null;
+    if (from) saveUnderway({ seed: s.seed, place: from });
     else clearUnderway();
     engine?.sailFrom(from ? { place: from } : null);
     putToSea();
@@ -337,11 +332,8 @@ export function App() {
    * Sail on: the world the last voyage was in, at the seed it was drawn from
    * and the place she had got to.
    *
-   * The settings are moved to that world first, because the menu may have
-   * been used to look at somewhere else since -- and the seed is pinned,
-   * since a resumed voyage under a new seed is a different coast, and in the
-   * island field a different sea altogether. Pinning it turns "a new world
-   * every time" off, which is a visible change to a setting the player owns:
+   * The seed is pinned, since a resumed voyage under a new seed is a
+   * different coast. Pinning it turns "a new world every time" off, which is a visible change to a setting the player owns:
    * it is the honest one, because from here on she *is* sailing that world,
    * and the menu shows it as pinned rather than hiding it.
    *
@@ -354,14 +346,9 @@ export function App() {
   const sailOn = useCallback(() => {
     const row = loadUnderway();
     if (!row) return;
-    const next: Settings = {
-      ...settingsRef.current,
-      region: row.region,
-      seed: row.seed,
-      randomWorld: false,
-    };
+    const next: Settings = { ...settingsRef.current, seed: row.seed, randomWorld: false };
     applySettings(next);
-    engine?.sailFrom({ place: row.place, pos: row.pos });
+    engine?.sailFrom({ place: row.place });
     putToSea(next);
   }, [applySettings, engine, putToSea]);
 

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { BELTS } from '@/sim/climate';
-import { COAST_ID } from '@/sim/coast';
 import { WEATHER_KINDS } from '@/sim/weather';
 import { NOW_FACTS, QUEST_FORMAT, TALLY_FACTS, readPack } from '@/sim/quest';
 import { PACK_GUIDE_NAMES, PACK_GUIDE_NOW, PACK_GUIDE_TALLIES } from './pack-guide-strings';
@@ -45,7 +44,7 @@ const refusal = (ask: unknown): string | null => {
 
 describe('the quest pack guide', () => {
   it('prints only names a pack can be installed with', () => {
-    for (const field of ['belt', 'weather', 'region']) {
+    for (const field of ['belt', 'weather']) {
       const meaning = meaningOf(PACK_GUIDE_NAMES, field);
       expect(meaning, field).toBeDefined();
       for (const name of quoted(meaning!.en)) {
@@ -58,6 +57,8 @@ describe('the quest pack guide', () => {
     // And the assertion above is worth something: a name that is not in the
     // guide is refused, so "everything listed installs" is not vacuous.
     expect(refusal({ now: { weather: 'foggy' } })).toContain('unknownName');
+    // The world was the third of these until there was only one world.
+    expect(refusal({ now: { region: 'coast' } })).toContain('unknownField');
   });
 
   it('prints a bound the reader accepts for every fact it names', () => {
@@ -78,14 +79,13 @@ describe('the quest pack guide', () => {
     const listed = (field: string) => quoted(meaningOf(PACK_GUIDE_NAMES, field)!.en).sort();
     expect(listed('belt')).toEqual([...BELTS].sort());
     expect(listed('weather')).toEqual([...WEATHER_KINDS].sort());
-    expect(listed('region')).toEqual(['""', COAST_ID].sort());
     expect(PACK_GUIDE_NOW.terms?.map((t) => t.term).sort()).toEqual([...NOW_FACTS].sort());
     expect(PACK_GUIDE_TALLIES.terms?.map((t) => t.term).sort()).toEqual([...TALLY_FACTS].sort());
   });
 
   it('says the same names in both languages', () => {
     // A name is never translated, so the two lists have to be the same list.
-    for (const field of ['belt', 'weather', 'region']) {
+    for (const field of ['belt', 'weather']) {
       const meaning = meaningOf(PACK_GUIDE_NAMES, field)!;
       expect(quoted(meaning.ko).sort(), field).toEqual(quoted(meaning.en).sort());
     }

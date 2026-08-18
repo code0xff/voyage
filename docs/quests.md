@@ -100,22 +100,19 @@ and these, which are not numbers:
 | `near: { lat, lon, within }` | within `within` nautical miles of that place |
 | `belt` | the wind belt she is in now |
 | `weather` | the weather now |
-| `region` | the world she is sailing |
 
-Those last three name something rather than measure it, so the name has to be
-one this build has. They are checked at install like everything else -- a
+Those two name something rather than measure it, so the name has to be one
+this build has. They are checked at install like everything else -- a
 misspelled `"weather": "foggy"` is not a hard quest, it is an impossible one.
 
 | field | names |
 |---|---|
 | `belt` | `doldrums` `trades` `horse` `westerlies` `polar` |
 | `weather` | `clear` `fair` `overcast` `rain` `squall` `shower` `fog` |
-| `region` | `coast` the open Earth, or `""` the seeded islands and open water |
 
-**A belt, a latitude and `near` are answered on the open Earth and nowhere
-else.** The island field is an invented ocean: it has no position, and its mean
-wind is the player's own setting, which calling "the westerlies" would be a lie
--- `beltFor` returns null off `COAST_ID`.
+There is one world -- the Earth -- so `region` is gone from the vocabulary: a
+pack that named a world would be asking a question with one answer. Every belt,
+latitude and `near` is therefore answered wherever she is.
 
 ### `passage` and `total`
 
