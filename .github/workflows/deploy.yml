@@ -41,10 +41,10 @@ jobs:
 
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22.x
           cache: npm
@@ -98,7 +98,7 @@ jobs:
         run: npm run check:base -- dist "${{ steps.base.outputs.base }}"
 
       - name: Upload the built site
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: voyage-dist
           path: dist
@@ -106,7 +106,7 @@ jobs:
 
       - name: Upload for Pages
         if: inputs.publish == 'github-pages'
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
@@ -131,4 +131,4 @@ jobs:
     steps:
       - name: Deploy
         id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
