@@ -164,6 +164,16 @@ export interface Sample {
   /** True on the sample where a passage begins, and where one completes. */
   passageBegan?: boolean;
   passageFinished?: boolean;
+  /**
+   * Whether she is on a passage at all -- pointed at somewhere she has not
+   * reached.
+   *
+   * The per-passage tally only counts while this is true. Counting free
+   * sailing into it would make "fifty miles between anchors" completable by
+   * forty miles of passage and ten of pottering about, which is not what it
+   * says and not what the logbook would record.
+   */
+  onPassage?: boolean;
 }
 
 /** What has piled up. */
@@ -338,7 +348,10 @@ export function watch(
   const passage: Tally = sample.passageBegan ? emptyTally() : { ...state.passage, belts: [...state.passage.belts] };
   const total: Tally = { ...state.total, belts: [...state.total.belts] };
 
-  for (const t of [passage, total]) {
+  // The book counts everything; the passage counts only what was sailed on
+  // one. A tally that is not being added to still holds what it reached, so a
+  // passage given up is frozen rather than forgotten.
+  for (const t of sample.onPassage ? [passage, total] : [total]) {
     t.miles += sample.miles;
     t.hours += sample.hours;
     t.whales += sample.whales;

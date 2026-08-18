@@ -1023,6 +1023,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       photographs: sinceLook.photographs,
       passageBegan,
       passageFinished,
+      // Only what was sailed on a passage counts towards one; see `Sample`.
+      onPassage: destination !== null,
     };
     sinceLook.miles = 0;
     sinceLook.hours = 0;

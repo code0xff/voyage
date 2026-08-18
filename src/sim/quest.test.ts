@@ -41,6 +41,10 @@ function sample(over: Partial<Sample> = {}): Sample {
     whales: 0,
     sharks: 0,
     photographs: 0,
+    // Bound somewhere unless a test says otherwise: the passage tally only
+    // counts what was sailed on a passage, and most of these are about what
+    // the tallies do rather than about which of them is running.
+    onPassage: true,
     ...over,
   };
 }
@@ -101,6 +105,23 @@ describe('watching a quest while she sails', () => {
     // is exactly what a latitude-only quest could not say.
     const wide = sail(p, [sample({ place: { lat: -55.98, lon: -58 } })]);
     expect(wide.done).toEqual([]);
+  });
+
+  it('counts nothing towards a passage while she is not on one', () => {
+    // The book counts every mile; the passage counts only what was sailed on
+    // one. Otherwise "fifty miles between anchors" is completable by forty
+    // miles of passage and ten of pottering about.
+    const p = pack({ passage: { facts: { miles: { atLeast: 100 } } } });
+    const free = sail(p, [sample({ miles: 90, onPassage: false }), sample({ miles: 90, onPassage: false })]);
+    expect(free.done).toEqual([]);
+    expect(free.state.passage.miles).toBe(0);
+    expect(free.state.total.miles).toBeCloseTo(180, 6);
+    // And a passage given up keeps what it reached rather than losing it.
+    const given = sail(p, [
+      sample({ miles: 40, passageBegan: true }),
+      sample({ miles: 90, onPassage: false }),
+    ]);
+    expect(given.state.passage.miles).toBeCloseTo(40, 6);
   });
 
   it('adds up what she does, and starts the passage tally again on a new one', () => {

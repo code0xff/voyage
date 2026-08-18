@@ -70,7 +70,7 @@ Every condition names when it is measured.
 | scope | means | reset |
 |---|---|---|
 | `now` | true at this instant | — |
-| `passage` | accumulated since the current passage began | when a passage begins |
+| `passage` | accumulated since the current passage began | when one begins, and when one is abandoned |
 | `total` | accumulated over every passage ever sailed | never |
 
 A quest completes the moment its whole `ask` holds. `now` conditions and

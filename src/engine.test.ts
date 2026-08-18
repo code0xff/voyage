@@ -2271,6 +2271,37 @@ describe('watching quests while she sails', () => {
     engine.dispose();
   });
 
+  it('starts the passage tally again when a passage is given up', async () => {
+    // Clearing a destination abandons the passage -- the logbook drops its
+    // record -- so the quests must not go on adding free-sailing miles to it.
+    // Left running, "fifty miles in one passage" could be finished by forty in
+    // a passage and ten of pottering about.
+    quests.packs = [pack({ passage: { facts: { miles: { atLeast: 0.05 } } } })];
+    const engine = sailing({ randomWorld: false, seed: 13 });
+    await settle();
+    const seen: string[] = [];
+    engine.onEvent((e) => {
+      if (e.type === 'quest') seen.push(e.id);
+    });
+
+    engine.setDestination({ x: 4000, y: 4000 });
+    engine.advance(20);
+    const underWay = engine.snapshot.quests.passage.miles;
+    expect(underWay, 'nothing was counted while she was bound somewhere').toBeGreaterThan(0.01);
+
+    // Given up. What she sails from here is not that passage, so the tally
+    // stands still: frozen at what it reached rather than forgotten.
+    engine.setDestination(null);
+    engine.advance(60);
+    expect(engine.snapshot.quests.passage.miles).toBeCloseTo(underWay, 10);
+    // And the whole of it, sailed free, never completes a passage quest.
+    engine.advance(120);
+    expect(seen, 'a passage quest completed on sailing that was not one').toEqual([]);
+    // The book still has every mile of it.
+    expect(engine.snapshot.quests.total.miles).toBeGreaterThan(0.05);
+    engine.dispose();
+  });
+
   it('writes what it noticed down, and keeps it on the way out', async () => {
     quests.packs = [pack({ now: { facts: { speed: { atLeast: 0.5 } } } })];
     const engine = sailing({ randomWorld: false, seed: 13 });

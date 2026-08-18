@@ -72,8 +72,8 @@ export const PACK_GUIDE_WHEN: PackGuideSection = {
     {
       term: 'passage',
       meaning: {
-        en: 'piled up since this passage began, and reset when the next one does',
-        ko: '이번 항해가 시작된 뒤로 쌓인 값. 다음 항해가 시작되면 0으로',
+        en: 'piled up since this passage began; back to nothing when the next one begins, or when this one is given up',
+        ko: '이번 항해가 시작된 뒤로 쌓인 값. 다음 항해가 시작되거나 이번 항해를 포기하면 0으로',
       },
     },
     {
