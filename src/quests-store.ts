@@ -127,9 +127,20 @@ const NOTHING: QuestStore = {
 let refused = false;
 /** And one check per session is enough; the answer cannot change under us. */
 let seeded = false;
+/** The one in flight, so two readers at once cannot both seed. */
+let seeding: Promise<void> | null = null;
 
 /**
- * Put the starter pack in, once ever in this browser.
+ * Put the starter pack in, once ever in this browser, and only into a browser
+ * that is holding no packs at all.
+ *
+ * **Both conditions, not just the mark.** The mark is new, so every browser
+ * that already has this game has packs and no mark -- and one of those packs
+ * may be an edited `first-miles`, because the starter used to ship as a file
+ * under `public/` with that id. Seeding on the mark alone would have replaced
+ * somebody's edited pack with the shipped one on the first read after the
+ * update. A browser holding packs is not a new browser; it is marked and left
+ * alone.
  *
  * The pack first and the mark second, on purpose: a crash between them costs
  * a repeated `put` of the same id next time, which is the same row. The other
@@ -141,17 +152,30 @@ let seeded = false;
  */
 async function seedOnce(): Promise<void> {
   if (seeded) return;
-  const asked = await open();
-  const already = await run<unknown>(asked, STATE, 'readonly', (s) => s.get(SEEDED_KEY));
-  if (already) {
+  // One flight for all callers: the engine and the two screens can ask at
+  // once, and three of these interleaved would each read "no packs" and each
+  // write. Idempotent as it happens -- one id, one row -- but it is a race,
+  // and a race that is currently harmless is a race.
+  seeding ??= (async () => {
+    const asked = await open();
+    if (!(await run<unknown>(asked, STATE, 'readonly', (s) => s.get(SEEDED_KEY)))) {
+      const held = await open();
+      if ((await run<number>(held, PACKS, 'readonly', (s) => s.count())) === 0) {
+        const packs = await open();
+        await run(packs, PACKS, 'readwrite', (s) => s.put(STARTER_PACK));
+      }
+      const mark = await open();
+      await run(mark, STATE, 'readwrite', (s) => s.put(true, SEEDED_KEY));
+    }
     seeded = true;
-    return;
+  })();
+  try {
+    await seeding;
+  } finally {
+    // Cleared either way. A failed flight must not be the answer every later
+    // caller awaits -- the next one should try again.
+    seeding = null;
   }
-  const packs = await open();
-  await run(packs, PACKS, 'readwrite', (s) => s.put(STARTER_PACK));
-  const mark = await open();
-  await run(mark, STATE, 'readwrite', (s) => s.put(true, SEEDED_KEY));
-  seeded = true;
 }
 
 export const questStore: QuestStore = {
