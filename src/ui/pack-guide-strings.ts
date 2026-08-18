@@ -119,6 +119,10 @@ export const PACK_GUIDE_NAMES: PackGuideSection = {
       en: 'The other three name something instead of measuring it, so the name has to be one this build has. A misspelled `"weather": "foggy"` is not a hard quest, it is an impossible one — which is why it is refused at install rather than accepted.',
       ko: '나머지 셋은 재는 대신 이름을 부릅니다. 그러니 이 버전이 가진 이름이어야 합니다. 잘못 쓴 `"weather": "foggy"`는 어려운 퀘스트가 아니라 불가능한 퀘스트입니다. 그래서 설치할 때 받아주지 않고 거부합니다.',
     },
+    {
+      en: 'One combination the reader cannot catch: a wind belt is only named on the open Earth, because everywhere else the wind is the one you set in the conditions and calling that "the westerlies" would be a lie. So a `region` and a `belt` asked together never complete. Latitude and `near` do work in a surveyed region — it is a real place.',
+      ko: '검사기가 잡아줄 수 없는 조합이 하나 있습니다. 바람대 이름은 지구 해안선(`coast`)에서만 붙습니다. 다른 바다에서는 바람이 당신이 조건에서 정한 값이고, 그것을 "편서풍대"라 부르면 거짓말이기 때문입니다. 그래서 `region`과 `belt`를 함께 물으면 결코 완료되지 않습니다. 위도와 `near`는 실측 해역에서도 동작합니다. 실제로 있는 장소니까요.',
+    },
   ],
   terms: [
     {
@@ -138,8 +142,8 @@ export const PACK_GUIDE_NAMES: PackGuideSection = {
     {
       term: 'region',
       meaning: {
-        en: '`""` the islands, `coast` the open Earth, or a surveyed one: `sf-bay` `newport` `merchant-row` `puget-sound` `chesapeake` `buzzards-bay`',
-        ko: '`""`는 섬 바다, `coast`는 지구 전체, 실측 해역은 `sf-bay` `newport` `merchant-row` `puget-sound` `chesapeake` `buzzards-bay`',
+        en: '`""` any sea that is neither — the seeded islands, open water, a venue — `coast` the open Earth, or a surveyed one: `sf-bay` `newport` `merchant-row` `puget-sound` `chesapeake` `buzzards-bay`',
+        ko: '`""`는 그 둘이 아닌 바다 전부(시드로 만든 섬 바다, 외해, 경기장), `coast`는 지구 해안선, 실측 해역은 `sf-bay` `newport` `merchant-row` `puget-sound` `chesapeake` `buzzards-bay`',
       },
     },
   ],
