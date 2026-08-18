@@ -1822,7 +1822,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // rather than recorded if the destination is cleared or moved. Half a
     // passage to somewhere the player changed their mind about is not a passage,
     // and a logbook of them would be worth nothing.
-    log = pos ? new PassageLog({ ...state.pos }, pos, Date.now()) : null;
+    log = pos ? new PassageLog({ ...state.pos }, pos, Date.now(), snapshot.place) : null;
     destination = pos;
     snapshot.destination = pos;
     // Cleared immediately rather than left to the next step, so a readout that
@@ -1856,6 +1856,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       // the venue that used to be the only answer; the id it holds is now a
       // region's as often as not, and `placeName` resolves either.
       current.region || current.venue,
+      snapshot.place,
     );
     log = null;
     // Was that a port of call? Judged before the destination is cleared, on

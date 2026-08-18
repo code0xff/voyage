@@ -2094,6 +2094,33 @@ describe('sailing on the Earth', () => {
     engine.dispose();
   });
 
+  it('files a passage with the places it was between, not only the metres', async () => {
+    // `from` and `to` are plane metres, and on the endless coast the plane is
+    // re-pinned under the boat every 200 km -- so a logbook of them can say
+    // how far she sailed and never where. A passage that crossed a re-pin
+    // could not even be trusted for the first of those until the endpoints
+    // were carried across; these two are the ones that answer "where".
+    anchorAnywhere.on = true;
+    const engine = sailing({ region: 'coast', randomWorld: false, seed: 13 });
+    engine.advance(0.1);
+    // Sail first, then take her departure from *there*: `fromPlace` has to be
+    // where the passage began and not where the session did.
+    engine.advance(60);
+    const setOut = { ...placeOf(engine) };
+    engine.setDestination({ ...engine.snapshot.state.pos });
+    engine.advance(1);
+    press('a');
+    frame(0.1);
+    await Promise.resolve();
+    await Promise.resolve();
+    const record = logAdd.mock.calls[0][0] as PassageRecord;
+    expect(record.fromPlace!.lat).toBeCloseTo(setOut.lat, 3);
+    expect(record.fromPlace!.lon).toBeCloseTo(setOut.lon, 3);
+    // And the far end is where she actually anchored.
+    expect(record.toPlace!.lat).toBeCloseTo(placeOf(engine).lat, 3);
+    engine.dispose();
+  });
+
   it('files a passage whose straight line survives the re-pin', async () => {
     // `direct` is measured between where she set out and where the anchor
     // went down, and both are plane positions -- so on a passage that

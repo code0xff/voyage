@@ -1,4 +1,5 @@
 import { compassAngle, compassVec, dot, len, rotCW90, sub, wrap2Pi, wrapPi, type Vec2 } from './math';
+import type { LatLon } from './globe';
 // The sky's, not a copy of it. It is the same clock: the engine's hour counts
 // on monotonically so the sun and the tide never see it jump, and both that
 // module and this one want it brought back into the day before anyone reads it
@@ -208,6 +209,21 @@ export interface PassageRecord {
   startHour?: number;
   endHour?: number;
   /**
+   * Where she set out and where she anchored, on the Earth.
+   *
+   * The plane coordinates above cannot answer that. On the endless coast the
+   * plane is re-pinned under the boat every 200 km, so `from` and `to` mean
+   * something only within the session that wrote them -- a logbook full of
+   * them can say how far she sailed and never where. These say where.
+   *
+   * Absent together, and for two reasons rather than one: a record written
+   * before they existed, and a world that is not on the Earth. The island
+   * field is nowhere in particular, and a passage across it honestly has no
+   * latitude to give.
+   */
+  fromPlace?: LatLon;
+  toPlace?: LatLon;
+  /**
    * The weather that took up most of the passage, by the clock.
    *
    * The one it is remembered for rather than the one it ended in: arriving in
@@ -275,6 +291,13 @@ export class PassageLog {
     public to: Vec2,
     /** ms since the epoch, supplied because the sim core has no clock. */
     readonly startedAt: number,
+    /**
+     * And where that was on the Earth, if the world is on it. Taken here
+     * rather than worked out at the end: the plane it was measured in may
+     * have been re-pinned twice by then, and the whole point of this field is
+     * that it survives that.
+     */
+    readonly fromPlace: LatLon | null = null,
   ) {}
 
   /**
@@ -396,7 +419,7 @@ export class PassageLog {
    * ends where the anchor went down, which is near the destination and never
    * exactly on it.
    */
-  finish(id: string, at: Vec2, venue: string): PassageRecord {
+  finish(id: string, at: Vec2, venue: string, atPlace: LatLon | null = null): PassageRecord {
     // Time-weighted, so lying becalmed for an hour drags the average down as it
     // should. Guarded because a passage can be ended the instant it is begun.
     const avgSog = this.duration > 0 ? this.sogIntegral / this.duration : 0;
@@ -411,6 +434,11 @@ export class PassageLog {
       from: { ...this.from },
       to: { ...at },
       direct: len(sub(at, this.from)),
+      // Copied for the same reason the endpoints are, and dropped together
+      // when either end has none: half a track is not a place either.
+      ...(this.fromPlace && atPlace
+        ? { fromPlace: { ...this.fromPlace }, toPlace: { ...atPlace } }
+        : {}),
       avgSog,
       maxSog: this.maxSog,
       venue,
