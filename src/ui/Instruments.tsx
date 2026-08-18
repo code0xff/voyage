@@ -25,27 +25,20 @@ import { useRef } from 'react';
  * "the trades" beside 15 degrees north is the difference between sailing
  * a big map and sailing an ocean that has parts.
  *
- * The belt is silent in a surveyed region and at a venue, because those
- * places keep their own conditions and naming a belt there would describe a
- * wind nobody is feeling. Written per frame outside React like every other
- * readout -- it changes in the last digit at walking pace, but it changes
- * every step, and this panel's rule is that nothing per-frame goes through
- * the reconciler.
+ * Written per frame outside React like every other readout -- it changes in
+ * the last digit at walking pace, but it changes every step, and this panel's
+ * rule is that nothing per-frame goes through the reconciler.
+ *
+ * It used to hide itself, and to leave the belt blank, in a world that was not
+ * on the Earth. There is no such world now: she is always somewhere, and
+ * always in some belt.
  */
 function Fix() {
   const t = useT();
-  const where = useReadout<HTMLSpanElement>((s) => (s.place ? formatLatLon(s.place) : ''));
-  const belt = useReadout<HTMLSpanElement>((s) => (s.belt ? t(BELT[s.belt]) : ''));
-  // The whole line goes away in a world that is not on the Earth -- the
-  // island field is an invented ocean, and a blank row where a position
-  // should be reads as an instrument that has failed.
-  const row = useRef<HTMLDivElement>(null);
-  useEngineFrame((s) => {
-    const el = row.current;
-    if (el) el.style.display = s.place ? '' : 'none';
-  });
+  const where = useReadout<HTMLSpanElement>((s) => formatLatLon(s.place));
+  const belt = useReadout<HTMLSpanElement>((s) => t(BELT[s.belt]));
   return (
-    <div ref={row} className="mt-2 flex items-baseline justify-between gap-2">
+    <div className="mt-2 flex items-baseline justify-between gap-2">
       <span ref={where} className="font-mono text-[10.5px] tabular-nums text-muted-foreground" />
       <span ref={belt} className="truncate text-[10.5px] text-muted-foreground" />
     </div>

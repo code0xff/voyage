@@ -142,22 +142,3 @@ export class HeightField {
     return i < 0 ? 0 : i >= this.h ? this.h - 1 : i;
   }
 }
-
-/**
- * Read a baked raster into a `HeightField`.
- *
- * Takes bytes rather than a path or a URL, for the same reason the class does:
- * whoever has them -- `fetch` in the browser, `readFileSync` in a test or the
- * polar run -- is the side of the wall allowed to go and get them.
- */
-export function heightFieldFromBytes(bytes: ArrayBuffer, region: Region): HeightField {
-  const { width, height } = region.grid;
-  if (bytes.byteLength !== width * height * 2) {
-    throw new Error(
-      `raster for ${region.id} is ${bytes.byteLength} bytes, expected ${width * height * 2}`,
-    );
-  }
-  // Little-endian int16, which is what the baker writes and what every platform
-  // this runs on reads natively.
-  return new HeightField(new Int16Array(bytes), region);
-}

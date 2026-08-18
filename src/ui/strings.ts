@@ -303,39 +303,6 @@ export const WEATHER: Record<WeatherKind, Phrase> = {
   fog: { en: 'Fog', ko: '안개' },
 };
 
-/**
- * What each region asks of you.
- *
- * The names and the survey citations stay in English -- they are what is
- * written on the chart and what makes the depth claim checkable. Only this,
- * which is description, is translated.
- */
-export const REGION_BRIEF: Record<string, Phrase> = {
-  'sf-bay': {
-    en: 'The Gate, Alcatraz, Raccoon Strait and the Berkeley flats. A surveyed coast and surveyed depths — the shoal you can see is the one you will touch.',
-    ko: '금문, 알카트라즈, 라쿤 해협, 버클리 사주. 해안선도 수심도 실측이라, 화면에서 보이는 여울이 실제로 부딪히는 여울입니다.',
-  },
-  newport: {
-    en: 'The East Passage from Prudence to the sea, Conanicut and Aquidneck either side, and the open sound beyond Brenton. A sea breeze first, and a stream that turns under it.',
-    ko: '프루던스에서 바다까지 이어지는 이스트 패시지, 양옆의 코나니컷과 아퀴드넥, 브렌턴 너머의 열린 만. 시브리즈가 먼저이고, 그 아래로 조류가 방향을 바꿉니다.',
-  },
-  'merchant-row': {
-    en: 'Stonington, the islands south of it, and the north of Isle au Haut. Twice as much of the sailable water is close aboard a shore as anywhere else here.',
-    ko: '스토닝턴과 그 남쪽 섬들, 그리고 아일오호 북부. 항해 가능한 물의 두 배가 해안에 바짝 붙어 있습니다.',
-  },
-  'puget-sound': {
-    en: 'Elliott Bay, Bainbridge and the main basin. Deep enough that the bottom never enters into it — the decision is the breeze under the bluffs.',
-    ko: '엘리엇 만, 베인브리지, 그리고 본 수역. 바닥이 아예 문제가 되지 않을 만큼 깊고, 결정하는 것은 절벽 아래의 바람입니다.',
-  },
-  chesapeake: {
-    en: 'Annapolis, the Severn and the Bay Bridge. The shallowest and the lightest — more of it is too shoal to sail than anywhere else here.',
-    ko: '아나폴리스, 세번 강, 베이 브리지. 가장 얕고 바람도 가장 약하며, 항해 불가능할 만큼 얕은 물이 어디보다 많습니다.',
-  },
-  'buzzards-bay': {
-    en: 'Woods Hole, Vineyard Sound and the Elizabeth Islands. Hard breeze and hard stream over open water — the most sailable square here.',
-    ko: '우즈홀, 빈야드 해협, 엘리자베스 제도. 트인 물 위의 센 바람과 센 조류 — 항해 가능한 면적이 가장 넓습니다.',
-  },
-};
 
 export const DAY_PHASE: Record<DayPhase, Phrase> = {
   night: { en: 'Night', ko: '밤' },

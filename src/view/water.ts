@@ -3,7 +3,7 @@ import { MAX_WAVES, type WaveField } from '../sim/waves';
 
 import { EDGE_FADE, type RegionTerrain } from '../sim/region-terrain';
 import type { SkyState } from '../sim/sky';
-import { compassVec, smoothstep } from '../sim/math';
+import { smoothstep } from '../sim/math';
 
 /**
  * The wave surface.
@@ -231,8 +231,6 @@ const flareGlsl = /* glsl */ `
  * indexed by group id, is not available in GLSL ES 1.00.
  */
 const shelterGlsl = /* glsl */ `
-  uniform vec2 uDownwind; // unit vector, the way the wind travels
-
   float waveShelter(vec2 p) {
     // A region carries its shelter as data, computed by the same sweep the
     // physics reads -- so this is not a copy of the model, it *is* the model's
@@ -668,7 +666,6 @@ export function createWater(): Water {
     uOrigin: { value: new THREE.Vector2() },
     uWaveA: { value: waveA },
     uWaveB: { value: waveB },
-    uDownwind: { value: new THREE.Vector2(0, -1) },
     uSteep: { value: 0.55 },
     uDeep: { value: new THREE.Color(0x17293b) },
     uShallow: { value: new THREE.Color(0x3a6b8a) },
@@ -822,9 +819,6 @@ export function createWater(): Water {
       // grid it is cut for.
       far.position.set(ox, 0, -oy);
       uniforms.uTime.value = waves.time;
-
-      const from = compassVec(twd);
-      uniforms.uDownwind.value.set(-from.x, -from.y);
 
       // Through `packUniform` rather than reading the components field by
       // field. It is the one path `waves.test.ts` checks the surface against,
