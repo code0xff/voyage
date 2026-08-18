@@ -1913,6 +1913,17 @@ describe('sailing on the Earth', () => {
     // done. Left behind, each of these is out by the whole 200 km.
     expect(Math.abs(after.dest - before.dest)).toBeLessThan(before.dest * 1e-4);
     expect(Math.abs(after.flare - before.flare)).toBeLessThan(before.flare * 1e-4 + 1);
+
+    // And what the *view* is holding, which the engine cannot move for it: the
+    // wake and the chart's track are trails of plane positions the view laid
+    // itself. They are told by a shift, and it has to be the one the boat
+    // actually made -- a review pointed out that this test's name promised
+    // everything and it was only checking the engine's own half.
+    expect(engine.snapshot.pin.count).toBe(1);
+    // To a centimetre: it is a translation standing in for a reprojection, and
+    // over the few kilometres a trail covers that is the same thing.
+    expect(engine.snapshot.pin.x).toBeCloseTo(engine.snapshot.state.pos.x - (REANCHOR_AT + 1), 1);
+    expect(engine.snapshot.pin.y).toBeCloseTo(engine.snapshot.state.pos.y, 1);
     engine.dispose();
   });
 

@@ -115,6 +115,8 @@ export function MinimapCard({
    * disappear -- the drawing itself reads the ref.
    */
   const pan = useRef<Vec2 | null>(null);
+  /** The re-pinning the pan has been carried across. */
+  const pinned = useRef(0);
   const [panned, setPanned] = useState(false);
   /**
    * Folded, on a small screen.
@@ -351,11 +353,20 @@ export function MinimapCard({
       draft: CRUISER.draft,
       range,
       session: s.session,
+      pin: s.pin,
       destination: s.destination,
       calls: s.calls,
       currents: s.currents,
       pan: pan.current,
     });
+    // A hand-panned chart holds a world position of its own, so it moves with
+    // the plane like the track does -- otherwise a re-pin flings the view two
+    // hundred kilometres off the boat and the player has to press recentre to
+    // find her again.
+    if (s.pin.count !== pinned.current) {
+      pinned.current = s.pin.count;
+      if (pan.current) pan.current = { x: pan.current.x + s.pin.x, y: pan.current.y + s.pin.y };
+    }
   });
 
   const chrome = (

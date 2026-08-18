@@ -140,6 +140,17 @@ export interface Snapshot {
   /** Which wind belt she is in. */
   belt: Belt;
   /**
+   * The last re-pinning of the plane: how many there have been, and the shift
+   * the last one applied.
+   *
+   * For anything outside the engine that holds a plane position of its own --
+   * the wake, the chart's track and its pan. They compare the count with the
+   * one they last acted on and translate what they hold by the shift. The
+   * engine cannot move them itself: they are the view's own memory, and the
+   * view is not allowed to be asked for it back.
+   */
+  pin: { count: number; x: number; y: number };
+  /**
    * What the quests have noticed, live.
    *
    * Published rather than left in the store, because the store is written on
@@ -592,6 +603,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // The opening pin, replaced by the real position on the first step. The
     // menu can read the snapshot before the engine has stepped once.
     place: { ...DEFAULT_ANCHOR },
+    pin: { count: 0, x: 0, y: 0 },
     belt: beltAt(DEFAULT_ANCHOR.lat),
     quests: emptyQuestState(),
     lightsOn: true,
@@ -1280,6 +1292,19 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // assignment; they were two answers when there were two kinds of world.
     oceanAnchor = { ...to };
     snapshot.place = placeOf(state.pos.x, state.pos.y);
+    // And everything the *view* is holding in plane metres. The wake and the
+    // chart's track are trails of world positions, kept where they were laid
+    // rather than moved with the boat -- so a re-pin drew a straight line two
+    // hundred kilometres long from her stern, which is precisely the bug the
+    // new-session reset in `scene.ts` was written for, arriving by the other
+    // road. Published as a shift rather than as the mapper, because a trail
+    // lies within a few kilometres of the boat and over that distance the
+    // reprojection *is* this translation, to well inside a metre.
+    snapshot.pin = {
+      count: snapshot.pin.count + 1,
+      x: boat.x - x,
+      y: boat.y - y,
+    };
     rebuildCoastWindow();
   }
 
@@ -2369,6 +2394,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       flare: snapshot.flare,
       binoculars: snapshot.binoculars,
       session,
+      pin: snapshot.pin,
       whales: whales.events,
       sharks: sharks.events,
       gullFlocks: wildlife.flocks,

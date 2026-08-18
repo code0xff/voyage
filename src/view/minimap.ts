@@ -230,6 +230,8 @@ export interface MinimapInput {
   range: number;
   /** Bumped by the engine on every new session; the track starts over on it. */
   session: number;
+  /** The last re-pinning of the plane; see `Snapshot.pin`. */
+  pin: { count: number; x: number; y: number };
   /** Where the boat is bound, or null when she is just out sailing. */
   destination: Vec2 | null;
   /** The cruise's hand of ports of call, or empty when there is none. */
@@ -390,6 +392,8 @@ export function createMinimap(): Minimap {
   const windOut: [number, number] = [1, 0];
 
   let session = -1;
+  /** The re-pinning the track has been carried across; see `draw`. */
+  let pinCount = 0;
 
   // Where the chart is looking. World coordinates, and deliberately not the
   // boat's: see PAN_AT.
@@ -524,6 +528,22 @@ export function createMinimap(): Minimap {
       if (input.session !== session) {
         session = input.session;
         trackCount = 0;
+      }
+      // A re-pinning is the opposite case, and has to be told apart from a
+      // restart: the boat's coordinates change by two hundred kilometres and
+      // she has not moved at all. The track is carried across rather than
+      // dropped -- she really did sail it -- and the chart's own centre with
+      // it, or the view would jump to where the boat used to be.
+      if (input.pin.count !== pinCount) {
+        pinCount = input.pin.count;
+        for (let i = 0; i < trackCount; i++) {
+          track[i * 2] += input.pin.x;
+          track[i * 2 + 1] += input.pin.y;
+        }
+        if (Number.isFinite(centreX)) {
+          centreX += input.pin.x;
+          centreY += input.pin.y;
+        }
       }
       pushTrack(bx, by);
 
