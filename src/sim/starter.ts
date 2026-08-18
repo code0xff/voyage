@@ -1,5 +1,4 @@
-import type { QuestPack } from './quest';
-import { QUEST_FORMAT } from './quest';
+import { QUEST_FORMAT, type QuestPack } from './quest';
 
 /**
  * The pack the game comes with, and the file it hands out as the example.
