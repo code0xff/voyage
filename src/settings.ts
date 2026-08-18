@@ -4,7 +4,6 @@ import { knotsToMs, msToKnots } from './sim/units';
 import type { Vec2 } from './sim/math';
 import { setDriftVec } from './sim/current';
 import { TIDE_PERIOD } from './sim/current';
-import { venueById, type Venue } from './sim/venues';
 import { detectLang, type Lang } from './i18n';
 import { regionById, type Region } from './sim/regions';
 import { COAST_ID } from './sim/coast';
@@ -73,22 +72,14 @@ export interface Settings {
   /** How thickly islands are scattered through the ocean, 0..10. Zero is open water. */
   islandCount: number;
   /**
-   * A named place to sail, or '' for the procedural ocean.
+   * A surveyed region to sail, `COAST_ID` for the Earth, or '' for the
+   * procedural ocean.
    *
-   * Picking one writes its conditions into the settings above rather than
-   * overriding them, so the sliders keep showing what is actually being sailed
-   * and stay adjustable. Only the things that have no slider -- the land, the
-   * wind's direction, how far offshore the slack water reaches -- are read from
-   * the venue by the engine.
-   */
-  venue: string;
-  /**
-   * A surveyed region to sail, or '' for none.
-   *
-   * Kept apart from `venue` rather than folded into it. A venue is a sketch in
-   * circles that reproduces the decisions a place asks of you; a region is the
-   * place, surveyed. They are different claims about how true the land is, and
-   * collapsing them into one field would make the honest label impossible.
+   * Picking a surveyed one writes its conditions into the settings above
+   * rather than overriding them, so the sliders keep showing what is actually
+   * being sailed and stay adjustable. Only the things that have no slider --
+   * the land, the wind's direction, how far offshore the slack water reaches
+   * -- are read from the place by the engine.
    */
   region: string;
   /**
@@ -155,7 +146,6 @@ export const DEFAULT_SETTINGS: Settings = {
   timeScale: 60,
   weatherMode: 'auto',
   islandCount: 4,
-  venue: '',
   region: '',
   cruise: false,
   seed: 20260806,
@@ -194,15 +184,11 @@ export function loadSettings(): Settings {
       timeScale: num(o.timeScale, DEFAULT_SETTINGS.timeScale, 0, 600),
       weatherMode: mode,
       islandCount: Math.round(num(o.islandCount, DEFAULT_SETTINGS.islandCount, 0, 10)),
-      // Checked against the list rather than trusted: a venue removed or
-      // renamed between versions must fall back to open water, not strand the
-      // player in a world the engine cannot build.
-      venue: typeof o.venue === 'string' && venueById(o.venue) ? o.venue : DEFAULT_SETTINGS.venue,
-      // Checked against the list for the same reason as the venue: a stored id
-      // for a region that no longer ships must not strand the player in a world
-      // with no land the engine can load. The generated coast is the one id
-      // that is not on the list and still always buildable -- it needs no file,
-      // only the seed stored two lines down.
+      // Checked against the list rather than trusted: a stored id for a region
+      // that no longer ships must not strand the player in a world with no
+      // land the engine can load. The generated coast is the one id that is
+      // not on the list and still always buildable -- it needs no file, only
+      // the seed stored two lines down.
       region:
         typeof o.region === 'string' && (regionById(o.region) || o.region === COAST_ID)
           ? o.region
@@ -242,46 +228,19 @@ export const windKn = (ms: number): number => msToKnots(ms);
  * The player's set and drift as the velocity vector the physics wants.
  *
  * The conversion itself lives in `src/sim/current.ts`, with the model that uses
- * it, because venues need it too and a second copy would be a compass-to-vector
- * sign only one caller exercised.
+ * it, because the model needs it too and a second copy would be a
+ * compass-to-vector sign only one caller exercised.
  */
 export const currentVec = (s: Settings): Vec2 => setDriftVec(s.setDeg, s.driftKnots);
 
 /**
- * Settings for sailing a venue: its conditions written into the player's own,
- * rather than held apart and overriding them.
- *
- * One source of truth is the point. Kept separate, the wind slider would read
- * 12 knots while the boat sailed in 20, and the player would be adjusting a
- * number nothing was listening to.
- */
-export const withVenue = (s: Settings, v: Venue): Settings => ({
-  ...s,
-  venue: v.id,
-  windKnots: Math.round(v.windKnots),
-  gustiness: v.gustiness,
-  seaScale: v.seaScale,
-  driftKnots: v.driftKnots,
-  setDeg: v.setDeg,
-  startHour: v.startHour,
-  // A venue brings its own land, so the procedural ocean has to stand down.
-  islandCount: 0,
-});
-
-/** Back to the open ocean, with a plausible sea rather than whatever the venue had. */
-export const withoutVenue = (s: Settings): Settings => ({
-  ...s,
-  venue: '',
-  driftKnots: 0,
-  islandCount: DEFAULT_SETTINGS.islandCount,
-});
-
-/**
  * Settings for sailing a region: its conditions written into the player's own.
  *
- * Written in rather than overridden, exactly as `withVenue` does and for the
- * same reason -- every slider then keeps showing what is actually being sailed
- * and stays live, instead of displaying one thing while the world does another.
+ * Written in rather than overridden: every slider then keeps showing what is
+ * actually being sailed and stays live, instead of displaying one thing while
+ * the world does another. One source of truth is the point -- held apart, the
+ * wind slider would read 12 knots while the boat sailed in 20, and the player
+ * would be adjusting a number nothing was listening to.
  *
  * The land is not among them. A region brings a surveyed coast and no islands,
  * and the two cannot coexist: the island slider stands down.
@@ -290,7 +249,6 @@ export function withRegion(s: Settings, r: Region): Settings {
   return {
     ...s,
     region: r.id,
-    venue: '',
     islandCount: 0,
     windKnots: r.conditions.windKnots,
     gustiness: r.conditions.gustiness,
@@ -316,7 +274,6 @@ export const withoutRegion = (s: Settings): Settings => ({ ...s, region: '' });
 export const withCoast = (s: Settings): Settings => ({
   ...s,
   region: COAST_ID,
-  venue: '',
   islandCount: 0,
 });
 

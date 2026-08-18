@@ -184,6 +184,6 @@ Land blocks the wind and shelters the sea; it does not refract the breeze around
 a headland or accelerate it through a gap. Parking in a lee is the dominant
 effect by a wide margin, and this is documented in the README as deliberate.
 
-It matters more for venues than it did for procedural islands, because real
-places are known for exactly these effects. It is the single largest gap between
-a venue and the place it is named after.
+It matters more for a surveyed region than it did for procedural islands,
+because real places are known for exactly these effects. It is the single
+largest gap between a region and the place it is named after.

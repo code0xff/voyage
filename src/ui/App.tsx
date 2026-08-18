@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Engine, RegionLoadStatus } from "@/engine";
 import { loadSettings, saveSettings, type Settings } from "@/settings";
 import { regionById } from "@/sim/regions";
-import { venueById } from "@/sim/venues";
 import { EngineProvider } from "./engine-context";
 import { LangProvider } from "./i18n";
 import { Instruments } from "./Instruments";
@@ -181,7 +180,7 @@ export function App() {
               // voyage rather than as `screenshot (14).png`.
               const s = settingsRef.current;
               const where =
-                regionById(s.region)?.name ?? venueById(s.venue)?.name ?? "open sea";
+                regionById(s.region)?.name ?? "open sea";
               const t = new Date();
               const pad = (n: number) => String(n).padStart(2, "0");
               const stamp = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}-${pad(t.getHours())}${pad(t.getMinutes())}`;
@@ -359,7 +358,7 @@ export function App() {
     // Where a new voyage begins: the chosen departure on the Earth, and the
     // world's own opening position anywhere else.
     const from = s.region === COAST_ID ? (waterById(s.departure)?.place ?? null) : null;
-    if (from) saveUnderway({ region: s.region, venue: s.venue, seed: s.seed, place: from, pos: null });
+    if (from) saveUnderway({ region: s.region, seed: s.seed, place: from, pos: null });
     else clearUnderway();
     engine?.sailFrom(from ? { place: from } : null);
     putToSea();
@@ -389,7 +388,6 @@ export function App() {
     const next: Settings = {
       ...settingsRef.current,
       region: row.region,
-      venue: row.venue,
       seed: row.seed,
       randomWorld: false,
     };

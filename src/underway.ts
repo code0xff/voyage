@@ -42,8 +42,6 @@ import type { Vec2 } from './sim/math';
 export interface Underway {
   /** Region id, `coast` for the Earth, or '' for the island field. */
   region: string;
-  /** Venue id, or ''. */
-  venue: string;
   /** The seed that drew it; a voyage resumed under another seed is another world. */
   seed: number;
   /** Where she was on the Earth, or null in a world that is not on it. */
@@ -73,7 +71,7 @@ export function loadUnderway(): Underway | null {
     if (!raw) return null;
     const o = JSON.parse(raw) as Partial<Underway>;
     if (typeof o !== 'object' || o === null) return null;
-    if (typeof o.region !== 'string' || typeof o.venue !== 'string') return null;
+    if (typeof o.region !== 'string') return null;
     if (!finite(o.seed) || !finite(o.at)) return null;
     // One of the two, and it has to be the whole of one: half a coordinate is
     // a row this game has never written.
@@ -83,7 +81,7 @@ export function loadUnderway(): Underway | null {
         : null;
     const pos = o.pos && finite(o.pos.x) && finite(o.pos.y) ? { x: o.pos.x, y: o.pos.y } : null;
     if (!place && !pos) return null;
-    return { region: o.region, venue: o.venue, seed: o.seed, place, pos, at: o.at };
+    return { region: o.region, seed: o.seed, place, pos, at: o.at };
   } catch {
     return null;
   }
@@ -123,9 +121,9 @@ export function clearUnderway(): void {
 /** Whether a stored voyage is the world these settings would sail. */
 export function sameWorld(
   voyage: Underway,
-  world: { region: string; venue: string; seed: number },
+  world: { region: string; seed: number },
 ): boolean {
   return (
-    voyage.region === world.region && voyage.venue === world.venue && voyage.seed === world.seed
+    voyage.region === world.region && voyage.seed === world.seed
   );
 }

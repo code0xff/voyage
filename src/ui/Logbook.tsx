@@ -16,7 +16,6 @@ import {
 import { phaseName, skyState } from '@/sim/sky';
 import { DEG, RAD } from '@/sim/math';
 import { formatDistance, formatDuration, formatWhen, msToKnots } from '@/sim/units';
-import { venueById } from '@/sim/venues';
 import { placeName } from '@/sim/regions';
 import type { PassageRecord, SightingKind } from '@/sim/passage';
 import type { Phrase } from '@/i18n';
@@ -85,7 +84,7 @@ function Entry({ p, onRemove }: { p: PassageRecord; onRemove: () => void }) {
     <div className="group grid grid-cols-[1fr_auto] items-start gap-2 border-b border-border/60 py-2 last:border-0">
       <div>
         <div className="text-[11px]">
-          {placeName(p.venue, (id) => venueById(id)?.name ?? null)}
+          {placeName(p.venue)}
           {/* The chosen language, not the browser's. The same passage's date is
               on the front page through `LastPassage`, which already passes it,
               and the two read differently without this. */}

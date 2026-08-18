@@ -23,8 +23,8 @@ function fakeStorage() {
 }
 
 const KEY = 'voyage.underway.v1';
-const EARTH = { region: 'coast', venue: '', seed: 7, place: { lat: -33.87, lon: 151.21 }, pos: null };
-const ISLANDS = { region: '', venue: '', seed: 42, place: null, pos: { x: 1200, y: -800 } };
+const EARTH = { region: 'coast', seed: 7, place: { lat: -33.87, lon: 151.21 }, pos: null };
+const ISLANDS = { region: '', seed: 42, place: null, pos: { x: 1200, y: -800 } };
 
 let store: ReturnType<typeof fakeStorage>;
 const had = 'localStorage' in globalThis;
@@ -95,16 +95,16 @@ describe('the voyage she is on', () => {
       // no world
       JSON.stringify({ seed: 1, place: { lat: 1, lon: 2 }, at: 1 }),
       // no seed, or one that is not a number
-      JSON.stringify({ region: 'coast', venue: '', place: { lat: 1, lon: 2 }, at: 1 }),
-      JSON.stringify({ region: 'coast', venue: '', seed: 'x', place: { lat: 1, lon: 2 }, at: 1 }),
+      JSON.stringify({ region: 'coast', place: { lat: 1, lon: 2 }, at: 1 }),
+      JSON.stringify({ region: 'coast', seed: 'x', place: { lat: 1, lon: 2 }, at: 1 }),
       // no timestamp
-      JSON.stringify({ region: 'coast', venue: '', seed: 1, place: { lat: 1, lon: 2 } }),
+      JSON.stringify({ region: 'coast', seed: 1, place: { lat: 1, lon: 2 } }),
       // neither coordinate
-      JSON.stringify({ region: 'coast', venue: '', seed: 1, place: null, pos: null, at: 1 }),
+      JSON.stringify({ region: 'coast', seed: 1, place: null, pos: null, at: 1 }),
       // half a coordinate
-      JSON.stringify({ region: 'coast', venue: '', seed: 1, place: { lat: 1 }, at: 1 }),
-      JSON.stringify({ region: '', venue: '', seed: 1, pos: { x: 1 }, at: 1 }),
-      JSON.stringify({ region: '', venue: '', seed: 1, pos: { x: 1, y: 'north' }, at: 1 }),
+      JSON.stringify({ region: 'coast', seed: 1, place: { lat: 1 }, at: 1 }),
+      JSON.stringify({ region: '', seed: 1, pos: { x: 1 }, at: 1 }),
+      JSON.stringify({ region: '', seed: 1, pos: { x: 1, y: 'north' }, at: 1 }),
     ];
     for (const row of bad) {
       store.raw.set(KEY, row);
@@ -118,10 +118,10 @@ describe('the voyage she is on', () => {
     // archipelago, and on the Earth another shoreline.
     saveUnderway(ISLANDS);
     const row = loadUnderway()!;
-    expect(sameWorld(row, { region: '', venue: '', seed: 42 })).toBe(true);
-    expect(sameWorld(row, { region: '', venue: '', seed: 43 })).toBe(false);
-    expect(sameWorld(row, { region: 'coast', venue: '', seed: 42 })).toBe(false);
-    expect(sameWorld(row, { region: '', venue: 'somewhere', seed: 42 })).toBe(false);
+    expect(sameWorld(row, { region: '', seed: 42 })).toBe(true);
+    expect(sameWorld(row, { region: '', seed: 43 })).toBe(false);
+    expect(sameWorld(row, { region: 'coast', seed: 42 })).toBe(false);
+    expect(sameWorld(row, { region: 'sf-bay', seed: 42 })).toBe(false);
   });
 
   it('survives storage refusing to work at all', () => {

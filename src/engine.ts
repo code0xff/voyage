@@ -11,7 +11,6 @@ import { polarStale, type Polar } from './sim/polar';
 import { createPolarSolver } from './polar-solver';
 import { WindField } from './sim/wind';
 import { CurrentField, DEFAULT_FULL_DEPTH, tideRate } from './sim/current';
-import { venueById } from './sim/venues';
 import { regionById, type Region } from './sim/regions';
 import { RegionTerrain } from './sim/region-terrain';
 import { loadEarth, loadRegion } from './terrain-load';
@@ -122,8 +121,8 @@ export interface Snapshot {
    * provably too far to be felt, which is exactly what makes it useless to the
    * physics and necessary to a passage-scale chart.
    *
-   * Equal to `terrain` when a region or venue is loaded, because a surveyed
-   * coast is not windowed at all -- the whole place is already known.
+   * Equal to `terrain` when a region is loaded, because a surveyed coast is
+   * not windowed at all -- the whole place is already known.
    */
   chart: Terrain;
   /**
@@ -167,8 +166,8 @@ export interface Snapshot {
   place: LatLon | null;
   /**
    * Which wind belt she is in, or null where the belts do not apply -- a
-   * surveyed region and a venue keep their own conditions, so naming a belt
-   * there would be a claim about a wind nobody is feeling.
+   * surveyed region keeps its own conditions, so naming a belt there would be
+   * a claim about a wind nobody is feeling.
    */
   belt: Belt | null;
   /**
@@ -516,8 +515,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * the window, dry land once the boat sailed near -- which is precisely the
    * un-completable-goal bug the anchorage oracle exists to prevent. The chart
    * window exists to undo the windowing (its own docblock's words) and
-   * reaches 8.3 km. A region or a venue is never windowed, so `query` is
-   * already the whole place there.
+   * reaches 8.3 km. A region is never windowed, so `query` is already the
+   * whole place there.
    */
   function dealCalls(): void {
     const world = field ? snapshot.chart : query;
@@ -734,8 +733,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let activeIslands: readonly Island[] = [];
   let visibleIslands: readonly Island[] = [];
   let chartIslands: readonly Island[] = [];
-  /** The venue's land, or EMPTY_TERRAIN in the open ocean. Fixed for a session. */
-  let venueTerrain: Terrain = EMPTY_TERRAIN;
   /**
    * The region installed, and the one asked for.
    *
@@ -840,7 +837,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let departure: LatLon | null = null;
   /**
    * Where a departure is taken from in a world whose plane never moves -- a
-   * surveyed region, a venue, the island field.
+   * surveyed region, the island field.
    *
    * The Earth carries its position as a latitude and longitude because its
    * plane is re-pinned under the boat every 200 km; everywhere else the plane
@@ -939,19 +936,19 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   function rebuildWorld(): void {
     // The world she was sailing in is being replaced, so the passage through it
     // is over whether or not she moved. `arrive()` stamps a record with the
-    // venue that is current when the anchor goes down, so a passage carried
-    // across a venue change would be filed under a place most of it did not
+    // place that is current when the anchor goes down, so a passage carried
+    // across a change of world would be filed under a place most of it did not
     // happen in.
     setDestination(null);
     // And she cannot still be lying to an anchor she let go in a world that no
     // longer exists. The other half of the same bug: `placeAtStart` was taught
-    // to weigh it and this path was not, so changing a venue while anchored
-    // left the new world held fast by the old ground.
+    // to weigh it and this path was not, so changing world while anchored
+    // left the new one held fast by the old ground.
     anchored = false;
     snapshot.anchored = false;
     // A half-made tack dies with the world too. This path runs on a settings
     // change *without* `placeAtStart` behind it -- resume, not put to sea --
-    // and a new venue's wind can stand on the other side of an unmoved bow,
+    // and a new world's wind can stand on the other side of an unmoved bow,
     // which must read as a replaced world and not as a turn. A Codex round
     // caught this route around the teleport reset.
     maneuvers.reset();
@@ -969,16 +966,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     snapshot.flareReady = true;
     snapshot.flareWait = null;
 
-    // A venue brings its own land, fixed and known, so there is nothing to
-    // stream: the whole place is always loaded. The procedural field is the
-    // other case, an endless ocean that has to be looked at through a window.
-    const venue = venueById(current.venue);
-    venueTerrain = venue ? new Terrain(venue.islands) : EMPTY_TERRAIN;
     // A region sets the tidal band too. Its stream is as much a part of the
     // place as its coast -- at San Francisco it is the whole game -- and
     // leaving fullDepth at the open-ocean default would run the tide flat out
     // right up to the beach and delete the inshore lane.
-    const conditioned = regionById(current.region)?.conditions ?? venue;
+    const conditioned = regionById(current.region)?.conditions;
     currents.fullDepth = conditioned ? conditioned.fullDepth : DEFAULT_FULL_DEPTH;
 
     // A surveyed region is the third kind of world, and the only one that has
@@ -1059,7 +1051,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
     const up = compassVec(wind.baseTwd);
     field =
-      !venue && !current.region && current.islandCount > 0
+      !current.region && current.islandCount > 0
         ? new IslandField({
             seed: current.seed,
             // The slider is 0..10 islands' worth of thickness, not a count: in
@@ -1176,7 +1168,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     const onEarth = current.region === COAST_ID;
     saveUnderway({
       region: current.region,
-      venue: current.venue,
       seed: current.seed,
       place: onEarth ? snapshot.place : null,
       pos: onEarth ? null : { ...state.pos },
@@ -1329,9 +1320,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   /**
    * Where she is on the Earth, or null in a world that is not on it.
    *
-   * The island field is an invented ocean and a venue is an invented place:
-   * printing a real latitude and longitude over either is a false claim of
-   * exactly the kind this project does not make elsewhere. The endless coast
+   * The island field is an invented ocean: printing a real latitude and
+   * longitude over it is a false claim of exactly the kind this project does
+   * not make elsewhere. The endless coast
    * is the planet and a surveyed region is a real place, and those two get a
    * position.
    */
@@ -1450,9 +1441,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * and nothing would say so.
    */
   function reanchorIfFar(x: number, y: number): void {
-    // Only the endless coast may be re-pinned. A venue and a surveyed region
-    // are fixed terrain laid out in plane metres about their own centre, so
-    // moving the pin under one would leave the survey where it was and carry
+    // Only the endless coast may be re-pinned. A surveyed region is fixed
+    // terrain laid out in plane metres about its own centre, so moving the
+    // pin under one would leave the survey where it was and carry
     // the boat back into the middle of it -- a teleport, several miles, in
     // the one part of the game whose whole claim is that the ground is real.
     if (current.region !== COAST_ID) return;
@@ -1600,28 +1591,28 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     snapshot.place = placeOf(x, y);
     slideCoast(x, y);
     if (!field) {
-      // Either open water, a venue or a region, and all three are the same job:
-      // one fixed terrain, installed once and never slid along. The whole place
-      // is known, which is what makes a bounded region easier than the endless
+      // Either open water or a region, and both are the same job: one fixed
+      // terrain, installed once and never slid along. The whole place is
+      // known, which is what makes a bounded region easier than the endless
       // ocean rather than harder.
-      if (!published || snapshot.terrain !== venueTerrain || snapshot.region !== regionTerrain) {
+      if (!published || snapshot.terrain !== EMPTY_TERRAIN || snapshot.region !== regionTerrain) {
         activeIslands = [];
         visibleIslands = [];
         chartIslands = [];
         published = true;
-        query = regionTerrain ?? venueTerrain;
+        query = regionTerrain ?? EMPTY_TERRAIN;
         wind.terrain = query;
         // The stream needs the same land the wind does: it is the depth that
         // decides where it runs, and it must never be reading last world's.
         currents.terrain = query;
-        snapshot.terrain = venueTerrain;
+        snapshot.terrain = EMPTY_TERRAIN;
         // A surveyed coast is not windowed, so the chart wants the same thing
         // the physics has. The wider window only exists to undo a windowing.
-        snapshot.chart = venueTerrain;
+        snapshot.chart = EMPTY_TERRAIN;
         snapshot.region = regionTerrain;
         // The circle meshes and the region tiles are mutually exclusive, so the
         // one not in use is handed nothing and draws nothing.
-        view.setTerrain(regionTerrain ? EMPTY_TERRAIN : venueTerrain, regionTerrain ? EMPTY_TERRAIN : venueTerrain);
+        view.setTerrain(EMPTY_TERRAIN, EMPTY_TERRAIN);
         view.setRegion(regionTerrain);
       }
       return;
@@ -1693,12 +1684,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let pushedPower = NaN;
 
   function applySettings(s: Settings): void {
-    const venueChanged = s.venue !== current.venue || s.region !== current.region;
+    const regionChanged = s.region !== current.region;
     const worldChanged =
-      s.islandCount !== current.islandCount ||
-      venueChanged ||
-      s.region !== current.region ||
-      s.seed !== current.seed;
+      s.islandCount !== current.islandCount || regionChanged || s.seed !== current.seed;
     const cruiseChanged = s.cruise !== current.cruise;
     current = s;
     /*
@@ -1717,19 +1705,19 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       view.setBinocularPower(s.binocularPower);
     }
 
-    // Arriving at a venue brings its breeze with it: its land is laid out
-    // around that direction, so a venue picked mid-session was otherwise
-    // arranged for one wind and sailed in another. Only on arrival, so that
-    // Q/E still work afterwards and a later edit does not undo them.
-    if (venueChanged) {
+    // Arriving at a surveyed region brings its breeze with it: its land is
+    // laid out around that direction, so a place picked mid-session was
+    // otherwise arranged for one wind and sailed in another. Only on arrival,
+    // so that Q/E still work afterwards and a later edit does not undo them.
+    if (regionChanged) {
       windShift = 0;
-      const arriving = regionById(s.region)?.conditions ?? venueById(s.venue);
+      const arriving = regionById(s.region)?.conditions;
       if (arriving) wind.baseTwd = arriving.windTwd;
       // And arriving on the Earth brings the belt's, on exactly the same
       // argument. Without this, switching to the planet mid-session left her
       // sailing the last world's breeze while the ease crept toward the belt
       // over four minutes -- the panel naming the westerlies over a wind
-      // still blowing from the north. Guarded by `venueChanged` like the
+      // still blowing from the north. Guarded by `regionChanged` like the
       // line above, so Q/E and a later slider edit are not undone.
       else if (s.region === COAST_ID) {
         wind.baseTwd = climateAt(toLatLon(oceanAnchor, state.pos.x, state.pos.y).lat).twd;
@@ -1881,14 +1869,14 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // engine was built, so the Start hour setting did nothing after the first
     // load and every session began wherever the last one's clock had wandered to.
     hour = current.startHour;
-    // So does the wind's direction at a venue. It has no slider -- the land is
-    // laid out around it, and a beat that started on a random bearing would put
-    // the course somewhere the place was not designed for. Free to shift with
+    // So does the wind's direction in a surveyed region. It has no slider --
+    // the land is laid out around it, and a beat that started on a random
+    // bearing would put the course somewhere the place was not designed for. Free to shift with
     // Q/E afterwards, like anywhere else.
-    const place = regionById(current.region)?.conditions ?? venueById(current.venue);
+    const place = regionById(current.region)?.conditions;
     if (place) wind.baseTwd = place.windTwd;
-    // And so does the belt's, out on the open coast, where there is no venue
-    // to say what the wind does. *Snapped* here rather than eased: the ease
+    // And so does the belt's, out on the open coast, where there is no
+    // surveyed place to say what the wind does. *Snapped* here rather than eased: the ease
     // below exists so a boat sailing north into the westerlies finds them
     // gradually, but a session opening in the trades must open with the
     // trades blowing -- otherwise she is trimmed and reefed at the dock for
@@ -2012,9 +2000,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       crypto.randomUUID(),
       { ...state.pos },
       // Where she was, whichever kind of place it is. The field is named for
-      // the venue that used to be the only answer; the id it holds is now a
-      // region's as often as not, and `placeName` resolves either.
-      current.region || current.venue,
+      // the sketched venues that used to be the only answer; the id it holds
+      // is a region's or the Earth's now, and `placeName` resolves all three.
+      current.region,
       snapshot.place,
     );
     log = null;
@@ -2131,10 +2119,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
      * than replacing it, so a setting of 25 knots is still a hard sail
      * wherever she is.
      *
-     * A surveyed region keeps its own conditions and a venue keeps the
-     * player's: those places were laid out around a particular breeze, and
-     * a belt reaching in to turn it would undo the thing that makes them
-     * worth sailing.
+     * A surveyed region keeps its own conditions: those places were laid out
+     * around a particular breeze, and a belt reaching in to turn it would undo
+     * the thing that makes them worth sailing.
      */
     const climate = beltFor(state.pos.x, state.pos.y);
     if (climate) {
@@ -2792,7 +2779,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       if (spot?.place || spot?.pos) {
         saveUnderway({
           region: current.region,
-          venue: current.venue,
           seed: current.seed,
           place: spot.place ?? null,
           pos: spot.pos ?? null,

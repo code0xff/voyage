@@ -4,9 +4,9 @@ import { COAST_ID, COAST_NAME } from './coast';
 /**
  * Regions: bounded pieces of a real coast, sailed freely.
  *
- * A region is the successor to a venue. A venue reproduces the *decisions* a
- * place asks of a sailor with land drawn from overlapping circles; a region is
- * the place, surveyed -- its coastline is where the coastline is, and its
+ * A region is the successor to the sketched venues. A sketch reproduces the
+ * *decisions* a place asks of a sailor with land drawn from overlapping
+ * circles; a region is the place, surveyed -- its coastline is where the coastline is, and its
  * depths are soundings rather than one uniform shelf slope.
  *
  * What is here is only the description of the grid and where in the world it
@@ -509,10 +509,11 @@ export const regionById = (id: string): Region | null =>
 /**
  * Ids that used to mean somewhere else.
  *
- * `sf` was the San Francisco venue, and passages logged there carry it. The
- * venue is gone and the surveyed region is the same water, so the id resolves
- * forward rather than falling through to "Open ocean" -- a logbook that forgot
- * where you had been would be a worse answer than a slightly generous one.
+ * `sf` was the San Francisco sketch that preceded the surveyed region, and
+ * passages logged there carry it. The sketch is gone and the surveyed region
+ * is the same water, so the id resolves forward rather than falling through to
+ * "Open ocean" -- a logbook that forgot where you had been would be a worse
+ * answer than a slightly generous one.
  */
 const RENAMED: Record<string, string> = { sf: 'sf-bay' };
 
@@ -525,19 +526,18 @@ export const rasterBytes = (r: Region): number => r.grid.width * r.grid.height *
 /**
  * What to call the place a passage was sailed in.
  *
- * Regions first, then venues, then the open ocean. Both are consulted because
- * `PassageRecord.venue` is a stored id and the logbook outlives the list it
- * was written against: San Francisco was a venue when the earliest passages
- * were logged and is a region now, and a row that quietly became "Open ocean"
- * would be the logbook forgetting where someone went.
+ * The stored id and nothing else, because the logbook outlives every list it
+ * was written against: `PassageRecord.venue` is a field older than regions,
+ * older than the Earth, and it holds whatever the world was called on the day
+ * it was written. `RENAMED` is what carries those forward.
  */
-export function placeName(id: string, venueName: (id: string) => string | null): string {
+export function placeName(id: string): string {
   // The generated coast is not in REGIONS -- it has no raster to ship -- but a
   // passage sailed along one was not sailed on the open ocean, and the logbook
-  // reads its venue field through here. Imported from `coast.ts` rather than
+  // reads its stored field through here. Imported from `coast.ts` rather than
   // restated; the cycle is type-only in the other direction, so it is safe.
   if (id === COAST_ID) return COAST_NAME;
-  return regionByStoredId(id)?.name ?? venueName(id) ?? 'Open ocean';
+  return regionByStoredId(id)?.name ?? 'Open ocean';
 }
 
 /**

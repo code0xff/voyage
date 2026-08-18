@@ -278,7 +278,7 @@ describe('the generated coast', () => {
 
   /** The logbook must file a coast passage under its name, not "Open ocean". */
   it('is what placeName calls it', () => {
-    expect(placeName(COAST_ID, () => null)).toBe(COAST_NAME);
+    expect(placeName(COAST_ID)).toBe(COAST_NAME);
   });
 });
 

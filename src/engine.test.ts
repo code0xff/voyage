@@ -641,7 +641,7 @@ describe('engine', () => {
     // pending on purpose: the boat sails on while it waits, which is exactly
     // the resumed-session path this covers.
     regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
-    engine.applySettings(settings({ region: 'newport', venue: '' }));
+    engine.applySettings(settings({ region: 'newport' }));
     for (let i = 0; i < 30; i++) {
       engine.advance(1);
       expect(engine.snapshot.maneuver).toBeNull();
@@ -895,7 +895,7 @@ describe('engine', () => {
     callsOverride.hand = [{ x: 5, y: -95 }];
     const engine = createEngine(
       canvas(),
-      settings({ region: 'sf-bay', venue: '', cruise: true }),
+      settings({ region: 'sf-bay', cruise: true }),
     );
     const spy = offerCalls as ReturnType<typeof vi.fn>;
     const before = spy.mock.calls.length;
@@ -915,7 +915,7 @@ describe('engine', () => {
 
     const engine = createEngine(
       canvas(),
-      settings({ region: 'sf-bay', venue: '' }),
+      settings({ region: 'sf-bay' }),
     );
     const initialSession = engine.snapshot.session;
 
@@ -943,7 +943,7 @@ describe('engine', () => {
 
     const engine = createEngine(
       canvas(),
-      settings({ region: 'sf-bay', venue: '' }),
+      settings({ region: 'sf-bay' }),
     );
     const statuses: string[] = [];
     engine.onEvent((event) => {
@@ -1573,7 +1573,7 @@ describe('the flare', () => {
  * tests below all sail seed 13 on the coast, so the world is theirs.
  */
 function storedOn(place: { lat: number; lon: number }, seed = 13) {
-  return { region: 'coast', venue: '', seed, place, pos: null, at: 1 };
+  return { region: 'coast', seed, place, pos: null, at: 1 };
 }
 
 /** What the row says her position was, whichever coordinate its world uses. */
@@ -1761,7 +1761,7 @@ describe('sailing on the Earth', () => {
     carryTo(engine, 10);
     const ocean = { ...placeOf(engine) };
     regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
-    engine.applySettings(settings({ region: 'newport', venue: '' }));
+    engine.applySettings(settings({ region: 'newport' }));
     const newport = regionById('newport')!.centre;
     expect(placeOf(engine).lat).toBeCloseTo(newport.lat, 1);
     expect(placeOf(engine).lon).toBeCloseTo(newport.lon, 1);
@@ -1786,7 +1786,7 @@ describe('sailing on the Earth', () => {
     // carried back into the middle of it -- several miles of teleport, and
     // the terrain would say nothing was wrong.
     regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
-    const engine = sailing({ region: 'newport', venue: '' });
+    const engine = sailing({ region: 'newport' });
     engine.snapshot.state.pos = { x: REANCHOR_AT + 5_000, y: 0 };
     engine.advance(0.02);
     expect(engine.snapshot.state.pos.x).toBeGreaterThan(REANCHOR_AT);
@@ -1799,7 +1799,7 @@ describe('sailing on the Earth', () => {
     // project does not make elsewhere -- and the readout hides itself on
     // this, so a position here would put San Francisco under an ocean that
     // is nowhere.
-    const engine = sailing({ region: '', venue: '', islandCount: 4 });
+    const engine = sailing({ region: '', islandCount: 4 });
     engine.advance(0.5);
     expect(engine.snapshot.place).toBeNull();
     engine.dispose();
@@ -2011,7 +2011,7 @@ describe('sailing on the Earth', () => {
     // remembered by latitude and longitude; every other world has a plane
     // nailed down, and there the metres are exactly right.
     regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
-    const engine = sailing({ region: 'newport', venue: '' });
+    const engine = sailing({ region: 'newport' });
     engine.advance(0.5);
     engine.snapshot.state.pos = { x: 2200, y: -1400 };
     engine.advance(31);
@@ -2030,8 +2030,8 @@ describe('sailing on the Earth', () => {
     // And the other half: a row with plane metres puts her back at them,
     // ninety metres downwind of where she was rather than of the origin.
     regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
-    kept.stored = { region: 'newport', venue: '', seed: 13, place: null, pos: { x: 4000, y: 1500 }, at: 1 };
-    const engine = sailing({ region: 'newport', venue: '', seed: 13, randomWorld: false });
+    kept.stored = { region: 'newport', seed: 13, place: null, pos: { x: 4000, y: 1500 }, at: 1 };
+    const engine = sailing({ region: 'newport', seed: 13, randomWorld: false });
     engine.advance(0.5);
     const pos = engine.snapshot.state.pos;
     expect(Math.hypot(pos.x - 4000, pos.y - 1500)).toBeLessThan(200);
@@ -2042,7 +2042,7 @@ describe('sailing on the Earth', () => {
     // 29 MB on the wire, so it is not fetched for a session in Newport --
     // whose ground is surveyed, and which never asks the globe anything.
     regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
-    const inRegion = sailing({ region: 'newport', venue: '' });
+    const inRegion = sailing({ region: 'newport' });
     expect(earthLoad).not.toHaveBeenCalled();
     inRegion.dispose();
 
@@ -2309,7 +2309,7 @@ describe('the wind belts', () => {
     // Sound's wind while the panel named the westerlies over it. Seen in the
     // browser before it was seen in a test.
     regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
-    const engine = sailing({ region: 'puget-sound', venue: '' });
+    const engine = sailing({ region: 'puget-sound' });
     engine.advance(0.5);
     expect(deg(engine.snapshot.wind.baseTwd)).toBeCloseTo(350, 0);
     engine.applySettings(settings({ region: 'coast', randomWorld: false, seed: 13 }));
@@ -2359,7 +2359,7 @@ describe('the wind belts', () => {
     engine.advance(0.5);
     expect(engine.snapshot.belt).not.toBeNull();
     regionLoad.mockReturnValue(deferred<RegionTerrain>().promise);
-    engine.applySettings(settings({ region: 'sf-bay', venue: '' }));
+    engine.applySettings(settings({ region: 'sf-bay' }));
     engine.advance(0.5);
     expect(engine.snapshot.belt).toBeNull();
     engine.dispose();

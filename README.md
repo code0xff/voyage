@@ -279,8 +279,9 @@ runs out of the Gate within twenty degrees of the way a westerly makes you beat,
 so it would carry the boat towards the mark and leave nothing to escape.
 
 Venues — named places sketched from overlapping circles — were the earlier
-answer and none ship now. The type survives because it is still right for a
-coast with no open survey behind it: CUDEM covers US waters and nothing else.
+answer. San Francisco was the only one, the surveyed region is the same water,
+and the code is gone: a type with no entries and no way to select one is not a
+feature, it is a thing a reader has to work out is dead.
 
 ### 2. Sails
 
@@ -605,8 +606,8 @@ that gives Biscay a gale gives Cape Horn a bigger one.
 The player's wind slider is scaled, not replaced. It sets what trade-wind
 strength means and every belt is relative to it, so 25 knots is still a hard sail
 everywhere and the doldrums are still the softest place they can be. Direction is
-taken outright — a compass bearing has no slider to honour. Surveyed regions and
-venues keep their own conditions untouched: their land was laid out around a
+taken outright — a compass bearing has no slider to honour. Surveyed regions
+keep their own conditions untouched: their land was laid out around a
 particular breeze.
 
 ### 8. Time of day and weather

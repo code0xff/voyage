@@ -439,16 +439,14 @@ export const SETTINGS_UI: Record<string, Phrase> = {
  * They were not the last, which this claimed until a batch of them turned up in
  * the menu: the islands slider and its label, the island count on the front
  * page, "open sea", "flat" at the bottom of the sea slider, the procedural
- * entry in the Where list, the set-of-the-current slider, and the note under a
- * venue. Listed rather than counted -- the first version of this said "six",
- * which was wrong twice over, and a tally is the part that goes stale.
+ * entry in the Where list, and the set-of-the-current slider. Listed rather
+ * than counted -- the first version of this said "six", which was wrong twice
+ * over, and a tally is the part that goes stale.
  *
  * Some are conditional, which is part of why a sweep of one rendered screen
  * missed them: "open sea" wants the slider at zero or a stored id that no
  * longer resolves, "flat" and "steady" want their sliders at zero, the set
- * slider wants a drift above zero, the Where entry wants the select open, and
- * the venue note wants a venue -- which nothing can currently select, because
- * `VENUES` is empty.
+ * slider wants a drift above zero, and the Where entry wants the select open.
  *
  * But not all, and that is the part worth remembering. The islands label sat
  * unconditionally on the World tab, and the island count sat on the very first
@@ -689,13 +687,7 @@ export const WORLD: Record<string, Phrase> = {
   where: { en: 'Where', ko: '어디서' },
   islands: { en: 'Islands', ko: '섬' },
   openOcean: { en: 'Open ocean (procedural)', ko: '먼바다 (절차적 생성)' },
-  /** Why a venue is worth sailing even though its coastline is not the real one. */
-  venueSketch: {
-    en: 'The land, depths and stream are a sketch meant to reproduce the decisions the place asks of you, not its geography.',
-    ko: '육지와 수심, 조류는 스케치입니다. 그 장소의 지형이 아니라, 그곳이 요구하는 판단을 재현하기 위한 것입니다.',
-  },
   surveyedTag: { en: 'surveyed', ko: '실측' },
-  sketchTag: { en: 'sketch', ko: '스케치' },
   /**
    * The planet's tag and its explanation. The lead is set apart the way the
    * surveyed and sketch leads are, because these tags are claims about how
@@ -733,10 +725,6 @@ export const WORLD: Record<string, Phrase> = {
     ko: '실측 해안을 불러오지 못했습니다. 출항하기 전에 다시 시도하세요.',
   },
   retryRegion: { en: 'Retry', ko: '다시 시도' },
-  sketchWarning: {
-    en: 'Approximate, and not for navigation.',
-    ko: '근사값이며, 실제 항해에 쓸 수 없습니다.',
-  },
   seed: { en: 'World seed', ko: '월드 시드' },
   /**
    * A region's land is surveyed and cannot vary, so nothing the seed does is
@@ -766,10 +754,6 @@ export const WORLD: Record<string, Phrase> = {
   cruiseNote: {
     en: 'A few anchorages stand on the chart. Anchor at one to call there, and the next hand is dealt from where you lie. An empty hand means none were found in reach — head for a coast.',
     ko: '차트에 정박지 몇 곳이 제시됩니다. 그중 한 곳에 닻을 내리면 기항이 되고, 그 자리에서 다음 후보가 나옵니다. 아무것도 뜨지 않으면 닿을 거리에서 찾지 못한 것이니, 해안 쪽으로 가보세요.',
-  },
-  venueNote: {
-    en: 'A venue brings its own land, breeze and tide, so the island slider stands down. The stream runs hardest in deep water and gives up in the shallows — which is where the wind gives up too.',
-    ko: '베뉴는 자체 육지와 바람, 조류를 가져오므로 섬 슬라이더는 물러납니다. 조류는 깊은 물에서 가장 세고 얕은 곳에서 사그라드는데, 바람도 바로 그곳에서 사그라듭니다.',
   },
   coastNote: {
     en: 'The planet does not move, so the seed is everything on top of it: the shape of the shore, the islets, the puffs and the weather. Pin it to keep a coast worth coming back to.',

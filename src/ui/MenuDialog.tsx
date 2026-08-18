@@ -49,12 +49,9 @@ import {
 import {
   withCoast,
   withRegion,
-  withVenue,
   withoutRegion,
-  withoutVenue,
   type Settings,
 } from "@/settings";
-import { VENUES, venueById } from "@/sim/venues";
 import { REGIONS, placeName, regionById } from "@/sim/regions";
 import { COAST_ID, COAST_NAME } from "@/sim/coast";
 import { formatLatLon } from "@/sim/globe";
@@ -195,7 +192,7 @@ function LastPassage({ p, onOpen }: { p: PassageRecord; onOpen: () => void }) {
         <span className="text-muted-foreground">{formatWhen(p.startedAt, lang)}</span>
       </div>
       <div className="font-mono text-[10px] tabular-nums text-muted-foreground">
-        {placeName(p.venue, (id) => venueById(id)?.name ?? null)} ·{" "}
+        {placeName(p.venue)} ·{" "}
         {formatDistance(p.distance)} · {formatDuration(p.duration)}
       </div>
     </button>
@@ -635,21 +632,19 @@ export function MenuDialog({
                   · {formatClock(settings.startHour)}
                 </div>
                 <div>
-                  {/* A venue sets the island count to zero because it brings its
-                      own land, so reading "open sea" off that field alone
-                      announced San Francisco as an empty ocean. */}
+                  {/* A surveyed place sets the island count to zero because it
+                      brings its own land, so reading "open sea" off that field
+                      alone announced San Francisco as an empty ocean. */}
                   {settings.region
                     ? // The lookup does not know the generated coast, and the
                       // fallback announced it as the open sea -- the same
-                      // mislabelling the comment above records for venues.
+                      // mislabelling the comment above records.
                       settings.region === COAST_ID
                       ? COAST_NAME
                       : (regionById(settings.region)?.name ?? t(MENU.openSea))
-                    : settings.venue
-                      ? (venueById(settings.venue)?.name ?? t(MENU.openSea))
-                      : settings.islandCount === 0
-                        ? t(MENU.openSea)
-                        : t(islandCount(settings.islandCount))}
+                    : settings.islandCount === 0
+                      ? t(MENU.openSea)
+                      : t(islandCount(settings.islandCount))}
                 </div>
               </div>
               {/* Opens on World rather than on whichever tab was last left.
@@ -819,12 +814,10 @@ export function MenuDialog({
               </Select>
             </div>
             {/*
-              One list, three kinds of world, because "where am I sailing" is
-              one question and splitting it across two controls would invite
-              picking a region and a venue at once. The groups are labelled by
-              how true the land is, which is the only difference that matters:
-              a region is surveyed, a venue is a sketch that reproduces the
-              decisions rather than the geography.
+              One list, because "where am I sailing" is one question and
+              splitting it across two controls would invite picking two worlds
+              at once. Each entry is tagged by how true its land is, which is
+              the only difference that matters.
             */}
             <div className="grid grid-cols-[104px_1fr] items-center gap-3">
               <span className="text-[11px] text-muted-foreground">
@@ -836,12 +829,12 @@ export function MenuDialog({
                     ? settings.region === COAST_ID
                       ? COAST_ID
                       : `region:${settings.region}`
-                    : settings.venue || "open"
+                    : "open"
                 }
                 onValueChange={(v) => {
-                  // Before the venue fallthrough: an unprefixed value it does
-                  // not recognise clears the world, which is exactly what must
-                  // not happen to a coast someone just picked.
+                  // Before the open-water fallthrough: an unprefixed value it
+                  // does not recognise clears the world, which is exactly what
+                  // must not happen to a coast someone just picked.
                   if (v === COAST_ID) {
                     onSettings(withCoast(settings));
                     return;
@@ -851,17 +844,10 @@ export function MenuDialog({
                     if (region) onSettings(withRegion(settings, region));
                     return;
                   }
-                  const venue = venueById(v);
                   // Picking a place writes its conditions into the settings
                   // rather than overriding them, so every slider below keeps
                   // showing what is actually being sailed and stays live.
-                  onSettings(
-                    withoutRegion(
-                      venue
-                        ? withVenue(settings, venue)
-                        : withoutVenue(settings),
-                    ),
-                  );
+                  onSettings(withoutRegion(settings));
                 }}
               >
                 <SelectTrigger className="w-full">
@@ -878,11 +864,6 @@ export function MenuDialog({
                   {REGIONS.map((r) => (
                     <SelectItem key={r.id} value={`region:${r.id}`}>
                       {r.name} — {t(WORLD.surveyedTag)}
-                    </SelectItem>
-                  ))}
-                  {VENUES.map((v) => (
-                    <SelectItem key={v.id} value={v.id}>
-                      {v.name} — {t(WORLD.sketchTag)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -918,15 +899,6 @@ export function MenuDialog({
                 </p>
                 <RegionLoadNotice status={regionStatus} onRetry={onRetryRegion} />
               </>
-            ) : settings.venue ? (
-              <p className="text-[10px] leading-relaxed text-muted-foreground">
-                {venueById(settings.venue)?.brief}
-                <br />
-                <span className="text-warning">
-                  {t(WORLD.sketchWarning)}
-                </span>{" "}
-                {t(WORLD.venueSketch)}
-              </p>
             ) : (
               <Slider
                 label={t(WORLD.islands)}
@@ -1010,8 +982,8 @@ export function MenuDialog({
               </p>
             )}
             <p className="pt-1 text-[10px] leading-relaxed text-muted-foreground">
-              {/* Four worlds, four notes. This read `venue ? … : …`, and a
-                  region sets `venue` to '' -- so picking a surveyed coast
+              {/* Three worlds, three notes. This once read off a field a
+                  surveyed place sets to '' -- so picking a surveyed coast
                   produced the procedural ocean's copy, promising that islands
                   would keep coming over the horizon at a place whose coastline
                   is fixed and measured. The generated coast then wore the
@@ -1021,9 +993,7 @@ export function MenuDialog({
                 ? t(WORLD.coastNote)
                 : settings.region
                   ? t(WORLD.regionNote)
-                  : settings.venue
-                    ? t(WORLD.venueNote)
-                    : t(WORLD.oceanNote)}
+                  : t(WORLD.oceanNote)}
             </p>
           </TabsContent>
 
