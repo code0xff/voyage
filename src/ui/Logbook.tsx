@@ -20,6 +20,7 @@ import { venueById } from '@/sim/venues';
 import { placeName } from '@/sim/regions';
 import type { PassageRecord, SightingKind } from '@/sim/passage';
 import type { Phrase } from '@/i18n';
+import { saveFile } from './save-file';
 
 /**
  * The logbook.
@@ -203,22 +204,11 @@ export function Logbook({
   // rather than polling keeps this asleep for the whole time the menu is shut.
   useEffect(reload, [reload, version]);
 
-  const download = () => {
-    const blob = new Blob([JSON.stringify(toExport(passages ?? [], Date.now()), null, 1)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `voyage-logbook-${new Date().toISOString().slice(0, 10)}.json`;
-    // Keep the anchor in the document until the click has been dispatched. A
-    // URL revoked on the next line can cancel a download in browsers that have
-    // not consumed the Blob yet, so release it on the next task instead.
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
-  };
+  const download = () =>
+    saveFile(
+      `voyage-logbook-${new Date().toISOString().slice(0, 10)}.json`,
+      JSON.stringify(toExport(passages ?? [], Date.now()), null, 1),
+    );
 
   const upload = (file: File) => {
     void file.text().then(
