@@ -573,6 +573,10 @@ export const QUEST: Record<string, Phrase> = {
     en: 'That pack uses something this version does not know:',
     ko: '이 버전이 모르는 항목이 있습니다:',
   },
+  unknownName: {
+    en: 'That pack names a wind belt, a weather or a world this version does not have:',
+    ko: '이 버전에 없는 바람대·날씨·바다 이름을 쓰고 있습니다:',
+  },
   emptyBound: { en: 'A condition in that pack has no limit in it:', ko: '범위가 비어 있는 조건이 있습니다:' },
   emptyAsk: { en: 'A quest in that pack asks for nothing.', ko: '아무 조건도 없는 퀘스트가 있습니다.' },
   noName: { en: 'A quest in that pack has no English name.', ko: '영문 이름이 없는 퀘스트가 있습니다.' },

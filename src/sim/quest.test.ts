@@ -228,6 +228,29 @@ describe('reading a pack from a stranger', () => {
     expect(problemOf(withAsk({ now: { withCrew: 3 } }))?.named).toBe('withCrew');
   });
 
+  it('refuses a belt, a weather or a world it has no name for', () => {
+    // The half that was missed while the facts were checked. A misspelled
+    // name is not a hard quest, it is an impossible one: no sample will ever
+    // carry that string, so the pack half-works and nobody can see why.
+    expect(problemOf(withAsk({ now: { weather: 'foggy' } }))).toEqual({
+      kind: 'unknownName',
+      quest: 'q',
+      named: 'weather foggy',
+    });
+    expect(problemOf(withAsk({ now: { belt: 'roaring-forties' } }))?.kind).toBe('unknownName');
+    expect(problemOf(withAsk({ now: { region: 'sf-harbour' } }))?.kind).toBe('unknownName');
+    // Written out rather than imported, because these are the names a pack
+    // author types: a test that asked the module for its own list would pass
+    // whatever the list said, including an empty one.
+    expect(problemOf(withAsk({ now: { weather: 'fog' } }))).toBeNull();
+    expect(problemOf(withAsk({ now: { belt: 'westerlies' } }))).toBeNull();
+    expect(problemOf(withAsk({ now: { region: 'sf-bay' } }))).toBeNull();
+    // The two worlds that are not surveyed regions: the island field, and
+    // the open Earth.
+    expect(problemOf(withAsk({ now: { region: '' } }))).toBeNull();
+    expect(problemOf(withAsk({ now: { region: 'coast' } }))).toBeNull();
+  });
+
   it('refuses an ask that asks nothing', () => {
     // It would complete on the first sample, which is never what was meant.
     expect(problemOf(withAsk({}))?.kind).toBe('emptyAsk');

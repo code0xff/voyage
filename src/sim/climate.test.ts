@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BELT_EDGES, beltAt, climateAt, climateSpeed, componentsToTwd } from './climate';
+import { BELT_EDGES, BELTS, beltAt, climateAt, climateSpeed, componentsToTwd } from './climate';
 
 /**
  * The wind belts, against what a pilot chart says.
@@ -172,6 +172,22 @@ describe('the wind belts', () => {
     // Symmetric: the same latitude north and south is the same belt, even
     // though the southern one blows harder.
     for (const lat of [0, 12, 31, 45, 70]) expect(beltAt(-lat)).toBe(beltAt(lat));
+  });
+
+  it('has a name in the list for every latitude on the planet', () => {
+    // `BELTS` is what a quest pack's `belt` is checked against at install,
+    // so a belt the model can answer with and the list has never heard of
+    // would make a legal pack refused. Swept rather than compared to the
+    // type, because the type cannot be read at runtime and a list written
+    // out beside it is exactly the thing that goes stale.
+    for (let lat = -90; lat <= 90; lat += 0.25) {
+      expect(BELTS, `at ${lat}`).toContain(beltAt(lat));
+    }
+    // And nothing in the list that the planet never produces, which is the
+    // other way for it to drift.
+    const found = new Set<string>();
+    for (let lat = -90; lat <= 90; lat += 0.25) found.add(beltAt(lat));
+    expect([...BELTS].sort()).toEqual([...found].sort());
   });
 
   it('reads a bearing the way a compass does', () => {

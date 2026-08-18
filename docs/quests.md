@@ -100,7 +100,17 @@ and these, which are not numbers:
 | `near: { lat, lon, within }` | within `within` nautical miles of that place |
 | `belt` | the wind belt she is in now |
 | `weather` | the weather now |
-| `region` | the world she is sailing: a region id, or `""` for the island field |
+| `region` | the world she is sailing |
+
+Those last three name something rather than measure it, so the name has to be
+one this build has. They are checked at install like everything else -- a
+misspelled `"weather": "foggy"` is not a hard quest, it is an impossible one.
+
+| field | names |
+|---|---|
+| `belt` | `doldrums` `trades` `horse` `westerlies` `polar` |
+| `weather` | `clear` `fair` `overcast` `rain` `squall` `shower` `fog` |
+| `region` | `""` the island field, `coast` the open Earth, or a surveyed one: `sf-bay` `newport` `merchant-row` `puget-sound` `chesapeake` `buzzards-bay` |
 
 ### `passage` and `total`
 

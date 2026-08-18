@@ -55,6 +55,17 @@ export interface Climate {
 export type Belt = 'doldrums' | 'trades' | 'horse' | 'westerlies' | 'polar';
 
 /**
+ * Every belt, for anything that has to check a name against the list.
+ *
+ * Written out rather than derived from `SPEED`, because a belt is a name in
+ * this model before it is a wind speed -- and a quest pack naming one is
+ * checked against this, so the list has to be the whole set. `climate.test.ts`
+ * sweeps the latitudes and requires `beltAt` to answer from it, which is what
+ * catches a belt added to the type and forgotten here.
+ */
+export const BELTS: readonly Belt[] = ['doldrums', 'trades', 'horse', 'westerlies', 'polar'];
+
+/**
  * Mean speeds in knots at the middle of each belt.
  *
  * Pilot-chart order of magnitude rather than any one month's measurement:

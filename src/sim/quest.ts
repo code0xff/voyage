@@ -1,4 +1,8 @@
+import { BELTS } from './climate';
+import { COAST_ID } from './coast';
 import type { LatLon } from './globe';
+import { REGIONS } from './regions';
+import { WEATHER_KINDS } from './weather';
 
 /**
  * Quests: things worth doing, written as data by anyone.
@@ -425,6 +429,7 @@ export interface PackProblem {
     | 'duplicateId'
     | 'unknownFact'
     | 'unknownField'
+    | 'unknownName'
     | 'emptyBound'
     | 'emptyAsk'
     | 'noName'
@@ -435,6 +440,28 @@ export interface PackProblem {
 
 const ASK_SCOPES = ['now', 'passage', 'total', 'any'];
 const NOW_FIELDS = ['facts', 'near', 'belt', 'weather', 'region'];
+
+/**
+ * The three fields that name something instead of measuring it, and every
+ * name each of them may take.
+ *
+ * Checked at install for the same reason the facts are. A misspelled
+ * `"weather": "foggy"` is not a quest that is hard to complete, it is a quest
+ * that *cannot* be completed -- no sample will ever carry that string -- and
+ * a pack whose author is told at install is a pack that gets fixed. This half
+ * was missed the first time round while the facts were checked, which made
+ * the promise in `docs/quests.md` untrue for exactly the fields whose
+ * spelling nobody can guess.
+ *
+ * The worlds are the two unsurveyed ones plus every surveyed region: '' is
+ * the island field and `COAST_ID` the open Earth, which is what
+ * `Settings.region` holds for each.
+ */
+const NAMED: Record<string, readonly string[]> = {
+  belt: BELTS,
+  weather: WEATHER_KINDS,
+  region: ['', COAST_ID, ...REGIONS.map((r) => r.id)],
+};
 
 type Refusal = PackProblem | null;
 
@@ -474,6 +501,13 @@ function checkAsk(ask: unknown, quest: string): Refusal {
     }
     const bad = checkBounds((now.facts ?? {}) as Record<string, unknown>, NOW_FACTS, quest);
     if (bad) return bad;
+    for (const [field, allowed] of Object.entries(NAMED)) {
+      const named = now[field];
+      if (named === undefined) continue;
+      if (typeof named !== 'string' || !allowed.includes(named)) {
+        return { kind: 'unknownName', quest, named: `${field} ${String(named)}` };
+      }
+    }
     if (now.near !== undefined) {
       const near = now.near as Near | null;
       const ok =
