@@ -57,10 +57,16 @@ export function useT(): (p: Phrase) => string {
 }
 
 /**
- * Inline markup for translated prose, kept to the two things it actually needs.
+ * Inline markup for translated prose, kept to the three things it actually
+ * needs.
  *
  *   **bold**   a run that carries the weight of the sentence
  *   [[T]]      a key cap
+ *   `atLeast`  a name out of a file, quoted exactly as it is typed
+ *
+ * The third arrived with the quest pack guide, which is a page of prose about
+ * a file format: `westerlies` and `atLeast` are what goes in the file, so they
+ * are never translated and have to look unlike the sentence around them.
  *
  * A translator can move these around a sentence freely, which matters: Korean
  * puts the verb last, so anything that assumed English word order by splitting
@@ -68,7 +74,7 @@ export function useT(): (p: Phrase) => string {
  * different sentence. One string per sentence, markers wherever they land.
  */
 export function Rich({ text }: { text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*|\[\[[^\]]+\]\])/g);
+  const parts = text.split(/(\*\*[^*]+\*\*|\[\[[^\]]+\]\]|`[^`]+`)/g);
   return (
     <>
       {parts.map((part, i) => {
@@ -87,6 +93,20 @@ export function Rich({ text }: { text: string }) {
             >
               {part.slice(2, -2)}
             </kbd>
+          );
+        }
+        if (part.startsWith('`') && part.endsWith('`') && part.length > 1) {
+          return (
+            <code
+              key={i}
+              // `normal-case`, because these appear in headings that are
+              // uppercased and `now` is not `NOW` in a file that is read by a
+              // machine. A guide that teaches the wrong spelling of a keyword
+              // is worse than one that looks inconsistent.
+              className="rounded bg-secondary/60 px-1 font-mono text-[10px] normal-case text-foreground"
+            >
+              {part.slice(1, -1)}
+            </code>
           );
         }
         return part;

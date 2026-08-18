@@ -201,6 +201,8 @@ export const TABS: Record<string, Phrase> = {
   log: { en: 'Log', ko: '항해일지' },
   sailing: { en: 'Sailing', ko: '항해' },
   controls: { en: 'Controls', ko: '조작' },
+  /** The third half of "how do I do the thing this game is for". */
+  packs: { en: 'Packs', ko: '팩 만들기' },
 };
 
 /**

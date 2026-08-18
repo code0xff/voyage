@@ -5,6 +5,7 @@ import {
   BookOpen,
   Compass,
   Flag,
+  FileJson,
   LifeBuoy,
   SlidersHorizontal,
   Waves,
@@ -62,6 +63,7 @@ import { AT_WATER, NEAR_WATER, WATERS, waterAt, waterById } from "@/sim/waters";
 import { beltAt } from "@/sim/climate";
 import { Logbook } from "./Logbook";
 import { QuestPacks, Quests } from "./Quests";
+import { PackGuide } from "./PackGuide";
 import { SailingGuide } from "./SailingGuide";
 import { Credits } from "./Credits";
 import type { LogStore } from "@/logbook";
@@ -1170,6 +1172,13 @@ export function MenuDialog({
             <TabsTrigger value="keys" className={TAB_TRIGGER}>
               <Waves /> {t(TABS.controls)}
             </TabsTrigger>
+            {/* Writing a pack is the third answer to "how do I do the thing
+                this game is for", so it belongs behind the same door -- and a
+                guide to the format that only lives in the repository is one
+                only people who already found the repository will read. */}
+            <TabsTrigger value="packs" className={TAB_TRIGGER}>
+              <FileJson /> {t(TABS.packs)}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="sailing" className="mt-4">
@@ -1193,6 +1202,10 @@ export function MenuDialog({
             <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
               {t(CONTROLS_NOTE)}
             </p>
+          </TabsContent>
+
+          <TabsContent value="packs" className="mt-4">
+            <PackGuide />
           </TabsContent>
         </Tabs>
 
