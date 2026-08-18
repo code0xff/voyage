@@ -1,0 +1,67 @@
+{
+  "format": 1,
+  "id": "first-miles",
+  "name": "First miles",
+  "author": "voyage",
+  "quests": [
+    {
+      "id": "first",
+      "name": {
+        "en": "Her first passage",
+        "ko": "첫 항해"
+      },
+      "ask": {},
+      "counting": {
+        "kind": "passages",
+        "needs": 1
+      }
+    },
+    {
+      "id": "fifty",
+      "name": {
+        "en": "Fifty miles between anchors",
+        "ko": "한 항해에 50해리"
+      },
+      "ask": {
+        "facts": {
+          "miles": {
+            "atLeast": 50
+          }
+        }
+      }
+    },
+    {
+      "id": "thousand",
+      "name": {
+        "en": "A thousand miles in the book",
+        "ko": "누적 1,000해리"
+      },
+      "ask": {},
+      "counting": {
+        "kind": "total",
+        "fact": "miles",
+        "needs": 1000
+      }
+    },
+    {
+      "id": "night",
+      "name": {
+        "en": "Sailed through the night",
+        "ko": "밤을 지나 항해"
+      },
+      "ask": {
+        "throughTheNight": true
+      }
+    },
+    {
+      "id": "fog",
+      "name": {
+        "en": "A passage made in fog",
+        "ko": "안개 속 항해"
+      },
+      "ask": {
+        "weather": "fog"
+      }
+    }
+  ]
+}

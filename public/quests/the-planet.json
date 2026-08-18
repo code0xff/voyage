@@ -1,0 +1,71 @@
+{
+  "format": 1,
+  "id": "the-planet",
+  "name": "The whole planet",
+  "author": "voyage",
+  "quests": [
+    {
+      "id": "line",
+      "name": {
+        "en": "Crossed the line",
+        "ko": "적도 통과"
+      },
+      "note": {
+        "en": "One end of a passage north of the equator and the other south of it.",
+        "ko": "한 항해의 한쪽 끝은 적도 북쪽, 다른 쪽은 남쪽."
+      },
+      "ask": {
+        "crossedTheLine": true
+      }
+    },
+    {
+      "id": "every-belt",
+      "name": {
+        "en": "Every wind belt on the planet",
+        "ko": "모든 바람대"
+      },
+      "note": {
+        "en": "The doldrums, the trades, the horse latitudes, the westerlies and the polar easterlies. The last of them is past sixty degrees.",
+        "ko": "무풍대, 무역풍대, 아열대 고압대, 편서풍대, 극동풍대. 마지막 하나는 위도 60도 너머입니다."
+      },
+      "ask": {},
+      "counting": {
+        "kind": "belts",
+        "needs": 5
+      }
+    },
+    {
+      "id": "doldrums",
+      "name": {
+        "en": "Becalmed in the doldrums",
+        "ko": "적도 무풍대의 정체"
+      },
+      "ask": {
+        "belt": "doldrums",
+        "facts": {
+          "avgSpeed": {
+            "atMost": 3
+          }
+        }
+      }
+    },
+    {
+      "id": "trade-run",
+      "name": {
+        "en": "A trade wind run",
+        "ko": "무역풍 활주"
+      },
+      "ask": {
+        "belt": "trades",
+        "facts": {
+          "miles": {
+            "atLeast": 30
+          },
+          "wandering": {
+            "atMost": 1.15
+          }
+        }
+      }
+    }
+  ]
+}

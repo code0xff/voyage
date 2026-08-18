@@ -1,0 +1,37 @@
+{
+  "format": 1,
+  "id": "southern-ocean",
+  "name": "The Southern Ocean",
+  "author": "voyage",
+  "quests": [
+    {
+      "id": "forties",
+      "name": { "en": "The roaring forties", "ko": "포효하는 40도" },
+      "note": {
+        "en": "Sail south of 40°S, where the westerlies have nothing in their way.",
+        "ko": "남위 40도 아래로. 편서풍을 막을 것이 아무것도 없는 바다입니다."
+      },
+      "ask": { "facts": { "south": { "atLeast": 40 } } }
+    },
+    {
+      "id": "fifties",
+      "name": { "en": "The furious fifties", "ko": "성난 50도" },
+      "ask": { "facts": { "south": { "atLeast": 50 } } }
+    },
+    {
+      "id": "on-her-feet",
+      "name": { "en": "Thirty knots, and she kept her feet", "ko": "30노트, 그리고 눕지 않았다" },
+      "note": {
+        "en": "Heel is what reefing controls, so this asks that you reefed in time.",
+        "ko": "힐각은 리프로 잡는 것입니다. 제때 리프했는지를 묻습니다."
+      },
+      "ask": { "facts": { "wind": { "atLeast": 30 }, "heel": { "atMost": 35 } } }
+    },
+    {
+      "id": "long-southern-leg",
+      "name": { "en": "A hundred miles below forty south", "ko": "남위 40도 아래에서 100해리" },
+      "ask": { "facts": { "south": { "atLeast": 40 }, "miles": { "atLeast": 10 } } },
+      "counting": { "kind": "total", "fact": "miles", "needs": 100 }
+    }
+  ]
+}
