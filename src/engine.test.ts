@@ -1947,6 +1947,57 @@ describe('sailing on the Earth', () => {
     engine.dispose();
   });
 
+  it('leaves the wind and the sea where they were when the plane moves', () => {
+    // The claim a re-pin makes is that nothing happens: the coordinates change
+    // and the world does not. The wind's gusts and the sea's phase are read at
+    // a plane position, so they were the half that did not hold -- the same
+    // piece of ocean was suddenly read two hundred kilometres away in the
+    // pattern, and the puff she was in and the shape of the water under her
+    // both changed in one frame.
+    //
+    // Asserted at the *same physical place*, which is the boat: she is where
+    // she was, whatever her coordinates say.
+    const engine = sailing({ randomWorld: false, seed: 13 });
+    engine.advance(1);
+    // Carried out to the threshold first, so that what is compared is one spot
+    // of ocean read on either side of the pin moving -- not two spots.
+    engine.snapshot.state.pos = { x: REANCHOR_AT + 1, y: 0 };
+    // The sea is read over a patch rather than at one point: a phase two
+    // hundred kilometres away is a different wave train, but at any single
+    // point it can happen to cross the old height, and a test that sampled
+    // one place would pass on that coincidence.
+    const patch = [
+      { x: 0, y: 0 },
+      { x: 12, y: 0 },
+      { x: 0, y: 12 },
+      { x: -18, y: 7 },
+      { x: 25, y: -25 },
+    ];
+    const read = () => {
+      const at = engine.snapshot.state.pos;
+      return {
+        wind: engine.snapshot.wind.sample(at),
+        sea: patch.map((d) => engine.snapshot.waves.heightAt(at.x + d.x, at.y + d.y)),
+      };
+    };
+    const before = read();
+
+    // One step, which re-pins.
+    engine.advance(1 / 120);
+    expect(engine.snapshot.pin.count, 'the plane never moved').toBe(1);
+
+    const after = read();
+    // A step of the clock moves everything a little: 1/120 s is under a
+    // hundredth of a radian on the longest component. The jump this catches is
+    // a different pattern entirely.
+    for (let i = 0; i < patch.length; i++) {
+      expect(after.sea[i], `the sea at ${patch[i].x},${patch[i].y}`).toBeCloseTo(before.sea[i], 2);
+    }
+    expect(after.wind.gust).toBeCloseTo(before.wind.gust, 2);
+    expect(after.wind.shift).toBeCloseTo(before.wind.shift, 2);
+    engine.dispose();
+  });
+
   it('files a passage with the places it was between, not only the metres', async () => {
     // `from` and `to` are plane metres, and on the endless coast the plane is
     // re-pinned under the boat every 200 km -- so a logbook of them can say

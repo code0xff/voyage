@@ -66,6 +66,9 @@ export class WindField {
    */
   private driftX = 0;
   private driftY = 0;
+  /** How far the plane has been re-pinned under the pattern; see `repin`. */
+  private pinX = 0;
+  private pinY = 0;
   private seed: number;
 
   constructor(baseTws: number, baseTwd = 0, gustiness = 0.45, shiftAmplitude = 0.19, seed = 1337) {
@@ -89,7 +92,29 @@ export class WindField {
     this.seed = seed;
     this.driftX = 0;
     this.driftY = 0;
+    this.pinX = 0;
+    this.pinY = 0;
     this.t = 0;
+  }
+
+  /**
+   * The plane was re-pinned under the boat: the wind is where it was, and its
+   * coordinates are not.
+   *
+   * Its own offset rather than the drift, which would have been the obvious
+   * place: the shift pattern is carried at 0.55 of the gust pattern's rate, so
+   * one number added to the drift moves the two fields by different amounts
+   * and the shift jumps by the difference. This is subtracted from the
+   * position itself, before either scale is taken, so both patterns stay
+   * exactly where they were.
+   *
+   * Without it, a boat that had sailed two hundred kilometres found herself in
+   * a different puff the instant the pin moved -- and the pattern is the only
+   * thing about a stretch of sailing that varies at all.
+   */
+  repin(d: { x: number; y: number }): void {
+    this.pinX += d.x;
+    this.pinY += d.y;
   }
 
   update(dt: number): void {
@@ -159,16 +184,21 @@ export class WindField {
       leadY = up.y * this.baseTws * ADVECTION * leadSeconds;
     }
 
-    const gx = (pos.x + leadX - driftX) / GUST_SCALE;
-    const gy = (pos.y + leadY - driftY) / GUST_SCALE;
+    // The pin comes off the position first: everything below is in the
+    // pattern's own coordinates, which the plane moves under.
+    const px = pos.x - this.pinX;
+    const py = pos.y - this.pinY;
+
+    const gx = (px + leadX - driftX) / GUST_SCALE;
+    const gy = (py + leadY - driftY) / GUST_SCALE;
     // 0..1 -> -1..1
     const g = fbm2(gx, gy, this.seed, 3) * 2 - 1;
 
     // The shift pattern is carried at 0.55 of the gust pattern's rate, so its
     // lead has to be scaled by the same 0.55 or the two would be forecasts of
     // different moments -- the puff right and the shift somewhere past it.
-    const sx = (pos.x + leadX * 0.55 - driftX * 0.55) / SHIFT_SCALE;
-    const sy = (pos.y + leadY * 0.55 - driftY * 0.55) / SHIFT_SCALE;
+    const sx = (px + leadX * 0.55 - driftX * 0.55) / SHIFT_SCALE;
+    const sy = (py + leadY * 0.55 - driftY * 0.55) / SHIFT_SCALE;
     const s = fbm2(sx, sy, this.seed + 4111, 2) * 2 - 1;
 
     // Real wind gusts harder than it lulls, so the response is asymmetric.
@@ -196,12 +226,16 @@ export class WindField {
   sampleInto(x: number, y: number, out: [number, number]): void {
     const driftX = this.driftX;
     const driftY = this.driftY;
+    // In the pattern's coordinates, exactly as `sample` does it; the land is
+    // asked about in the plane's, because the land is where the plane says.
+    const px = x - this.pinX;
+    const py = y - this.pinY;
 
-    const g = fbm2((x - driftX) / GUST_SCALE, (y - driftY) / GUST_SCALE, this.seed, 3) * 2 - 1;
+    const g = fbm2((px - driftX) / GUST_SCALE, (py - driftY) / GUST_SCALE, this.seed, 3) * 2 - 1;
     const s =
       fbm2(
-        (x - driftX * 0.55) / SHIFT_SCALE,
-        (y - driftY * 0.55) / SHIFT_SCALE,
+        (px - driftX * 0.55) / SHIFT_SCALE,
+        (py - driftY * 0.55) / SHIFT_SCALE,
         this.seed + 4111,
         2,
       ) *

@@ -93,8 +93,6 @@ export interface FrameInput {
   binoculars: boolean;
   /** Bumped on every new session, so the view can drop what it was trailing. */
   session: number;
-  /** The last re-pinning of the plane; see `Snapshot.pin`. */
-  pin: { count: number; x: number; y: number };
   /** Rare environmental encounters, kept outside the boat physics. */
   whales: readonly WhaleSighting[];
   sharks: readonly SharkSighting[];
@@ -425,8 +423,6 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   wake.frustumCulled = false;
   scene.add(wake);
   let wakeCount = 0;
-  /** The re-pinning the wake has been moved for; see the frame loop. */
-  let pinCount = 0;
   let wakeTimer = 0;
   /** The session the trail belongs to. -1 so the first frame always clears. */
   let trailSession = -1;
@@ -860,20 +856,6 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     // last one of the previous session and a straight line is drawn clean
     // across the chart. Snapshot.session exists for exactly this and had simply
     // never been plumbed through to the view.
-    // The plane was re-pinned under her: everything the engine holds moved
-    // with it, and the wake is the view's own memory of where she has been.
-    // Translated rather than dropped, because a re-pin is *not* a jump -- the
-    // water did not move -- and a trail that vanished every 200 km would make
-    // a bookkeeping detail visible.
-    if (f.pin.count !== pinCount) {
-      pinCount = f.pin.count;
-      for (let i = 0; i < wakeCount; i++) {
-        wakePos[i * 3] += f.pin.x;
-        wakePos[i * 3 + 2] -= f.pin.y;
-      }
-      wakeGeo.attributes.position.needsUpdate = true;
-    }
-
     if (f.session !== trailSession) {
       trailSession = f.session;
       wakeCount = 0;

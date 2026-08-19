@@ -144,7 +144,7 @@ export interface Snapshot {
    * the last one applied.
    *
    * For anything outside the engine that holds a plane position of its own --
-   * the wake, the chart's track and its pan. They compare the count with the
+   * the chart's track, and the chart's pan. They compare the count with the
    * one they last acted on and translate what they hold by the shift. The
    * engine cannot move them itself: they are the view's own memory, and the
    * view is not allowed to be asked for it back.
@@ -1292,19 +1292,27 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // assignment; they were two answers when there were two kinds of world.
     oceanAnchor = { ...to };
     snapshot.place = placeOf(state.pos.x, state.pos.y);
-    // And everything the *view* is holding in plane metres. The wake and the
-    // chart's track are trails of world positions, kept where they were laid
-    // rather than moved with the boat -- so a re-pin drew a straight line two
-    // hundred kilometres long from her stern, which is precisely the bug the
-    // new-session reset in `scene.ts` was written for, arriving by the other
-    // road. Published as a shift rather than as the mapper, because a trail
-    // lies within a few kilometres of the boat and over that distance the
-    // reprojection *is* this translation, to well inside a metre.
-    snapshot.pin = {
-      count: snapshot.pin.count + 1,
-      x: boat.x - x,
-      y: boat.y - y,
-    };
+    /*
+     * And the fields that are functions of *where*, which is the half this
+     * list forgot for longest. The wind's gusts and the sea's phase are noise
+     * and sines sampled at a plane position; left alone, the same piece of
+     * ocean was suddenly read two hundred kilometres away in the pattern, so
+     * the puff she was in changed and the surface under her changed shape in
+     * one frame. Each absorbs the shift into the offset it already keeps for
+     * how far the pattern has travelled.
+     *
+     * One shift for all of them, taken from the boat, rather than the
+     * per-point reprojection: over the few kilometres these patterns are read
+     * across, the reprojection *is* that translation to well inside a metre.
+     *
+     * The wake needs nothing, and that is not an oversight: it is kept in the
+     * water's frame, which is `waves.drift`, which has just moved with it.
+     * The chart's track and its pan are in plane metres and are told below.
+     */
+    const shift = { x: boat.x - x, y: boat.y - y };
+    wind.repin(shift);
+    waves.repin(shift);
+    snapshot.pin = { count: snapshot.pin.count + 1, x: shift.x, y: shift.y };
     rebuildCoastWindow();
   }
 
@@ -2400,7 +2408,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       flare: snapshot.flare,
       binoculars: snapshot.binoculars,
       session,
-      pin: snapshot.pin,
       whales: whales.events,
       sharks: sharks.events,
       gullFlocks: wildlife.flocks,

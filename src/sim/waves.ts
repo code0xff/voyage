@@ -130,6 +130,24 @@ export class WaveField {
   }
 
   /**
+   * The plane was re-pinned under the boat: the water is where it was, and its
+   * coordinates are not.
+   *
+   * The drift *is* the water's offset from the plane -- `heightAt` samples the
+   * pattern at `P - drift` -- so a plane that moves by `d` under a sea that
+   * did not move is a drift that gains `d`. Without this the same piece of
+   * ocean was sampled at a phase two hundred kilometres away, and the surface
+   * under the boat changed shape in one frame.
+   *
+   * The wake needs nothing for the same reason: it is kept in the water's
+   * frame, and this is that frame.
+   */
+  repin(d: { x: number; y: number }): void {
+    this.driftX += d.x;
+    this.driftY += d.y;
+  }
+
+  /**
    * @param drift the water's own velocity, m/s. Its integral is what the wave
    *   pattern is carried along by.
    *
