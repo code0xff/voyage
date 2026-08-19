@@ -14,6 +14,10 @@ that comes over the horizon is where the Earth says a coast is, and the wind at
 a latitude is the wind that belongs to it -- the trades from the east, the
 westerlies from the west, and the doldrums in between where a day can go by.
 
+Every passage is written into a logbook, and **quests** — plain JSON files
+anyone can write and install — notice the things worth having done, from a
+first fifty miles to a rounding of the Horn.
+
 ```bash
 npm install
 npm run dev        # simulator
@@ -66,13 +70,30 @@ src/sim/     pure physics core -- no Three.js, no React, no browser APIs
   polar      steady-state polar solver -- the physics validation tool
   passage    where you are bound: bearing, VMC, ETA and the course to steer
   anchorage  whether a spot will hold her
+  calls      the cruise's hand of ports to call at
+  maneuver   what a tack or a gybe cost, judged against the mean wind
+  autopilot  hold a compass course or a wind angle
   current    tidal streams as a function of position
+  shear      how much harder it blows at the head than at the foot
+  coast      the shoreline: the Earth's, with the seed's own bays inside it
+  heightfield a sampled square of ground, and how to read between the samples
+  region-terrain the terrain interface over one, with its shelter swept
+  shelter    fetch and wind shadow, swept once per two degrees of wind
   regions    what a height-field world is, and what a passage's place was called
   globe      the tangent plane <-> latitude and longitude, and great circles
   earth      the coarse planet, asked one question: where is the land
   climate    what the latitude does to the wind -- the belts a pilot chart has
+  waters     the eleven departures, each verified against the shipped raster
+  departure  which way she points when the lines are slipped
+  quest      quests as data: the format, the reader and the watcher
+  starter    the pack the game ships with, and the file it hands out
 
-src/engine.ts  the 120 Hz loop, the render loop and everything imperative
+src/          the browser side that is not the renderer
+  engine.ts       the 120 Hz loop, the render loop and everything imperative
+  settings.ts     player-facing conditions, kept apart from the physics constants
+  logbook.ts      the passages she has made, in IndexedDB
+  quests-store.ts installed packs and what they noticed, in an IndexedDB of its own
+  underway.ts     the one row that carries a voyage from session to session
 
 src/view/    3D rendering
   scene      scene assembly, lofted hull, camera, wind streaks, wake
@@ -100,6 +121,9 @@ src/ui/      React overlay, built on the shadcn/ui design system
   MinimapCard     the chart panel, and the full-screen view of it
   PolarCard       the polar diagram
   MenuDialog      menu, settings, results
+  Quests          what the packs have noticed, and the settings tab that installs them
+  SailingGuide    how to sail her, and what every number on screen means
+  PackGuide       how to write a quest pack
 
 scripts/polar.ts   runs the same core headless, without a browser
 ```
@@ -464,11 +488,12 @@ empty sea.
 A session opens where the last one got to. That is what makes the planet a
 place rather than a backdrop: a boat that reached the Azores and reopened off
 San Francisco has had a passage taken away from her. One row in localStorage
-holds the position and nothing else — not the trim, not the heading, not the
-hour — because every session in this game is a *departure*, prepared for the
-conditions of the moment, and restoring an exact instant would fight that
-rather than extend it. The menu shows where the next departure opens and offers
-to forget it.
+holds the seed and the position, and nothing else — not the trim, not the
+heading, not the hour — because every session in this game is a *departure*,
+prepared for the conditions of the moment, and restoring an exact instant would
+fight that rather than extend it. The menu offers two doors, and only ever the
+ones that mean something: **sail on** from where she got to, and **new voyage**
+from the departure chosen in the settings.
 
 The sim works in metres on a tangent plane, and it keeps doing so: `globe.ts`
 converts to latitude and longitude at the edges. A plane is honest near its pin
@@ -733,6 +758,45 @@ light will last.
 Arriving means bringing her to rest somewhere she will stay: water between
 three and twelve metres, the way off her, and the anchor down. Then the passage
 writes itself into the logbook.
+
+---
+
+## Quests
+
+A quest describes something that would have been worth doing, and completes
+when the game observes that it was done. There is no accepting one, no failing
+one and no clock: playing is the only way to make progress, and there is never
+a wrong thing to be carrying.
+
+**They are files, and anyone can write one.** A pack is JSON — a list of quests,
+each with a name in as many languages as its author cares to write and an
+`ask` built from a closed vocabulary of named facts, two bounds and one
+combinator. Nothing in a pack is ever evaluated, so the worst a stranger's file
+can do to you is be refused; and it *is* refused, at install, with the name of
+the thing that was wrong, because a pack that installed and then quietly could
+not complete would be one nobody could debug.
+
+One pack ships and is installed on the first run — six things a beginner does
+anyway. **Settings → Quests** hands it back as a file to edit and install
+again, and **Help → Packs** is the format's reference, its examples generated
+from the shipped pack so they cannot go stale. The design and the whole
+vocabulary are in [docs/quests.md](docs/quests.md).
+
+**Watched, not summed.** The engine samples the world every two seconds of
+sailing and hands it to a pure function with the tallies so far. Reading the
+logbook instead would have been cheaper and wrong: a logbook entry is a
+summary, and it cannot know that she passed within twenty miles of the Horn on
+the way, or that the tack that saved her was made in thirty knots.
+
+**A completion keeps the moment, not a tick.** Where she was, what the wind and
+the sea were doing, the hour, and what she had run up by then — because a
+moment is the one thing that cannot be recovered afterwards. Read back it is a
+logbook entry rather than a checkbox: *round the Horn, 55°58'S 67°16'W, at
+three in the morning, thirty-four knots and six metres of sea.*
+
+The price of that is stated plainly in the design doc: unlike a pure function
+of the logbook, this has to be *stored*, so deleting a passage does not
+un-complete a quest.
 
 ---
 

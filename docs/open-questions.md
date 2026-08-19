@@ -167,8 +167,10 @@ the end of it the game has something to chase, which is the one thing
 
 ## Local-first, with no sync
 
-The logbook lives in this browser. Export to a file is the durability answer and
-it is built, but nothing follows you to another device.
+The logbook lives in this browser, and so do the installed quest packs and what
+they have noticed. The logbook exports to a file and a pack *is* a file, which
+is the durability answer for both, but nothing follows you to another device --
+and a completed quest is the one thing with no export at all.
 
 That is a decision rather than an omission — see AGENTS.md section 2 — and the
 records are plain serialisable rows with stable ids so that a sync layer is a new
@@ -177,7 +179,7 @@ accounts, not a database.
 
 ---
 
-## Islands do not bend the wind
+## Land does not bend the wind
 
 Land blocks the wind and shelters the sea; it does not refract the breeze around
 a headland or accelerate it through a gap. Parking in a lee is the dominant

@@ -16,6 +16,20 @@ resistance, added resistance in waves, and a proper 6-DOF hull response.
 
 If a change makes the game more fun but the physics wrong, it is a bad change.
 
+**There is one world: the Earth.** A generated coastline inside the real
+planet's own, sailed on a tangent plane that is re-pinned under the boat every
+200 km. There were four -- six surveyed NOAA squares, a field of procedural
+islands and a set of sketched venues -- and all of them were retired in favour
+of the planet; `docs/real-map.md` keeps that design and the measurements behind
+it, headed by why it went. Do not add a second world without a reason that
+survives the argument recorded there.
+
+**Quest packs are the extension point.** They are JSON files anyone can write
+and install, made of named facts from a closed vocabulary -- nothing in one is
+ever evaluated. That is what makes the format the expensive thing to change:
+once someone else's file exists, the vocabulary is a promise. `docs/quests.md`
+is the design; `sim/quest.ts` is the reader and the watcher.
+
 ## 2. Stack
 
 | | |
@@ -50,10 +64,19 @@ because that is currently how it gets shown to anyone else).
 What that obliges. Records are **plain serialisable rows with a stable id and a
 timestamp**, so that adding a sync layer later is a new storage adapter and not
 a migration. Storage goes behind an interface for the same reason. And anything
-that accumulates — the logbook above all — uses IndexedDB rather than
-localStorage, which is a few megabytes and already straining: `src/sim/replay.ts`
-packs the ghost into a flat `Float32Array` and rounds every value to two decimals
-specifically to make one recording fit.
+that accumulates — the logbook and the quest packs — uses IndexedDB rather than
+localStorage, which is a few megabytes and was already straining when the only
+thing in it was a ghost recording.
+
+There are two IndexedDB databases and that is deliberate: `voyage.logbook` is
+passages, `voyage.quests` is installed packs and what they have noticed. They
+are independent features with independent schemas, and sharing one would mean
+every change to how quests are stored forces a version bump the logbook has to
+migrate through, for a feature it knows nothing about.
+
+localStorage keeps the two rows that are overwritten rather than accumulated:
+the settings, and the voyage she is on (`src/underway.ts` — a seed and a
+position, so that "sail on" opens where she got to).
 
 The one thing local-first cannot do is follow you to another device. If that is
 ever wanted it needs accounts, and accounts are the real cost — not the database.
@@ -348,6 +371,13 @@ to, including zero. Write those out. The distinction is whether the constant is
 a *precondition the test needs in order to look at anything* or the *claim being
 made*.
 
+**A fixture five tests share lives in one file.** `sim/land.fixture.ts` draws a
+round island into a height field and hands back the real `RegionTerrain`: the
+anchorage judge, the tide and the three animal fields all want "somewhere with
+a shore" and none of them cares whose. It is a fixture and says so in its name;
+nothing the game ships imports it. Five copies of it would be five places for a
+correction to fail to reach.
+
 **When you fix a bug, add the regression test.** Several tests in this repo are
 labelled with the bug they lock down; follow that pattern.
 
@@ -383,6 +413,10 @@ There *is* a current -- `sim/current.ts`, and a set and drift the boat feels --
 which this list denied for a while after it was built. What is missing is the
 tide: the stream varies with depth but not with time.
 
+**No time compression at sea**, and no shrunken planet, belong here too: the
+clock runs fast, the boat does not, and the README says at length why scaling
+the world is not the alternative it looks like.
+
 The whales and the sharks belong here too. They are sightings and not bodies:
 no force, no collision, and a whale gives way to a boat sailing a course but
 cannot outrun one that is chasing it. See the README for why that is the right
@@ -392,6 +426,6 @@ Two more that look like bugs but are not:
 
 - **The sun is not astronomical.** Elevation is a sine between fixed sunrise and
   sunset hours. A real ephemeris would change nothing a helmsman notices.
-- **Islands only shadow wind and waves; they do not bend the wind around
+- **Land only shadows wind and waves; it does not bend the wind around
   headlands.** Parking in a lee is the dominant effect by a wide margin, and
   refraction would cost far more than it is worth.
