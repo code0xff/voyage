@@ -140,6 +140,17 @@ export interface Snapshot {
   /** Which wind belt she is in. */
   belt: Belt;
   /**
+   * A quest that has just been completed, for the few seconds it is worth
+   * saying so, or null.
+   *
+   * The name rather than the id, and every language of it, because the engine
+   * has the packs and must not have a language: which one to read is the
+   * screen's business. Shown one at a time -- a sample can complete three at
+   * once, and three lines at the bottom of the screen would be a notification
+   * tray in a game that has none.
+   */
+  questDone: { id: string; name: Record<string, string> } | null;
+  /**
    * The last re-pinning of the plane: how many there have been, and the shift
    * the last one applied.
    *
@@ -460,6 +471,17 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   const MANEUVER_SHOWN = 8;
   let maneuverTtl = 0;
   /**
+   * Real seconds a completed quest stays on screen, and the ones still waiting
+   * their turn.
+   *
+   * Longer than a maneuver report because it is not advice about what she is
+   * doing: it is the game saying that a thing is done, and it is the only
+   * notice of it there is until the player opens the menu.
+   */
+  const QUEST_SHOWN = 10;
+  let questTtl = 0;
+  const questQueue: { id: string; name: Record<string, string> }[] = [];
+  /**
    * Which deal of the session the next hand of calls is. Folded into the
    * offer's salt so completing a call turns a fresh hand, while re-opening a
    * pinned world at its start deals the very same one.
@@ -603,6 +625,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // The opening pin, replaced by the real position on the first step. The
     // menu can read the snapshot before the engine has stepped once.
     place: { ...DEFAULT_ANCHOR },
+    questDone: null,
     pin: { count: 0, x: 0, y: 0 },
     belt: beltAt(DEFAULT_ANCHOR.lat),
     quests: emptyQuestState(),
@@ -1050,7 +1073,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     questState = step.state;
     snapshot.quests = questState;
     questsDirty = true;
-    for (const done of step.completed) emit({ type: 'quest', id: done.id, completion: done.completion });
+    for (const done of step.completed) {
+      emit({ type: 'quest', id: done.id, completion: done.completion });
+      // The name is looked up here because this is where the packs are. The
+      // id is `pack.quest`, and the pack's own id is the part before the dot.
+      const named = questPacks
+        .flatMap((p) => p.quests.map((q) => ({ id: `${p.id}.${q.id}`, name: q.name })))
+        .find((q) => q.id === done.id);
+      if (named) questQueue.push(named);
+    }
     // A completion is written down at once rather than left to the throttle.
     // The throttle is there for the tallies, which move every few seconds and
     // are worth nothing to anyone half a minute later; a completion is rare,
@@ -2124,6 +2155,21 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     } else if (snapshot.maneuver !== null) {
       maneuverTtl -= PHYS_DT;
       if (maneuverTtl <= 0) snapshot.maneuver = null;
+    }
+
+    // The same shape for a completed quest, one at a time out of the queue.
+    // Real seconds, like the maneuver report: the time scale is for watching
+    // the sun move, and a notice that lasted a sixtieth of its time on screen
+    // because the clock was wound up would be no notice at all.
+    if (snapshot.questDone === null) {
+      const next = questQueue.shift();
+      if (next) {
+        snapshot.questDone = next;
+        questTtl = QUEST_SHOWN;
+      }
+    } else {
+      questTtl -= PHYS_DT;
+      if (questTtl <= 0) snapshot.questDone = null;
     }
 
     // Judged where she is, every step, because the answer is what the player is

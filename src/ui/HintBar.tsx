@@ -3,7 +3,8 @@ import { Card } from '@/components/ui/card';
 import { MAX_WAY, anchorProblem } from '@/sim/anchorage';
 import { useEngineFrame } from './engine-context';
 import { useT } from './i18n';
-import { ANCHOR_PROBLEM, HINT, flareWait, holding, nowhereToAnchor } from './strings';
+import { ANCHOR_PROBLEM, HINT, flareWait, holding, nowhereToAnchor, questDone } from './strings';
+import { useLang } from './i18n';
 
 /**
  * A single line of context at the bottom of the screen.
@@ -17,6 +18,7 @@ export function HintBar() {
   // latest closure in a ref, so switching language re-renders and the next
   // frame writes the new wording -- no need to force the line to change first.
   const t = useT();
+  const lang = useLang();
 
   useEngineFrame((s) => {
     const el = ref.current;
@@ -26,8 +28,15 @@ export function HintBar() {
 
     // At anchor first: it is a state she is in, not advice about one, and while
     // she is lying to it nothing else on this list is worth saying.
-    if (s.anchored) parts.push(t(HINT.anchored));
-    else if (s.clearance < 0) parts.push(t(HINT.aground));
+    if (s.clearance < 0) parts.push(t(HINT.aground));
+    // A quest just completed. Above everything but the ground under her,
+    // because it is the only notice of it there is: the record is written at
+    // once, but nothing else on screen says so, and the moment it names -- the
+    // wind, the sea, the hour -- is happening now and not when the menu is
+    // next opened. Below being aground, which is not a moment to celebrate in.
+    else if (s.questDone)
+      parts.push(t(questDone(s.questDone.name[lang] ?? s.questDone.name.en ?? '')));
+    else if (s.anchored) parts.push(t(HINT.anchored));
     // A direct answer to a press outranks ambient advice for the three
     // seconds it is on: the player just asked the boat something.
     else if (s.flareWait != null) parts.push(t(flareWait(s.flareWait)));

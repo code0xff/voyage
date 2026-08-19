@@ -2416,6 +2416,46 @@ describe('watching quests while she sails', () => {
     engine.dispose();
   });
 
+  it('says so on the screen when one completes, one at a time', async () => {
+    // The record is written at once, but until this the only way to find out
+    // was to open the menu -- and the moment a completion names, the wind and
+    // the sea and the hour, is happening now.
+    quests.packs = [
+      {
+        format: 2,
+        id: 'p',
+        name: 'Pack',
+        quests: [
+          { id: 'one', name: { en: 'The first', ko: '첫째' }, ask: { now: { facts: { speed: { atLeast: 0.5 } } } } },
+          { id: 'two', name: { en: 'The second' }, ask: { now: { facts: { depth: { atLeast: 1 } } } } },
+        ],
+      },
+    ];
+    const engine = sailing({ randomWorld: false, seed: 13 });
+    await settle();
+    // The first look comes at two seconds of *world* time, which at the
+    // default scale is a thirtieth of a second of sailing.
+    engine.advance(1);
+
+    // Both completed on the same look; one is on screen and the other waits.
+    expect(Object.keys(engine.snapshot.quests.done)).toHaveLength(2);
+    const first = engine.snapshot.questDone;
+    expect(first, 'nothing was shown').not.toBeNull();
+    // Every language of the name, so the screen can choose; the engine has no
+    // business knowing which.
+    expect(first!.name.en).toBe('The first');
+    expect(first!.name.ko).toBe('첫째');
+
+    // It goes by itself, and the next one takes its place rather than being
+    // lost. Ten real seconds each, so eleven is past the first and inside the
+    // second.
+    engine.advance(11);
+    expect(engine.snapshot.questDone?.name.en).toBe('The second');
+    engine.advance(11);
+    expect(engine.snapshot.questDone).toBeNull();
+    engine.dispose();
+  });
+
   it('writes what it noticed down, and keeps it on the way out', async () => {
     quests.packs = [pack({ now: { facts: { speed: { atLeast: 0.5 } } } })];
     const engine = sailing({ randomWorld: false, seed: 13 });

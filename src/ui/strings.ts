@@ -63,6 +63,17 @@ export const flareWait = (seconds: number): Phrase => ({
   ko: `조명탄 재장전 중 — ${seconds}초 후 발사 가능`,
 });
 
+/**
+ * A quest just completed, on the hint bar.
+ *
+ * The name is the pack author's and is not translated -- it arrives already in
+ * the reader's language if they wrote one, and in English if they did not.
+ */
+export const questDone = (name: string): Phrase => ({
+  en: `Done: ${name}`,
+  ko: `달성: ${name}`,
+});
+
 export const nowhereToAnchor = (why: Phrase): Phrase => ({
   en: `Nowhere to anchor: ${why.en}`,
   ko: `닻 내릴 곳이 아님: ${why.ko}`,
