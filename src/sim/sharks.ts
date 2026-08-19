@@ -157,6 +157,13 @@ export class SharkField {
     this.reseed(seed);
   }
 
+  /** The plane was re-pinned under the boat; see `WhaleField.repin`. */
+  repin(d: Vec2): void {
+    if (!this.active) return;
+    this.active.pos.x += d.x;
+    this.active.pos.y += d.y;
+  }
+
   /** The next gap, in seconds, stretched by `spacing`. */
   private wait(base: number, spread: number): number {
     return (base + this.rand() * spread) * this.spacing;

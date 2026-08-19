@@ -184,6 +184,13 @@ export class Wildlife {
     });
   }
 
+  /** The plane was re-pinned under the boat; see `WhaleField.repin`. */
+  repin(d: Vec2): void {
+    if (!this.activeFlock) return;
+    this.activeFlock.pos.x += d.x;
+    this.activeFlock.pos.y += d.y;
+  }
+
   private updateFlock(dt: number, boat: Vec2, terrain: TerrainQuery): void {
     this.flocks.length = 0;
     this.flockTimer -= dt;

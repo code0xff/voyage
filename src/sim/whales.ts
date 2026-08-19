@@ -241,6 +241,22 @@ export class WhaleField {
   }
 
   /**
+   * The plane was re-pinned under the boat; see `WaveField.repin`.
+   *
+   * A sighting holds a world position, so an encounter in progress has to be
+   * carried across or the animal is suddenly two hundred kilometres away --
+   * culled by the renderer, and gone mid-blow. Rare, because an encounter
+   * lasts seconds and a re-pin is two hundred kilometres of sailing apart, and
+   * still the invariant the pin's own comment states: nothing in the water may
+   * be left behind in the plane it was written in.
+   */
+  repin(d: Vec2): void {
+    if (!this.active) return;
+    this.active.pos.x += d.x;
+    this.active.pos.y += d.y;
+  }
+
+  /**
    * Move, or turn off water too shallow to move into.
    *
    * The obstructed case tries a quarter turn each way before it will reverse.
