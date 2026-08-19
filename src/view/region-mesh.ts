@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { RegionTerrain } from '../sim/region-terrain';
 import type { SkyState } from '../sim/sky';
+import { CLEAR_DAY } from '../sim/weather';
 
 /**
  * The land, as a grid of tiles.
@@ -37,14 +38,19 @@ const STEP = 41;
  * drop a frame.
  */
 const BUILDS_PER_FRAME = 2;
-/** How far tiles are drawn, m. Past the fog at any visibility, so they are born unseen. */
-const DRAW_RANGE = 2800;
+/**
+ * How far tiles are drawn, m. Past the fog at any visibility, so they are born
+ * unseen: a coast that arrived inside the visible range would appear out of
+ * clear air, which is the one thing this whole streaming arrangement exists to
+ * prevent. Sized against `CLEAR_DAY` for that reason rather than by eye.
+ */
+const DRAW_RANGE = CLEAR_DAY + 600;
 /**
  * Dropped beyond this, m. Wider than DRAW_RANGE on purpose: with one threshold,
  * a boat working to windward along the line would rebuild the same tile every
  * few seconds.
  */
-const KEEP_RANGE = 3600;
+const KEEP_RANGE = DRAW_RANGE + 800;
 
 /**
  * Below this, a tile is all water and is never built, m.

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Earth } from './earth';
 import { beltAt } from './climate';
 import { coastHeightField } from './coast';
+import { CLEAR_DAY } from './weather';
 import { WATERS, waterAt, waterById } from './waters';
 
 /**
@@ -88,6 +89,19 @@ describe('the departures', () => {
         }
       }
       const where = `${w.id} on seed ${seed}`;
+      // In sight, which is what this test is named for and what it did not
+      // check: land within the distance a clear day reaches. Every departure
+      // passed the old test with its coast four kilometres off and the haze
+      // stopping at 1.6 km, so all eleven opened on an empty sea.
+      let nearest = Infinity;
+      for (let x = -9800; x <= 9800; x += 100) {
+        for (let y = -9800; y <= 9800; y += 100) {
+          if (height.elevationAt(x, y) > 0) nearest = Math.min(nearest, Math.hypot(x, y));
+        }
+      }
+      expect(nearest, `${where}: nearest land is ${(nearest / 1000).toFixed(1)} km`).toBeLessThan(
+        CLEAR_DAY,
+      );
       // A tenth of the window at least: a coast to look at and to sail
       // along, not a rock on the horizon.
       expect(land / n, `${where} shows ${((land / n) * 100).toFixed(1)}% land`).toBeGreaterThan(0.1);

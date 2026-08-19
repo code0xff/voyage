@@ -421,13 +421,46 @@ export class Weather {
     this.nextStrike = 0;
   }
 
-  /** Visibility in metres, for fog and rain. */
+  /**
+   * Visibility in metres.
+   *
+   * Two closers, and whichever is worse wins. Fog runs the whole way from a
+   * clear day down to `THICK`; rain only takes it to `RAINING`, because heavy
+   * rain at sea is a couple of kilometres and not a wall.
+   *
+   * **Rain used to bite when it was not raining.** The clear term was written
+   * as `1600 - rain * 700`, so a cloudless day was held to 1.6 km by a
+   * quantity that was zero -- and the 2,600 m ceiling this function clamped to
+   * was a number it could never reach. The whole game was played inside a
+   * kilometre and a half: at every one of the eleven departures the coast
+   * stands four kilometres off, which put all of them beyond the haze and
+   * opened each on an empty sea.
+   */
   get visibility(): number {
     const s = this.state;
-    const fogged = 90 + (1 - s.fog) * 2400;
-    const rained = 1600 - s.rain * 700;
-    return clamp(Math.min(fogged, rained), 90, 2600);
+    const fogged = THICK + (1 - s.fog) * (CLEAR_DAY - THICK);
+    const rained = CLEAR_DAY - s.rain * (CLEAR_DAY - RAINING);
+    return clamp(Math.min(fogged, rained), THICK, CLEAR_DAY);
   }
 }
 
 export const WEATHER_KINDS = Object.keys(PROFILES) as WeatherKind[];
+
+/**
+ * m she can see on a clear day.
+ *
+ * The geometric horizon from a helmsman's two metres is 5.2 km, so this is
+ * about as far as there is anything to see from a small boat -- and it is what
+ * puts a departure's coast, four kilometres off, on the horizon where it
+ * belongs. It was 1,600 m by accident (see `visibility`), which made every
+ * sea the same size and hid the eleven places the departures exist to show.
+ *
+ * The renderer's land window is sized against this: see `DRAW_RANGE` in
+ * `view/region-mesh.ts`, which must reach past it or a coast would be built
+ * inside the fog and appear out of clear air.
+ */
+export const CLEAR_DAY = 5000;
+/** m at the thickest fog: a boat's length or two of grey. */
+const THICK = 90;
+/** m in the heaviest rain, which closes in but is not a wall. */
+const RAINING = 900;

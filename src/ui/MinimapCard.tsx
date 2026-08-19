@@ -88,7 +88,16 @@ export function MinimapCard({
   const ref = useRef<HTMLCanvasElement>(null);
   const t = useT();
   const engine = useEngine();
-  const [range, setRange] = useState(1);
+  /**
+   * The range the chart opens at: 2.5 km, the fourth of five.
+   *
+   * It opened at 700 m, which is inside the coast at every one of the eleven
+   * departures -- so the first thing a new voyage showed was an empty disc,
+   * and the chart agreed with a horizon that was empty for a different reason
+   * (see `CLEAR_DAY`). Wide enough to hold the land she can see, and it is one
+   * press of [[N]] back down to pilotage.
+   */
+  const [range, setRange] = useState(3);
   const minimap = useRef(createMinimap());
 
   // Only ever read while `full`; kept in state so a resized window re-lays the

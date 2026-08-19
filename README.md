@@ -579,7 +579,15 @@ closes them again as the deck goes over.
 Weather is a slow random walk between named conditions (clear, fair, overcast,
 rain, squall, shower, fog), with every continuous quantity easing towards its target
 rather than snapping. It drives mean wind, gustiness, visibility, cloud cover and
-rain. This is what makes two passages over the same water different: a squall
+rain.
+
+**A clear day reaches five kilometres**, which is about the geometric horizon
+from a helmsman's two metres and is what puts a departure's coast — they stand
+four kilometres off — on the horizon where it belongs. Fog closes that to
+ninety metres and the heaviest rain to nine hundred. It read 1,600 m on the
+clearest day for a long time, because the rain term subtracted from a ceiling
+even when there was no rain: every sea was the same size, and all eleven
+departures opened on an empty circle of water. This is what makes two passages over the same water different: a squall
 arriving halfway forces a reef and changes which side of the bay pays. It is seeded, so a
 given seed replays exactly.
 

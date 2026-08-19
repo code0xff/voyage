@@ -83,12 +83,17 @@ export function coastRegion(seed: number): Region {
  * m, how far offshore of the origin the base shoreline runs.
  *
  * Chosen against the haze, and retuned after looking: at the first value of
- * 5600 the spawn was out of sight of everything -- clear-weather visibility
- * tops out at 2.6 km, so a "coastal" world opened indistinguishable from the
- * open ocean. At 3000, less the swing below, the shore runs from about a
- * kilometre off at its boldest headland to five at the back of a deep bay:
- * the boat opens in the coastal lane, with the mainland coming up out of the
- * haze on the first tack toward it.
+ * 5600 the spawn was out of sight of everything, because clear-weather
+ * visibility then stopped at 1.6 km and a "coastal" world opened
+ * indistinguishable from the open ocean. At 3000, less the swing below, the
+ * shore runs from about a kilometre off at its boldest headland to five at the
+ * back of a deep bay.
+ *
+ * The haze it was chosen against has since been corrected -- a clear day now
+ * reaches `CLEAR_DAY`, five kilometres -- so this distance is no longer the
+ * thing standing between the player and a coastline. It is left where it is:
+ * a kilometre to five is a coastal lane worth sailing, and a shore further out
+ * would be a different world rather than a better-lit one.
  */
 const SHORE_DISTANCE = 3000;
 
