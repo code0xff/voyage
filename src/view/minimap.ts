@@ -510,18 +510,6 @@ export function createMinimap(): Minimap {
       const bx = input.state.pos.x;
       const by = input.state.pos.y;
 
-      const centred = chartCentre(
-        Number.isFinite(centreX) ? { x: centreX, y: centreY } : null,
-        { x: bx, y: by },
-        input.pan,
-        rangeIndex,
-      );
-      centreX = centred.x;
-      centreY = centred.y;
-
-      const sx = (x: number) => cx + (x - centreX) * k;
-      const sy = (y: number) => cy - (y - centreY) * k;
-
       // A new session is a new track. Guessing from a teleport did not work:
       // the finish gate is the start gate, so a restart moves the boat about
       // ninety metres and the next session drew on joined to the last one.
@@ -534,6 +522,12 @@ export function createMinimap(): Minimap {
       // she has not moved at all. The track is carried across rather than
       // dropped -- she really did sail it -- and the chart's own centre with
       // it, or the view would jump to where the boat used to be.
+      //
+      // *Before* the centre is worked out, and that is the whole of why this
+      // block sits here rather than below it: `chartCentre` eases the old
+      // centre towards the boat, and an old centre in the old plane against a
+      // boat in the new one is a chart drawn two hundred kilometres out for
+      // the frame it takes to notice.
       if (input.pin.count !== pinCount) {
         pinCount = input.pin.count;
         for (let i = 0; i < trackCount; i++) {
@@ -545,6 +539,19 @@ export function createMinimap(): Minimap {
           centreY += input.pin.y;
         }
       }
+
+      const centred = chartCentre(
+        Number.isFinite(centreX) ? { x: centreX, y: centreY } : null,
+        { x: bx, y: by },
+        input.pan,
+        rangeIndex,
+      );
+      centreX = centred.x;
+      centreY = centred.y;
+
+      const sx = (x: number) => cx + (x - centreX) * k;
+      const sy = (y: number) => cy - (y - centreY) * k;
+
       pushTrack(bx, by);
 
       ctx.clearRect(0, 0, size, size);
