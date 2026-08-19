@@ -1697,6 +1697,10 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // already counted.
     seenWhale = 0;
     seenShark = 0;
+    // And a quest completed in the last world has nothing to say over this
+    // one. What it noticed is kept; the notice is a thing that was happening.
+    questQueue.length = 0;
+    snapshot.questDone = null;
     sharks.reseed(current.seed);
     // The stream is at its full run again: `hour` has just been put back to the
     // start hour, which is what the tide is measured from. Set here as well as

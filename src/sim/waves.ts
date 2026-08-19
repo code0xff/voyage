@@ -140,7 +140,10 @@ export class WaveField {
    * under the boat changed shape in one frame.
    *
    * The wake needs nothing for the same reason: it is kept in the water's
-   * frame, and this is that frame.
+   * frame, and this is that frame. The offset it hands the wake gains 200 km
+   * at each re-pin, which is float32-exact past ten thousand kilometres of
+   * sailing -- nine hundred hours of it, since the boat has no time
+   * compression at sea.
    */
   repin(d: { x: number; y: number }): void {
     this.driftX += d.x;
