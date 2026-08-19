@@ -199,7 +199,7 @@ vi.mock('./sim/coast', async (importActual) => {
   };
 });
 
-import { FLARE_BURN, FLARE_COOLDOWN, FLARE_RISE, REANCHOR_AT, createEngine } from './engine';
+import { FLARE_BURN, FLARE_COOLDOWN, FLARE_RISE, QUEST_SHOWN, REANCHOR_AT, createEngine } from './engine';
 import { coastHeightField } from './sim/coast';
 import { DEFAULT_SETTINGS, type Settings } from './settings';
 import { WhaleField } from './sim/whales';
@@ -2416,6 +2416,22 @@ describe('watching quests while she sails', () => {
     engine.dispose();
   });
 
+  it('drops a notice that belonged to the world before this one', async () => {
+    // The same carried-over state the thunder had. The clear lives in
+    // `rebuildWorld`, which is on both roads into a new world -- putting to
+    // sea, and a settings change that rolls the seed -- because the first
+    // version of it was in `newSession` and covered only the first.
+    quests.packs = [pack({ now: { facts: { speed: { atLeast: 0.5 } } } })];
+    const engine = sailing({ randomWorld: false, seed: 13 });
+    await settle();
+    engine.advance(1);
+    expect(engine.snapshot.questDone, 'nothing was shown to begin with').not.toBeNull();
+
+    engine.applySettings(settings({ randomWorld: false, seed: 77 }));
+    expect(engine.snapshot.questDone).toBeNull();
+    engine.dispose();
+  });
+
   it('says so on the screen when one completes, one at a time', async () => {
     // The record is written at once, but until this the only way to find out
     // was to open the menu -- and the moment a completion names, the wind and
@@ -2446,12 +2462,17 @@ describe('watching quests while she sails', () => {
     expect(first!.name.en).toBe('The first');
     expect(first!.name.ko).toBe('첫째');
 
-    // It goes by itself, and the next one takes its place rather than being
-    // lost. Ten real seconds each, so eleven is past the first and inside the
-    // second.
-    engine.advance(11);
+    // Still up most of the way through: a notice that lasted a second would
+    // pass a test that only looked at the ends.
+    engine.advance(QUEST_SHOWN - 2);
+    expect(engine.snapshot.questDone?.name.en).toBe('The first');
+
+    // Then it goes by itself, and the next takes its place rather than being
+    // lost. Imported rather than written out, because a duration a test has to
+    // outlast is one that gets retuned.
+    engine.advance(2 + QUEST_SHOWN / 2);
     expect(engine.snapshot.questDone?.name.en).toBe('The second');
-    engine.advance(11);
+    engine.advance(QUEST_SHOWN);
     expect(engine.snapshot.questDone).toBeNull();
     engine.dispose();
   });

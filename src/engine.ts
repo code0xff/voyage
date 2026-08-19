@@ -377,6 +377,15 @@ const KEEP_PLACE_EVERY = 30;
  */
 const WATCH_EVERY = 2;
 /**
+ * Real seconds a completed quest stays on screen.
+ *
+ * Longer than a maneuver report because it is not advice about what she is
+ * doing: it is the game saying that a thing is done, and it is the only notice
+ * of it there is until the player opens the menu. Exported so that a test can
+ * outlast it without writing the number down beside it.
+ */
+export const QUEST_SHOWN = 10;
+/**
  * How fast the keys move the helm, in fractions of full deflection per second:
  * slowly near amidships, faster the further over it already is.
  *
@@ -479,6 +488,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * notice of it there is until the player opens the menu.
    */
   const QUEST_SHOWN = 10;
+  /** How many may be waiting their turn behind the one on screen. */
+  const QUEUED_NOTICES = 3;
   let questTtl = 0;
   const questQueue: { id: string; name: Record<string, string> }[] = [];
   /**
@@ -925,6 +936,24 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // caught this route around the teleport reset.
     maneuvers.reset();
     snapshot.maneuver = null;
+    // Everything else that was true of the world being replaced, and here
+    // rather than in `newSession` because a settings change that rolls the
+    // seed comes through this path and not that one -- which is how the first
+    // version of these three covered putting to sea and missed the menu.
+    //
+    // The thunder still counting out its distance: `silencePending` below
+    // drops what the audio graph is holding, and this is the engine's own
+    // list, so a bolt seen in the last world arrived over the new one.
+    pendingThunder.length = 0;
+    // The sighting ids: the fields restart theirs at one with the world, so
+    // the last world's would silence the first encounter of this one -- a
+    // fresh id 1 read as the one already counted.
+    seenWhale = 0;
+    seenShark = 0;
+    // And a quest completed in the last world has nothing to say over this
+    // one. What it noticed is kept; the notice is a thing that was happening.
+    questQueue.length = 0;
+    snapshot.questDone = null;
     // A flare does not survive the world being replaced, and neither does
     // the wait for the next one. Its *sound* is deliberately not chased
     // down on this path: newSession silences everything pending, but a
@@ -1080,7 +1109,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       const named = questPacks
         .flatMap((p) => p.quests.map((q) => ({ id: `${p.id}.${q.id}`, name: q.name })))
         .find((q) => q.id === done.id);
-      if (named) questQueue.push(named);
+      // Capped, because a pack is somebody else's file and may hold any
+      // number of quests: a hundred completing at once would be a quarter of
+      // an hour of notices, long after the moment any of them was about. What
+      // is dropped is the *notice*; every one of them is in the record.
+      if (named && questQueue.length < QUEUED_NOTICES) questQueue.push(named);
     }
     // A completion is written down at once rather than left to the throttle.
     // The throttle is there for the tallies, which move every few seconds and
@@ -1343,6 +1376,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     const shift = { x: boat.x - x, y: boat.y - y };
     wind.repin(shift);
     waves.repin(shift);
+    // And an encounter in progress, which holds a world position of its own.
+    // Rare -- a whale lasts seconds and a re-pin is two hundred kilometres
+    // apart -- and left out it is an animal culled mid-blow.
+    whales.repin(shift);
+    sharks.repin(shift);
+    wildlife.repin(shift);
     snapshot.pin = { count: snapshot.pin.count + 1, x: shift.x, y: shift.y };
     rebuildCoastWindow();
   }
@@ -1686,21 +1725,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     diag = null;
     snapshot.diag = null;
     // And a blow already scheduled belongs to an ocean that no longer exists.
-    // Both queues, which the first version of this missed: `silencePending`
-    // drops what the audio graph is holding, and `pendingThunder` is the
-    // engine's own list of strikes still counting out their distance. Left
-    // standing, a bolt seen in the last world arrived over the new one.
     sound.silencePending();
-    pendingThunder.length = 0;
-    // The sighting ids restart with the fields below, so last world's would
-    // silence the first encounter of this one: a fresh id 1 read as the one
-    // already counted.
-    seenWhale = 0;
-    seenShark = 0;
-    // And a quest completed in the last world has nothing to say over this
-    // one. What it noticed is kept; the notice is a thing that was happening.
-    questQueue.length = 0;
-    snapshot.questDone = null;
     sharks.reseed(current.seed);
     // The stream is at its full run again: `hour` has just been put back to the
     // start hour, which is what the tide is measured from. Set here as well as
@@ -2458,6 +2483,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       flare: snapshot.flare,
       binoculars: snapshot.binoculars,
       session,
+      pin: snapshot.pin,
       whales: whales.events,
       sharks: sharks.events,
       gullFlocks: wildlife.flocks,
