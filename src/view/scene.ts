@@ -93,6 +93,8 @@ export interface FrameInput {
   binoculars: boolean;
   /** Bumped on every new session, so the view can drop what it was trailing. */
   session: number;
+  /** The last re-pinning of the plane; see `Snapshot.pin`. */
+  pin: { count: number; x: number; y: number };
   /** Rare environmental encounters, kept outside the boat physics. */
   whales: readonly WhaleSighting[];
   sharks: readonly SharkSighting[];
@@ -405,6 +407,8 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   const seeds = new Float32Array(STREAKS * 2);
   // Scratch buffer reused STREAKS times per frame, to avoid 900 allocations.
   const windOut: [number, number] = [1, 0];
+  /** The re-pinning the streak seeds have been carried across. */
+  let pinCount = 0;
   for (let i = 0; i < STREAKS; i++) {
     seeds[i * 2] = (Math.random() - 0.5) * FIELD;
     seeds[i * 2 + 1] = (Math.random() - 0.5) * FIELD;
@@ -792,6 +796,21 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
     const meanDir = compassVec(wind.baseTwd); // towards where it blows from
     // The same advection rate the puff field itself uses, or the streaks would
     // slide across the puffs they are drawn to show.
+    // The plane was re-pinned under her. The streaks are seeded in plane
+    // metres and wrapped into a 300 m patch about the boat, so left alone they
+    // are all wrapped by a different multiple of the patch and the whole
+    // pattern re-shuffles in one frame. The wake needs nothing -- it is in the
+    // water's frame, which moved with it -- and these are not.
+    if (f.pin.count !== pinCount) {
+      pinCount = f.pin.count;
+      for (let i = 0; i < STREAKS; i++) {
+        seeds[i * 2] += f.pin.x;
+        seeds[i * 2 + 1] += f.pin.y;
+      }
+      // The water's own ripple is read off the world position too.
+      water.repin(f.pin);
+    }
+
     const drift = wind.baseTws * ADVECTION * dt;
     const wx = -meanDir.x * drift;
     const wy = -meanDir.y * drift;

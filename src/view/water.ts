@@ -341,6 +341,7 @@ const fragmentShader = /* glsl */ `
   uniform float uWhitecap;
   uniform float uSpecular;
   uniform float uRipple;
+  uniform vec2 uPin;   // how far the plane has been re-pinned under the water
   uniform vec4 uLamp;
   uniform vec3 uLampColor;
 
@@ -361,7 +362,7 @@ const fragmentShader = /* glsl */ `
     // Sheltered water is smooth: the lee of an island loses the ripple for the
     // same reason it loses the waves.
     vec2 rs = rippleSlope(
-      vec2(vWorld.x, -vWorld.z),
+      vec2(vWorld.x, -vWorld.z) - uPin,
       uTime,
       rippleAmp(dist, uRipple) * vShelter
     );
@@ -500,6 +501,7 @@ const farFragmentShader = /* glsl */ `
   uniform float uFogFar;
   uniform float uSpecular;
   uniform float uRipple;
+  uniform vec2 uPin;   // how far the plane has been re-pinned under the water
 
   varying vec3 vWorld;
 
@@ -529,7 +531,7 @@ const farFragmentShader = /* glsl */ `
     // island loop per fragment for a number about to be multiplied by zero.
     float amp = rippleAmp(dist, uRipple);
     if (amp > 0.0) amp *= waveShelter(simP);
-    vec2 rs = rippleSlope(simP, uTime, amp);
+    vec2 rs = rippleSlope(simP - uPin, uTime, amp);
     vec3 n = normalize(vec3(-rs.x, 1.0, rs.y));
     vec3 viewDir = normalize(cameraPosition - vWorld);
     vec3 sunDir = normalize(uSun);
@@ -583,6 +585,8 @@ export interface Water {
    * hazard -- for a region, at least.
    */
   setRegion(terrain: RegionTerrain | null): void;
+  /** Carry the ripple across a re-pinning of the plane. */
+  repin(d: { x: number; y: number }): void;
   /** Re-upload the shelter channel if the wind has moved the field. */
   updateRegion(twd: number): void;
   /** Height of the rendered water surface at a world point. */
@@ -678,6 +682,7 @@ export function createWater(): Water {
     uWhitecap: { value: 0 },
     uSpecular: { value: 0.5 },
     uRipple: { value: 1 },
+    uPin: { value: new THREE.Vector2() },
     // xy: the lamp in sim coordinates, z: how lit it is, w: its height.
     uLamp: { value: new THREE.Vector4(0, 0, 0, 1) },
     uLampColor: { value: new THREE.Color(0.42, 0.29, 0.14) },
@@ -727,6 +732,20 @@ export function createWater(): Water {
     setFlare(simX, simY, level, altitude) {
       uniforms.uFlare.value.set(simX, simY, level, altitude);
     },
+    /**
+     * The plane was re-pinned under the boat; see `WaveField.repin`.
+     *
+     * The long waves are carried by the phase the field hands over, which has
+     * already absorbed this. The ripple is the shader's own -- three short
+     * components read straight off the world position -- so it is the one
+     * thing here that would re-shuffle its texture the moment the pin moved.
+     * Accumulated, because the engine publishes the shift and this wants the
+     * distance from where the pattern was laid.
+     */
+    repin(d) {
+      uniforms.uPin.value.set(uniforms.uPin.value.x + d.x, uniforms.uPin.value.y + d.y);
+    },
+
     setRegion(next) {
       region = next;
       if (field) {
