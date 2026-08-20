@@ -74,7 +74,14 @@ const rippleGlsl = /* glsl */ `
   }
 
   // Fade it out before it is finer than a pixel, or the horizon crawls with
-  // moire. By then the fog has taken over anyway.
+  // moire. On a clear day the fog has NOT taken over where this ends: at
+  // 2,500 m the water fog is only 0.135 of the way in (it starts at 0.35 of
+  // visibility and completes at 5,000 m), so a couple of kilometres of
+  // flat-normal water lie between the last ripple and the haze. Accepted
+  // rather than overlooked -- the fade's end is set by what a pixel can
+  // resolve at this distance, not by the visibility, and carrying the ripple
+  // out to where its finest component is far below a pixel would buy back
+  // exactly the shimmer this cut exists to prevent.
   float rippleAmp(float dist, float scale) {
     return scale * (1.0 - smoothstep(800.0, 2500.0, dist));
   }
@@ -275,7 +282,11 @@ const vertexShader = /* glsl */ `
 
     // Fade the wave height to zero at the edge of the grid. Without this the
     // boundary between rippled and flat water shows up as a hard line; fading
-    // makes the edge flatten out and blend into the fogged horizon.
+    // makes the edge flatten out to meet the far sea's own flat-plus-ripple
+    // surface. On a clear day that join stands in plain air -- the fog does
+    // not even start until 0.35 of visibility, 1,750 m, four times further
+    // out -- so it is the matching shading on both sides that keeps the seam
+    // invisible, not the haze.
     float edge = max(abs(position.x), abs(position.y)) / ${SIZE.toFixed(1)};
     float shelter = waveShelter(p);
     float fade = (1.0 - smoothstep(0.28, 0.49, edge)) * shelter;
