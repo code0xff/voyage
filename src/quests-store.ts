@@ -30,7 +30,13 @@ export interface QuestStore {
   packs(): Promise<QuestPack[]>;
   /** Add one, or replace the one with the same id. */
   install(pack: QuestPack): Promise<void>;
-  /** Remove a pack. What it noticed is left alone; see `forget`. */
+  /**
+   * Remove a pack. What it noticed is left alone; see `forget`.
+   *
+   * The starter pack is refused: see `STARTER_PACK`. Enforced here rather than
+   * only in the screen that offers the button, because the store is the
+   * boundary and a later sync adapter owes the same guarantee.
+   */
   remove(id: string): Promise<void>;
   /** What the watcher has seen so far, or null if it has never run. */
   state(): Promise<QuestState | null>;
@@ -50,9 +56,9 @@ const STATE_KEY = 'state';
  *
  * Kept beside the watcher's state rather than in the packs -- the packs are
  * what is installed, and this is a fact about the browser. It is deliberately
- * *not* cleared by `forget`: forgetting what was noticed is about the
- * completions, and a starter pack that reappeared because you cleared your
- * records would be the game arguing with a decision you made.
+ * *not* cleared by `forget`: forgetting what was noticed is about completions,
+ * and what is installed is a separate question that clearing your records has
+ * no business answering.
  */
 const SEEDED_KEY = 'starter';
 
@@ -146,9 +152,12 @@ let seeding: Promise<void> | null = null;
  * a repeated `put` of the same id next time, which is the same row. The other
  * order would cost the pack entirely.
  *
- * The mark is what makes removal stick. Without it the game would put back
- * the pack a player had just deleted on the next thing that read the list,
- * which is the most annoying bug this feature could have.
+ * The mark still matters now that the starter cannot be removed. Seeded once,
+ * a browser always holds at least that pack, so the count can no longer reach
+ * zero on its own -- but a browser seeded before this rule existed may have
+ * had it removed while that was still allowed. The mark is what leaves those
+ * alone, rather than putting the pack back on the next read and undoing a
+ * decision that was legitimately available at the time.
  */
 async function seedOnce(): Promise<void> {
   if (seeded) return;
@@ -201,6 +210,10 @@ export const questStore: QuestStore = {
   },
   async remove(id) {
     if (refused) return;
+    // The one pack that stays. Nothing above offers the button for it, so this
+    // is not reachable from the game -- it is here so that the rule belongs to
+    // the store rather than to one screen's rendering.
+    if (id === STARTER_PACK.id) return;
     try {
       const db = await open();
       await run(db, PACKS, 'readwrite', (s) => s.delete(id));

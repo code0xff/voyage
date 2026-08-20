@@ -17,13 +17,18 @@ import { QUEST_FORMAT, type QuestPack } from './quest';
  * the game actually runs are the same bytes rather than two copies that
  * drift.
  *
- * **Installed like any other pack**, into the store, on the first run --
- * rather than being a permanent built-in the list treats differently.
- * A player who does not want it can remove it and it stays removed; one who
- * edits their downloaded copy and installs it back replaces this by its id,
- * which is what editing the example is for. The alternative -- a pack the
- * game always adds -- would have been a second kind of pack with its own
- * rules, in a feature whose whole premise is that every pack is a file.
+ * **Installed like any other pack**, into the store, on the first run, and
+ * read by exactly the same code -- but it is the one pack that cannot be
+ * removed. It is the worked example, and the quest screen is the only place
+ * anyone finds out what a pack is; a player who deletes it has thrown away
+ * the documentation along with the quests, and the game gives no hint that
+ * the way back is Settings -> Quests -> Example file -> Install.
+ *
+ * Not removable is not the same as not replaceable, and the difference is the
+ * whole point. Edit your downloaded copy, install it back, and it takes this
+ * one's place by its id -- which is what editing the example is for. The slot
+ * is permanent; what is in it is yours. Change the id instead and you get a
+ * second pack, removable like every other.
  */
 export const STARTER_PACK: QuestPack = {
   format: QUEST_FORMAT,

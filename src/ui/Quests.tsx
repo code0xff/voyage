@@ -251,16 +251,18 @@ export function QuestPacks({ onChanged }: { onChanged: () => void }) {
                   {pack.quests.length}
                 </span>
               </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-[10px]"
-                onClick={() =>
-                  void questStore.remove(pack.id).then(reload)
-                }
-              >
-                <Trash2 /> {t(QUEST.remove)}
-              </Button>
+              {pack.id === STARTER_PACK.id ? (
+                <span className="px-2 text-[10px] text-muted-foreground">{t(QUEST.shipped)}</span>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[10px]"
+                  onClick={() => void questStore.remove(pack.id).then(reload)}
+                >
+                  <Trash2 /> {t(QUEST.remove)}
+                </Button>
+              )}
             </div>
           ))}
         </div>

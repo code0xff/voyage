@@ -518,6 +518,12 @@ export const QUEST: Record<string, Phrase> = {
   },
   installed: { en: 'Installed', ko: '설치됨' },
   remove: { en: 'Remove', ko: '삭제' },
+  /**
+   * Where the starter pack's Remove button would be. A button that is simply
+   * missing reads as a bug; this says which pack it is and, with `sampleNote`
+   * underneath, how to put your own in its place.
+   */
+  shipped: { en: 'Ships with the game', ko: '기본 팩' },
   packNote: {
     en: 'A pack is a JSON file of things worth doing. It can only ever notice what you have already sailed — nothing in one is run, and installing one cannot change how the boat behaves.',
     ko: '퀘스트 팩은 해볼 만한 일들을 적어둔 JSON 파일입니다. 이미 항해한 것을 알아챌 뿐이며, 팩 안의 무엇도 실행되지 않고 배의 거동을 바꾸지 못합니다.',

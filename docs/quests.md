@@ -174,12 +174,20 @@ Everything inside one scope is **and**. To say **or**, use `any`:
 ## The pack that ships, and the guide in the game
 
 One pack comes with the game -- `src/sim/starter.ts`, six things a beginner
-does anyway -- and it is installed into the store on the first run like any
-other pack, so it can be removed and stays removed. It is a TypeScript
-constant rather than a file under `public/` for three reasons: it needs no
-network, it is typechecked against `QuestPack`, and the example file the game
-hands out is that object serialised, so the example and the pack the game runs
-cannot drift apart.
+does anyway -- installed into the store on the first run and read by exactly
+the same code as any other pack. It is a TypeScript constant rather than a
+file under `public/` for three reasons: it needs no network, it is typechecked
+against `QuestPack`, and the example file the game hands out is that object
+serialised, so the example and the pack the game runs cannot drift apart.
+
+It is the one pack that cannot be removed, and `questStore.remove` refuses it
+rather than the screen merely hiding the button. It is the worked example, and
+the quest screen is where anyone finds out what a pack is at all; deleting it
+throws away the documentation with the quests, and nothing then tells you the
+way back. Replacing it is a different thing and still works: install an edited
+copy under the same id and it takes this one's place, which is what editing
+the example is for. Change the id instead and you have a second pack,
+removable like every other.
 
 The same reasoning covers the in-game guide, under **Help → Packs**: its two
 code blocks are generated from that pack, and `pack-guide-strings.test.ts`
