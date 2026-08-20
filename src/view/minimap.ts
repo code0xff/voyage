@@ -83,8 +83,18 @@ export function chartPinch(acc: number, ratio: number): { acc: number; step: num
   return { acc: a, step };
 }
 
-/** Grid spacing at each range, m. Something to count, so distance is readable. */
-const GRID = [100, 200, 500] as const;
+/**
+ * Grid spacing at each range, m. Something to count, so distance is readable:
+ * every spacing keeps the chart between two and four squares from centre to
+ * edge, whatever the scale.
+ *
+ * One entry per entry of `RANGES`, and exported so the test can hold the two
+ * to that. It sat at three entries while the ranges grew to five, and nothing
+ * said a word: `GRID[rangeIndex]` was undefined on the passage scales, the
+ * first line's coordinate came out NaN, and the canvas silently dropped the
+ * whole path -- a chart with every layer but its grid.
+ */
+export const GRID = [100, 200, 500, 1000, 2000] as const;
 
 /**
  * How far from the centre the boat may get before the chart starts to pan,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { coastHeightField } from '../sim/coast';
 import { RegionTerrain } from '../sim/region-terrain';
 import {
+  GRID,
   RANGES,
   chartCentre,
   chartPinch,
@@ -128,6 +129,25 @@ describe('chart ranges', () => {
     const far = chartCentre(start, { x: over, y: 0 }, null, rangeIndex);
     expect(far.x).toBeCloseTo(120, 9);
     expect(far.y).toBeCloseTo(0, 9);
+  });
+
+  /**
+   * A grid spacing for every range.
+   *
+   * Regression: GRID sat at three entries while RANGES grew to five, so on
+   * the passage scales `GRID[rangeIndex]` was undefined, the first grid
+   * coordinate came out NaN, and the canvas dropped the whole path without a
+   * word -- a chart with every layer but its grid, at the very range every
+   * new voyage now opens on.
+   */
+  it('has a grid spacing for every range, with lines on the chart to count', () => {
+    expect(GRID.length).toBe(RANGES.length);
+    for (let i = 0; i < RANGES.length; i++) {
+      // Positive and finite is what keeps NaN out of the draw path; smaller
+      // than the range is what puts gridlines on the chart at all.
+      expect(GRID[i]).toBeGreaterThan(0);
+      expect(GRID[i]).toBeLessThan(RANGES[i]);
+    }
   });
 });
 
