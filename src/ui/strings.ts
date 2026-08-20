@@ -245,6 +245,9 @@ export const KEYS: [string, Phrase][] = [
   ['0', { en: 'hand all sail / set again', ko: '돛 전부 거두기 / 다시 펴기' }],
   ['A', { en: 'let go / weigh anchor', ko: '닻 내리기 / 올리기' }],
   ['N / wheel / pinch on chart', { en: 'chart range', ko: '차트 축척' }],
+  // Beside N because it is the same question one step further out, which is
+  // also why it is O: no letter that spells "map" or "world" was free.
+  ['O', { en: 'the world map, and where she is on it', ko: '세계 지도와 현재 위치' }],
   ['drag chart', { en: 'look around it', ko: '차트 둘러보기' }],
   ['click chart', { en: 'set where you are bound', ko: '목적지 정하기' }],
   ['drag', { en: 'orbit around the boat', ko: '배 주위로 시점 돌리기' }],
@@ -643,6 +646,8 @@ export const CHART: Record<string, Phrase> = {
  */
 export const WORLDMAP: Record<string, Phrase> = {
   title: { en: 'World map', ko: '세계 지도' },
+  /** The way in from the menu, phrased like the logbook's and the quests'. */
+  see: { en: 'See the world map', ko: '세계 지도 보기' },
   open: { en: 'Open the world map', ko: '세계 지도 열기' },
   close: { en: 'Close the world map', ko: '세계 지도 닫기' },
   you: { en: '\u25cf here', ko: '\u25cf 현재 위치' },

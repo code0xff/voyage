@@ -145,6 +145,20 @@ export function App() {
               else if (chartFullRef.current) setChartFull(false);
               else setMenuOpen((v) => !v);
             }
+            // `O`. One sheet at a time: opening the map puts the full chart
+            // away, which is the same rule the chart's own globe button states
+            // by not being there in the full view. Never a silent no-op --
+            // a key that does nothing reads as a broken key, which is the
+            // lesson the flare above is already carrying.
+            if (ev.type === "worldMap") {
+              // Read through the ref and not a setState updater, for the reason
+              // given where the refs are declared: StrictMode may run an
+              // updater twice, and one with another setState inside it is a
+              // side effect in a render-phase function.
+              const opening = !worldOpenRef.current;
+              setWorldOpen(opening);
+              if (opening) setChartFull(false);
+            }
             // On the commit and not on the anchor going down: the record is
             // not in the store until its transaction lands, and a read that
             // goes out any earlier can come back straight past it.
@@ -537,6 +551,11 @@ export function App() {
           onRetryEngine={retryEngine}
           onNewVoyage={newVoyage}
           onSailOn={sailOn}
+          onWorldMap={() => {
+            setMenuOpen(false);
+            setChartFull(false);
+            setWorldOpen(true);
+          }}
         />
       </div>
     </LangProvider>

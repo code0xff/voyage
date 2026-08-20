@@ -37,6 +37,7 @@ import {
   MENU,
   PANEL,
   QUEST,
+  WORLDMAP,
   SETTINGS_UI,
   TABS,
   offWater,
@@ -278,6 +279,7 @@ export function MenuDialog({
   onRetryEngine,
   onNewVoyage,
   onSailOn,
+  onWorldMap,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -306,6 +308,13 @@ export function MenuDialog({
   onRetryEngine: () => void;
   /** Put to sea from the chosen departure, forgetting where she got to. */
   onNewVoyage: () => void;
+  /**
+   * Open the world map, which lives over the whole window rather than in
+   * here. The menu closes on the way, because the map is the thing being
+   * asked for and a dialog left open behind it is the bug Escape already
+   * has a chain to prevent.
+   */
+  onWorldMap: () => void;
   /** Put to sea in the world of the last voyage, where it left off. */
   onSailOn: () => void;
 }) {
@@ -635,6 +644,21 @@ export function MenuDialog({
                 <span className="text-foreground">{t(MENU.logbook)}</span>
               </button>
             )}
+
+            {/* Beside the logbook and the quests, because all three are
+                "show me something" rather than "put her to sea".
+
+                It is here at all because the globe on the chart card was the
+                only way in, and the first person to be handed the feature
+                could not find it -- one icon among three, with a tooltip for
+                a label. A map nobody opens is a map nobody has. */}
+            <button
+              type="button"
+              onClick={onWorldMap}
+              className="block w-full rounded-md px-1 py-1 text-left text-[10px] leading-relaxed text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <span className="text-foreground">{t(WORLDMAP.see)} →</span>
+            </button>
 
             {/* Beside the logbook, because it answers the same kind of
                 question -- what have I done -- and belongs nowhere near the

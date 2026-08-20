@@ -831,8 +831,8 @@ un-complete a quest.
 | `B` | binoculars — the wheel or a pinch sets the power, and it is remembered |
 | `U` | fire a parachute flare — one a minute, and the night answers |
 | `N` | chart range |
+| `O` | the world map, and where she is on the planet |
 | wheel or pinch over the chart | chart range |
-| the globe on the chart | the world map, and where she is on the planet |
 | drag the chart | look around it; double-click recentres on the boat |
 | click the chart | set where you are bound; right-click clears it |
 | drag | look around — the eye follows your hand, as in a first-person view |

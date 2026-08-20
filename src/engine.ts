@@ -279,7 +279,21 @@ export type EngineEvent =
   /** The passage reached the store and its transaction committed. */
   | { type: 'logbookSaved'; record: PassageRecord }
   /** `N` was pressed: the chart should step to its next range. */
-  | { type: 'chartRange' };
+  | { type: 'chartRange' }
+  /**
+   * `O` was pressed: the world map should open, or close if it is already up.
+   *
+   * `O` because it is next to `N` and the two ask the same question at
+   * different scales -- how far out am I looking. It is not a mnemonic and
+   * there was none left to have: every letter that spells anything here is
+   * taken, `M` by the sound and `W` by the mainsheet.
+   *
+   * A toggle rather than an open, because it is the only key that reaches
+   * the map -- Escape backs out of things, and is the wrong shape for the key
+   * that also opens them. Emitted like `chartRange` and settled in the UI:
+   * the engine has no idea what is on screen, and should not.
+   */
+  | { type: 'worldMap' };
 
 export interface Engine {
   readonly snapshot: Snapshot;
@@ -2408,6 +2422,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       snapshot.anchored = anchored;
     }
     if (input.wasPressed('n')) emit({ type: 'chartRange' });
+    if (input.wasPressed('o')) emit({ type: 'worldMap' });
     if (input.wasPressed('p')) schedulePolar(0);
     if (input.wasPressed('r')) putToSea();
     if (input.wasPressed('y')) {
