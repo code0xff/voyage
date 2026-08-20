@@ -1663,6 +1663,52 @@ describe('sailing on the Earth', () => {
     engine.dispose();
   });
 
+  it('writes down no voyage until she has been put to sea', () => {
+    /*
+     * The constructor builds a session so the menu has a sea behind it, and
+     * that session is not a voyage: nobody has chosen anything yet.
+     *
+     * Recorded, it put a row at the default anchor before the player had
+     * touched the game -- and the menu then offered to "sail on" from a place
+     * they had never been, as its first and widest button. Found on the
+     * deployed site: open it, change the departure, and it is there.
+     *
+     * `writes` and not just `stored`, because the row is written with the
+     * position she happens to be at, which on a fresh browser *is* the
+     * default anchor -- so a test that only looked at where it pointed would
+     * pass on a bug that wrote every thirty seconds.
+     */
+    kept.stored = null;
+    kept.writes = 0;
+    const engine = createEngine(canvas(), settings({ randomWorld: false, seed: 13 }));
+    // Long enough for the throttle to have fired several times over, and past
+    // the write `placeAtStart` makes on its way out.
+    engine.advance(90);
+    expect(kept.writes, 'a voyage was recorded before one was begun').toBe(0);
+    expect(kept.stored).toBeNull();
+
+    // And from the moment she is put to sea, she is remembered.
+    engine.putToSea();
+    expect(kept.writes, 'nothing was written at put-to-sea').toBeGreaterThan(0);
+    engine.dispose();
+  });
+
+  it('keeps no record of the unstarted scene when the tab goes away', () => {
+    // The other way out, and the one that actually loses things: closing the
+    // tab writes the last of it, so an unstarted session that answered
+    // `pagehide` would stamp the default anchor over the voyage the player
+    // really has waiting. Seen while testing the bug above -- navigating away
+    // from the game overwrote a probe row that a plain reload left alone.
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 });
+    kept.writes = 0;
+    const engine = createEngine(canvas(), settings({ randomWorld: false, seed: 13 }));
+    engine.advance(1);
+    for (const fn of listeners.get('pagehide') ?? []) fn({});
+    expect(kept.writes, 'the unstarted scene wrote itself down on the way out').toBe(0);
+    expect(storedPlace()!.lat, 'the waiting voyage was overwritten').toBeCloseTo(-33.5, 1);
+    engine.dispose();
+  });
+
   it('opens where she got to, and writes down where she gets to', () => {
     // The planet made this necessary: a boat that reached the Azores and
     // reopened off San Francisco has had a passage taken away from her, and

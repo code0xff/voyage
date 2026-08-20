@@ -393,9 +393,24 @@ export function App() {
       // reopen this dialog. Keep the recovery button reachable until loading
       // succeeds; otherwise a transient chunk failure becomes a dead screen.
       if (!open && (!engine || engineLoading || engineError)) return;
+      /*
+       * And nothing to go back to before she has been put to sea.
+       *
+       * "Put this window away" needs something behind it, and until a
+       * departure is taken there is nothing there but the scene the engine
+       * builds so the menu is not sitting on a black canvas. Dismissing it
+       * used to drop you into that scene sailing -- a third door beside the
+       * two labelled ones, doing something neither of them says, and the only
+       * way to be at sea without having chosen where from.
+       *
+       * One guard for all three ways out, because ✕, Escape and a click on
+       * the backdrop all arrive here. The ✕ is hidden as well; a button that
+       * does nothing is worse than no button.
+       */
+      if (!open && !started) return;
       setMenuOpen(open);
     },
-    [engine, engineError, engineLoading],
+    [engine, engineError, engineLoading, started],
   );
 
   return (

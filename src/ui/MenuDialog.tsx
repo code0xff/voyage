@@ -485,15 +485,25 @@ export function MenuDialog({
           substitute for Resume. This says "put this window away"; Resume says
           "your boat is still out there, go back to her", and when there is a
           session running that is the likeliest thing anyone wants and belongs
-          on a full-width button rather than in a corner. */}
-      <button
-        type="button"
-        aria-label={t(MENU.close)}
-        onClick={() => onOpenChange(false)}
-        className="absolute right-3 top-3 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-      >
-        <X className="size-4" />
-      </button>
+          on a full-width button rather than in a corner.
+
+          Only once there is a session, though. Before the first departure
+          there is nothing behind this window to put it away in front of, and
+          the ✕ was a third door beside the two labelled ones -- it dropped
+          you into the scene the engine builds for the menu's own backdrop,
+          sailing, from a departure nobody had chosen. `App` refuses that
+          close for all three ways out; this stops offering the one that has
+          a button, because a button that does nothing is worse than none. */}
+      {canResume && (
+        <button
+          type="button"
+          aria-label={t(MENU.close)}
+          onClick={() => onOpenChange(false)}
+          className="absolute right-3 top-3 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          <X className="size-4" />
+        </button>
+      )}
 
       <div>
         {logbookError && (

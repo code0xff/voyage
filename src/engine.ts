@@ -856,8 +856,18 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * top of it -- so "start over" put her back where she was thirty seconds
    * later, and choosing the Cape while sailing off Antigua quietly became
    * Antigua again. Proven with a probe before it was fixed.
+   *
+   * **And false to begin with, until she is actually put to sea.** The
+   * constructor builds a session so the menu has a living sea behind it
+   * rather than a black canvas, and that session is not a voyage: nobody has
+   * chosen anything yet. Recording it wrote a row at the default anchor
+   * before the player had touched the game, and the menu then offered to
+   * "sail on" from a place they had never been -- as the first and widest
+   * button, which also pins the seed and so quietly turns "a new world every
+   * time" off. Reproduced on the deployed site: open it, change the
+   * departure, and there it is.
    */
-  let keeping = true;
+  let keeping = false;
   /**
    * Where this session began, in plane metres, so the coast generator can
    * keep that one spot clear of its own inventions. Carried across a
@@ -1712,8 +1722,6 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       oceanAnchor = { ...departure };
       departure = null;
     }
-    // And her position is worth writing down again, from here.
-    keeping = true;
     // The pin first: the belt below is read at the plane's origin, and the
     // origin means nothing until the pin is where this session's world says.
     pinForWorld();
@@ -1870,6 +1878,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   function putToSea(): void {
+    // Here rather than in `newSession`, which the constructor also calls to
+    // build the scene behind the menu. This is the line that says a voyage
+    // has begun, and only this path is one: `placeAtStart` writes the row on
+    // its way out, so from here she is being remembered.
+    keeping = true;
     newSession();
     placeAtStart();
   }
