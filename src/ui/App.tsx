@@ -59,6 +59,27 @@ export function App() {
   chartFullRef.current = chartFull;
   const worldOpenRef = useRef(worldOpen);
   worldOpenRef.current = worldOpen;
+  /**
+   * Whether the map was opened from the menu, so that closing it goes back
+   * there rather than dropping you at sea.
+   *
+   * The menu has to give way to it -- the map takes the whole window and the
+   * dialog is drawn over everything -- so opening one closes the other, and
+   * without this the way back was gone. Worse before the first departure:
+   * the menu cannot be dismissed then, and this was the one path that closed
+   * it anyway, which put her to sea from a departure nobody had chosen. That
+   * is the door the commit before last shut, reopened by a link added to the
+   * menu two commits earlier.
+   */
+  const worldFromMenu = useRef(false);
+  /** Every way out of the world map, so they all go back where it came from. */
+  const closeWorldMap = useCallback(() => {
+    setWorldOpen(false);
+    if (worldFromMenu.current) {
+      worldFromMenu.current = false;
+      setMenuOpen(true);
+    }
+  }, []);
   const [started, setStarted] = useState(false);
   /**
    * Bumped when a passage's write has *committed*, so the logbook reloads on it.
@@ -141,7 +162,7 @@ export function App() {
             // exactly what the world map did before it was added to this
             // chain, having brought its own keydown listener instead.
             if (ev.type === "toggleMenu") {
-              if (worldOpenRef.current) setWorldOpen(false);
+              if (worldOpenRef.current) closeWorldMap();
               else if (chartFullRef.current) setChartFull(false);
               else setMenuOpen((v) => !v);
             }
@@ -155,9 +176,16 @@ export function App() {
               // given where the refs are declared: StrictMode may run an
               // updater twice, and one with another setState inside it is a
               // side effect in a render-phase function.
-              const opening = !worldOpenRef.current;
-              setWorldOpen(opening);
-              if (opening) setChartFull(false);
+              if (worldOpenRef.current) {
+                closeWorldMap();
+              } else {
+                // Pressed at the helm -- the engine reads no keys while the
+                // menu is up, because the menu pauses it -- so this one goes
+                // back to the sea it came from.
+                worldFromMenu.current = false;
+                setWorldOpen(true);
+                setChartFull(false);
+              }
             }
             // On the commit and not on the anchor going down: the record is
             // not in the store until its transaction lands, and a read that
@@ -494,7 +522,10 @@ export function App() {
                   <div className="flex flex-col items-end gap-2 sm:gap-3">
                     {!compact && <PolarCard />}
                     <MinimapCard
-                      onWorld={() => setWorldOpen(true)}
+                      onWorld={() => {
+                        worldFromMenu.current = false;
+                        setWorldOpen(true);
+                      }}
                       full={chartFull}
                       onFull={setChartFull}
                       compact={compact}
@@ -545,7 +576,7 @@ export function App() {
             {/* Outside the HUD's `pointer-events-none` padded layer, which is
                 the same reason the full chart is: this wants the whole
                 window, not the inset the instruments live in. */}
-            <WorldMapDialog open={worldOpen} onClose={() => setWorldOpen(false)} />
+            <WorldMapDialog open={worldOpen} onClose={closeWorldMap} />
           </EngineProvider>
         )}
 
@@ -567,6 +598,7 @@ export function App() {
           onNewVoyage={newVoyage}
           onSailOn={sailOn}
           onWorldMap={() => {
+            worldFromMenu.current = true;
             setMenuOpen(false);
             setChartFull(false);
             setWorldOpen(true);
