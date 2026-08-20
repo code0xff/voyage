@@ -425,8 +425,8 @@ export class Weather {
    * Visibility in metres.
    *
    * Two closers, and whichever is worse wins. Fog runs the whole way from a
-   * clear day down to `THICK`; rain only takes it to `RAINING`, because heavy
-   * rain at sea is a couple of kilometres and not a wall.
+   * clear day down to `THICK`; rain only runs *towards* `RAINING`, because
+   * heavy rain at sea is a couple of kilometres and not a wall.
    *
    * **Rain used to bite when it was not raining.** The clear term was written
    * as `1600 - rain * 700`, so a cloudless day was held to 1.6 km by a
@@ -462,5 +462,11 @@ export const WEATHER_KINDS = Object.keys(PROFILES) as WeatherKind[];
 export const CLEAR_DAY = 5000;
 /** m at the thickest fog: a boat's length or two of grey. */
 const THICK = 90;
-/** m in the heaviest rain, which closes in but is not a wall. */
+/**
+ * m at the rain closer's endpoint, `rain = 1` -- which no condition reaches:
+ * the wettest profile is a squall's 0.9. What the named conditions actually
+ * settle at is clear 5,000, shower 3,360, rain 2,335, squall 1,310 and fog
+ * 90. Short of a wall even at the endpoint, because heavy rain at sea closes
+ * the horizon to a couple of kilometres of grey and no further.
+ */
 const RAINING = 900;
