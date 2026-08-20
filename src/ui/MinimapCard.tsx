@@ -89,15 +89,20 @@ export function MinimapCard({
   const t = useT();
   const engine = useEngine();
   /**
-   * The range the chart opens at: 2.5 km, the fourth of five.
+   * The range the chart opens at: 5 km, the widest -- the range that holds
+   * what the eye can hold.
    *
    * It opened at 700 m, which is inside the coast at every one of the eleven
    * departures -- so the first thing a new voyage showed was an empty disc,
    * and the chart agreed with a horizon that was empty for a different reason
-   * (see `CLEAR_DAY`). Wide enough to hold the land she can see, and it is one
-   * press of [[N]] back down to pilotage.
+   * (see `CLEAR_DAY`). The 2.5 km opening that replaced it repeated the
+   * mistake at half scale: visibility is 5 km and a departure's coast stands
+   * about 4 km off, so the land she could newly see was still off the chart.
+   * The widest range is the one that puts that coast inside the frame -- and
+   * since [[N]] cycles upward and wraps, pilotage scale really is one press
+   * away from here, which no other opening could say.
    */
-  const [range, setRange] = useState(3);
+  const [range, setRange] = useState(RANGES.length - 1);
   const minimap = useRef(createMinimap());
 
   // Only ever read while `full`; kept in state so a resized window re-lays the
