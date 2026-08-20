@@ -635,6 +635,27 @@ export const CHART: Record<string, Phrase> = {
 };
 
 /**
+ * The world map. Its own block rather than more of `CHART`: it answers a
+ * different question -- where on the planet, not what is around me -- and the
+ * two overlap only in `escToClose`, which the map borrows from `CHART` rather
+ * than keeping a second copy of two words to translate twice. `WORLD` was
+ * taken by the settings tab that chooses a planet, a third thing again.
+ */
+export const WORLDMAP: Record<string, Phrase> = {
+  title: { en: 'World map', ko: '세계 지도' },
+  open: { en: 'Open the world map', ko: '세계 지도 열기' },
+  close: { en: 'Close the world map', ko: '세계 지도 닫기' },
+  you: { en: '\u25cf here', ko: '\u25cf 현재 위치' },
+  departures: { en: '\u25cb departures', ko: '\u25cb 출항지' },
+  passages: { en: '\u00b7\u00b7\u00b7 passages sailed', ko: '\u00b7\u00b7\u00b7 지난 항해' },
+  /** The planet did not load. The game is still sailable; this is not. */
+  unavailable: {
+    en: 'The world map needs the planet, and it did not load.',
+    ko: '세계 지도를 그리려면 지구 데이터가 필요한데, 불러오지 못했습니다.',
+  },
+};
+
+/**
  * The passage line's advice, which is the one piece of prose that is written
  * per frame. It is assembled in a readout rather than rendered by React, so the
  * translator is captured in the component and used inside the callback --

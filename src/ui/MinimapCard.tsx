@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronUp, Crosshair, Maximize2, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Crosshair, Globe, Maximize2, X } from 'lucide-react';
 import { RANGES, chartPinch, createMinimap } from '@/view/minimap';
 import { CRUISER } from '@/sim/config';
 import { formatDistance } from '@/sim/units';
@@ -10,7 +10,7 @@ import type { Vec2 } from '@/sim/math';
 import { useEngine, useEngineFrame, useReadout } from './engine-context';
 import { COMPACT_COLUMN, PANEL_COLUMN, PANEL_PAD } from './viewport';
 import { useT } from './i18n';
-import { CHART, PANEL, callTally } from './strings';
+import { CHART, PANEL, WORLDMAP, callTally } from './strings';
 
 /**
  * The chart, px. One size, matching the polar exactly -- 208 in a 232 px card.
@@ -77,10 +77,13 @@ const DRAG_SLOP = 4;
  * had been recording.
  */
 export function MinimapCard({
+  onWorld,
   full,
   onFull,
   compact = false,
 }: {
+  /** Open the world map. The chart's own state is untouched by it. */
+  onWorld: () => void;
   full: boolean;
   onFull: (v: boolean) => void;
   compact?: boolean;
@@ -434,6 +437,25 @@ export function MinimapCard({
               onClick={recentre}
             >
               <Crosshair />
+            </Button>
+          )}
+          {/* The way out to the world map, and it lives here because this is
+              the panel the question is asked at. The chart stops at five
+              kilometres; "where is that on the planet" is the next thing you
+              want to know from it, and a player looking for it looks at the
+              chart rather than in a menu. Hidden in the full view, which is
+              the chart taking the whole screen -- opening a second full-screen
+              sheet from inside the first is a stack, not a step. */}
+          {!full && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 w-5 p-0 [&_svg]:size-3"
+              aria-label={t(WORLDMAP.open)}
+              title={t(WORLDMAP.open)}
+              onClick={onWorld}
+            >
+              <Globe />
             </Button>
           )}
           <Button

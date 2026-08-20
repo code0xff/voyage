@@ -107,6 +107,7 @@ src/view/    3D rendering
   shark      a fin holding its course across yours
   gull       an authored flock, circling within sight of a coast
   minimap    the chart: land, breeze, tide, and where she is bound
+  worldmap   the whole planet, and where she is on it
   rain       wind-slanted rain around the camera
   telemetry  rolling time-series graph
   polarplot  polar diagram, drawn with the UI design tokens
@@ -119,6 +120,7 @@ src/ui/      React overlay, built on the shadcn/ui design system
   PassageBar      where she is bound, and what to steer
   Logbook         the passages she has made
   MinimapCard     the chart panel, and the full-screen view of it
+  WorldMapDialog  the world map: where the chart's five kilometres actually are
   PolarCard       the polar diagram
   MenuDialog      menu, settings, results
   Quests          what the packs have noticed, and the settings tab that installs them
@@ -830,6 +832,7 @@ un-complete a quest.
 | `U` | fire a parachute flare — one a minute, and the night answers |
 | `N` | chart range |
 | wheel or pinch over the chart | chart range |
+| the globe on the chart | the world map, and where she is on the planet |
 | drag the chart | look around it; double-click recentres on the boat |
 | click the chart | set where you are bound; right-click clears it |
 | drag | look around — the eye follows your hand, as in a first-person view |

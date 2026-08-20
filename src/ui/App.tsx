@@ -12,6 +12,7 @@ import { waterById } from "@/sim/waters";
 import { HintBar } from "./HintBar";
 import { BinocularMask } from "./BinocularMask";
 import { MinimapCard } from "./MinimapCard";
+import { WorldMapDialog } from "./WorldMapDialog";
 import { PassageBar } from "./PassageBar";
 import { TouchControls } from "./TouchControls";
 import { useViewport } from "./viewport";
@@ -41,12 +42,23 @@ export function App() {
    * behind an open chart.
    */
   const [chartFull, setChartFull] = useState(false);
+  /**
+   * The world map, open over everything.
+   *
+   * Here rather than inside the chart card, because it is not part of the
+   * chart: it takes the whole window, it outlives the card on a phone where
+   * the card can be folded away, and the chart's range and pan have nothing
+   * to do with it. The card only holds the button.
+   */
+  const [worldOpen, setWorldOpen] = useState(false);
   // Read by the engine's event handler, which is created once. A ref and not
   // the state value, because that closure would otherwise capture `false`
   // forever -- and not a setState updater with another setState inside it,
   // which StrictMode is entitled to run twice and would toggle the menu twice.
   const chartFullRef = useRef(chartFull);
   chartFullRef.current = chartFull;
+  const worldOpenRef = useRef(worldOpen);
+  worldOpenRef.current = worldOpen;
   const [started, setStarted] = useState(false);
   /**
    * Bumped when a passage's write has *committed*, so the logbook reloads on it.
@@ -122,11 +134,15 @@ export function App() {
           setEngineError(false);
 
           const offEvent = e.onEvent((ev) => {
-            // Escape backs out of whatever is in front: the chart first, the world
-            // second. Never the menu while the chart is up, which would leave a
-            // dialog open behind a chart the player thought they were closing.
+            // Escape backs out of whatever is in front: the world map first,
+            // then the chart, then the world itself. Never the menu while
+            // either sheet is up, which would leave a dialog open behind
+            // something the player thought they were closing -- which is
+            // exactly what the world map did before it was added to this
+            // chain, having brought its own keydown listener instead.
             if (ev.type === "toggleMenu") {
-              if (chartFullRef.current) setChartFull(false);
+              if (worldOpenRef.current) setWorldOpen(false);
+              else if (chartFullRef.current) setChartFull(false);
               else setMenuOpen((v) => !v);
             }
             // On the commit and not on the anchor going down: the record is
@@ -448,7 +464,12 @@ export function App() {
                 */}
                   <div className="flex flex-col items-end gap-2 sm:gap-3">
                     {!compact && <PolarCard />}
-                    <MinimapCard full={chartFull} onFull={setChartFull} compact={compact} />
+                    <MinimapCard
+                      onWorld={() => setWorldOpen(true)}
+                      full={chartFull}
+                      onFull={setChartFull}
+                      compact={compact}
+                    />
                     {/* Under the chart, because that is where a destination is
                         set, drawn and cleared -- the passage line is the
                         chart's caption, not a separate announcement. */}
@@ -492,6 +513,10 @@ export function App() {
                 </div>
               )}
             </div>
+            {/* Outside the HUD's `pointer-events-none` padded layer, which is
+                the same reason the full chart is: this wants the whole
+                window, not the inset the instruments live in. */}
+            <WorldMapDialog open={worldOpen} onClose={() => setWorldOpen(false)} />
           </EngineProvider>
         )}
 
