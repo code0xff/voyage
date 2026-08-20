@@ -8,7 +8,7 @@ import type { WaveField } from '../sim/waves';
 import type { RegionTerrain } from '../sim/region-terrain';
 import { createRegionView } from './region-mesh';
 import { rainbowStrength, type SkyState } from '../sim/sky';
-import type { WeatherState } from '../sim/weather';
+import { CLEAR_DAY, type WeatherState } from '../sim/weather';
 import { createWater } from './water';
 import { createRain } from './rain';
 import { createSkyDome } from './skydome';
@@ -51,6 +51,26 @@ const ACCENT = 0x4fd1c5;
  * The naked-eye field, degrees. Everything about the camera is set against it.
  */
 const EYE_FOV = 55;
+
+/**
+ * The far clip plane, m -- derived from the visibility, not chosen by eye.
+ *
+ * It has to be derived, because a chosen number went stale once: it sat at a
+ * hand-picked 4,000 while `CLEAR_DAY` grew to 5,000, and the kilometre between
+ * the two was clipped rather than fogged -- a hole in the sea that read as the
+ * fog's fault and was actually the frustum's. Everything far away is sized
+ * from `CLEAR_DAY` too (the land window at `CLEAR_DAY` + 600 in
+ * region-mesh.ts, the far sea whose corners stand at sqrt(2) of its
+ * half-size), so tying this to the same constant means visibility can never
+ * outgrow the clip again.
+ *
+ * Twice `CLEAR_DAY` covers all of those with the eye's own offset from the
+ * boat on top (about 420 m at the overhead view's longest zoom). Exported for
+ * the test in water.test.ts that holds the far sea inside it. The near plane
+ * stays at 0.5 m: 20,000:1 is comfortable inside a 24-bit depth buffer, still
+ * sub-millimetre where the deck's own geometry needs it.
+ */
+export const EYE_FAR = 2 * CLEAR_DAY;
 
 /**
  * Binocular power is the player's to set, not this file's.
@@ -336,7 +356,7 @@ export function createScene(canvas: HTMLCanvasElement, cfg: BoatConfig): SceneVi
   // Fog colour tracks the sky, so the horizon always dissolves into it.
   scene.fog = new THREE.Fog(0x1b2a3a, 260, 560);
 
-  const camera = new THREE.PerspectiveCamera(EYE_FOV, 1, 0.5, 4000);
+  const camera = new THREE.PerspectiveCamera(EYE_FOV, 1, 0.5, EYE_FAR);
 
   // All three lights are driven by the time of day every frame.
   const hemi = new THREE.HemisphereLight(0xcfe2f5, 0x223141, 2.2);

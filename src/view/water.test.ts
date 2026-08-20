@@ -4,6 +4,7 @@ import { HeightField } from '../sim/heightfield';
 import { RegionTerrain } from '../sim/region-terrain';
 import { coastRegion } from '../sim/coast';
 import { FIELD_DEPTH, SEG, SIZE, createWater, fieldGlsl, ringGeometry } from './water';
+import { EYE_FAR } from './scene';
 
 /**
  * The ring the far sea is cut from.
@@ -129,6 +130,23 @@ describe('the far sea ring', () => {
     const step = SIZE / SEG;
     const north = new Set(built.filter((p) => p.z === -half).map((p) => p.x));
     for (let i = 0; i <= SEG; i++) expect(north.has(-half + i * step)).toBe(true);
+    water.dispose();
+  });
+
+  /**
+   * Everything the far sea builds sits inside the camera's far plane.
+   *
+   * The clip was a hand-picked 4,000 m and the visibility grew past it: the
+   * sea between 4 and 5 km was clipped rather than fogged, and the hole read
+   * as the weather's doing. Fog is measured from the camera and this ring is
+   * centred on the boat, so the eye's own offset from her -- up to about
+   * 420 m at the overhead view's longest zoom -- rides on top of the reach.
+   */
+  it('stays inside the camera far plane, with the eye off the boat', () => {
+    const water = createWater();
+    const built = verts(water.far.geometry as ReturnType<typeof ringGeometry>);
+    const reach = Math.max(...built.map((v) => Math.hypot(v.x, v.z)));
+    expect(reach + 420).toBeLessThanOrEqual(EYE_FAR);
     water.dispose();
   });
 });
