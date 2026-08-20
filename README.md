@@ -1001,3 +1001,33 @@ anywhere. They never went anywhere. A flock holds station while you sail past
 it, and that parallax is why one can look like it is moving.
 
 The sound is still entirely procedural. There are no audio assets.
+
+---
+
+## Licence
+
+**GNU Affero General Public License v3** — the full text is in
+[LICENSE](LICENSE), and every file in this repository is under it unless the
+file itself says otherwise (the three animal models are CC BY 4.0; the
+third-party packages carry their own, generated into
+`public/third-party-notices.txt` at build time).
+
+The AGPL is the licence a browser game actually needs. A game is *served*
+rather than shipped, so the ordinary GPL's obligation — which attaches to
+distributing a binary — would never be triggered by putting a copy on a web
+server. Section 13 is the clause that closes that: **anyone who runs a modified
+copy of this and lets other people use it over a network has to offer them its
+source.** Fork it, change it, put it online, and the people sailing it get the
+same rights you had.
+
+That is a deliberate trade rather than the default choice. It is a poor licence
+for anyone who wants to fold a piece of this into something closed, and that is
+the point: the physics is the value here, and the terms say it stays open
+wherever it goes.
+
+What it does not restrain: playing it, reading it, learning from it, forking it
+for yourself, or writing quest packs. A pack is a data file of your own — the
+game only reads it — so nothing about the licence reaches it.
+
+The animal models are somebody else's work under their own licence, and their
+attribution files travel with them; see Credits above.

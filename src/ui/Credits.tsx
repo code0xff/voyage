@@ -33,15 +33,20 @@ const LICENCE = { name: 'CC BY 4.0', href: 'https://creativecommons.org/licenses
  * to us -- three models under CC BY, a hundred and thirty packages under MIT
  * and friends -- and a page that lists only those reads as though the whole
  * thing were assembled from other people's work. Almost none of it is: the
- * physics, the shaders, the sound and the rest are written for this project and
- * are not being given away. This is the sentence that says so.
+ * physics, the shaders, the sound and the rest are written for this project.
+ * This is the line that says who wrote them and on what terms.
  *
- * It is a claim rather than a grant, which is why it is not a licence file.
- * Copyright exists from the moment the thing is written, with or without a
- * notice -- the Berne Convention settled that -- so this creates nothing. It
- * announces, which matters in two practical ways: it removes any "I thought it
- * was free" defence, and it tells anyone who wants to license or reuse a piece
- * of it who to ask.
+ * It said "All rights reserved" until the project took a licence. That was a
+ * claim rather than a grant, which is why it was not a licence file; now there
+ * is one -- `LICENSE`, the GNU AGPL v3 -- and this line points at it. Both
+ * halves matter: copyright exists from the moment the thing is written, with
+ * or without a notice, and the licence is what lets anyone else do anything
+ * with it.
+ *
+ * The AGPL is the reason a player can see this at all. Section 13 obliges
+ * anyone who runs a modified copy *over a network* to offer its source to the
+ * people using it -- a browser game is served, not shipped, so that is the
+ * clause that does the work here.
  *
  * Any name will do: a legal name, a studio, a domain. Copyright does not care.
  * Under US law an anonymous or pseudonymous work runs 95 years from publication
@@ -161,13 +166,22 @@ export function Credits() {
           it is a broken line of text in front of a player.
 
           Untranslated on purpose, and noted here so it is not mistaken for a
-          missed string later: "Copyright (c) ... All rights reserved" is a
-          formula rather than prose, printed in this form on Korean products
-          too, and it sits with the licence names and citations that this file
-          already keeps as references. */}
+          missed string later: a copyright line and a licence name are formulae
+          rather than prose, printed in this form on Korean products too, and
+          they sit with the licence names and citations that this file already
+          keeps as references. */}
       {OWNER && (
         <p className="mt-3 border-t border-border/60 pt-2 text-[10px] leading-relaxed text-muted-foreground">
-          Copyright © {YEAR} {OWNER}. All rights reserved.
+          Copyright © {YEAR} {OWNER}. Licensed under the{' '}
+          <a
+            className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+            href="https://www.gnu.org/licenses/agpl-3.0.html"
+            target="_blank"
+            rel="noreferrer"
+          >
+            GNU AGPL v3
+          </a>
+          .
         </p>
       )}
     </section>

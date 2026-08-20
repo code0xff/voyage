@@ -55,5 +55,5 @@
     "vitest": "^4.1.10"
   },
   "description": "Sailing simulator with real aerodynamics, hydrodynamics and wave physics, in the browser.",
-  "license": "MIT"
+  "license": "AGPL-3.0-only"
 }
