@@ -653,6 +653,12 @@ export const WORLDMAP: Record<string, Phrase> = {
   you: { en: '\u25cf here', ko: '\u25cf 현재 위치' },
   departures: { en: '\u25cb departures', ko: '\u25cb 출항지' },
   passages: { en: '\u00b7\u00b7\u00b7 passages sailed', ko: '\u00b7\u00b7\u00b7 지난 항해' },
+  /**
+   * The planet is on its way. It is 29 MB, so on a first visit or a slow line
+   * this is seconds, and an empty sheet with nothing on it is what a broken
+   * map looks like.
+   */
+  loading: { en: 'Drawing the planet\u2026', ko: '지구를 그리는 중\u2026' },
   /** The planet did not load. The game is still sailable; this is not. */
   unavailable: {
     en: 'The world map needs the planet, and it did not load.',

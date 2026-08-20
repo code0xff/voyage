@@ -598,6 +598,22 @@ export function App() {
           onNewVoyage={newVoyage}
           onSailOn={sailOn}
           onWorldMap={() => {
+            /*
+             * The same condition the menu's own close keeps, and for the same
+             * reason it is written there: the map lives inside the engine's
+             * provider, so without an engine it does not mount -- and closing
+             * the menu would leave no dialog, no HUD, and no Escape, since the
+             * engine owns that key. A dead screen until the page is reloaded.
+             *
+             * This is the second time a link added to the menu walked past
+             * `onMenuOpenChange`. The first put her to sea from a departure
+             * nobody had chosen; this one is reachable in the second or two
+             * the engine chunk takes to arrive, which is exactly the window a
+             * first-time visitor on a slow line spends looking at this menu.
+             * The link is disabled until then as well -- the guard is the
+             * correctness and the disabled state is the affordance.
+             */
+            if (!engine || engineLoading || engineError) return;
             worldFromMenu.current = true;
             setMenuOpen(false);
             setChartFull(false);

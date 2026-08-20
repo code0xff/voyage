@@ -208,7 +208,17 @@ export function WorldMapDialog({ open, onClose }: { open: boolean; onClose: () =
             {t(WORLDMAP.unavailable)}
           </div>
         ) : (
-          <canvas ref={attach} className="block" style={{ width: size.w, height: size.h }} />
+          <div className="relative" style={{ width: size.w, height: size.h }}>
+            <canvas ref={attach} className="block" style={{ width: size.w, height: size.h }} />
+            {/* Over the canvas rather than instead of it: the canvas has to be
+                mounted and sized before the raster lands, or `attach` never
+                runs and the first frame after it has nothing to draw into. */}
+            {!map && (
+              <div className="absolute inset-0 flex items-center justify-center text-[11px] text-muted-foreground">
+                {t(WORLDMAP.loading)}
+              </div>
+            )}
+          </div>
         )}
         {/* The legend and the position on one line under the sheet: what the
             marks mean, and the number the picture is the answer to. */}

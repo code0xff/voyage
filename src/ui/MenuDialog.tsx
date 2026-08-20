@@ -678,7 +678,12 @@ export function MenuDialog({
             <button
               type="button"
               onClick={onWorldMap}
-              className="block w-full rounded-md px-1 py-1 text-left text-[10px] leading-relaxed text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              // The map mounts inside the engine's provider, so until the
+              // engine is there this cannot open one -- and `App` refuses the
+              // click for that reason. Said here too, because a link that
+              // silently does nothing is the thing a broken button looks like.
+              disabled={engineLoading || engineError}
+              className="block w-full rounded-md px-1 py-1 text-left text-[10px] leading-relaxed text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40"
             >
               <span className="text-foreground">{t(WORLDMAP.see)} →</span>
             </button>
