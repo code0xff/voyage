@@ -4,6 +4,7 @@ import { MAX_WAVES, type WaveField } from '../sim/waves';
 import { EDGE_FADE, type RegionTerrain } from '../sim/region-terrain';
 import type { SkyState } from '../sim/sky';
 import { smoothstep } from '../sim/math';
+import { CLEAR_DAY } from '../sim/weather';
 
 /**
  * The wave surface.
@@ -477,8 +478,20 @@ const fragmentShader = /* glsl */ `
  * the grid's fade reaches zero before its rim, so the outer nine metres of it
  * carry no wave height and no Gerstner displacement at all, and the rim lands
  * on exactly the square this hole is cut to.
+ *
+ * Sized from `CLEAR_DAY`, because a fixed size went stale once: at 8,000 m
+ * square the sides reached only 4 km while visibility grew to 5, so on the
+ * cardinal directions the sea simply ended a kilometre before the fog could
+ * hide the edge -- a hole the camera's old 4 km far plane happened to clip
+ * out of sight. The 600 m on top is the same allowance `DRAW_RANGE` in
+ * region-mesh.ts makes: fog distance is measured from the camera and this
+ * ring is centred on the boat, and the eye can stand a few hundred metres
+ * off her. Growing the ring adds no vertices -- `SEG` is set by the grid
+ * seam it has to match, not by the area -- so the cells just get larger,
+ * which a flat, per-fragment-shaded sea does not mind. Exported for the
+ * tests that hold it past the fog and inside the camera's far plane.
  */
-const FAR_SIZE = 8000;
+export const FAR_SIZE = 2 * (CLEAR_DAY + 600);
 
 const farVertexShader = /* glsl */ `
   varying vec3 vWorld;

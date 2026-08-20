@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { HeightField } from '../sim/heightfield';
 import { RegionTerrain } from '../sim/region-terrain';
 import { coastRegion } from '../sim/coast';
-import { FIELD_DEPTH, SEG, SIZE, createWater, fieldGlsl, ringGeometry } from './water';
+import { FAR_SIZE, FIELD_DEPTH, SEG, SIZE, createWater, fieldGlsl, ringGeometry } from './water';
 import { EYE_FAR } from './scene';
+import { CLEAR_DAY } from '../sim/weather';
 
 /**
  * The ring the far sea is cut from.
@@ -28,7 +29,10 @@ import { EYE_FAR } from './scene';
  */
 describe('the far sea ring', () => {
   const half = SIZE / 2;
-  const outer = 4000;
+  // The real outer half-extent, not a number of this file's own: it was a
+  // hardcoded 4000 here, which kept every assertion green while the sea it
+  // described had fallen a kilometre short of the fog.
+  const outer = FAR_SIZE / 2;
   const ring = () => ringGeometry(half, outer, SEG);
   const tris = (g: ReturnType<typeof ringGeometry>) => {
     const p = g.getAttribute('position').array;
@@ -130,6 +134,31 @@ describe('the far sea ring', () => {
     const step = SIZE / SEG;
     const north = new Set(built.filter((p) => p.z === -half).map((p) => p.x));
     for (let i = 0; i <= SEG; i++) expect(north.has(-half + i * step)).toBe(true);
+    water.dispose();
+  });
+
+  /**
+   * The flat sea reaches past a clear day's fog in every direction, sides
+   * included -- the property, not the number.
+   *
+   * A square ring's corners reach sqrt(2) further than its sides, so a size
+   * that only covers the corners lies about the cardinals: at a fixed 8,000 m
+   * the corners stood at 5.66 km and the sides at 4, and between 4 km and the
+   * 5 km fog there was open sky where sea should be, hidden only by the
+   * camera's own clip. `CLEAR_DAY` is imported because the claim is
+   * relational -- however visibility is tuned, the sea must outlast it.
+   */
+  it('reaches past a clear day of visibility in the cardinal directions', () => {
+    const water = createWater();
+    const built = verts(water.far.geometry as ReturnType<typeof ringGeometry>);
+    // The north/south bands are the vertices over the grid's own x-span;
+    // east/west likewise. Each must carry the sea out beyond the fog.
+    const ns = built.filter((v) => Math.abs(v.x) <= half).map((v) => v.z);
+    const ew = built.filter((v) => Math.abs(v.z) <= half).map((v) => v.x);
+    expect(Math.max(...ns)).toBeGreaterThanOrEqual(CLEAR_DAY);
+    expect(Math.min(...ns)).toBeLessThanOrEqual(-CLEAR_DAY);
+    expect(Math.max(...ew)).toBeGreaterThanOrEqual(CLEAR_DAY);
+    expect(Math.min(...ew)).toBeLessThanOrEqual(-CLEAR_DAY);
     water.dispose();
   });
 
