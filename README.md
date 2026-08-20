@@ -493,9 +493,17 @@ San Francisco has had a passage taken away from her. One row in localStorage
 holds the seed and the position, and nothing else — not the trim, not the
 heading, not the hour — because every session in this game is a *departure*,
 prepared for the conditions of the moment, and restoring an exact instant would
-fight that rather than extend it. The menu offers two doors, and only ever the
-ones that mean something: **sail on** from where she got to, and **new voyage**
-from the departure chosen in the settings.
+fight that rather than extend it. The menu offers two doors: **sail on** from
+where she got to, and **new voyage** from the departure chosen in the settings.
+
+The row is written from the moment she is *put to sea* and not before. The
+engine builds a session in its constructor so the menu has a living sea behind
+it instead of a black canvas, and that session is not a voyage — recording it
+put a row at the default anchor before the player had touched the game, and the
+menu then offered to sail on from a place they had never been. For the same
+reason the opening menu cannot be dismissed: until a departure is taken there
+is nothing behind it to go back to, and closing it was the one way to be at sea
+without having chosen where from.
 
 The sim works in metres on a tangent plane, and it keeps doing so: `globe.ts`
 converts to latitude and longitude at the edges. A plane is honest near its pin

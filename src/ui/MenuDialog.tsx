@@ -52,7 +52,7 @@ import { placeName } from "@/sim/regions";
 import { COAST_NAME } from "@/sim/coast";
 import { formatLatLon } from "@/sim/globe";
 import { loadUnderway } from "@/underway";
-import { AT_WATER, NEAR_WATER, WATERS, waterAt, waterById } from "@/sim/waters";
+import { NEAR_WATER, WATERS, waterAt, waterById } from "@/sim/waters";
 import { beltAt } from "@/sim/climate";
 import { Logbook } from "./Logbook";
 import { QuestPacks, Quests } from "./Quests";
@@ -370,17 +370,30 @@ export function MenuDialog({
       ? t(offWater(t(WATER_NAME[near.id])))
       : formatLatLon(carried.place);
   /*
-   * Not offered when it would be the same door twice: a voyage still sitting
-   * at the departure a new one would start from is a new one.
+   * Offered whenever there is one, and that is the whole rule.
    *
-   * Compared against *that* departure and not against any -- the first
-   * version asked only whether she was near some water on the list, so a
-   * voyage resumed in the Korea Strait was hidden because the Korea Strait is
-   * on the list, whatever the new-voyage picker said.
+   * It used to be hidden when the carried voyage was within eight kilometres
+   * of the departure a new one would start from, on the reasoning that a
+   * voyage still sitting where a new one would begin is a new one and two
+   * doors to one place is a worse menu than one.
+   *
+   * The reasoning was sound and the threshold was not. Eight kilometres is
+   * three quarters of an hour at six knots, so a short evening's sailing
+   * finished inside it -- and coming back the next day the game showed only
+   * "New voyage", which discards the position when you take it. It reads
+   * exactly like being forgotten, and it was reported as that.
+   *
+   * The rule also had a second job nobody asked it to do: it was hiding the
+   * phantom voyage the engine used to record before the player had started
+   * anything, which sat at the default anchor and so matched the default
+   * departure. That is fixed at the source now, and this no longer has
+   * anything to compensate for.
+   *
+   * What is left is a duplicate door in one narrow case -- she is still at
+   * the departure, so "sail on" and "new voyage" go to the same water. That
+   * is redundant and it is true. Hiding a voyage she really made is neither.
    */
-  const at = carried ? waterAt(carried.place, AT_WATER * 4) : null;
-  const sameDoor = carried !== null && from !== null && at?.id === from.id;
-  const sailsOn = carried !== null && !sameDoor;
+  const sailsOn = carried !== null;
 
   /**
    * The newest passage, or null while the store has not answered and whenever
