@@ -55,18 +55,21 @@ const LICENCE = { name: 'CC BY 4.0', href: 'https://creativecommons.org/licenses
  * separate things.
  */
 /*
- * A pen name, deliberately, and not the handle this repository is kept under.
+ * A pen name, and no longer a separation.
  *
- * That handle is attached to a day job, and this is not that -- so the one
- * string a player can see is the one place the two must not be joined up. It is
- * the last link in that chain rather than the first: the repository is private,
- * the build carries no source map, no absolute path and no author field, and
- * `package.json` names nobody. Checked, not assumed.
+ * It was chosen while the repository was private, to keep this project's one
+ * player-visible string apart from the handle the work is kept under -- and
+ * the paragraph here used to list what else was checked: no source map, no
+ * absolute path, no author field, nobody named in `package.json`.
  *
- * What is still joined up is the commit history, which is signed with a real
- * name and address 208 times over. That costs nothing while the repository
- * stays private and everything the day the it does not, so it is a decision to
- * take before publishing rather than after.
+ * It also said the remaining link was the commit history, signed with a real
+ * name and address four hundred times over, and that publishing was therefore
+ * a decision to take beforehand rather than after. That decision has been
+ * taken: the repository is public, under the AGPL, with its history intact.
+ * The pen name stays because it is what the screen has always said and a
+ * credit line is not improved by changing whose it is -- but it is a name
+ * now, not a wall, and anyone who wants the other one has four hundred
+ * commits to read it off.
  *
  * Rendered as plain text and never as a link. It reads like a domain and is not
  * one -- `.iv` is not a TLD -- and this screen is otherwise wall to wall with
@@ -86,6 +89,18 @@ const YEAR = 2026;
  * drift from the tree the way a hand-kept list would.
  */
 const NOTICES = { name: 'Open-source licences', href: assetUrl('/third-party-notices.txt') };
+
+/**
+ * Where this came from, which the licence obliges.
+ *
+ * AGPL section 13: run a modified copy over a network and you owe its source
+ * to the people using it. A browser game is served rather than shipped, so
+ * that clause is the one that does the work -- and the licence's own appendix
+ * says how to discharge it, in as many words: *if your program is a web
+ * application, its interface could display a "Source" link that leads users to
+ * an archive of the code.* This is that link.
+ */
+const SOURCE = { name: 'Source', href: 'https://github.com/code0xff/voyage' };
 
 /**
  * One line each, and the creator on every line.
@@ -156,6 +171,13 @@ export function Credits() {
       </p>
       <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
         {t(CREDITS.code)} <Ref {...NOTICES} />
+      </p>
+      {/* The offer of source, which the licence obliges rather than invites --
+          and it sits above the copyright line for the same reason that line
+          sits last: this one is a grant to the player, and the one below it is
+          the claim it is granted from. */}
+      <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+        {t(CREDITS.source)} <Ref {...SOURCE} />
       </p>
       {/* Last, and set apart. Everything above it is someone else's grant to
           this project; this is the one line that runs the other way, and it

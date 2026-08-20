@@ -216,6 +216,8 @@ export const CREDITS: Record<string, Phrase> = {
     ko: '실행 중에 크기와 위치를 맞추고 애니메이션을 적용하며, 형상과 텍스처는 그 밖에 수정하지 않았습니다. 소리를 포함한 나머지 전부는 이 프로젝트를 위해 직접 만든 것입니다.',
   },
   code: { en: 'The libraries it is built on:', ko: '사용한 오픈소스 라이브러리:' },
+  /** The AGPL's own suggested wording for the offer of source; see `SOURCE`. */
+  source: { en: 'This game is free software:', ko: '이 게임은 자유 소프트웨어입니다:' },
   /** Links to the per-model notice, which is where the changes are stated in full. */
   changes: { en: 'changes', ko: '변경 내역' },
   /** All three are under the same licence, so it is said once below the list. */
