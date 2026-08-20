@@ -1,16 +1,23 @@
 name: deploy
 
-# Manual only, and deliberately.
+# Every push to `dev`, and on request.
 #
-# There is no deployment yet -- the game gets shown to people over a Cloudflare
-# quick tunnel, which is why `vite.config.ts` allows one. Firing this on every
-# push to `dev` would either publish continuously to somewhere that does not
-# exist, or sit red. Run it when there is something to hand over.
+# It was manual only while there was nowhere to publish to: firing it on every
+# push would have meant publishing continuously to somewhere that did not
+# exist, or sitting red. There is a GitHub Pages site now, `dev` is the only
+# branch, and a site that lags the branch by however long it takes someone to
+# remember to press a button is a site nobody can trust to be the game.
+#
+# The manual form stays, and keeps its inputs: it is how the artifact is built
+# for anywhere that is not Pages, and how a base other than the project path
+# gets tried before it is needed.
 #
 # It builds the same tree twice over from `verify`, which is the point: this
 # asserts that the *deployed* build works at the base it will be served from,
 # and `verify` asserts nothing about the base at all.
 on:
+  push:
+    branches: [dev]
   workflow_dispatch:
     inputs:
       base:
@@ -20,18 +27,21 @@ on:
       publish:
         description: 'Where the build goes.'
         required: false
-        default: artifact
+        default: github-pages
         type: choice
         options:
-          - artifact
           - github-pages
+          - artifact
 
 permissions:
   contents: read
 
+# One deploy at a time, and the newest one wins. Pushes come in bursts -- a
+# feature and the docs commit behind it -- and a queue of them would publish
+# the older tree over the newer as each finished.
 concurrency:
   group: deploy-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -66,7 +76,8 @@ jobs:
         id: base
         env:
           GIVEN: ${{ inputs.base }}
-          PUBLISH: ${{ inputs.publish }}
+          # A push carries no inputs, and the answer for a push is the site.
+          PUBLISH: ${{ inputs.publish || 'github-pages' }}
           REPO: ${{ github.event.repository.name }}
           OWNER: ${{ github.repository_owner }}
         run: |
@@ -105,7 +116,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload for Pages
-        if: inputs.publish == 'github-pages'
+        if: (inputs.publish || 'github-pages') == 'github-pages'
         uses: actions/upload-pages-artifact@v5
         with:
           path: dist
@@ -115,7 +126,7 @@ jobs:
   # them for the build as well.
   pages:
     name: publish to GitHub Pages
-    if: inputs.publish == 'github-pages'
+    if: (inputs.publish || 'github-pages') == 'github-pages'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
