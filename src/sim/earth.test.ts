@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { Earth, GLOBE_4M, ShorePatch, cellMetres } from './earth';
+import { Earth, GLOBE_4M, ShorePatch, cellMetres, mapProject, mapUnproject } from './earth';
 
 /**
  * The coarse Earth, against places whose answers are known.
@@ -218,5 +218,142 @@ describe('how deep it is out there', () => {
     expect(banks).toBeLessThan(300);
     // Never negative, on land: the land's own height is not a depth.
     expect(earth.shorePatch({ lat: 39.5, lon: -117 }, 2000).floor(0, 0)).toBe(0);
+  });
+});
+
+/**
+ * The world map's grid, and the picture drawn on it.
+ *
+ * Two flips are possible here and both draw a plausible planet: north for
+ * south, and east for west. The file above records the orientation of this
+ * data going wrong twice already, so these do not check the arithmetic --
+ * they check continents. Every place below is chosen so that its mirror in
+ * one axis is the opposite answer, which is what makes a flip fail rather
+ * than merely move.
+ */
+describe('the world map grid', () => {
+  it('puts north up and east right', () => {
+    const W = 360;
+    const H = 180;
+    const north = mapProject({ lat: 45, lon: 0 }, W, H);
+    const south = mapProject({ lat: -45, lon: 0 }, W, H);
+    const east = mapProject({ lat: 0, lon: 90 }, W, H);
+    const west = mapProject({ lat: 0, lon: -90 }, W, H);
+    expect(north.y).toBeLessThan(south.y);
+    expect(east.x).toBeGreaterThan(west.x);
+    // And the origin is the middle of the sheet, which is what fixes the
+    // offset rather than only the direction.
+    const origin = mapProject({ lat: 0, lon: 0 }, W, H);
+    expect(origin.x).toBeCloseTo(W / 2);
+    expect(origin.y).toBeCloseTo(H / 2);
+  });
+
+  it('lands both ends of the date line on the same seam', () => {
+    const W = 1080;
+    const H = 540;
+    expect(mapProject({ lat: 0, lon: -180 }, W, H).x).toBeCloseTo(0);
+    expect(mapProject({ lat: 0, lon: 180 }, W, H).x).toBeCloseTo(0);
+    // The meridian either side of it is at the two edges and not folded into
+    // the middle, which is what a modulo taken on the wrong sign would do.
+    expect(mapProject({ lat: 0, lon: -179.9 }, W, H).x).toBeLessThan(1);
+    expect(mapProject({ lat: 0, lon: 179.9 }, W, H).x).toBeGreaterThan(W - 1);
+  });
+
+  it('comes back to the place it started from', () => {
+    for (const place of [
+      { lat: 37.78, lon: -122.65 },
+      { lat: -33.84, lon: 151.34 },
+      { lat: 64.12, lon: -22.32 },
+      { lat: 0, lon: 0 },
+    ]) {
+      const { x, y } = mapProject(place, 1080, 540);
+      const back = mapUnproject(x, y, 1080, 540);
+      expect(back.lat).toBeCloseTo(place.lat, 6);
+      expect(back.lon).toBeCloseTo(place.lon, 6);
+    }
+  });
+
+  /**
+   * Where the map says a place is, written out rather than asked of
+   * `mapProject`.
+   *
+   * This is the one place in these tests that restates the projection, and it
+   * has to. `landMask` builds its rows and columns *through* `mapProject`, so
+   * a test that also looked places up through it would flip both together and
+   * pass: with the latitude term negated, the picture below is upside down
+   * and every assertion still holds. Measured, not guessed -- that mutation
+   * was run, and only the two arithmetic tests above caught it.
+   *
+   * So the convention is stated here instead -- north at the top, east to the
+   * right, the date line at the left edge -- and the raster is what has to
+   * agree with it. The oracle is then the Earth rather than the code.
+   */
+  const pixel = (lat: number, lon: number, W: number, H: number) => ({
+    px: Math.floor(((lon + 180) / 360) * W),
+    py: Math.floor(((90 - lat) / 180) * H),
+  });
+
+  it('draws the continents where the continents are', () => {
+    const W = 1080;
+    const H = 540;
+    const mask = earth.landMask(W, H);
+    const at = (lat: number, lon: number) => {
+      const { px, py } = pixel(lat, lon, W, H);
+      return mask[py * W + px];
+    };
+    // Each of these has its north-south or east-west mirror in the other
+    // list, so neither flip survives: Siberia against the Southern Ocean,
+    // the Sahara against the Atlantic at the same latitude.
+    const land: [string, number, number][] = [
+      ['Siberia', 60, 100],
+      ['Sahara', 23, 13],
+      ['Australia', -25, 133],
+      ['Amazon basin', -3, -60],
+      ['East Antarctica', -80, 0],
+    ];
+    const sea: [string, number, number][] = [
+      ['Southern Ocean', -60, 100],
+      ['off Mauritania', 23, -23],
+      ['South Pacific', -25, -133],
+      ['mid-Atlantic', -3, -20],
+      ['Arctic', 87, 0],
+    ];
+    for (const [name, lat, lon] of land) expect(at(lat, lon), name).toBe(255);
+    for (const [name, lat, lon] of sea) expect(at(lat, lon), name).toBe(0);
+  });
+
+  it('keeps the islands a mid-cell sample would lose', () => {
+    const W = 1080;
+    const H = 540;
+    const mask = earth.landMask(W, H);
+    const at = (lat: number, lon: number) => {
+      const { px, py } = pixel(lat, lon, W, H);
+      return mask[py * W + px];
+    };
+    // The reason `landMask` marks a cell from any sample in it rather than
+    // from the middle of it. All four are narrower than the 37 km cell they
+    // sit in, and all four are places a sailing game is looked at for.
+    for (const [name, lat, lon] of [
+      ['Oahu', 21.47, -157.98],
+      ['Antigua', 17.07, -61.8],
+      ['Malta', 35.9, 14.4],
+      ['Tahiti', -17.65, -149.45],
+    ] as [string, number, number][]) {
+      expect(at(lat, lon), name).toBe(255);
+    }
+  });
+
+  it('leaves the ocean as ocean rather than marking most of it', () => {
+    // The other half of the claim above. Widening every coast by a cell is
+    // acceptable; a rule that painted the sea would be a map of nothing, and
+    // the Earth's land fraction -- 29% -- is the figure that tells them
+    // apart. Loose bounds: this grid puts the ice sheets in, the coasts run
+    // a cell wide, and the point is the order of magnitude.
+    const mask = earth.landMask(1080, 540);
+    let land = 0;
+    for (const v of mask) if (v) land++;
+    const fraction = land / mask.length;
+    expect(fraction).toBeGreaterThan(0.2);
+    expect(fraction).toBeLessThan(0.45);
   });
 });

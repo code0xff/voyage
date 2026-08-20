@@ -52,6 +52,44 @@ export function cellMetres(grid: GlobeGrid): number {
   return (grid.arcMinutes / 60) * METRES_PER_DEG_LAT;
 }
 
+/**
+ * Where a place falls on an equirectangular map, in fractional pixels.
+ *
+ * The plainest projection there is -- longitude straight across, latitude
+ * straight down -- and here that is not a compromise but the grid's own
+ * shape. `globe-4m.bin` is 5400 by 2700 because it is 360 degrees by 180 at
+ * four arc-minutes, so a map drawn this way resamples the planet along the
+ * axes it was already stored on. Anything better-behaved at the poles would
+ * be a second geometry to keep in step with the raster for no gain: this is a
+ * "where in the world am I" picture, not a chart anyone navigates on.
+ *
+ * Exported beside `landMask` and used by it, so the picture and the marks put
+ * on top of it cannot drift apart. That is the same rule the water shader
+ * keeps with `waveShelter`: a boat drawn in a different place from the boat
+ * the map means is a lie the player will eventually notice.
+ *
+ * Longitude is taken modulo 360 rather than through `wrapLon`, which returns
+ * 180 rather than -180 and would put the date line one pixel off the right
+ * edge. Here both ends of it land at x = 0, which is where a map cut at the
+ * date line has its seam. Latitude clamps at the poles and not at `clampLat`'s
+ * 89.5: that limit belongs to the tangent plane, and cutting the top and
+ * bottom half-degree off a world map would lose the ice.
+ */
+export function mapProject(
+  place: LatLon,
+  width: number,
+  height: number,
+): { x: number; y: number } {
+  const lon = ((((place.lon + 180) % 360) + 360) % 360) / 360;
+  const lat = (90 - Math.max(-90, Math.min(90, place.lat))) / 180;
+  return { x: lon * width, y: lat * height };
+}
+
+/** The inverse, at the pixel's own corner. Exact against `mapProject`. */
+export function mapUnproject(x: number, y: number, width: number, height: number): LatLon {
+  return { lon: (x / width) * 360 - 180, lat: 90 - (y / height) * 180 };
+}
+
 export class Earth {
   private readonly samples: Int16Array;
   readonly grid: GlobeGrid;
@@ -123,6 +161,60 @@ export class Earth {
   /** True where the coarse Earth says there is land. */
   isLand(place: LatLon): boolean {
     return this.elevationAt(place) > 0;
+  }
+
+  /**
+   * The whole planet as land or sea, on an equirectangular grid of `width` by
+   * `height` cells: 255 land, 0 sea.
+   *
+   * **A cell is land if any source sample in it is**, rather than land at the
+   * middle of it. The two differ by more than they sound: at 1080 across, a
+   * cell is a third of a degree -- about 37 km -- so a point sample loses
+   * every island narrower than that, which is most of the ones worth sailing
+   * to. The Aegean, the Leewards, the Tuamotus and Hawaii all disappear from
+   * a mid-cell map, and they are exactly what a world map is looked at for.
+   * The price is a coastline a cell wider than the real one, which at this
+   * scale is under a pixel of what is already a pixel-wide line.
+   *
+   * Built by walking the source grid once and marking, not by asking this
+   * class a question per output cell. The reduction is 14.6 million array
+   * reads either way, but as an elevation query per source sample it would be
+   * bilinear interpolation of four neighbours for each -- and the answer here
+   * is about a stored sample rather than about a point between them.
+   *
+   * The rows and columns are resolved through `mapProject` once each rather
+   * than by the ratio of the two grid sizes. A ratio looks equivalent and is
+   * not: the samples sit half a *source* step in from their block's edge --
+   * see `elevationAt`, and the review that found the whole planet 2.8 km
+   * north-east of itself for exactly this reason -- so a map built on the
+   * ratio would carry that offset as a shift nothing in the picture reveals.
+   */
+  landMask(width: number, height: number): Uint8Array {
+    const mask = new Uint8Array(width * height);
+    const { width: sw, height: sh, arcMinutes } = this.grid;
+    const step = arcMinutes / 60;
+    const half = SOURCE_STEP / 2;
+
+    const col = new Int32Array(sw);
+    for (let gx = 0; gx < sw; gx++) {
+      const { x } = mapProject({ lat: 0, lon: -180 + half + gx * step }, width, height);
+      col[gx] = Math.min(width - 1, Math.max(0, Math.floor(x)));
+    }
+    const row = new Int32Array(sh);
+    for (let gy = 0; gy < sh; gy++) {
+      const { y } = mapProject({ lat: 90 - half - gy * step, lon: 0 }, width, height);
+      row[gy] = Math.min(height - 1, Math.max(0, Math.floor(y)));
+    }
+
+    const s = this.samples;
+    for (let gy = 0; gy < sh; gy++) {
+      const src = gy * sw;
+      const out = row[gy] * width;
+      for (let gx = 0; gx < sw; gx++) {
+        if (s[src + gx] > 0) mask[out + col[gx]] = 255;
+      }
+    }
+    return mask;
   }
 
   /**
