@@ -74,7 +74,7 @@ describe('polar diagram', () => {
 
   // Three full polars, which is 111 steady-state solves and about 1.6 million
   // physics steps. It genuinely takes this long; it is not hanging.
-  it('points highest in medium air and worse at both extremes', { timeout: 30_000 }, () => {
+  it('points highest in medium air and worse at both extremes', () => {
     const angleAt = (kn: number) =>
       solvePolar(CRUISER, { ...DEFAULT_ENV, tws: knotsToMs(kn) }, 5).bestUpwind!.twa * RAD;
     const light = angleAt(6);
@@ -126,8 +126,17 @@ describe('the no-go boundary', () => {
    * Note it does *not* open up in light air, where `bestUpwind` does. The angle
    * she works to windward best at and the angle she stops gaining at are two
    * different curves, and only one of them is what "no-go" means.
+   *
+   * No timeout of its own. It carried 20 s, which was generous against the
+   * old five-second default and became *stricter* than the suite's thirty --
+   * so the one test here that had already been given more time was the one
+   * that failed on a slow runner. It solves three polars and takes 5.7 s on
+   * the machine it is written on; CI was running at a third of that pace and
+   * ran out of clock at 20. Both this and the test above now inherit the
+   * default. The 60 s and 120 s marks elsewhere stay: those ask for *more*
+   * than the default, which is what a per-test timeout is for.
    */
-  it('widens with the wind, hardest in a gale', { timeout: 20000 }, () => {
+  it('widens with the wind, hardest in a gale', () => {
     const light = at(3).noGo;
     const middle = at(12).noGo;
     const heavy = at(40).noGo;
