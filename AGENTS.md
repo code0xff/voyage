@@ -406,12 +406,17 @@ The loop is:
 
 Do not "fix" these without being asked; they are known, intentional
 simplifications documented in the README: no spinnaker, no surfing, no AI
-opponents, no main/jib slot interaction, no boat-to-boat collision, and no
-tide.
+opponents, no main/jib slot interaction, and no boat-to-boat collision.
 
-There *is* a current -- `sim/current.ts`, and a set and drift the boat feels --
-which this list denied for a while after it was built. What is missing is the
-tide: the stream varies with depth but not with time.
+**The tide is the entry this list keeps getting wrong,** so it is worth being
+exact. It first said there was no tide at all, which `sim/current.ts` had
+already made false -- there is a set and drift the boat feels. It was corrected
+to "the stream varies with depth but not with time", and that went stale too:
+`tideRate` is a 12.42-hour cosine on the world clock, so the stream dies to
+slack about three hours in and runs back, and the player can lengthen, shorten
+or switch off the period. What is actually missing is the **height**: no
+springs and neaps, no depth that changes with the tide, no gate. The README
+says why that one is not another phase term.
 
 **No time compression at sea**, and no shrunken planet, belong here too: the
 clock runs fast, the boat does not, and the README says at length why scaling

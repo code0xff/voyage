@@ -13,10 +13,15 @@ That ocean is the real one. The boat has a latitude and a longitude, the coast
 that comes over the horizon is where the Earth says a coast is, and the wind at
 a latitude is the wind that belongs to it -- the trades from the east, the
 westerlies from the west, and the doldrums in between where a day can go by.
+`O` draws the whole of it, and where she is on it.
 
 Every passage is written into a logbook, and **quests** — plain JSON files
 anyone can write and install — notice the things worth having done, from a
 first fifty miles to a rounding of the Horn.
+
+**[Sail it here.](https://code0xff.github.io/voyage/)** It runs entirely in the
+browser: no account, no server behind it, and nothing leaves the machine it is
+played on.
 
 ```bash
 npm install
@@ -81,7 +86,7 @@ src/sim/     pure physics core -- no Three.js, no React, no browser APIs
   shelter    fetch and wind shadow, swept once per two degrees of wind
   regions    what a height-field world is, and what a passage's place was called
   globe      the tangent plane <-> latitude and longitude, and great circles
-  earth      the coarse planet, asked one question: where is the land
+  earth      the coarse planet: where the land is, and that reduced to a map
   climate    what the latitude does to the wind -- the belts a pilot chart has
   waters     the eleven departures, each verified against the shipped raster
   departure  which way she points when the lines are slipped
@@ -795,9 +800,12 @@ the thing that was wrong, because a pack that installed and then quietly could
 not complete would be one nobody could debug.
 
 One pack ships and is installed on the first run — six things a beginner does
-anyway. **Settings → Quests** hands it back as a file to edit and install
-again, and **Help → Packs** is the format's reference, its examples generated
-from the shipped pack so they cannot go stale. The design and the whole
+anyway. It is the one pack that cannot be removed, because it is the worked
+example and the quest screen is where anyone finds out what a pack is at all;
+replacing it is a different thing and still works. **Settings → Quests** hands
+it back as a file to edit and install again under the same id, and
+**Help → Packs** is the format's reference, its examples generated from the
+shipped pack so they cannot go stale. The design and the whole
 vocabulary are in [docs/quests.md](docs/quests.md).
 
 **Watched, not summed.** The engine samples the world every two seconds of
