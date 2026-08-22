@@ -843,7 +843,7 @@ un-complete a quest.
 | `[ ]` | mean wind speed |
 | `C` | camera: astern / on deck / overhead |
 | `0` | hand all sail, or set it again |
-| `A` | let go the anchor, or weigh it |
+| `V` | let go the anchor, or weigh it |
 | `B` | binoculars — the wheel or a pinch sets the power, and it is remembered |
 | `U` | fire a parachute flare — one a minute, and the night answers |
 | `N` | chart range |

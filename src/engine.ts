@@ -2423,10 +2423,19 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       // whatever the wheel left is what they should open at next time.
       if (!snapshot.binoculars) emit({ type: 'binocularPower', power: view.binocularPower() });
     }
+    // V, and not A, which it was until it was noticed that A is the helm.
+    //
+    // The helm has answered to A and D since the first commit; the anchor was
+    // put on A later and nobody saw the two written down together. At sea it
+    // hid, because letting go is refused where there is nowhere to hold and
+    // the refusal is silent -- so the one place it did fire was the one place
+    // it must not: bearing away to port into an anchorage let the anchor go
+    // under her, and called `arrive()`, which writes the passage up.
+    //
     // Weighing is always allowed; letting go is not. A refusal that says why is
     // the whole of the anchoring decision, so it goes through the same judgement
     // the readout is showing rather than a second copy of the rules.
-    if (input.wasPressed('a')) {
+    if (input.wasPressed('v')) {
       if (anchored) anchored = false;
       else if (snapshot.anchorage?.canAnchor) {
         anchored = true;

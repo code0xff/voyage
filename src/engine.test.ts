@@ -354,6 +354,16 @@ function press(key: string): void {
 }
 
 /**
+ * The anchor's key.
+ *
+ * Named rather than written out at each of the presses below, because none of
+ * those tests is about which key it is -- they need the anchor down so they
+ * can look at something else, and they should survive it being moved again.
+ * The one test that *is* about the key writes its keys out.
+ */
+const ANCHOR = 'v';
+
+/**
  * Hand the engine frames the way a browser would.
  *
  * The callback is held rather than scheduled, so the test decides when each
@@ -402,7 +412,7 @@ describe('engine', () => {
     engine.onEvent((e) => seen.push(e.type));
     engine.setDestination({ ...engine.snapshot.state.pos });
     await onTheWay?.();
-    press('a');
+    press(ANCHOR);
     frame(0.1);
     // The write is a promise; let it settle.
     await Promise.resolve();
@@ -410,6 +420,39 @@ describe('engine', () => {
     engine.dispose();
     return seen;
   }
+
+  /**
+   * The bug this locks down: the anchor and the helm on the same key.
+   *
+   * A and D have been the helm since the first commit. The anchor was put on A
+   * a long way after that, and the two were never written down beside each
+   * other -- the README listed both, four lines apart. At sea it hid, because
+   * letting go is refused where there is nothing to hold in and the refusal is
+   * silent, so the one place it ever fired was the worst one: coming into an
+   * anchorage, a turn to port let the hook go under her and called `arrive()`,
+   * which writes the passage up in the logbook.
+   *
+   * 'a' and 'd' are written out rather than taken from a list. They are the
+   * claim here and not a precondition -- the point is that *the helm's own
+   * keys* leave the anchor alone, which a test pressing "whatever ANCHOR is
+   * not" would not be making.
+   */
+  it('does not let go the anchor when the helm goes over', () => {
+    anchorAnywhere.on = true;
+    const engine = sailing();
+    press('a');
+    frame(0.1);
+    expect(engine.snapshot.anchored, 'the helm to port let the anchor go').toBe(false);
+    press('d');
+    frame(0.1);
+    expect(engine.snapshot.anchored, 'the helm to starboard let the anchor go').toBe(false);
+    // And the key it moved to still lets go, or this passes just as happily
+    // with the anchor bound to nothing at all.
+    press(ANCHOR);
+    frame(0.1);
+    expect(engine.snapshot.anchored, 'the anchor never went down').toBe(true);
+    engine.dispose();
+  });
 
   /** The record the passage was filed under, which is what the store was handed. */
   const filed = (): PassageRecord => logAdd.mock.calls[0][0] as PassageRecord;
@@ -687,7 +730,7 @@ describe('engine', () => {
       let seen: EngineEvent | null = null;
       engine.onEvent((e) => { if (e.type === 'logbookError') seen = e; });
       engine.setDestination({ ...engine.snapshot.state.pos });
-      press('a');
+      press(ANCHOR);
       frame(0.1);
       await Promise.resolve();
       await Promise.resolve();
@@ -795,7 +838,7 @@ describe('engine', () => {
     engine.advance(0.1);
     const spy = offerCalls as ReturnType<typeof vi.fn>;
     const dealsBefore = spy.mock.calls.length;
-    press('a');
+    press(ANCHOR);
     frame(0.1);
     expect(engine.snapshot.callsMade).toBe(1);
     // The anchor itself dealt the next hand -- exactly one, and with the salt
@@ -833,7 +876,7 @@ describe('engine', () => {
     anchorAnywhere.on = true;
     engine.setDestination(engine.snapshot.calls[0]);
     engine.advance(0.1);
-    press('a');
+    press(ANCHOR);
     frame(0.1);
     expect(engine.snapshot.callsMade).toBe(1);
 
@@ -2059,7 +2102,7 @@ describe('sailing on the Earth', () => {
     const setOut = { ...placeOf(engine) };
     engine.setDestination({ ...engine.snapshot.state.pos });
     engine.advance(1);
-    press('a');
+    press(ANCHOR);
     frame(0.1);
     await Promise.resolve();
     await Promise.resolve();
@@ -2085,7 +2128,7 @@ describe('sailing on the Earth', () => {
     engine.advance(1);
     engine.snapshot.state.pos = { x: REANCHOR_AT + 1, y: 0 };
     engine.advance(0.02);
-    press('a');
+    press(ANCHOR);
     frame(0.1);
     await Promise.resolve();
     await Promise.resolve();
@@ -2383,7 +2426,7 @@ describe('watching quests while she sails', () => {
     engine.onEvent((e) => {
       if (e.type === 'quest') seen.push(e.id);
     });
-    press('a');
+    press(ANCHOR);
     frame(0.1);
     expect(engine.snapshot.anchored, 'the anchor never went down').toBe(true);
     // Fifteen seconds is more than the quest asks for, and none of it counts.
@@ -2391,7 +2434,7 @@ describe('watching quests while she sails', () => {
     expect(seen, 'counted the hours she lay at anchor').toEqual([]);
 
     // Weigh, and the same fifteen seconds do count.
-    press('a');
+    press(ANCHOR);
     frame(0.1);
     expect(engine.snapshot.anchored).toBe(false);
     engine.advance(15);

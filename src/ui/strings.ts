@@ -16,7 +16,7 @@ import type { Belt } from '@/sim/climate';
  */
 
 export const HINT: Record<string, Phrase> = {
-  anchored: { en: 'At anchor — A to weigh', ko: '정박 중 — A로 닻 올리기' },
+  anchored: { en: 'At anchor — V to weigh', ko: '정박 중 — V로 닻 올리기' },
   aground: {
     en: 'Aground — sail her off before the tide leaves you',
     ko: '좌초 — 조류가 빠지기 전에 빠져나오세요',
@@ -38,10 +38,10 @@ export const HINT: Record<string, Phrase> = {
   menu: { en: 'Esc for menu and settings', ko: 'Esc로 메뉴와 설정' },
 };
 
-/** `Good holding in 8 m, sheltered — A to let go`, assembled per language. */
+/** `Good holding in 8 m, sheltered — V to let go`, assembled per language. */
 export const holding = (depth: string, sheltered: boolean): Phrase => ({
-  en: `Good holding in ${depth} m${sheltered ? ', sheltered' : ''} — A to let go`,
-  ko: `${depth} m, 닻 잘 물림${sheltered ? ' · 바람도 막힘' : ''} — A로 닻 내리기`,
+  en: `Good holding in ${depth} m${sheltered ? ', sheltered' : ''} — V to let go`,
+  ko: `${depth} m, 닻 잘 물림${sheltered ? ' · 바람도 막힘' : ''} — V로 닻 내리기`,
 });
 
 export const ANCHOR_PROBLEM: Record<AnchorProblem, Phrase> = {
@@ -243,7 +243,7 @@ export const KEYS: [string, Phrase][] = [
   ['Q E', { en: 'mean wind direction', ko: '평균 풍향' }],
   ['C', { en: 'camera: astern / on deck / overhead', ko: '카메라: 뒤 / 갑판 / 위' }],
   ['0', { en: 'hand all sail / set again', ko: '돛 전부 거두기 / 다시 펴기' }],
-  ['A', { en: 'let go / weigh anchor', ko: '닻 내리기 / 올리기' }],
+  ['V', { en: 'let go / weigh anchor', ko: '닻 내리기 / 올리기' }],
   ['N / wheel / pinch on chart', { en: 'chart range', ko: '차트 축척' }],
   // Beside N because it is the same question one step further out, which is
   // also why it is O: no letter that spells "map" or "world" was free.
