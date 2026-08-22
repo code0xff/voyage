@@ -114,6 +114,9 @@ const BASE = {
   islandCount: 0,
   seed: 20260806,
   randomWorld: false,
+  // Pinned, and not left to `detectLang()`. The button below is found by its
+  // text, and which text that is depends on the language the browser reports.
+  lang: 'en',
 };
 
 const browser = await chromium.launch({
@@ -148,8 +151,10 @@ for (const c of cases) {
   await page.goto(URL, { waitUntil: 'load' });
   await page.waitForSelector('canvas', { timeout: 20000 });
 
-  // The opening menu does not take Escape -- it wants a choice.
-  await page.getByRole('button', { name: /Put to sea/ }).click();
+  // The opening menu does not take Escape -- it wants a choice. "New voyage"
+  // is the one that always exists; "Sail on" appears only when a voyage was
+  // actually begun, which a fresh context never has.
+  await page.getByRole('button', { name: /New voyage/ }).click();
   await page.waitForTimeout(1200);
 
   // Anything the keyboard drives and no setting does: `c` for the top-down

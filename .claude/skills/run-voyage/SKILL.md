@@ -85,8 +85,11 @@ through the dialog. Anything in `Settings` (`src/settings.ts`) can go in
 
 ## Gotchas, all of them met in practice
 
-- **The opening menu ignores Escape.** It wants a choice. Click **Put to
-  sea** (or **Resume**, if a session is already running).
+- **The opening menu ignores Escape.** It wants a choice. Click **New
+  voyage** — the one button that is always there. **Sail on** is offered
+  only when a voyage was really begun, which a fresh browser context has
+  not. `shoot.mjs` also pins `lang: 'en'`, because the button is found by
+  its text and the text follows the language.
 - **The camera starts looking at the horizon.** The sky is barely in
   frame. Drag it up with `pitch` — about `-300` puts the sky across the
   top half.
