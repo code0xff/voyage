@@ -24,14 +24,6 @@ function usKey(code: string): string | null {
       return ' ';
     case 'Escape':
       return 'escape';
-    case 'BracketLeft':
-      return '[';
-    case 'BracketRight':
-      return ']';
-    case 'Minus':
-      return '-';
-    case 'Equal':
-      return '=';
     case 'ArrowLeft':
     case 'ArrowRight':
     case 'ArrowUp':
@@ -175,10 +167,6 @@ export class Input {
 
   get windShift(): number {
     return this.axis(['q'], ['e']);
-  }
-
-  get windGust(): number {
-    return this.axis(['[', '-'], [']', '=']);
   }
 
   /**

@@ -840,7 +840,6 @@ un-complete a quest.
 | `F` / `G` | furl / unfurl jib |
 | `Y` | auto-reef |
 | `Q E` | mean wind direction |
-| `[ ]` | mean wind speed |
 | `C` | camera: astern / on deck / overhead |
 | `0` | hand all sail, or set it again |
 | `V` | let go the anchor, or weigh it |
