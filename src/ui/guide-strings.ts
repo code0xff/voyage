@@ -103,8 +103,8 @@ export const GUIDE: GuideSection[] = [
     title: { en: 'Coming to anchor', ko: '닻 내리기' },
     paragraphs: [
       {
-        en: 'The anchor goes down with [[A]], and only where it can hold: **3 to 12 m of water**, with the way off her — under about **0.7 knots** over the ground. Deeper and there is nothing for it to lie to; faster and it will not set. The panel says which of those is stopping you, the moment one is.',
-        ko: '닻은 [[A]]로 내리며, 잡아줄 수 있는 곳에서만 내려갑니다: **수심 3~12 m**, 그리고 배를 거의 세워 대지속도 약 **0.7노트** 아래일 때입니다. 더 깊으면 닻이 바닥을 잡지 못하고, 더 빠르면 걸리지 않습니다. 지금 무엇이 막고 있는지는 계기판이 그때그때 알려줍니다.',
+        en: 'The anchor goes down with [[V]], and only where it can hold: **3 to 12 m of water**, with the way off her — under about **0.7 knots** over the ground. Deeper and there is nothing for it to lie to; faster and it will not set. The panel says which of those is stopping you, the moment one is.',
+        ko: '닻은 [[V]]로 내리며, 잡아줄 수 있는 곳에서만 내려갑니다: **수심 3~12 m**, 그리고 배를 거의 세워 대지속도 약 **0.7노트** 아래일 때입니다. 더 깊으면 닻이 바닥을 잡지 못하고, 더 빠르면 걸리지 않습니다. 지금 무엇이 막고 있는지는 계기판이 그때그때 알려줍니다.',
       },
       {
         en: 'This is also how a passage ends. Set a destination on the chart and the logbook writes the passage down when the anchor goes down **within 150 m of it** — sailing over the spot records nothing. An anchorage is a place rather than a point, so aim for somewhere with water she can actually lie in.',
