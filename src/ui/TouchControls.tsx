@@ -273,7 +273,7 @@ export function TouchControls({ onMenu }: { onMenu: () => void }) {
           </StateKey>
           <StateKey
             label={t(TOUCH.anchor)}
-            onPress={() => engine.press('a')}
+            onPress={() => engine.press('v')}
             lit={(s) => s.anchored}
           >
             <Anchor />
