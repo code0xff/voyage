@@ -347,10 +347,24 @@ const settings = (over: Partial<Settings> = {}): Settings => ({
   ...over,
 });
 
-/** Press and release a key, the way `Input` expects to hear about it. */
-function press(key: string): void {
-  for (const fn of listeners.get('keydown') ?? []) fn({ key, repeat: false, preventDefault: () => {} });
-  for (const fn of listeners.get('keyup') ?? []) fn({ key, preventDefault: () => {} });
+/** What a keystroke can carry besides the key itself. */
+type Mods = { ctrlKey?: boolean; metaKey?: boolean };
+
+/**
+ * Press a key and leave it held, the way `Input` expects to hear about it.
+ *
+ * Separate from `press` because the keyup that never comes is a real case and
+ * not a contrivance: macOS does not deliver one while Command is down.
+ */
+function hold(key: string, mods: Mods = {}): void {
+  for (const fn of listeners.get('keydown') ?? [])
+    fn({ key, repeat: false, preventDefault: () => {}, ...mods });
+}
+
+/** Press and release a key. */
+function press(key: string, mods: Mods = {}): void {
+  hold(key, mods);
+  for (const fn of listeners.get('keyup') ?? []) fn({ key, preventDefault: () => {}, ...mods });
 }
 
 /**
@@ -451,6 +465,42 @@ describe('engine', () => {
     press(ANCHOR);
     frame(0.1);
     expect(engine.snapshot.anchored, 'the anchor never went down').toBe(true);
+    engine.dispose();
+  });
+
+  /**
+   * Cmd and Ctrl belong to the browser, not to the boat.
+   *
+   * Every letter this game binds is also half of a shortcut somebody uses, and
+   * the keystroke arrives at the window either way. Cmd+A is the one that does
+   * lasting damage rather than a moment's surprise: macOS delivers no keyup
+   * while Command is held, so the token stayed in `held` after the hand came
+   * off and the helm was still hard over -- pilot dropped, boat turning --
+   * until the window next lost focus.
+   *
+   * The plain press at the end is not decoration. Without it this passes
+   * unchanged with the keydown listener deleted altogether.
+   */
+  it('does not take a keystroke that carries ctrl or command', () => {
+    anchorAnywhere.on = true;
+    const engine = sailing();
+
+    press(ANCHOR, { ctrlKey: true });
+    frame(0.1);
+    expect(engine.snapshot.anchored, 'paste let the anchor go').toBe(false);
+
+    // The autopilot is what a hand on the tiller drops, so it reads the held
+    // helm directly and answers with a boolean the sea cannot argue with.
+    press('h');
+    frame(0.1);
+    expect(engine.snapshot.pilot.mode, 'the pilot did not engage').not.toBe('off');
+    hold('a', { metaKey: true });
+    frame(0.5);
+    expect(engine.snapshot.pilot.mode, 'select-all took the helm').not.toBe('off');
+
+    hold('a');
+    frame(0.5);
+    expect(engine.snapshot.pilot.mode, 'the helm no longer drops the pilot').toBe('off');
     engine.dispose();
   });
 

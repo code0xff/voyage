@@ -90,6 +90,15 @@ export class Input {
     if (target?.isContentEditable || /^(input|textarea|select)$/i.test(target?.tagName ?? '')) {
       return;
     }
+    // A keystroke carrying Ctrl or Command is a browser command, not a
+    // control. Every letter this game binds is also half of a shortcut
+    // somebody uses -- Cmd+C copied and swung the camera, Cmd+K opened the
+    // omnibox and photographed the sea -- and the worst of them is Cmd+A:
+    // macOS does not deliver keyup while Command is down, so the token stayed
+    // in `held` after the hand came off and the helm sat hard to port until
+    // the window next lost focus. `onUp` deliberately has no such guard, or a
+    // key pressed plain and released under Command would never be let go.
+    if (e.ctrlKey || e.metaKey) return;
     for (const k of this.tokens(e)) {
       if (!this.held.has(k)) this.pressed.add(k);
       this.held.add(k);
