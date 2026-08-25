@@ -22,7 +22,7 @@ function fakeStorage() {
 }
 
 const KEY = 'voyage.underway.v1';
-const SYDNEY = { seed: 7, place: { lat: -33.87, lon: 151.21 } };
+const SYDNEY = { seed: 7, place: { lat: -33.87, lon: 151.21 }, hour: 20.5 };
 
 let store: ReturnType<typeof fakeStorage>;
 const had = 'localStorage' in globalThis;
@@ -49,6 +49,7 @@ describe('the voyage she is on', () => {
     expect(row.seed).toBe(7);
     expect(row.place.lat).toBeCloseTo(-33.87, 9);
     expect(row.place.lon).toBeCloseTo(151.21, 9);
+    expect(row.hour).toBeCloseTo(20.5, 9);
     expect(row.at).toBe(1234);
   });
 
@@ -116,6 +117,45 @@ describe('the voyage she is on', () => {
     const row = loadUnderway()!;
     expect(row.seed).toBe(7);
     expect(row.place.lat).toBeCloseTo(10, 9);
+  });
+
+  it('carries no hour for a row written before the clock was', () => {
+    // Every row this game wrote for its first weeks has no `hour`, and each
+    // one is a good voyage. Null and not a number, because the number a
+    // caller would want is the Start time setting and this module has never
+    // heard of it -- guessed as zero it would open a resumed voyage at
+    // midnight, which is a worse answer than the reset it replaces.
+    store.raw.set(KEY, JSON.stringify({ seed: 7, place: { lat: 1, lon: 2 }, at: 1 }));
+    const row = loadUnderway()!;
+    expect(row.seed).toBe(7);
+    expect(row.hour).toBeNull();
+  });
+
+  it('carries no hour rather than an unreadable one', () => {
+    // The rest of the row is a voyage and stands. An hour that is not a
+    // number is one fact missing, not a row from somewhere else.
+    for (const hour of ['midday', null, {}, NaN, Infinity]) {
+      store.raw.set(KEY, JSON.stringify({ seed: 7, place: { lat: 1, lon: 2 }, hour, at: 1 }));
+      const row = loadUnderway();
+      expect(row, String(hour)).not.toBeNull();
+      expect(row!.hour, String(hour)).toBeNull();
+    }
+  });
+
+  it('holds the carried clock where the sun still moves', () => {
+    // A clock is stepped by about 1e-5 of an hour. Written out rather than
+    // imported, because the claim is that the stored hour is one the world
+    // can still be advanced from, and asserting the module's own bound back
+    // at it would hold at any bound including none.
+    store.raw.set(KEY, JSON.stringify({ seed: 7, place: { lat: 1, lon: 2 }, hour: 1e300, at: 1 }));
+    const hour = loadUnderway()!.hour!;
+    expect(hour + 1e-5, 'the clock is too large to advance').toBeGreaterThan(hour);
+    expect(hour).toBeGreaterThan(0);
+
+    // And never before the voyage began: the clock counts on from the start
+    // hour and does not run backwards.
+    store.raw.set(KEY, JSON.stringify({ seed: 7, place: { lat: 1, lon: 2 }, hour: -5, at: 1 }));
+    expect(loadUnderway()!.hour).toBeGreaterThanOrEqual(0);
   });
 
   it('knows whether a row is the world these settings would sail', () => {

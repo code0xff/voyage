@@ -381,12 +381,13 @@ export function App() {
     const s = settingsRef.current;
     // Where a new voyage begins: the departure chosen in the settings.
     const from = waterById(s.departure)?.place ?? null;
-    if (from) saveUnderway({ seed: s.seed, place: from });
+    if (from) saveUnderway({ seed: s.seed, place: from, hour: null });
     else clearUnderway();
-    // The track goes with the position, and for the same reason it is written
-    // here: pressed while the engine is still loading, the call below is
-    // optional-chained away, and the engine that arrives afterwards would
-    // find a stored track and draw the last voyage across this one.
+    // A new voyage has no clock and no track behind it, and both are written
+    // here for the reason the position is: pressed while the engine is still
+    // loading, the call below is optional-chained away, and the engine that
+    // arrives afterwards would find the last voyage's hour and track and take
+    // them up as this one's.
     clearTrack();
     engine?.sailFrom(from ? { place: from } : null);
     putToSea();

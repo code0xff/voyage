@@ -1124,6 +1124,30 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   /**
+   * Take the voyage up where it was left: its clock, and its track.
+   *
+   * Both are read from the store here rather than held from startup, and that
+   * is what makes the menu's own writes work. `App` writes the position row
+   * before the engine exists -- it has to, because the door can be pressed
+   * while the engine is still a dynamic import and its `sailFrom` is
+   * optional-chained away -- so a "new voyage" taken in that window is a row
+   * with no hour and no track, and this finds exactly that.
+   *
+   * The clock first, and before the stream is set in `newSession`: the tide's
+   * phase is measured from it, and the sea is built on the stream a few lines
+   * later. Set after that block, the first sea of a resumed session would be
+   * raised on a full stream that the hour says is nearly slack.
+   */
+  function resumeVoyage(): void {
+    const row = loadUnderway();
+    // The same world, on `sameWorld`'s argument: an hour is harmless anywhere
+    // but it is half of this row, and taking half of a row that belongs to
+    // another voyage is how the other half gets taken next.
+    if (row && sameWorld(row, current) && row.hour !== null) hour = row.hour;
+    restoreTrack();
+  }
+
+  /**
    * Lay the stored track back out in this session's plane, if it belongs to
    * this world.
    *
@@ -1175,7 +1199,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // clearing digs out of whatever it lands on. Nothing is written until
     // she is off it again, so the last good position stands.
     if (snapshot.clearance <= 0) return;
-    saveUnderway({ seed: current.seed, place: snapshot.place });
+    saveUnderway({ seed: current.seed, place: snapshot.place, hour });
     // With the position and on its guards, not on its own timer. They are two
     // halves of one record -- where she got to, and how she got there -- and
     // a track written past a position that was not would draw a line running
@@ -1849,6 +1873,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // The clock belongs to the session too. `hour` was read once when the
     // engine was built, so the Start hour setting did nothing after the first
     // load and every session began wherever the last one's clock had wandered to.
+    //
+    // A *new* voyage, that is. One being carried on takes its own clock back
+    // a few lines below -- see `resumeVoyage`, and `underway.ts` for why the
+    // hour crossed the line that keeps the trim and the heading out. "Start
+    // time" is what the setting is called and what it now is.
     hour = current.startHour;
     // So does the wind's direction on the open coast, where the belt says what
     // the wind does. *Snapped* here rather than eased: the ease
@@ -1876,10 +1905,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // restart moves the boat about ninety metres and the next session drew on
     // joined to the last one.
     //
-    // Whether the stored one is laid back out is the caller's to say rather
-    // than this function's: it is run for the scene behind the menu as well
-    // as for a departure, and only one of those spends the answer.
+    // Whether the voyage is taken up again is read here and *spent* by the
+    // caller: this runs for the scene behind the menu as well as for a
+    // departure, and only the departure ends it.
     track.count = 0;
+    if (resuming) resumeVoyage();
     weather.reseed(current.seed);
     wind.reseed(current.seed);
     wildlife.reseed(current.seed);
@@ -1898,12 +1928,20 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // And a blow already scheduled belongs to an ocean that no longer exists.
     sound.silencePending();
     sharks.reseed(current.seed);
-    // The stream is at its full run again: `hour` has just been put back to the
-    // start hour, which is what the tide is measured from. Set here as well as
+    // The stream, at the rate this session's clock says. Set here as well as
     // in the step below, because the sea is built from it three lines down and
-    // would otherwise be raised on whatever the last session's tide had reached.
-    streamNow.x = fullStream.x;
-    streamNow.y = fullStream.y;
+    // would otherwise be raised on whatever the last session's tide had
+    // reached.
+    //
+    // It used to be the full run and could say so plainly: `hour` had just
+    // been put back to the start hour, and the tide is measured from exactly
+    // that, so the rate was 1 by construction. A resumed voyage brings its own
+    // clock, and the same two lines would have opened it on a spring ebb the
+    // sun said was slack -- with the sea raised on that wind-over-tide for the
+    // one step before the loop corrected it.
+    const opened = tideRate(hour, current.startHour, current.tideHours);
+    streamNow.x = fullStream.x * opened;
+    streamNow.y = fullStream.y * opened;
     // A new session starts with the sea its weather implies, not the one the
     // last session left behind.
     // Seeded from the same relative wind the step uses, not from the breeze
@@ -2034,9 +2072,9 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     keeping = true;
     newSession();
     // And here the flag is spent. What follows this departure is a session of
-    // her own making: pressing R to put to sea again is a new track, which is
-    // what a new session always was before the track was written down at all.
-    if (resuming) restoreTrack();
+    // her own making: pressing R to put to sea again is a new clock and a new
+    // track, which is what a new session always was before either was
+    // written down at all.
     resuming = false;
     placeAtStart();
   }
@@ -2714,12 +2752,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   // Build the initial paused scene even when a surveyed raster is still in
   // flight. The public `putToSea` path remains guarded so a click cannot turn
   // that placeholder into a playable world.
+  // The scene behind the menu is handed the voyage's clock and track for the
+  // reason it is handed its position: what it shows is the voyage she is on.
+  // `resuming` is deliberately not spent by it -- this is not the voyage being
+  // taken up, and the departure that follows would find the answer gone.
   newSession();
-  // The scene behind the menu, and it is handed the track for the reason
-  // it is handed the position: what it draws is the voyage she is on. The
-  // flag is deliberately *not* spent here -- this is not the voyage being
-  // taken up, and the departure that follows would find it already gone.
-  if (resuming) restoreTrack();
   placeAtStart();
   // Prime the diagnostics with a single step. The game opens with the menu up,
   // which pauses the physics -- without this the scene has nothing to draw and
@@ -2789,8 +2826,16 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       // Written down at once. A tab closed straight after choosing must not
       // lose the choice, and the menu can be open before the engine exists,
       // so the two write the same row rather than one trusting the other.
+      const resume = spot?.resume === true;
       if (spot?.place) {
-        saveUnderway({ seed: current.seed, place: spot.place });
+        // Read before it is written over: on a resume the row being replaced
+        // is this voyage's own, and its clock goes on. A new voyage starts at
+        // the Start time setting, which is what a null hour asks for.
+        saveUnderway({
+          seed: current.seed,
+          place: spot.place,
+          hour: resume ? (loadUnderway()?.hour ?? null) : null,
+        });
       } else {
         clearUnderway();
       }
@@ -2798,7 +2843,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       // at the next write for the same reason the position does: a tab closed
       // straight after choosing must not keep the old voyage's track to draw
       // across the new one. Carrying on keeps it, which is the whole point.
-      resuming = spot?.resume === true;
+      resuming = resume;
       if (!resuming) clearTrack();
       // Held for the next departure rather than applied to this session's
       // pin: she is still where she is, which is what the menu says.

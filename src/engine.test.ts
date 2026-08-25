@@ -1117,6 +1117,13 @@ describe('engine', () => {
    */
   it('runs the day on world time, whatever the time scale', () => {
     const spent = (timeScale: number) => {
+      // Each case is its own voyage. Every engine in this file shares one
+      // store, and `keepUnderway` writes to it, so the case before this one
+      // has left a row -- and a row is resumed, clock and all, which since
+      // the clock started being carried meant the third case opening at
+      // 14:00 and running past sunset inside its sixty seconds. `darkIn`
+      // wraps to tomorrow there, and the assertion below is exact.
+      kept.stored = null;
       const engine = sailing({ timeScale, startHour: 13 });
       engine.advance(1);
       const before = engine.snapshot.darkIn;
@@ -1580,8 +1587,8 @@ describe('the flare', () => {
  * A stored voyage on the Earth, as the engine would have written it. The
  * tests below all sail seed 13 on the coast, so the world is theirs.
  */
-function storedOn(place: { lat: number; lon: number }, seed = 13) {
-  return { seed, place, pos: null, at: 1 };
+function storedOn(place: { lat: number; lon: number }, seed = 13, hour: number | null = null) {
+  return { seed, place, hour, pos: null, at: 1 };
 }
 
 /** What the row says her position was, whichever coordinate its world uses. */
@@ -2652,6 +2659,146 @@ describe('watching quests while she sails', () => {
     expect(quests.writes).toBeGreaterThan(0);
     const state = quests.saved as { done: Record<string, unknown> };
     expect(Object.keys(state.done)).toEqual(['p.q']);
+    engine.dispose();
+  });
+});
+
+/**
+ * The world clock, carried across a resumed voyage.
+ *
+ * `underway.ts` used to remember a place and only a place, and put the hour
+ * beside the trim and the heading as something a departure re-derives. Trim
+ * and heading really are the departure's; the clock is the world's, and the
+ * consequence of resetting it was that a passage could not be taken into a
+ * night -- sail into dusk, stop, come back, and it is breakfast time again on
+ * the same voyage.
+ *
+ * Asserted through `snapshot.sky.hour`, which is where a player meets it: the
+ * time on the instrument panel and the light on the water.
+ */
+describe('the clock she is sailing on', () => {
+  /**
+   * The time of day the session is showing, 0..24.
+   *
+   * Through a frame rather than `advance`, because the sky is published by
+   * the render loop: it is what is drawn, and the physics has no use for it.
+   */
+  function clock(engine: ReturnType<typeof sailing>) {
+    frame(0.1);
+    return engine.snapshot.sky.hour;
+  }
+
+  it('opens a new voyage at the start time', () => {
+    const engine = sailing({ randomWorld: false, seed: 13, startHour: 9, timeScale: 0 });
+    expect(clock(engine)).toBeCloseTo(9, 1);
+    engine.dispose();
+  });
+
+  it('takes a resumed voyage into the night it was left in', () => {
+    // Written out rather than derived: 22:00 is after sunset by any reckoning
+    // this game has, and the claim is that she opens in the dark. Nine is the
+    // start hour she would have opened at, and it is broad daylight.
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 22);
+    const engine = sailing({ randomWorld: false, seed: 13, startHour: 9, timeScale: 0 });
+    expect(clock(engine), 'the voyage opened at breakfast time').toBeCloseTo(22, 1);
+    expect(engine.snapshot.sky.daylight, 'she came back to daylight').toBeLessThan(0.1);
+    engine.dispose();
+  });
+
+  it('writes the clock down as it runs, and goes on from there', () => {
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 20);
+    const engine = sailing({ randomWorld: false, seed: 13, startHour: 9, timeScale: 60 });
+    // Half an hour of world time, which at 60x is thirty seconds of sailing --
+    // and thirty seconds is what the row is written on.
+    engine.advance(31);
+    const written = kept.stored!.hour as number;
+    expect(written, 'the clock was written from the start hour, not the voyage').toBeGreaterThan(20);
+    expect(written).toBeLessThan(21);
+    engine.dispose();
+  });
+
+  it('starts a new voyage at the start time even with a clock in store', () => {
+    // The row outlives the voyage: "new voyage" is taken over the top of one
+    // that had sailed into the night, and the new one begins in the morning.
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 22);
+    const engine = createEngine(canvas(), settings({ randomWorld: false, seed: 13, startHour: 9 }));
+    engine.sailFrom({ place: { lat: -33.5, lon: 18.4 } });
+    // Checked here, between choosing and departing, because that is the only
+    // moment it can be: `newSession` writes the row again a line later with
+    // this voyage's own 09:00, so afterwards the two answers agree and the
+    // window is invisible. It is a real window all the same -- the position's
+    // own write is here rather than in `putToSea` precisely because a tab
+    // closed straight after choosing must not keep the old voyage.
+    expect(kept.stored!.hour, "the choice kept the old voyage's clock").toBeNull();
+
+    engine.putToSea();
+    expect(clock(engine), "the new voyage took the old one's night").toBeCloseTo(9, 1);
+    expect(kept.stored!.hour, 'the discarded clock came back').toBeCloseTo(9, 1);
+    engine.dispose();
+  });
+
+  it('keeps the clock in the row a resumed departure writes over it', () => {
+    // "Sail on" replaces the row with the place it is departing from, and
+    // that write must not be what loses the hour: the row it is replacing is
+    // this voyage's own.
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 22);
+    const engine = createEngine(canvas(), settings({ randomWorld: false, seed: 13, startHour: 9 }));
+    engine.sailFrom({ place: { lat: -33.5, lon: 18.4 }, resume: true });
+    expect(kept.stored!.hour, 'the departure wrote the clock away').toBeCloseTo(22, 6);
+    engine.putToSea();
+    expect(clock(engine)).toBeCloseTo(22, 1);
+    engine.dispose();
+  });
+
+  it('opens a resumed session on the tide its own clock implies', () => {
+    // The stream is set once in `newSession` so the first sea can be raised on
+    // it, and it used to be set to the full run -- true by construction while
+    // every session began at the start hour the tide is measured from, and
+    // false the moment a voyage brought its own clock back.
+    //
+    // Half the period after the start hour the stream runs the other way, so
+    // the sign is the claim: 6.21 hours is written out because it is what
+    // makes this a reversal and not merely a smaller number.
+    const period = 12.42;
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 9 + period / 2);
+    const engine = sailing({
+      randomWorld: false,
+      seed: 13,
+      startHour: 9,
+      timeScale: 0,
+      driftKnots: 2,
+      setDeg: 90,
+      tideHours: period,
+    });
+    // Read before a single step: this is about the water the session opens
+    // on, which is what the sea is built from.
+    const stream = engine.snapshot.currents.peak;
+    expect(stream.x, 'the resumed session opened on the wrong half of the tide').toBeLessThan(0);
+    engine.dispose();
+  });
+
+  it('refuses a clock from a world that was rolled out from under it', () => {
+    // The reachable way for the row's world and the session's to differ, and
+    // it is a setting the player owns: with "a new world every time" on,
+    // `newSession` rolls a fresh seed *before* the voyage is taken up. The row
+    // matched the settings when the engine read it at construction -- which is
+    // what made this a resumed session at all -- and does not match the world
+    // that was then rolled over it.
+    //
+    // Unchecked she would open at 22:00 on a coast she has never seen, with
+    // last world's track drawn across it.
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 22);
+    const engine = sailing({ randomWorld: true, seed: 13, startHour: 9, timeScale: 0 });
+    expect(clock(engine), "a rolled world took the old one's clock").toBeCloseTo(9, 1);
+    engine.dispose();
+  });
+
+  it('refuses a clock from another world outright', () => {
+    // `sailing` pins seed 13; the row was written in 99, so it is not this
+    // voyage and no part of it is taken -- neither the place nor the hour.
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 99, 22);
+    const engine = sailing({ randomWorld: false, seed: 13, startHour: 9, timeScale: 0 });
+    expect(clock(engine), "another world's clock was taken up").toBeCloseTo(9, 1);
     engine.dispose();
   });
 });
