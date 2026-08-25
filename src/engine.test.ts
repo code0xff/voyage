@@ -21,7 +21,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * No production code was changed to make this possible.
  */
 
-const sceneCalls: { render: number } = { render: 0 };
+/**
+ * What the renderer was last handed.
+ *
+ * `elapsedHours` is here because it is the *only* consumer of the world clock
+ * in its unwrapped form -- everything else wraps it -- and so the only place
+ * a carried clock can be wrong without `snapshot.sky.hour` noticing.
+ */
+const sceneCalls: { render: number; elapsedHours: number } = { render: 0, elapsedHours: NaN };
 const earthLoad = vi.hoisted(() => vi.fn());
 const logAdd = vi.hoisted(() => vi.fn<(record: unknown) => Promise<void>>());
 /**
@@ -45,8 +52,9 @@ const capture = vi.hoisted(() => ({ blob: null as Blob | null }));
 
 vi.mock('./view/scene', () => ({
   createScene: () => ({
-    render: () => {
+    render: (f: { elapsedHours: number }) => {
       sceneCalls.render++;
+      sceneCalls.elapsedHours = f.elapsedHours;
     },
     setTerrain: () => {},
     setRegion: () => {},
@@ -295,6 +303,7 @@ const GLOBALS = ['window', 'document', 'requestAnimationFrame', 'cancelAnimation
 beforeEach(() => {
   frames = [];
   sceneCalls.render = 0;
+  sceneCalls.elapsedHours = NaN;
   earthLoad.mockReset();
   earthLoad.mockImplementation(() => Promise.resolve(stubEarth()));
   logAdd.mockReset();
@@ -2733,6 +2742,22 @@ describe('the clock she is sailing on', () => {
     engine.dispose();
   });
 
+  it('hands the renderer the clock it is sailing on, unwrapped', () => {
+    // The sky turns the stars and drifts the cloud deck off `elapsedHours`,
+    // which is the world clock *unwrapped* -- wrapped at midnight the whole
+    // star field would spin back through a day every night. It is the only
+    // consumer that sees the raw number, so every other assertion in this
+    // block would pass with it broken.
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 30);
+    const engine = sailing({ randomWorld: false, seed: 13, startHour: 9, timeScale: 0 });
+    frame(0.1);
+    // Thirty, and not the six o'clock in the morning it wraps to: past
+    // midnight on the second day of a voyage that began at nine.
+    expect(sceneCalls.elapsedHours, 'the sky was handed a wrapped clock').toBeCloseTo(30, 1);
+    expect(engine.snapshot.sky.hour, 'the panel was handed an unwrapped one').toBeCloseTo(6, 1);
+    engine.dispose();
+  });
+
   it('takes a resumed voyage into the night it was left in', () => {
     // Written out rather than derived: 22:00 is after sunset by any reckoning
     // this game has, and the claim is that she opens in the dark. Nine is the
@@ -2795,11 +2820,13 @@ describe('the clock she is sailing on', () => {
     // every session began at the start hour the tide is measured from, and
     // false the moment a voyage brought its own clock back.
     //
-    // Half the period after the start hour the stream runs the other way, so
-    // the sign is the claim: 6.21 hours is written out because it is what
-    // makes this a reversal and not merely a smaller number.
-    const period = 12.42;
-    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 9 + period / 2);
+    // Half a period after the hour it began at, the stream runs the other
+    // way: the *half* is the claim, and the sign is what makes it a reversal
+    // rather than merely a smaller number. The period itself is imported,
+    // because it is what the test needs in order to look at anything -- and
+    // written out as 12.42 this would stop being about the default tide the
+    // moment the default moved.
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 9 + TIDE_PERIOD / 2);
     const engine = sailing({
       randomWorld: false,
       seed: 13,
@@ -2807,7 +2834,7 @@ describe('the clock she is sailing on', () => {
       timeScale: 0,
       driftKnots: 2,
       setDeg: 90,
-      tideHours: period,
+      tideHours: TIDE_PERIOD,
     });
     // Read before a single step: this is about the water the session opens
     // on, which is what the sea is built from.
@@ -2904,16 +2931,22 @@ describe('the track she has sailed', () => {
     expect(engine.snapshot.track.count, 'the ring grew past its own bound').toBe(TRACK_MAX);
 
     // And it is the *recent* end that was kept, reaching the whole way back
-    // across the window the chart is collected in -- which is the entire
-    // reason for the bound, and 8300 m is what that window is. Written out
-    // rather than imported: `TRACK_MAX * TRACK_STEP` asserted back at itself
-    // would hold at any cap, including one that keeps four points.
+    // across the window the chart is collected in and not appreciably past
+    // it. Both ends written out, because both are the claim -- 8300 m is what
+    // that window is, and `TRACK_MAX * TRACK_STEP` asserted back at itself
+    // holds at any cap, including four points and including twice as many as
+    // the chart could ever show.
+    //
+    // The upper bound is the half of this the name promises and a first
+    // version did not make: "and no more" was only `count === TRACK_MAX`,
+    // which is the implementation restated and passes at any cap at all.
     const { xy, count } = engine.snapshot.track;
     const boat = engine.snapshot.state.pos;
     const oldest = Math.hypot(xy[0] - boat.x, xy[1] - boat.y);
     expect(oldest, 'the track no longer reaches back across the chart').toBeGreaterThanOrEqual(
       8300,
     );
+    expect(oldest, 'the track reaches far past anything the chart can draw').toBeLessThan(8400);
     // Contiguous, so the eviction shifted the whole array rather than leaving
     // a hole: a `copyWithin` off by one shows up as a step of a different
     // size, or as a point still sitting where the last shift left it.
