@@ -2842,6 +2842,30 @@ describe('the track she has sailed', () => {
     engine.dispose();
   });
 
+  it('drops the track when the world is redrawn under her', () => {
+    // The seed is a field in the menu, and typing into it rebuilds the coast
+    // over a running voyage rather than starting a new one. The track she
+    // sailed belongs to the world that has just gone.
+    //
+    // It reaches the store, which is what makes it more than a wrong line:
+    // `keepUnderway` writes the track under whatever seed is current, so the
+    // old world's track was being filed as the new world's and would be laid
+    // out on the next resume -- past the seed check rather than through it.
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
+    engine.advance(60);
+    expect(engine.snapshot.track.count, 'no track to lose').toBeGreaterThan(2);
+
+    engine.applySettings(settings({ randomWorld: false, seed: 14 }));
+    expect(engine.snapshot.track.count, 'the old world\'s track survived it').toBe(0);
+    engine.advance(31);
+    // What is stored now is this world's, and only this world's: everything
+    // in it was sailed since the seed changed.
+    expect(tracked.stored!.seed).toBe(14);
+    expect(tracked.stored!.points.length).toBeLessThan(8);
+    engine.dispose();
+  });
+
   it('refuses a track sailed in another world', () => {
     // A seed *is* the world. The same latitude under another one is another
     // piece of sea, and drawing last world's track across it would be a claim

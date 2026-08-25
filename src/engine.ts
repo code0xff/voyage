@@ -1708,7 +1708,21 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (s.weatherMode !== 'auto') weather.set(s.weatherMode);
     sound.setEnabled(s.sound);
     snapshot.soundOn = s.sound;
-    if (worldChanged) rebuildWorld();
+    if (worldChanged) {
+      rebuildWorld();
+      // And the track goes with the world it was sailed in. The seed can be
+      // typed into the menu over a running voyage, so the coast is redrawn
+      // under her without a departure -- and a track kept across that is a
+      // line through water that no longer exists.
+      //
+      // The line on the chart was always wrong here and nobody had noticed;
+      // what made it worth fixing is that the track is written down now, and
+      // `keepUnderway` stamps it with `current.seed`. So the old world's
+      // track was being stored as the new world's, which is exactly what
+      // `restoreTrack`'s seed check exists to refuse -- smuggled past it at
+      // the write instead of the read.
+      track.count = 0;
+    }
     // Toggled mid-session, the hand appears or goes without a restart. After a
     // rebuild the world under the old hand is gone, so it is dealt again too --
     // `placeAtStart` does the same for the paths that come through it, and a
