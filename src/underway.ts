@@ -93,8 +93,26 @@ const KEY = 'voyage.underway.v1';
 
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
-/** Whether a stored hour is one this game could have written. */
-const readable = (v: unknown): v is number => finite(v) && v >= 0 && v <= HOUR_LIMIT;
+/**
+ * Whether a stored hour is one this game could have written, and what to make
+ * of it: a number in range, or null.
+ *
+ * The two ends are not symmetric, and it took a review to see why. Below zero
+ * there is no right answer -- the clock counts *on* from the hour the voyage
+ * began, so a negative one is not a clock, and clamping it to zero produces a
+ * perfectly readable midnight that the voyage then opens on, earlier than it
+ * says it began. Refused, and the session falls back to the Start time
+ * setting, which is the answer it already takes for an hour that is missing.
+ *
+ * Above the limit there *is* a right answer, and it is the limit: that is
+ * exactly what `saveUnderway` writes for a clock that has run past it, and a
+ * voyage from a build whose limit was higher is a real voyage whose era is
+ * better kept than thrown away. Refusing it instead would mean every future
+ * tightening of this bound silently orphaned the clocks written under the
+ * looser one.
+ */
+const readable = (v: unknown): number | null =>
+  finite(v) && v >= 0 ? Math.min(v, HOUR_LIMIT) : null;
 
 /**
  * The furthest the clock is allowed to run, world hours.
@@ -197,21 +215,27 @@ export function loadUnderway(): Underway | null {
     // side. Refused together.
     //
     // *Written* against absent, though, and only against absent. Every row
-    // from before the origin travelled has an hour and no `began`, and those
+    // from before the origin travelled has an hour and no origin, and those
     // are good voyages: they fall back to the setting, which is what they did
-    // when they were written. A `began` that is present and unreadable is a
+    // when they were written. An origin that is present and unreadable is a
     // damaged row and gets no such benefit.
     //
-    // `null` counts as absent and not as damage, which took a bug to see.
-    // The rule was written against `undefined` alone -- the key being missing
-    // -- which is right for a row this game has never rewritten, and wrong
-    // for the one path that matters: `sailFrom` copies the pair forward on a
-    // resume, so an old row's absent origin came back as `began: null` and
-    // JSON writes that as a key that is present. The resume that was supposed
-    // to carry the clock was the thing that threw it away, on the second open
-    // rather than the first.
+    // **Absent is a missing key or `null`, and damaged is anything else.**
+    // Written against `undefined` alone first, which is right for a row this
+    // game has never rewritten and wrong for the one path that matters:
+    // `sailFrom` copies the pair forward on a resume, so an old row's absent
+    // origin came back as `began: null`, and JSON writes that as a key that
+    // is present. The resume that was supposed to carry the clock was the
+    // thing that threw it away, on the second open rather than the first.
+    //
+    // It also settles what happens to an origin that is not a number at all.
+    // `JSON.stringify` writes NaN and both infinities as `null`, so they
+    // cannot reach this reader as anything else -- an unreadable origin
+    // arrives as an absent one and the clock falls back to the setting, which
+    // is the answer it should get. A guard on the writer was tried and was
+    // dead code: it produced the bytes JSON was already producing.
     const damaged = o.began !== undefined && o.began !== null && began === null;
-    const hour = !damaged && readable(o.hour) ? o.hour : null;
+    const hour = damaged ? null : readable(o.hour);
     return { seed: o.seed, place, hour: hour, began: hour === null ? null : began, at: o.at };
   } catch {
     return null;

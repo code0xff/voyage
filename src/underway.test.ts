@@ -149,17 +149,33 @@ describe('the voyage she is on', () => {
     }
   });
 
-  it('refuses a carried clock it could not have written', () => {
-    // Refused rather than clamped, both ends, and the caller falls back to
-    // the start hour -- which is the answer it already takes for an hour that
-    // is missing or not a number. Clamped instead, each of these comes back
-    // as a perfectly readable clock that the voyage then opens on: midnight
-    // at one end, and at the other an hour the sky cannot draw smoothly.
-    for (const hour of [-5, -1e-6, 1e300, 5e5]) {
+  it('refuses a clock from before the voyage began', () => {
+    // The clock counts *on* from the hour the voyage began at, so a negative
+    // one is not a clock and there is no right answer to clamp it to.
+    // Clamped to zero it comes back as a perfectly readable midnight that the
+    // voyage then opens on -- earlier than it says it began. Null is the
+    // answer the caller already takes for an hour that is missing.
+    for (const hour of [-5, -1e-6]) {
       store.raw.set(KEY, JSON.stringify({ seed: 7, place: { lat: 1, lon: 2 }, hour, at: 1 }));
       const row = loadUnderway();
       expect(row, String(hour)).not.toBeNull();
       expect(row!.hour, `${hour} was taken as a clock`).toBeNull();
+    }
+  });
+
+  it('holds a clock from over the limit rather than throwing it away', () => {
+    // The other end is not symmetric, and the asymmetry is the point. Over
+    // the limit there *is* a right answer and it is the limit -- which is
+    // exactly what this module writes for a clock that has run past it, so a
+    // voyage from a build whose bound was looser is a real voyage whose era
+    // is better kept than lost. Refused instead, every future tightening of
+    // the bound would silently orphan the clocks written under the old one.
+    for (const hour of [5e4, 1e300]) {
+      store.raw.set(KEY, JSON.stringify({ seed: 7, place: { lat: 1, lon: 2 }, hour, at: 1 }));
+      const back = loadUnderway()!.hour;
+      expect(back, `${hour} lost its voyage's era`).not.toBeNull();
+      expect(back, `${hour} came back over the limit`).toBeLessThanOrEqual(3e4);
+      expect(back, `${hour} came back as something else`).toBeGreaterThan(1e4);
     }
   });
 
@@ -192,6 +208,9 @@ describe('the voyage she is on', () => {
     // Float32 spacing is `2^(exponent - 23)` and nothing else. A doubling
     // search for it overshot by a fifth and published a table that made an
     // over-generous bound look fine, which is how it came to be one.
+    // Normal, non-zero magnitudes only, which is all it is ever handed here:
+    // denormals and zero have a fixed spacing of 2^-149 that this expression
+    // does not describe.
     const ulp = (x: number) =>
       Math.pow(2, Math.floor(Math.log2(Math.abs(Math.fround(x)))) - 23);
     // The cloud deck's drift does not stay a drift: the shader scales it and
@@ -201,7 +220,10 @@ describe('the voyage she is on', () => {
     const finest = ulp(hour * CLOUD_DRIFT_PER_HOUR) * DECK_SCALE * CLOUD_LACUNARITY ** 4;
     expect(finest, 'the cloud deck steps through its own noise').toBeLessThan(0.05);
     // And the stars, which turn straight off it. A twentieth of a degree is
-    // well inside a pixel at any window this is played in.
+    // about *one* pixel across a 90-degree view on a 1920-wide window, not
+    // well inside one -- so it is a ceiling rather than comfort. At the bound
+    // the real step is 0.028 of a degree, which is a little over half of
+    // that.
     const star = (ulp(hour * SIDEREAL_RATE) * 180) / Math.PI;
     expect(star, 'the stars turn in visible steps').toBeLessThan(0.05);
   });
@@ -221,8 +243,11 @@ describe('the voyage she is on', () => {
       expect(back, `${began} was refused as an origin`).not.toBeNull();
       expect(back, `${began} came back as something else`).toBeCloseTo(began, 9);
     }
-    // And not an hour of some other day.
-    for (const began of [-0.5, 24.5, NaN, 'nine']) {
+    // And not an hour of some other day. `NaN` is deliberately absent from
+    // this list: `JSON.stringify` writes it as `null`, so it cannot reach the
+    // reader as a damaged origin at all -- which is why the *writer* refuses
+    // it instead. See the round trip below.
+    for (const began of [-0.5, 24.5, 'nine']) {
       store.raw.set(
         KEY,
         JSON.stringify({ seed: 7, place: { lat: 1, lon: 2 }, hour: 20, began, at: 1 }),
@@ -255,6 +280,26 @@ describe('the voyage she is on', () => {
     const old = loadUnderway()!;
     expect(old.hour, 'a row from before the origin existed lost its clock').toBeCloseTo(20, 9);
     expect(old.began).toBeNull();
+  });
+
+  it('lands an origin that is not a number in the one bucket it can reach', () => {
+    // `JSON.stringify({ began: NaN })` is `{"began":null}`, and both
+    // infinities go the same way -- so an unreadable origin cannot arrive
+    // here as anything but an absent one, whatever the writer intended. The
+    // reader's rule has to be right for that, because it is the only rule
+    // such a value will ever meet: absent means fall back to the Start time
+    // setting and keep the clock, which is what a row with no origin has
+    // always meant.
+    //
+    // Locked down because the failure is silent in the other direction: read
+    // as damage, this is a clock thrown away, and it is the same read that
+    // once threw away every legacy row's clock on its second open.
+    for (const began of [NaN, Infinity, -Infinity]) {
+      saveUnderway({ ...SYDNEY, began });
+      const row = loadUnderway()!;
+      expect(row.began, `${began} was written as an origin`).toBeNull();
+      expect(row.hour, `${began} took the clock with it`).toBeCloseTo(20.5, 9);
+    }
   });
 
   it("carries an old row's clock through the resume that rewrites it", () => {

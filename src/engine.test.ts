@@ -2006,10 +2006,11 @@ describe('sailing on the Earth', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     // The stored origin is deliberately *not* the current Start time: with
     // the two the same, dropping the origin and keeping it are the same
-    // number and the assertion below cannot tell them apart. Half a period
-    // away, so an origin left standing puts the stream the other way about --
-    // written first as a flat 17:00, which is eight hours from nine and not
-    // the half period the comment claimed.
+    // number and the assertion below cannot tell them apart. Half a tide
+    // period away from it, so an origin left standing puts the stream the
+    // other way about -- derived, because half a period is the claim and a
+    // flat 17:00 written here first was eight hours from nine rather than
+    // the 6.21 it needed to be.
     kept.stored = storedOn({ lat: 45, lon: -100 }, 13, 22, 9 + TIDE_PERIOD / 2);
     tracked.stored = {
       seed: 13,
