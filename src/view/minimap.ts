@@ -225,9 +225,39 @@ const TIDE_CELLS = 7;
 /** Redraw interval for the wind layer, ms. It advects far too slowly to need 60 Hz. */
 const WIND_INTERVAL = 120;
 
-const TRACK_MAX = 240;
 /** Metres between recorded track points. */
 const TRACK_STEP = 12;
+/**
+ * How many track points are kept.
+ *
+ * Derived from the chart rather than chosen, because the only track worth
+ * keeping is the one the chart can draw. It was 240 -- 2.9 km -- which was a
+ * reasonable length while the widest range was pilotage scale, and stopped
+ * being one when the passage scales arrived: on the 5 km chart she came from
+ * somewhere off the end of her own track, and the water astern was drawn
+ * empty when she had in fact just sailed through it.
+ *
+ * `CHART_RANGE` *is* the answer, and exactly: the furthest a point can be
+ * from the boat and still be drawn is `maxChartOffset(i) + RANGES[i]`, and
+ * that comes to 8300 m at every one of the five ranges. Not a coincidence --
+ * `maxChartOffset` is written as `CHART_RANGE - range` for the ranges where
+ * that is the binding term, precisely so a drag can never leave the window
+ * the chart is collected in.
+ *
+ * Two things a first attempt got wrong, pulling opposite ways. The chart is
+ * clipped to a *circle*, so the corner of the square is never drawn and the
+ * range is the reach rather than its half-diagonal. And the chart pans: a
+ * drag astern at the widest range puts the centre 3300 m behind her, so the
+ * track has to reach that much further than one centred on the boat would.
+ *
+ * Straight-line extent, so a boat beating up sees rather less of it than this
+ * in a direct line -- which is right: what is drawn is the track she sailed,
+ * tacks and all.
+ *
+ * Plus one for the fencepost: n points span n-1 steps, and without it the
+ * track stops eight metres short of the far edge it is derived to reach.
+ */
+const TRACK_MAX = Math.ceil(CHART_RANGE / TRACK_STEP) + 1;
 
 export interface MinimapInput {
   state: BoatState;
