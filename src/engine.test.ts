@@ -2006,8 +2006,11 @@ describe('sailing on the Earth', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     // The stored origin is deliberately *not* the current Start time: with
     // the two the same, dropping the origin and keeping it are the same
-    // number and the assertion below cannot tell them apart.
-    kept.stored = storedOn({ lat: 45, lon: -100 }, 13, 22, 17);
+    // number and the assertion below cannot tell them apart. Half a period
+    // away, so an origin left standing puts the stream the other way about --
+    // written first as a flat 17:00, which is eight hours from nine and not
+    // the half period the comment claimed.
+    kept.stored = storedOn({ lat: 45, lon: -100 }, 13, 22, 9 + TIDE_PERIOD / 2);
     tracked.stored = {
       seed: 13,
       at: 1,
@@ -2044,13 +2047,12 @@ describe('sailing on the Earth', () => {
     expect(engine.snapshot.sky.hour, "the rejected voyage's clock was kept").toBeCloseTo(9, 1);
     // And the hour its tide was counted from, which is a second field of the
     // same record and went the same way. Read through the stream, since that
-    // is what it decides: 17:00 was half a period behind 9, so an origin left
-    // standing opens this one running the other way.
+    // is what it decides: the stored origin is half a period from this
+    // session's, so one left standing opens the stream running the other way.
+    // Strictly positive, because zero is what a test with no drift at all
+    // would also see and would not be reading the origin through anything.
     engine.advance(0.02);
-    expect(
-      engine.snapshot.currents.peak.x,
-      "the rejected voyage's tide origin was kept",
-    ).toBeGreaterThanOrEqual(0);
+    expect(engine.snapshot.currents.peak.x, "the rejected voyage's tide origin was kept").toBeGreaterThan(0);
     engine.putToSea();
     engine.advance(0.02);
     const { xy, count } = engine.snapshot.track;

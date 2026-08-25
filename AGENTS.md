@@ -81,12 +81,16 @@ where and when she left off) and the track she sailed to get there
 (`src/track.ts`).
 
 The track is a separate row and not a field on the voyage, because the voyage
-row is refused outright when the part that says *which voyage* is wrong — the
-seed, the timestamp, or either half of the position — and seven hundred points
-folded in would let one bad coordinate lose the position too. What the row
-says *about* the voyage is refused field by field instead: a clock that is
-missing or unreadable comes back null and the session falls back to the Start
-time setting, which is what every session did before the clock was carried.
+row is refused outright when the part that says *which voyage* is
+**unreadable** — a seed, a timestamp or a coordinate that is missing or not a
+number — and seven hundred points folded in would let one bad coordinate lose
+the position too. Unreadable, and not merely wrong: a seed from another world
+loads fine and is turned away later by `sameWorld`, and a latitude off the
+planet is clamped onto it rather than refused, because there is a right answer
+for those and refusing would cost a voyage to no purpose. What the row says
+*about* the voyage is handled field by field again: a clock that is missing or
+unreadable comes back null and the session falls back to the Start time
+setting, which is what every session did before the clock was carried.
 The track is bounded rather than accumulating — the chart keeps the last
 8.3 km, which is what the chart can draw — so it belongs here beside the
 settings and not in IndexedDB.

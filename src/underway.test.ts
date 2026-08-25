@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { clearUnderway, loadUnderway, sameWorld, saveUnderway } from './underway';
+import {
+  CLOUD_DRIFT_PER_HOUR,
+  CLOUD_LACUNARITY,
+  DECK_SCALE,
+  SIDEREAL_RATE,
+} from './view/skydome';
 
 /**
  * The one row that survives a session.
@@ -176,11 +182,28 @@ describe('the voyage she is on', () => {
     // The clock is stepped by about 1e-5 of an hour, and one too large to add
     // that to is a stopped sun that nothing reports.
     expect(hour + 1e-5, 'the clock is too large to advance').toBeGreaterThan(hour);
-    // And the renderer multiplies it up into float32 uniforms -- the cloud
-    // deck's drift at 0.5 an hour, scaled again in the shader and sampled by
-    // five noise octaves. Past about 3e5 the octave carrying half the sky
-    // starts stepping in visible fractions of a noise cell.
-    expect(hour, 'the carried clock reaches the sky as a stuttering float').toBeLessThan(3e5);
+
+    // And the other end, which is the whole reason the bound is where it is:
+    // the renderer multiplies this number up and hands the *products* to
+    // float32 uniforms. Asserted through the rates themselves, imported from
+    // the sky, so that changing one there without revisiting the bound here
+    // fails rather than quietly making the sky step.
+    //
+    // Float32 spacing is `2^(exponent - 23)` and nothing else. A doubling
+    // search for it overshot by a fifth and published a table that made an
+    // over-generous bound look fine, which is how it came to be one.
+    const ulp = (x: number) =>
+      Math.pow(2, Math.floor(Math.log2(Math.abs(Math.fround(x)))) - 23);
+    // The cloud deck's drift does not stay a drift: the shader scales it and
+    // samples five octaves off it, so a step in the uniform is a step of
+    // `DECK_SCALE * CLOUD_LACUNARITY^4` in the finest octave's own cells. A
+    // twentieth of a cell is the claim; at the old bound it was an eighth.
+    const finest = ulp(hour * CLOUD_DRIFT_PER_HOUR) * DECK_SCALE * CLOUD_LACUNARITY ** 4;
+    expect(finest, 'the cloud deck steps through its own noise').toBeLessThan(0.05);
+    // And the stars, which turn straight off it. A twentieth of a degree is
+    // well inside a pixel at any window this is played in.
+    const star = (ulp(hour * SIDEREAL_RATE) * 180) / Math.PI;
+    expect(star, 'the stars turn in visible steps').toBeLessThan(0.05);
   });
 
   it('takes any hour the Start time setting can hand it as an origin', () => {

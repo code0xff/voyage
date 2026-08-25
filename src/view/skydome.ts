@@ -28,6 +28,19 @@ import type { SkyState } from '../sim/sky';
  * fifteen degrees an hour, which is free and is the cue that time is passing.
  */
 
+/**
+ * How far the cloud deck's own plane is magnified before the noise is sampled.
+ *
+ * Interpolated into the shader rather than written there twice, and exported
+ * for the same reason as the two rates below: the clock's bound in
+ * `underway.ts` is derived through it, and a value changed here without that
+ * bound being revisited is a sky that starts stepping.
+ */
+export const DECK_SCALE = 1.9;
+
+/** How much finer each noise octave is than the one before it. */
+export const CLOUD_LACUNARITY = 2.03;
+
 const vertexShader = /* glsl */ `
   varying vec3 vDir;
   void main() {
@@ -92,16 +105,16 @@ const fragmentShader = /* glsl */ `
    * lumpy, so it is the cheapest thing that is.
    */
   float fbm2(vec2 p) {
-    return vnoise(p) * 0.62 + vnoise(p * 2.03 + 5.2) * 0.31;
+    return vnoise(p) * 0.62 + vnoise(p * ${CLOUD_LACUNARITY} + 5.2) * 0.31;
   }
 
   /**
    * How far the deck's own plane is magnified before the noise is sampled:
    * larger means smaller clouds, and more of them in the sky at once. One
    * unit of the plane is the horizontal distance to a point seen at
-   * forty-five degrees up.
+   * forty-five degrees up. Declared in TypeScript and interpolated in.
    */
-  const float DECK_SCALE = 1.9;
+  const float DECK_SCALE = ${DECK_SCALE};
 
   /**
    * The deck's density at a point in its own plane, 0..1 about a mean of half.
@@ -144,7 +157,7 @@ const fragmentShader = /* glsl */ `
       v += a * k * vnoise(p * f);
       sum += a * k;
       a *= 0.5;
-      f *= 2.03;
+      f *= ${CLOUD_LACUNARITY};
     }
     // Where the projection has run so far that not one octave survives, the
     // honest answer is the field's own mean rather than zero: zero is a
@@ -438,8 +451,14 @@ export interface SkyDome {
   dispose(): void;
 }
 
-/** rad per hour. The sky turns once a day; this part of it really is exact. */
-const SIDEREAL_RATE = (2 * Math.PI) / 24;
+/**
+ * rad per hour. The sky turns once a day; this part of it really is exact.
+ *
+ * Exported for `underway.test.ts`, which relates the clock's own bound to the
+ * two things that multiply it up into float32 uniforms. A rate changed here
+ * without that bound being revisited is a sky that starts stepping.
+ */
+export const SIDEREAL_RATE = (2 * Math.PI) / 24;
 
 /**
  * How far across the sky the cloud deck travels per world hour, at the wind's
@@ -454,7 +473,7 @@ const SIDEREAL_RATE = (2 * Math.PI) / 24;
  * moves the way the weather is moving, downwind and at a rate you can watch.
  * This number is what makes that read, and it was chosen by watching it.
  */
-const CLOUD_DRIFT_PER_HOUR = 0.5;
+export const CLOUD_DRIFT_PER_HOUR = 0.5;
 
 export function createSkyDome(): SkyDome {
   const geo = new THREE.SphereGeometry(1800, 32, 20);

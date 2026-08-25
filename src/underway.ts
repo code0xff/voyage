@@ -99,10 +99,9 @@ const readable = (v: unknown): v is number => finite(v) && v >= 0 && v <= HOUR_L
 /**
  * The furthest the clock is allowed to run, world hours.
  *
- * Eleven years, which is about seventeen hundred hours of playing one voyage
- * at the default time scale -- further than a voyage goes, and the clock is
- * the only thing here that can grow without bound now that it survives a
- * session.
+ * Three and a half years of world time, which is further than a voyage goes
+ * -- and the clock is the only thing here that can grow without bound now
+ * that it survives a session.
  *
  * The bound is not the double that holds `hour`, which is good for far
  * longer. It is float32, on the far side of the renderer. `skydome.ts`
@@ -114,28 +113,33 @@ const readable = (v: unknown): v is number => finite(v) && v >= 0 && v <= HOUR_L
  * The drift is the binding one, and by a long way, because it does not stay a
  * drift: the shader scales it by `DECK_SCALE` and then samples five noise
  * octaves off it, so a step in the uniform is a step of `1.9 * 2.03^i` in
- * octave i's own cells. Measured, per octave, against its share of the field:
+ * octave i's own cells. Measured on the exact float32 spacing, per octave,
+ * against that octave's share of the field:
  *
- *     hours    base octave (52% of it)   finest octave (3.2% of it)
- *     2e4      0.12% of a cell           2.1%
- *     1e5      0.61%                     10%
- *     3e5      1.8%                      31%
- *     1e6      3.0%                      52%
+ *     hours    base octave (52% of it)   finest octave (3.2% of it)   a star
+ *     1e4      0.09% of a cell           1.6%                         0.014 deg
+ *     3e4      0.19%                     3.2%                         0.028
+ *     1e5      0.74%                     13%                          0.11
+ *     3e5      3.0%                      50%                          0.45
  *
- * So 1e5 keeps the octave that carries half the sky moving at well under a
- * hundredth of a cell, and leaves a tenth-of-a-cell stutter only in the one
- * carrying three per cent of it. At 1e6 the base octave itself is stepping
- * and the finest is jumping half a cell at a time.
+ * 3e4 is the last row where nothing on the far side of the renderer moves by
+ * an amount anyone could see, and it is still three and a half years of world
+ * time -- some five hundred hours of playing one voyage at the default scale,
+ * without ever starting another.
  *
- * A first version of this reasoned about the hour rather than the products
- * and put the limit at 1e6, which is past where the sky visibly stutters. It
- * also compared against a guess at the finest feature instead of the octave
- * scales above, and was out by a factor of four at its own limit.
+ * It took two goes to get here, both of them wrong in the same direction.
+ * The first reasoned about the hour and not the products the renderer is
+ * actually handed, and put the bound at 1e6, where a star steps most of a
+ * degree. The second reasoned about the products but measured their spacing
+ * with a doubling search that overshot, and published a table a fifth too
+ * kind; on the true numbers its 1e5 leaves the finest octave stepping an
+ * eighth of a cell. The arithmetic here is `2^(exponent - 23)`, which is what
+ * float32 spacing is, rather than anything searched for.
  *
- * The *live* clock is held here too, in the engine's step. Clamping only the
- * stored copy left the session running past a limit its row was pinned at, so
- * a reload jumped the sky and the tide backwards -- which is the one thing
- * the pinned calendar was supposed to avoid.
+ * `underway.test.ts` holds this relation open: it imports the two rates and
+ * the deck's scale from `skydome.ts` and asserts the products stay under a
+ * twentieth of a cell and a twentieth of a degree. Change a rate there
+ * without revisiting this and the test says so.
  *
  * Clamped rather than refused on the way out, so an absurd row still sails.
  * What it costs a voyage that reached it is a pinned calendar at a steady
@@ -143,7 +147,7 @@ const readable = (v: unknown): v is number => finite(v) && v >= 0 && v <= HOUR_L
  * hand-edited 1e300 makes `hour += dt` a no-op and stops the sun with nothing
  * reporting a fault.
  */
-export const HOUR_LIMIT = 1e5;
+export const HOUR_LIMIT = 3e4;
 
 /**
  * Read the voyage, or null if there is none to read.
