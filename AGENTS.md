@@ -81,13 +81,23 @@ where and when she left off) and the track she sailed to get there
 (`src/track.ts`).
 
 The track is a separate row and not a field on the voyage, because the voyage
-row is refused whole when any part of it is wrong and six hundred points
-folded in would let one bad coordinate lose the position too. It is bounded
-rather than accumulating — the chart keeps the last 8.3 km, which is what the
-chart can draw — so it belongs here beside the settings and not in IndexedDB.
-Being two rows, they can in principle disagree; the cost is a track tail up to
-half a minute shorter than the position, which is what the write throttle
-already permits every second of normal play.
+row is refused outright when the part that says *which voyage* is wrong — the
+seed, the timestamp, or either half of the position — and seven hundred points
+folded in would let one bad coordinate lose the position too. What the row
+says *about* the voyage is refused field by field instead: a clock that is
+missing or unreadable comes back null and the session falls back to the Start
+time setting, which is what every session did before the clock was carried.
+The track is bounded rather than accumulating — the chart keeps the last
+8.3 km, which is what the chart can draw — so it belongs here beside the
+settings and not in IndexedDB.
+
+Being two rows, they can disagree. In normal running the gap is bounded and
+small: both are written on one tick and behind one throttle, so the track is
+at most half a minute shorter than the position, which is what that throttle
+already permits every second of play. A *failed* write is not bounded — a
+quota error on the larger track row while the position lands leaves a track of
+any age — and that is accepted rather than solved, because the cost is a line
+on a chart and the alternative is a transaction across two localStorage keys.
 
 The one thing local-first cannot do is follow you to another device. If that is
 ever wanted it needs accounts, and accounts are the real cost — not the database.
