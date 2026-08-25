@@ -74,10 +74,11 @@ export interface Underway {
    *
    * The "Start time" setting is where a *new* voyage begins, and a player may
    * move it between one session and the next. `hour` alone was enough until
-   * you ask what it counts from: the tide's phase is `hour - startHour` over
-   * the period, so read against a setting that has since moved, a resumed
-   * voyage opened on a tide it was never on -- move Start time by six hours
-   * with a 12.42-hour period and the stream runs the other way.
+   * you ask what it counts from: the tide's phase is `hour - began` over the
+   * period, and `began` was read straight from the Start time setting until
+   * this field existed. Read against a setting that has since moved, a
+   * resumed voyage opened on a tide it was never on -- move Start time by
+   * six hours with a 12.42-hour period and the stream runs the other way.
    *
    * So the origin travels with the clock. It is the one thing here that is
    * *not* re-derivable and not the world's either: it is a fact about when
@@ -177,14 +178,28 @@ export function loadUnderway(): Underway | null {
     // voyage on -- before the hour it says the voyage began at. Falling back
     // to the start hour is the honest failure, and it is the one already
     // taken for an hour that is missing or not a number.
-    const hour = readable(o.hour) ? o.hour : null;
-    // On the same terms, and against the day rather than the clock's own
-    // range: it is an hour of the day the voyage set out on, which is what
-    // the Start time setting hands over -- so the bound is that setting's,
-    // which `loadSettings` clamps to 0..24 *inclusive*. Written exclusive
-    // first, which refused the one voyage begun at the top of the range.
+    // Against the day rather than the clock's own range: `began` is an hour
+    // of the day the voyage set out on, which is what the Start time setting
+    // hands over -- so the bound is that setting's, which `loadSettings`
+    // clamps to 0..24 *inclusive*. Written exclusive first, which refused
+    // the one voyage begun at the top of the range.
     const began = finite(o.began) && o.began >= 0 && o.began <= 24 ? o.began : null;
-    return { seed: o.seed, place, hour, began, at: o.at };
+    // The pair, and not two fields that happen to sit together.
+    //
+    // The clock is only a clock against the hour it counts from: the tide's
+    // phase is `hour - began`, so an hour taken without a readable origin is
+    // an hour placed on whatever the Start time setting happens to say --
+    // which is the bug `began` was added to stop, arrived at from the other
+    // side. Refused together.
+    //
+    // *Written* against absent, though, and only against absent. Every row
+    // from before the origin travelled has an hour and no `began`, and those
+    // are good voyages: they fall back to the setting, which is what they did
+    // when they were written. A `began` that is present and unreadable is a
+    // damaged row and gets no such benefit.
+    const damaged = o.began !== undefined && began === null;
+    const hour = !damaged && readable(o.hour) ? o.hour : null;
+    return { seed: o.seed, place, hour: hour, began: hour === null ? null : began, at: o.at };
   } catch {
     return null;
   }

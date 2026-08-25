@@ -2004,7 +2004,10 @@ describe('sailing on the Earth', () => {
     // pond and float her in it, which is worse than failing because it looks
     // like it worked. The stub planet is land north of 30N.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    kept.stored = storedOn({ lat: 45, lon: -100 }, 13, 22, 9);
+    // The stored origin is deliberately *not* the current Start time: with
+    // the two the same, dropping the origin and keeping it are the same
+    // number and the assertion below cannot tell them apart.
+    kept.stored = storedOn({ lat: 45, lon: -100 }, 13, 22, 17);
     tracked.stored = {
       seed: 13,
       at: 1,
@@ -2013,7 +2016,16 @@ describe('sailing on the Earth', () => {
         { lat: 45.01, lon: -100 },
       ],
     };
-    const engine = sailing({ randomWorld: false, seed: 13 });
+    // A stream to read the tide's origin through: with no drift at all the
+    // assertion about it below is true whatever the origin says.
+    const engine = sailing({
+      randomWorld: false,
+      seed: 13,
+      startHour: 9,
+      driftKnots: 2,
+      setDeg: 90,
+      tideHours: TIDE_PERIOD,
+    });
     await Promise.resolve();
     await Promise.resolve();
     engine.advance(0.5);
@@ -2030,6 +2042,15 @@ describe('sailing on the Earth', () => {
     expect(tracked.stored, "the rejected voyage's track was left in store").toBeNull();
     frame(0.1);
     expect(engine.snapshot.sky.hour, "the rejected voyage's clock was kept").toBeCloseTo(9, 1);
+    // And the hour its tide was counted from, which is a second field of the
+    // same record and went the same way. Read through the stream, since that
+    // is what it decides: 17:00 was half a period behind 9, so an origin left
+    // standing opens this one running the other way.
+    engine.advance(0.02);
+    expect(
+      engine.snapshot.currents.peak.x,
+      "the rejected voyage's tide origin was kept",
+    ).toBeGreaterThanOrEqual(0);
     engine.putToSea();
     engine.advance(0.02);
     const { xy, count } = engine.snapshot.track;
@@ -2894,6 +2915,25 @@ describe('the clock she is sailing on', () => {
       engine.snapshot.currents.peak.x,
       'the resumed tide followed the setting rather than the voyage',
     ).toBeLessThan(0);
+    engine.dispose();
+  });
+
+  it('will not launder another world\'s clock into this one', () => {
+    // `sailFrom` writes the row on the way past and stamps what it copies
+    // with `current.seed`. So a caller who changes the seed and then asks to
+    // resume hands `resumeVoyage` a row that now carries the seed that makes
+    // it acceptable -- the world check answered by rewriting the answer.
+    //
+    // `App.sailOn` pins the seed to the row's before it calls this, so the
+    // menu is safe. The engine's API is what a second caller would meet, and
+    // it is the surface this file drives.
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 22, 9);
+    const engine = createEngine(canvas(), settings({ randomWorld: false, seed: 13, startHour: 9 }));
+    engine.applySettings(settings({ randomWorld: false, seed: 14, startHour: 9 }));
+    engine.sailFrom({ place: { lat: -33.5, lon: 18.4 }, resume: true });
+    expect(kept.stored!.hour, "seed 13's clock was copied under seed 14").toBeNull();
+    engine.putToSea();
+    expect(clock(engine), "the new world opened on the old world's clock").toBeCloseTo(9, 1);
     engine.dispose();
   });
 

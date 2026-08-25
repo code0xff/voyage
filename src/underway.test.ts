@@ -208,6 +208,30 @@ describe('the voyage she is on', () => {
     }
   });
 
+  it('takes the clock and the hour it counts from as one, or neither', () => {
+    // A clock is only a clock against the hour it counts from -- the tide's
+    // phase is `hour - began` -- so an hour taken with an unreadable origin
+    // is an hour placed on whatever the Start time setting happens to say.
+    // That is the bug `began` exists to stop, reached from the other side.
+    const damaged = { seed: 7, place: { lat: 1, lon: 2 }, hour: 20, at: 1 };
+    for (const began of [-1, 25, 'nine', null, {}]) {
+      store.raw.set(KEY, JSON.stringify({ ...damaged, began }));
+      const row = loadUnderway()!;
+      expect(row, String(began)).not.toBeNull();
+      expect(row.began, `${String(began)} was taken as an origin`).toBeNull();
+      expect(row.hour, `${String(began)} left its clock behind`).toBeNull();
+    }
+
+    // Absent is not damaged, and the difference is the whole rule. Every row
+    // written before the origin travelled with the clock has an hour and no
+    // `began`, and those are good voyages: they fall back to the setting,
+    // which is exactly what they did when they were written.
+    store.raw.set(KEY, JSON.stringify(damaged));
+    const old = loadUnderway()!;
+    expect(old.hour, 'a row from before the origin existed lost its clock').toBeCloseTo(20, 9);
+    expect(old.began).toBeNull();
+  });
+
   it('knows whether a row is the world these settings would sail', () => {
     // A seed *is* the world now: the same coordinates under another seed are
     // another shoreline.

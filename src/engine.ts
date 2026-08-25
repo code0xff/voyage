@@ -2876,7 +2876,16 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
         // is this voyage's own, and its clock -- and the hour that clock is
         // counted from -- go on. A new voyage starts at the Start time
         // setting, which is what a null pair asks for.
-        const carried = resume ? loadUnderway() : null;
+        //
+        // `sameWorld` before copying, because this write stamps whatever it
+        // copies with `current.seed`. Without it a caller who had changed the
+        // seed and then asked to resume laundered another world's clock into
+        // this one: the row came out carrying a seed that made it acceptable
+        // to `resumeVoyage`, which is the check being smuggled past rather
+        // than answered. `App` pins the seed first and is safe; the engine's
+        // own API is what a second caller would meet.
+        const row = resume ? loadUnderway() : null;
+        const carried = row && sameWorld(row, current) ? row : null;
         saveUnderway({
           seed: current.seed,
           place: spot.place,
