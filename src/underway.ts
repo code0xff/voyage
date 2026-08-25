@@ -197,7 +197,16 @@ export function loadUnderway(): Underway | null {
     // are good voyages: they fall back to the setting, which is what they did
     // when they were written. A `began` that is present and unreadable is a
     // damaged row and gets no such benefit.
-    const damaged = o.began !== undefined && began === null;
+    //
+    // `null` counts as absent and not as damage, which took a bug to see.
+    // The rule was written against `undefined` alone -- the key being missing
+    // -- which is right for a row this game has never rewritten, and wrong
+    // for the one path that matters: `sailFrom` copies the pair forward on a
+    // resume, so an old row's absent origin came back as `began: null` and
+    // JSON writes that as a key that is present. The resume that was supposed
+    // to carry the clock was the thing that threw it away, on the second open
+    // rather than the first.
+    const damaged = o.began !== undefined && o.began !== null && began === null;
     const hour = !damaged && readable(o.hour) ? o.hour : null;
     return { seed: o.seed, place, hour: hour, began: hour === null ? null : began, at: o.at };
   } catch {

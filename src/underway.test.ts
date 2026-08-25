@@ -214,7 +214,9 @@ describe('the voyage she is on', () => {
     // is an hour placed on whatever the Start time setting happens to say.
     // That is the bug `began` exists to stop, reached from the other side.
     const damaged = { seed: 7, place: { lat: 1, lon: 2 }, hour: 20, at: 1 };
-    for (const began of [-1, 25, 'nine', null, {}]) {
+    // `null` is deliberately not on this list: it is how JSON writes "there
+    // isn't one", and the row below relies on that. See the test after this.
+    for (const began of [-1, 25, 'nine', {}, true]) {
       store.raw.set(KEY, JSON.stringify({ ...damaged, began }));
       const row = loadUnderway()!;
       expect(row, String(began)).not.toBeNull();
@@ -230,6 +232,22 @@ describe('the voyage she is on', () => {
     const old = loadUnderway()!;
     expect(old.hour, 'a row from before the origin existed lost its clock').toBeCloseTo(20, 9);
     expect(old.began).toBeNull();
+  });
+
+  it("carries an old row's clock through the resume that rewrites it", () => {
+    // The path that matters, and the one the rule above got wrong first.
+    // `sailFrom` copies the pair forward on a resume, so an old row's absent
+    // origin comes back as `began: null` -- and JSON writes that as a key
+    // that is *present*. Read as damage, the resume that was supposed to
+    // carry the clock was the thing that threw it away, on the second open
+    // rather than the first, which is where nobody looks.
+    store.raw.set(KEY, JSON.stringify({ seed: 7, place: { lat: 1, lon: 2 }, hour: 22, at: 1 }));
+    const carried = loadUnderway()!;
+    expect(carried.hour, 'the old row would not open at all').toBeCloseTo(22, 9);
+
+    saveUnderway({ seed: 7, place: { lat: 1, lon: 2 }, hour: carried.hour, began: carried.began });
+    const again = loadUnderway()!;
+    expect(again.hour, 'the resume threw away the clock it was carrying').toBeCloseTo(22, 9);
   });
 
   it('knows whether a row is the world these settings would sail', () => {
