@@ -29,6 +29,20 @@ import type { SkyState } from '../sim/sky';
  */
 
 /**
+ * A number as a GLSL float literal.
+ *
+ * `${2}` interpolates as `2`, and GLSL will not assign an int to a float: the
+ * shader stops compiling, which nothing in the test suite can see and only a
+ * browser reports. Two of the constants below are interpolated into the
+ * shader so that they are declared once rather than twice, and a lacunarity
+ * of exactly 2 is the most ordinary value either of them could take.
+ *
+ * Exponent form needs no decimal point and GLSL accepts it, so only the
+ * integer case has to be repaired.
+ */
+export const glslFloat = (v: number): string => (Number.isInteger(v) ? v.toFixed(1) : String(v));
+
+/**
  * How far the cloud deck's own plane is magnified before the noise is sampled.
  *
  * Interpolated into the shader rather than written there twice, and exported
@@ -105,7 +119,7 @@ const fragmentShader = /* glsl */ `
    * lumpy, so it is the cheapest thing that is.
    */
   float fbm2(vec2 p) {
-    return vnoise(p) * 0.62 + vnoise(p * ${CLOUD_LACUNARITY} + 5.2) * 0.31;
+    return vnoise(p) * 0.62 + vnoise(p * ${glslFloat(CLOUD_LACUNARITY)} + 5.2) * 0.31;
   }
 
   /**
@@ -114,7 +128,7 @@ const fragmentShader = /* glsl */ `
    * unit of the plane is the horizontal distance to a point seen at
    * forty-five degrees up. Declared in TypeScript and interpolated in.
    */
-  const float DECK_SCALE = ${DECK_SCALE};
+  const float DECK_SCALE = ${glslFloat(DECK_SCALE)};
 
   /**
    * The deck's density at a point in its own plane, 0..1 about a mean of half.
@@ -157,7 +171,7 @@ const fragmentShader = /* glsl */ `
       v += a * k * vnoise(p * f);
       sum += a * k;
       a *= 0.5;
-      f *= ${CLOUD_LACUNARITY};
+      f *= ${glslFloat(CLOUD_LACUNARITY)};
     }
     // Where the projection has run so far that not one octave survives, the
     // honest answer is the field's own mean rather than zero: zero is a
