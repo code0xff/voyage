@@ -73,8 +73,8 @@ const DRAG_SLOP = 4;
  * transition: zoom out on the big chart, close it, and the card is where you
  * left it, because it is the same chart. Two components would have been two
  * charts that happened to look alike, and two `createMinimap()` instances --
- * two raster caches, two traced outlines, and a track that only one of them
- * had been recording.
+ * two raster caches and two traced outlines. The track was on that list until
+ * the engine took it over; the rest is reason enough.
  */
 export function MinimapCard({
   onWorld,
@@ -369,7 +369,7 @@ export function MinimapCard({
       region: s.region,
       draft: CRUISER.draft,
       range,
-      session: s.session,
+      track: s.track,
       pin: s.pin,
       destination: s.destination,
       calls: s.calls,
@@ -377,9 +377,9 @@ export function MinimapCard({
       pan: pan.current,
     });
     // A hand-panned chart holds a world position of its own, so it moves with
-    // the plane like the track does -- otherwise a re-pin flings the view two
-    // hundred kilometres off the boat and the player has to press recentre to
-    // find her again.
+    // the plane like the engine's own track does -- otherwise a re-pin flings
+    // the view two hundred kilometres off the boat and the player has to press
+    // recentre to find her again.
     if (s.pin.count !== pinned.current) {
       pinned.current = s.pin.count;
       if (pan.current) pan.current = { x: pan.current.x + s.pin.x, y: pan.current.y + s.pin.y };

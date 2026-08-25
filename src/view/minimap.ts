@@ -225,8 +225,14 @@ const TIDE_CELLS = 7;
 /** Redraw interval for the wind layer, ms. It advects far too slowly to need 60 Hz. */
 const WIND_INTERVAL = 120;
 
-/** Metres between recorded track points. */
-const TRACK_STEP = 12;
+/**
+ * Metres between recorded track points.
+ *
+ * Exported because the engine keeps the track and the chart draws it, and the
+ * chart is what decides how much of it is worth keeping. See `Snapshot.track`
+ * for why the recording moved out of here.
+ */
+export const TRACK_STEP = 12;
 /**
  * How many track points are kept.
  *
@@ -257,7 +263,7 @@ const TRACK_STEP = 12;
  * Plus one for the fencepost: n points span n-1 steps, and without it the
  * track stops eight metres short of the far edge it is derived to reach.
  */
-const TRACK_MAX = Math.ceil(CHART_RANGE / TRACK_STEP) + 1;
+export const TRACK_MAX = Math.ceil(CHART_RANGE / TRACK_STEP) + 1;
 
 export interface MinimapInput {
   state: BoatState;
@@ -268,8 +274,11 @@ export interface MinimapInput {
   draft: number;
   /** Index into RANGES. */
   range: number;
-  /** Bumped by the engine on every new session; the track starts over on it. */
-  session: number;
+  /**
+   * Where she has been this voyage, plane metres in flat x,y pairs, oldest
+   * first. See `Snapshot.track`.
+   */
+  track: { xy: Float32Array; count: number };
   /** The last re-pinning of the plane; see `Snapshot.pin`. */
   pin: { count: number; x: number; y: number };
   /** Where the boat is bound, or null when she is just out sailing. */
@@ -420,10 +429,6 @@ export function createMinimap(): Minimap {
   // This chart's own raster cache. See ChartCache.
   const chart: ChartCache = { canvas: null, key: '' };
 
-  // The chart keeps its own track of where she has been.
-  const track = new Float32Array(TRACK_MAX * 2);
-  let trackCount = 0;
-
   const windLayer = document.createElement('canvas');
   let windDrawnAt = -Infinity;
   let windRange = -1;
@@ -431,29 +436,13 @@ export function createMinimap(): Minimap {
   let windCy = NaN;
   const windOut: [number, number] = [1, 0];
 
-  let session = -1;
-  /** The re-pinning the track has been carried across; see `draw`. */
+  /** The re-pinning the chart's centre has been carried across; see `draw`. */
   let pinCount = 0;
 
   // Where the chart is looking. World coordinates, and deliberately not the
   // boat's: see PAN_AT.
   let centreX = NaN;
   let centreY = NaN;
-
-  function pushTrack(x: number, y: number): void {
-    if (trackCount > 0) {
-      const lx = track[(trackCount - 1) * 2];
-      const ly = track[(trackCount - 1) * 2 + 1];
-      if (Math.hypot(x - lx, y - ly) < TRACK_STEP) return;
-    }
-    if (trackCount === TRACK_MAX) {
-      track.copyWithin(0, 2);
-      trackCount--;
-    }
-    track[trackCount * 2] = x;
-    track[trackCount * 2 + 1] = y;
-    trackCount++;
-  }
 
   /**
    * The breeze, painted one pixel per sample and blown up to fill the chart.
@@ -550,18 +539,11 @@ export function createMinimap(): Minimap {
       const bx = input.state.pos.x;
       const by = input.state.pos.y;
 
-      // A new session is a new track. Guessing from a teleport did not work:
-      // the finish gate is the start gate, so a restart moves the boat about
-      // ninety metres and the next session drew on joined to the last one.
-      if (input.session !== session) {
-        session = input.session;
-        trackCount = 0;
-      }
-      // A re-pinning is the opposite case, and has to be told apart from a
-      // restart: the boat's coordinates change by two hundred kilometres and
-      // she has not moved at all. The track is carried across rather than
-      // dropped -- she really did sail it -- and the chart's own centre with
-      // it, or the view would jump to where the boat used to be.
+      // A re-pinning moves the boat's coordinates two hundred kilometres
+      // without her having moved at all, so the chart's own centre has to go
+      // with her or the view jumps to where she used to be. The track is
+      // moved by the engine, which owns it and everything else standing in
+      // the plane.
       //
       // *Before* the centre is worked out, and that is the whole of why this
       // block sits here rather than below it: `chartCentre` eases the old
@@ -570,10 +552,6 @@ export function createMinimap(): Minimap {
       // the frame it takes to notice.
       if (input.pin.count !== pinCount) {
         pinCount = input.pin.count;
-        for (let i = 0; i < trackCount; i++) {
-          track[i * 2] += input.pin.x;
-          track[i * 2 + 1] += input.pin.y;
-        }
         if (Number.isFinite(centreX)) {
           centreX += input.pin.x;
           centreY += input.pin.y;
@@ -591,8 +569,6 @@ export function createMinimap(): Minimap {
 
       const sx = (x: number) => cx + (x - centreX) * k;
       const sy = (y: number) => cy - (y - centreY) * k;
-
-      pushTrack(bx, by);
 
       ctx.clearRect(0, 0, size, size);
       ctx.save();
@@ -704,6 +680,7 @@ export function createMinimap(): Minimap {
       }
 
       // --- Track ------------------------------------------------------------
+      const { xy: track, count: trackCount } = input.track;
       if (trackCount > 1) {
         ctx.beginPath();
         for (let i = 0; i < trackCount; i++) {

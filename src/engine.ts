@@ -14,6 +14,7 @@ import { CurrentField, DEFAULT_FULL_DEPTH, tideRate } from './sim/current';
 import { RegionTerrain } from './sim/region-terrain';
 import { loadEarth } from './terrain-load';
 import { clearUnderway, loadUnderway, sameWorld, saveUnderway } from './underway';
+import { clearTrack, loadTrack, saveTrack } from './track';
 import { questStore } from './quests-store';
 import {
   emptyQuestState,
@@ -34,7 +35,7 @@ import {
   type ShoreSource,
 } from './sim/coast';
 import type { Earth } from './sim/earth';
-import { DEFAULT_ANCHOR, reproject, toLatLon, type LatLon } from './sim/globe';
+import { DEFAULT_ANCHOR, reproject, toLatLon, toPlane, type LatLon } from './sim/globe';
 import { beltAt, climateAt, climateSpeed, type Belt, type Climate } from './sim/climate';
 import { HeightField } from './sim/heightfield';
 import { ManeuverTracker, type Maneuver } from './sim/maneuver';
@@ -71,6 +72,7 @@ import { Weather } from './sim/weather';
 import { currentVec, wildlifeSpacing, windMs, type Settings } from './settings';
 import { Input } from './input';
 import { createScene, type SceneView } from './view/scene';
+import { TRACK_MAX, TRACK_STEP } from './view/minimap';
 import { SoundEngine } from './view/audio';
 import { Telemetry } from './view/telemetry';
 
@@ -126,6 +128,22 @@ export interface Snapshot {
   run: number;
   /** Increments whenever a new session starts. A view can reset its own state on it. */
   session: number;
+  /**
+   * Where she has been this voyage, plane metres in flat x,y pairs, oldest
+   * first, bounded by `TRACK_MAX`.
+   *
+   * The chart drew this and kept it, which was the natural place for it while
+   * it was a line on a picture and nothing else. It is here now because it is
+   * *written down*: a resumed voyage restores it (see `src/track.ts`), and a
+   * view that owned a record the game persists would be the renderer holding
+   * game state. It also has to survive a re-pinning like everything else
+   * standing in the plane, and `reanchorIfFar` is the one place that list is
+   * written out.
+   *
+   * The array is mutable and reused; `count` is how much of it is live.
+   * Nothing downstream may keep a reference past the frame.
+   */
+  track: { xy: Float32Array; count: number };
   pilot: PilotState;
   /**
    * Where she is on the Earth.
@@ -154,11 +172,15 @@ export interface Snapshot {
    * The last re-pinning of the plane: how many there have been, and the shift
    * the last one applied.
    *
-   * For anything outside the engine that holds a plane position of its own --
-   * the chart's track, and the chart's pan. They compare the count with the
-   * one they last acted on and translate what they hold by the shift. The
-   * engine cannot move them itself: they are the view's own memory, and the
-   * view is not allowed to be asked for it back.
+   * For anything outside the engine that holds a plane position of its own:
+   * the chart's pan, the wind streaks' seeds and the water's ripple. Each
+   * compares the count with the one it last acted on and translates what it
+   * holds by the shift. The engine cannot move them itself: they are the
+   * view's own memory, and the view is not allowed to be asked for it back.
+   *
+   * The chart's track was on that list and is not any more -- it is kept in
+   * here now (see `track`), where `reanchorIfFar` moves it with everything
+   * else the engine owns.
    */
   pin: { count: number; x: number; y: number };
   /**
@@ -332,8 +354,13 @@ export interface Engine {
    * puts to sea -- a menu that moved the boat under the player while they
    * were reading it would be a worse answer than one that waits -- and the
    * menu that offers this says so.
+   *
+   * `resume` says the place is the voyage being carried on rather than a new
+   * one being started from somewhere. Both hand over a place and the engine
+   * cannot tell them apart from that, so the caller says which it means; it
+   * decides whether the track already stored belongs to what happens next.
    */
-  sailFrom(spot: { place?: LatLon | null } | null): void;
+  sailFrom(spot: { place?: LatLon | null; resume?: boolean } | null): void;
   /**
    * Read the installed quest packs again.
    *
@@ -571,6 +598,17 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   const pilot = initialPilot();
   let destination: Vec2 | null = null;
   let anchored = false;
+  /**
+   * The track, plane metres in flat x,y pairs. See `Snapshot.track`.
+   *
+   * One array for the life of the engine, written round rather than grown: a
+   * point every twelve metres is one every four seconds at six knots, and an
+   * allocation per point for a line on a chart is not worth making.
+   *
+   * The object the snapshot publishes *is* this one, so there is a single
+   * count rather than a published copy that can fall behind the real one.
+   */
+  const track = { xy: new Float32Array(TRACK_MAX * 2), count: 0 };
 
   /**
    * The illumination flare: a rocket, a pop, half a minute of light swinging
@@ -646,6 +684,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     clearance: Infinity,
     run: 0,
     session: 0,
+    track,
     pilot,
     // The opening pin, replaced by the real position on the first step. The
     // menu can read the snapshot before the engine has stepped once.
@@ -828,6 +867,20 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   let oceanAnchor: LatLon = opening();
   /** s of sailing since the voyage was last written down; see `keepUnderway`. */
   let sinceSaved = 0;
+  /**
+   * Whether the session being started is a voyage carried on rather than a
+   * new one, and so whether the stored track belongs to it.
+   *
+   * The engine cannot tell the two apart from `sailFrom` alone -- "sail on"
+   * and "new voyage" both hand it a place -- and guessing from the distance
+   * between them is the shape of rule this menu has already been burned by.
+   * So the caller says which it means.
+   *
+   * True to begin with, because opening the page *is* carrying the voyage on:
+   * the engine restores the position it left off at before any menu has been
+   * touched, and the chart it draws behind that menu should be the same one.
+   */
+  let resuming = remembered !== null;
   /**
    * Where the player has asked the *next* departure to open, if they have
    * asked at all. Held apart from `oceanAnchor`, which is where the plane is
@@ -1049,6 +1102,60 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   }
 
   /**
+   * Add a point to the track, if she has sailed far enough to earn one.
+   *
+   * The step is a distance and not an interval, so a boat hove to does not
+   * spend the whole track standing still, and one reaching at nine knots is
+   * drawn no coarser than one beating at four.
+   */
+  function pushTrack(x: number, y: number): void {
+    if (track.count > 0) {
+      const lx = track.xy[(track.count - 1) * 2];
+      const ly = track.xy[(track.count - 1) * 2 + 1];
+      if (Math.hypot(x - lx, y - ly) < TRACK_STEP) return;
+    }
+    if (track.count === TRACK_MAX) {
+      track.xy.copyWithin(0, 2);
+      track.count--;
+    }
+    track.xy[track.count * 2] = x;
+    track.xy[track.count * 2 + 1] = y;
+    track.count++;
+  }
+
+  /**
+   * Lay the stored track back out in this session's plane, if it belongs to
+   * this world.
+   *
+   * The seed is checked for the reason `sameWorld` exists: the same latitude
+   * in another world is another piece of sea, and drawing last world's track
+   * across it would be a claim about water she has never sailed.
+   *
+   * Read at the moment it is laid out rather than held from startup, because
+   * the plane it is being laid out in is the thing that has just been decided
+   * -- `newSession` pins it a few lines above this is called from.
+   */
+  function restoreTrack(): void {
+    // Laying it out replaces what is there. `newSession` has just emptied it
+    // in both of the paths that reach here, so this is belt and braces -- but
+    // the belt is what stops a second call running `count` past the end of
+    // the array, where the draw would read NaNs off it and say nothing.
+    track.count = 0;
+    const row = loadTrack();
+    if (!row || row.seed !== current.seed) return;
+    // The tail, if the row is somehow longer than this build keeps: a track
+    // written when `TRACK_MAX` was larger is still a true track, and the
+    // recent end of it is the half worth having.
+    const from = Math.max(0, row.points.length - TRACK_MAX);
+    for (let i = from; i < row.points.length; i++) {
+      const p = toPlane(anchor, row.points[i]);
+      track.xy[track.count * 2] = p.x;
+      track.xy[track.count * 2 + 1] = p.y;
+      track.count++;
+    }
+  }
+
+  /**
    * Write down where she is, now and then.
    *
    * Every 30 seconds of sailing, which at six knots is a hundred metres --
@@ -1057,7 +1164,8 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    * frame. Also on the way out, so quitting deliberately keeps the last of
    * it.
    *
-   * By latitude and longitude, since the plane moves under her.
+   * By latitude and longitude, since the plane moves under her -- and the
+   * track with it, on the same tick and the same guards.
    */
   function keepUnderway(): void {
     if (!keeping) return;
@@ -1068,6 +1176,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // she is off it again, so the last good position stands.
     if (snapshot.clearance <= 0) return;
     saveUnderway({ seed: current.seed, place: snapshot.place });
+    // With the position and on its guards, not on its own timer. They are two
+    // halves of one record -- where she got to, and how she got there -- and
+    // a track written past a position that was not would draw a line running
+    // on from somewhere she does not resume.
+    const points: LatLon[] = [];
+    for (let i = 0; i < track.count; i++) {
+      points.push(placeOf(track.xy[i * 2], track.xy[i * 2 + 1]));
+    }
+    saveTrack(current.seed, points);
     sinceSaved = 0;
   }
 
@@ -1370,6 +1487,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       flareState.y = lit.y;
     }
     coastOrigin = move(coastOrigin);
+    // Point by point rather than by the boat's shift: the track runs several
+    // kilometres astern, and the two agree to well inside a metre over that,
+    // but this is the list where a position left behind is silently somewhere
+    // else on the Earth and nothing says so. Reprojected like the rest of it.
+    for (let i = 0; i < track.count; i++) {
+      const q = move({ x: track.xy[i * 2], y: track.xy[i * 2 + 1] });
+      track.xy[i * 2] = q.x;
+      track.xy[i * 2 + 1] = q.y;
+    }
     // Dropped rather than moved: its rows were filled about the old plane
     // and the rest would be filled about the new one, which would leave a
     // seam through the middle of the window.
@@ -1395,7 +1521,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
      *
      * The wake needs nothing, and that is not an oversight: it is kept in the
      * water's frame, which is `waves.drift`, which has just moved with it.
-     * The chart's track and its pan are in plane metres and are told below.
+     * The chart's pan is in plane metres and is told below.
      */
     const shift = { x: boat.x - x, y: boat.y - y };
     wind.repin(shift);
@@ -1731,6 +1857,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     if (opening) wind.baseTwd = opening.twd;
     session++;
     snapshot.session = session;
+    // A new session is a new track. Guessing from a teleport did not work
+    // when the chart was doing this: the finish gate is the start gate, so a
+    // restart moves the boat about ninety metres and the next session drew on
+    // joined to the last one.
+    //
+    // Whether the stored one is laid back out is the caller's to say rather
+    // than this function's: it is run for the scene behind the menu as well
+    // as for a departure, and only one of those spends the answer.
+    track.count = 0;
     weather.reseed(current.seed);
     wind.reseed(current.seed);
     wildlife.reseed(current.seed);
@@ -1884,6 +2019,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // its way out, so from here she is being remembered.
     keeping = true;
     newSession();
+    // And here the flag is spent. What follows this departure is a session of
+    // her own making: pressing R to put to sea again is a new track, which is
+    // what a new session always was before the track was written down at all.
+    if (resuming) restoreTrack();
+    resuming = false;
     placeAtStart();
   }
 
@@ -2165,6 +2305,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // she had been at the start of the step, which is the same one-step lie
     // the diagnostics avoid by being read out here too.
     snapshot.place = placeOf(state.pos.x, state.pos.y);
+    pushTrack(state.pos.x, state.pos.y);
     sinceSaved += PHYS_DT;
     if (sinceSaved >= KEEP_PLACE_EVERY) {
       keepUnderway();
@@ -2560,6 +2701,11 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
   // flight. The public `putToSea` path remains guarded so a click cannot turn
   // that placeholder into a playable world.
   newSession();
+  // The scene behind the menu, and it is handed the track for the reason
+  // it is handed the position: what it draws is the voyage she is on. The
+  // flag is deliberately *not* spent here -- this is not the voyage being
+  // taken up, and the departure that follows would find it already gone.
+  if (resuming) restoreTrack();
   placeAtStart();
   // Prime the diagnostics with a single step. The game opens with the menu up,
   // which pauses the physics -- without this the scene has nothing to draw and
@@ -2634,6 +2780,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       } else {
         clearUnderway();
       }
+      // A new voyage has nothing behind it, and the row goes now rather than
+      // at the next write for the same reason the position does: a tab closed
+      // straight after choosing must not keep the old voyage's track to draw
+      // across the new one. Carrying on keeps it, which is the whole point.
+      resuming = spot?.resume === true;
+      if (!resuming) clearTrack();
       // Held for the next departure rather than applied to this session's
       // pin: she is still where she is, which is what the menu says.
       departure = spot?.place ? { ...spot.place } : { ...DEFAULT_ANCHOR };

@@ -137,6 +137,26 @@ vi.mock('./underway', async (importActual) => ({
 }));
 
 /**
+ * The stored track, the same shape as `kept` and for the same two reasons:
+ * what the engine lays back out at a departure, and what it writes as she
+ * sails.
+ */
+const tracked = vi.hoisted(() => ({
+  stored: null as { seed: number; points: { lat: number; lon: number }[]; at: number } | null,
+  cleared: 0,
+}));
+vi.mock('./track', () => ({
+  loadTrack: () => tracked.stored,
+  saveTrack: (seed: number, points: { lat: number; lon: number }[]) => {
+    tracked.stored = { seed, points: points.map((p) => ({ ...p })), at: 1 };
+  },
+  clearTrack: () => {
+    tracked.stored = null;
+    tracked.cleared++;
+  },
+}));
+
+/**
  * The quests' own store, mocked so the engine can be watched without an
  * IndexedDB. The cell is the whole of it: what is installed, and what the
  * watcher has written down.
@@ -272,6 +292,8 @@ beforeEach(() => {
   logAdd.mockResolvedValue(undefined);
   kept.stored = null;
   kept.writes = 0;
+  tracked.stored = null;
+  tracked.cleared = 0;
   quests.packs = [];
   quests.saved = null;
   quests.writes = 0;
@@ -1589,10 +1611,16 @@ function placeOf(engine: ReturnType<typeof sailing>) {
  * re-pins to wherever she lands, exactly as it would after a long passage.
  * Walking her there in 200-km steps was the first version and it took
  * fifty coast rebuilds to cross a hemisphere.
+ *
+ * *Added to where she is*, rather than measured from the plane's origin.
+ * Every caller but one has her within a few metres of it, so the two agreed
+ * and the assumption was invisible; called after a couple of minutes' sailing
+ * it landed her 390 m short and the check below caught it.
  */
 function carryTo(engine: ReturnType<typeof sailing>, lat: number): void {
+  const { pos } = engine.snapshot.state;
   const dy = (lat - placeOf(engine).lat) * METRES_PER_DEG_LAT;
-  engine.snapshot.state.pos = { x: 0, y: dy };
+  engine.snapshot.state.pos = { x: pos.x, y: pos.y + dy };
   engine.advance(0.02);
   expect(placeOf(engine).lat).toBeCloseTo(lat, 3);
 }
@@ -2624,6 +2652,211 @@ describe('watching quests while she sails', () => {
     expect(quests.writes).toBeGreaterThan(0);
     const state = quests.saved as { done: Record<string, unknown> };
     expect(Object.keys(state.done)).toEqual(['p.q']);
+    engine.dispose();
+  });
+});
+
+/**
+ * The track she has sailed, carried across a resumed voyage.
+ *
+ * `underway.ts` remembers a place and only a place, which is the right answer
+ * for the boat's state and the wrong one for the record of what was done: a
+ * voyage carried on with the water astern drawn empty reads as having sailed
+ * nowhere. Four claims -- that the engine records it, that it survives the
+ * plane being re-pinned under her, that carrying a voyage on lays it back
+ * out, and that starting a new one never draws the last one's track across
+ * it.
+ */
+describe('the track she has sailed', () => {
+  /** How far astern the oldest point of the track is, m. */
+  function trackReach(engine: ReturnType<typeof sailing>) {
+    const { xy, count } = engine.snapshot.track;
+    expect(count, 'no track to look at').toBeGreaterThan(0);
+    const { pos } = engine.snapshot.state;
+    return Math.hypot(xy[0] - pos.x, xy[1] - pos.y);
+  }
+
+  it('records where she has been as she sails', () => {
+    const engine = sailing({ randomWorld: false, seed: 13 });
+    engine.advance(2);
+    const early = engine.snapshot.track.count;
+    engine.advance(120);
+    const later = engine.snapshot.track.count;
+    expect(later, 'the track did not grow while she sailed').toBeGreaterThan(early);
+
+    // Spaced by distance, not by time. Written out rather than imported: the
+    // claim is that no two points are closer than a chart can tell apart,
+    // which asserting the module's own step back at it would not make.
+    const { xy, count } = engine.snapshot.track;
+    for (let i = 1; i < count; i++) {
+      const d = Math.hypot(xy[i * 2] - xy[(i - 1) * 2], xy[i * 2 + 1] - xy[(i - 1) * 2 + 1]);
+      expect(d, `points ${i - 1} and ${i} are on top of each other`).toBeGreaterThan(1);
+    }
+    engine.dispose();
+  });
+
+  it('carries the track across a re-pinning of the plane', () => {
+    // The failure this locks down is the one every plane position in the
+    // engine can have. The plane's origin moves 200 km and the boat's
+    // coordinates move with it; a track left in the old frame would still be
+    // drawn beside her, having quietly become a claim about 200 km of ocean
+    // she has never been near.
+    //
+    // Asserted on the Earth rather than in the plane, which is the only place
+    // it can be settled: plane metres are exactly what the re-pin changes, so
+    // a test that watched them would be re-deriving the shift beside the code
+    // that applies it. A track point is a place, and a place does not move
+    // because the chart was re-drawn about somewhere else.
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
+    engine.advance(151);
+    const wasAt = tracked.stored!.points.map((p) => ({ ...p }));
+    expect(wasAt.length, 'nothing was written to compare against').toBeGreaterThan(4);
+
+    carryTo(engine, -20);
+    engine.advance(31);
+    const nowAt = tracked.stored!.points;
+    // The points she had are still where they were, and the jump is on the
+    // end of them. Nothing dropped: 150 seconds of sailing is far inside
+    // `TRACK_MAX`, so the ring has not begun to write over itself.
+    expect(nowAt.length, 'the track was dropped on the re-pin').toBeGreaterThan(wasAt.length);
+    wasAt.forEach((p, i) => {
+      expect(nowAt[i].lat, `point ${i} moved on the Earth`).toBeCloseTo(p.lat, 3);
+      expect(nowAt[i].lon, `point ${i} moved on the Earth`).toBeCloseTo(p.lon, 3);
+    });
+    engine.dispose();
+  });
+
+  it('writes the track down beside the position, in latitudes', () => {
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 });
+    const engine = sailing({ randomWorld: false, seed: 13 });
+    engine.advance(31);
+    expect(tracked.stored, 'nothing was written down').not.toBeNull();
+    expect(tracked.stored!.seed).toBe(13);
+    expect(tracked.stored!.points.length).toBeGreaterThan(1);
+    // Latitudes, because the plane is re-pinned under her and its metres mean
+    // nothing tomorrow. Off the Cape is where the row put her.
+    for (const p of tracked.stored!.points) expect(p.lat).toBeCloseTo(-33.5, 0);
+    engine.dispose();
+  });
+
+  it('lays the stored track back out when the voyage is carried on', () => {
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 });
+    tracked.stored = {
+      seed: 13,
+      at: 1,
+      points: [
+        { lat: -33.53, lon: 18.4 },
+        { lat: -33.52, lon: 18.4 },
+        { lat: -33.51, lon: 18.4 },
+      ],
+    };
+    const engine = createEngine(canvas(), settings({ randomWorld: false, seed: 13 }));
+    engine.sailFrom({ place: { lat: -33.5, lon: 18.4 }, resume: true });
+    engine.putToSea();
+    engine.advance(0.02);
+
+    expect(
+      engine.snapshot.track.count,
+      'the voyage was carried on without its track',
+    ).toBeGreaterThanOrEqual(3);
+    // Laid out in *this* session's plane: three points running up to her from
+    // the south, the oldest about three kilometres astern. A track restored in
+    // some other frame would be tens of kilometres out, or all at the origin.
+    const reach = trackReach(engine);
+    expect(reach, 'the stored track came back somewhere else entirely').toBeLessThan(6000);
+    expect(reach, 'the stored track came back on top of her').toBeGreaterThan(2000);
+    engine.dispose();
+  });
+
+  it('never draws the last voyage across a new one', () => {
+    tracked.stored = {
+      seed: 13,
+      at: 1,
+      points: [
+        { lat: -33.53, lon: 18.4 },
+        { lat: -33.52, lon: 18.4 },
+      ],
+    };
+    const engine = createEngine(canvas(), settings({ randomWorld: false, seed: 13 }));
+    // The same call the menu's "new voyage" makes, which hands over a place
+    // exactly as "sail on" does: the difference is the flag and nothing else,
+    // which is why the engine is told rather than left to guess.
+    engine.sailFrom({ place: { lat: -33.5, lon: 18.4 } });
+    expect(tracked.cleared, 'a new voyage kept the old track in store').toBeGreaterThan(0);
+    engine.putToSea();
+    engine.advance(0.02);
+    // She has taken a step, so the track holds her own position and nothing
+    // else. The stored points were three kilometres south of the departure,
+    // which is what a track drawn across a new voyage would reach back to.
+    expect(trackReach(engine), 'the old track was drawn across a new voyage').toBeLessThan(500);
+    engine.dispose();
+  });
+
+  it('lays it out for a departure taken before the engine had loaded', () => {
+    // The menu is up before the engine exists -- it is a dynamic import --
+    // so a player who presses "sail on" in that window has their `sailFrom`
+    // optional-chained away, and the engine that arrives is put to sea with
+    // nothing having been said to it. It has to fall back on what it read at
+    // construction, which is the same voyage. The position already did; the
+    // track had to be taught to, and the way it was written first spent the
+    // answer on the scene behind the menu and had none left for this.
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 });
+    tracked.stored = {
+      seed: 13,
+      at: 1,
+      points: [
+        { lat: -33.53, lon: 18.4 },
+        { lat: -33.52, lon: 18.4 },
+        { lat: -33.51, lon: 18.4 },
+      ],
+    };
+    // `sailing` is that path exactly: construct, then put to sea, and nothing
+    // in between.
+    const engine = sailing({ randomWorld: false, seed: 13 });
+    engine.advance(0.02);
+    const reach = trackReach(engine);
+    expect(reach, 'the track was lost between construction and departure').toBeGreaterThan(2000);
+    expect(reach, 'the track came back somewhere else entirely').toBeLessThan(6000);
+    engine.dispose();
+  });
+
+  it('does not lay out a track no voyage was carried on', () => {
+    // The row is trusted to be *this* voyage's only when there is a voyage
+    // being carried on. Both rows are written together and one can outlive
+    // the other -- a remembered position found to be on land is thrown away
+    // where the track beside it is not -- and a track with no voyage behind
+    // it would be drawn round a departure she has never sailed from.
+    kept.stored = null;
+    tracked.stored = {
+      seed: 13,
+      at: 1,
+      points: [
+        { lat: 37.7, lon: -122.6 },
+        { lat: 37.71, lon: -122.6 },
+      ],
+    };
+    const engine = sailing({ randomWorld: false, seed: 13 });
+    engine.advance(0.02);
+    expect(trackReach(engine), 'a track was laid out for no voyage').toBeLessThan(500);
+    engine.dispose();
+  });
+
+  it('refuses a track sailed in another world', () => {
+    // A seed *is* the world. The same latitude under another one is another
+    // piece of sea, and drawing last world's track across it would be a claim
+    // about water she has never sailed.
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 });
+    tracked.stored = {
+      seed: 99,
+      at: 1,
+      points: [
+        { lat: -33.53, lon: 18.4 },
+        { lat: -33.52, lon: 18.4 },
+      ],
+    };
+    const engine = sailing({ randomWorld: false, seed: 13 });
+    expect(engine.snapshot.track.count, "another world's track was laid out").toBe(0);
     engine.dispose();
   });
 });

@@ -8,6 +8,7 @@ import { PolarCard } from "./PolarCard";
 import { MenuDialog } from "./MenuDialog";
 import { logbook } from "@/logbook";
 import { clearUnderway, loadUnderway, saveUnderway } from "@/underway";
+import { clearTrack } from "@/track";
 import { waterById } from "@/sim/waters";
 import { HintBar } from "./HintBar";
 import { BinocularMask } from "./BinocularMask";
@@ -382,6 +383,11 @@ export function App() {
     const from = waterById(s.departure)?.place ?? null;
     if (from) saveUnderway({ seed: s.seed, place: from });
     else clearUnderway();
+    // The track goes with the position, and for the same reason it is written
+    // here: pressed while the engine is still loading, the call below is
+    // optional-chained away, and the engine that arrives afterwards would
+    // find a stored track and draw the last voyage across this one.
+    clearTrack();
     engine?.sailFrom(from ? { place: from } : null);
     putToSea();
   }, [engine, putToSea]);
@@ -406,7 +412,7 @@ export function App() {
     if (!row) return;
     const next: Settings = { ...settingsRef.current, seed: row.seed, randomWorld: false };
     applySettings(next);
-    engine?.sailFrom({ place: row.place });
+    engine?.sailFrom({ place: row.place, resume: true });
     putToSea(next);
   }, [applySettings, engine, putToSea]);
 
