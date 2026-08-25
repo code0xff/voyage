@@ -143,14 +143,19 @@ describe('the voyage she is on', () => {
   });
 
   it('holds the carried clock where the sun still moves', () => {
-    // A clock is stepped by about 1e-5 of an hour. Written out rather than
-    // imported, because the claim is that the stored hour is one the world
-    // can still be advanced from, and asserting the module's own bound back
-    // at it would hold at any bound including none.
+    // Two claims, both written out rather than imported: asserting the
+    // module's own bound back at it would hold at any bound, including none.
     store.raw.set(KEY, JSON.stringify({ seed: 7, place: { lat: 1, lon: 2 }, hour: 1e300, at: 1 }));
     const hour = loadUnderway()!.hour!;
+    // The clock is stepped by about 1e-5 of an hour, and a clock too large to
+    // add that to is a stopped sun that nothing reports.
     expect(hour + 1e-5, 'the clock is too large to advance').toBeGreaterThan(hour);
     expect(hour).toBeGreaterThan(0);
+    // And it reaches the renderer as a float32 uniform that turns the stars
+    // and drifts the cloud deck. Past about 3e5 the drift quantises to a
+    // visible fraction of the finest thing in the cloud noise; this is the
+    // margin under that.
+    expect(hour, 'the carried clock reaches the sky as a stuttering float').toBeLessThan(3e5);
 
     // And never before the voyage began: the clock counts on from the start
     // hour and does not run backwards.

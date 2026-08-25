@@ -79,14 +79,28 @@ const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFi
 /**
  * The furthest the carried clock is allowed to have run, world hours.
  *
- * A hundred and fourteen years, which no voyage reaches and every voyage is
- * safely inside: the clock is stepped by about 1e-5 of an hour at a time, and
- * a double holds that against a value this size with digits to spare. The
- * bound is not about plausibility -- it is about a hand-edited 1e300, which
- * makes `hour += dt` a no-op and stops the sun without anything reporting a
- * fault.
+ * Eleven years, which is about seventeen hundred hours of playing one voyage
+ * at the default time scale -- further than a voyage goes, and the clock is
+ * the only thing here that can grow without bound now that it survives a
+ * session.
+ *
+ * The bound is not the double that holds `hour`, which is fine for far longer.
+ * It is float32, on the far side of the renderer: the sky turns the stars by
+ * `elapsedHours * SIDEREAL_RATE` and drifts the cloud deck by
+ * `elapsedHours * CLOUD_DRIFT_PER_HOUR`, both uniforms, both linear in this
+ * number and neither periodic in a way that could be wrapped -- the stars
+ * would take a modulo of 24 happily, the drift would jump. Measured at the
+ * limit: the drift quantises to 2.6% of the finest thing in the cloud noise
+ * and a star steps by 0.1 of a degree, which is nothing. Ten times further
+ * it is 13% and half a degree, which is a stuttering sky.
+ *
+ * Clamped rather than refused, so an absurd row still sails. What it costs a
+ * voyage that somehow reached it is a pinned calendar at a steady time of
+ * day, which is a good deal better than the alternative it also guards: a
+ * hand-edited 1e300 makes `hour += dt` a no-op and stops the sun with nothing
+ * reporting a fault.
  */
-const HOUR_LIMIT = 1e6;
+const HOUR_LIMIT = 1e5;
 
 /**
  * Read the voyage, or null if there is none to read.
