@@ -398,7 +398,7 @@ const CLIMATE_TAU = 240;
  * sea she is in -- and rare enough that a synchronous localStorage write is
  * never in a frame's way.
  */
-const KEEP_PLACE_EVERY = 30;
+export const KEEP_PLACE_EVERY = 30;
 /**
  * s of sailing between looks at the world for the quests, in *world* time.
  *

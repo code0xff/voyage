@@ -219,7 +219,15 @@ vi.mock('./sim/coast', async (importActual) => {
   };
 });
 
-import { FLARE_BURN, FLARE_COOLDOWN, FLARE_RISE, QUEST_SHOWN, REANCHOR_AT, createEngine } from './engine';
+import {
+  FLARE_BURN,
+  FLARE_COOLDOWN,
+  FLARE_RISE,
+  KEEP_PLACE_EVERY,
+  QUEST_SHOWN,
+  REANCHOR_AT,
+  createEngine,
+} from './engine';
 import { coastHeightField } from './sim/coast';
 import { DEFAULT_SETTINGS, type Settings } from './settings';
 import { WhaleField } from './sim/whales';
@@ -228,6 +236,7 @@ import { DEG, RAD, wrapPi } from './sim/math';
 import { TIDE_PERIOD } from './sim/current';
 import { LogStoreUnavailable } from './logbook';
 import type { EngineEvent } from './engine';
+import { TRACK_MAX, TRACK_STEP } from './view/minimap';
 import { METRES_PER_DEG_LAT } from './sim/globe';
 import { waterById } from './sim/waters';
 import { ManeuverTracker, type Maneuver } from './sim/maneuver';
@@ -1849,11 +1858,13 @@ describe('sailing on the Earth', () => {
     expect(placeOf(engine).lat).toBeCloseTo(-33.5, 1);
     expect(placeOf(engine).lon).toBeCloseTo(18.4, 1);
 
-    // And she keeps her own record as she sails: half a minute of it is
-    // enough, which at six knots is a hundred metres.
+    // And she keeps her own record as she sails: one throttle's worth of it
+    // is enough, which at six knots is a hundred metres. Imported, because a
+    // duration a test has to outlast is one that gets retuned -- written out
+    // as 31 it would go on passing while covering nothing.
     kept.writes = 0;
     carryTo(engine, -20);
-    engine.advance(31);
+    engine.advance(KEEP_PLACE_EVERY + 1);
     expect(kept.writes).toBeGreaterThan(0);
     expect(storedPlace()!.lat).toBeCloseTo(-20, 1);
     engine.dispose();
@@ -1965,7 +1976,7 @@ describe('sailing on the Earth', () => {
     // would have written back over anyway.
     carryTo(engine, 45);
     kept.stored = null;
-    engine.advance(31);
+    engine.advance(KEEP_PLACE_EVERY + 1);
     expect(engine.snapshot.clearance).toBeLessThanOrEqual(0);
     expect(kept.stored, 'wrote a position with no water under it').toBeNull();
     engine.dispose();
@@ -2655,7 +2666,9 @@ describe('watching quests while she sails', () => {
     quests.packs = [pack({ now: { facts: { speed: { atLeast: 0.5 } } } })];
     const engine = sailing({ randomWorld: false, seed: 13 });
     await settle();
-    engine.advance(31);
+    // The quests are written on the position's throttle, not one of their
+    // own -- one `if` writes both.
+    engine.advance(KEEP_PLACE_EVERY + 1);
     expect(quests.writes).toBeGreaterThan(0);
     const state = quests.saved as { done: Record<string, unknown> };
     expect(Object.keys(state.done)).toEqual(['p.q']);
@@ -2708,9 +2721,9 @@ describe('the clock she is sailing on', () => {
   it('writes the clock down as it runs, and goes on from there', () => {
     kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 20);
     const engine = sailing({ randomWorld: false, seed: 13, startHour: 9, timeScale: 60 });
-    // Half an hour of world time, which at 60x is thirty seconds of sailing --
-    // and thirty seconds is what the row is written on.
-    engine.advance(31);
+    // Long enough to outlast the throttle, imported so it goes on doing that
+    // if the throttle is retuned.
+    engine.advance(KEEP_PLACE_EVERY + 1);
     const written = kept.stored!.hour as number;
     expect(written, 'the clock was written from the start hour, not the voyage').toBeGreaterThan(20);
     expect(written).toBeLessThan(21);
@@ -2842,6 +2855,49 @@ describe('the track she has sailed', () => {
     engine.dispose();
   });
 
+  it('keeps as much track as the chart can draw, and no more', () => {
+    // Nothing reached the ring's own boundary before this: the resume tests
+    // sail a few hundred metres, so reverting the cap -- or getting the
+    // eviction off by one -- passed all of them.
+    //
+    // Walked rather than sailed. Filling the ring means covering the whole
+    // chart window, which is eight kilometres and about three quarters of an
+    // hour of wall clock at six knots; she is stepped along instead, and what
+    // is being tested is the recording, which cannot tell the difference.
+    const engine = sailing({ randomWorld: false, seed: 13 });
+    const { pos } = engine.snapshot.state;
+    // One step per point, so the ring's length in metres is its length in
+    // points and the reach below can be tight enough to see the cap. The
+    // millimetre is float slack: `pushTrack` takes a step of exactly
+    // `TRACK_STEP` and a difference of accumulated sums can land just under.
+    const step = TRACK_STEP + 0.001;
+    for (let i = 1; i <= TRACK_MAX * 2; i++) {
+      engine.snapshot.state.pos = { x: pos.x, y: pos.y + i * step };
+      engine.advance(0.02);
+    }
+    expect(engine.snapshot.track.count, 'the ring grew past its own bound').toBe(TRACK_MAX);
+
+    // And it is the *recent* end that was kept, reaching the whole way back
+    // across the window the chart is collected in -- which is the entire
+    // reason for the bound, and 8300 m is what that window is. Written out
+    // rather than imported: `TRACK_MAX * TRACK_STEP` asserted back at itself
+    // would hold at any cap, including one that keeps four points.
+    const { xy, count } = engine.snapshot.track;
+    const boat = engine.snapshot.state.pos;
+    const oldest = Math.hypot(xy[0] - boat.x, xy[1] - boat.y);
+    expect(oldest, 'the track no longer reaches back across the chart').toBeGreaterThanOrEqual(
+      8300,
+    );
+    // Contiguous, so the eviction shifted the whole array rather than leaving
+    // a hole: a `copyWithin` off by one shows up as a step of a different
+    // size, or as a point still sitting where the last shift left it.
+    for (let i = 1; i < count; i++) {
+      const d = Math.hypot(xy[i * 2] - xy[(i - 1) * 2], xy[i * 2 + 1] - xy[(i - 1) * 2 + 1]);
+      expect(d, `points ${i - 1} and ${i} are not one step apart`).toBeCloseTo(step, 1);
+    }
+    engine.dispose();
+  });
+
   it('carries the track across a re-pinning of the plane', () => {
     // The failure this locks down is the one every plane position in the
     // engine can have. The plane's origin moves 200 km and the boat's
@@ -2856,12 +2912,12 @@ describe('the track she has sailed', () => {
     // because the chart was re-drawn about somewhere else.
     kept.stored = storedOn({ lat: -33.5, lon: 18.4 });
     const engine = sailing({ randomWorld: false, seed: 13 });
-    engine.advance(151);
+    engine.advance(120 + KEEP_PLACE_EVERY + 1);
     const wasAt = tracked.stored!.points.map((p) => ({ ...p }));
     expect(wasAt.length, 'nothing was written to compare against').toBeGreaterThan(4);
 
     carryTo(engine, -20);
-    engine.advance(31);
+    engine.advance(KEEP_PLACE_EVERY + 1);
     const nowAt = tracked.stored!.points;
     // The points she had are still where they were, and the jump is on the
     // end of them. Nothing dropped: 150 seconds of sailing is far inside
@@ -2877,7 +2933,9 @@ describe('the track she has sailed', () => {
   it('writes the track down beside the position, in latitudes', () => {
     kept.stored = storedOn({ lat: -33.5, lon: 18.4 });
     const engine = sailing({ randomWorld: false, seed: 13 });
-    engine.advance(31);
+    // Imported rather than written out: this has to outlast the throttle, and
+    // a hardcoded 31 stops covering it the moment the throttle is retuned.
+    engine.advance(KEEP_PLACE_EVERY + 1);
     expect(tracked.stored, 'nothing was written down').not.toBeNull();
     expect(tracked.stored!.seed).toBe(13);
     expect(tracked.stored!.points.length).toBeGreaterThan(1);
@@ -3005,7 +3063,7 @@ describe('the track she has sailed', () => {
 
     engine.applySettings(settings({ randomWorld: false, seed: 14 }));
     expect(engine.snapshot.track.count, 'the old world\'s track survived it').toBe(0);
-    engine.advance(31);
+    engine.advance(KEEP_PLACE_EVERY + 1);
     // What is stored now is this world's, and only this world's: everything
     // in it was sailed since the seed changed.
     expect(tracked.stored!.seed).toBe(14);
