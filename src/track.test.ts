@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { clearTrack, loadTrack, saveTrack } from './track';
+import { TRACK_MAX } from './view/minimap';
 
 /**
  * The track a resumed voyage draws.
@@ -125,6 +126,38 @@ describe('the track she has sailed', () => {
       expect(p.lon).toBeGreaterThanOrEqual(-180);
       expect(p.lon).toBeLessThanOrEqual(180);
     }
+  });
+
+  it('will not be made to parse a track no chart could draw', () => {
+    // Nothing stored is trusted, and until this was here that stopped at the
+    // *shape* of the row. A hand-edited one with two hundred thousand
+    // coordinates parsed every one and built an object per point, for a
+    // caller that keeps a few hundred -- and it lands on the frame a session
+    // opens in. Five megabytes of localStorage holds such a row easily.
+    const huge = Array.from({ length: 200_000 }, (_, i) => (i % 2 ? 10 : 20));
+    store.raw.set(KEY, JSON.stringify({ seed: 1, at: 1, p: huge }));
+    const started = performance.now();
+    const row = loadTrack();
+    // Refused outright rather than trimmed: a row that size was not written
+    // by this game, so it belongs to something else.
+    expect(row).toBeNull();
+    // A tenth of a second is a tenth of a session's opening frames. Written
+    // out because the claim is that reading this cannot cost a session, and
+    // no constant in the module says what that is worth.
+    expect(performance.now() - started, 'reading it cost real time').toBeLessThan(100);
+  });
+
+  it('takes the recent end of a row longer than the chart keeps', () => {
+    // A row written when the cap was larger is still a true track, and its
+    // recent end is the half worth having. Kept inside the size guard above,
+    // so this is the case that is trimmed rather than refused.
+    const p: number[] = [];
+    for (let i = 0; i < TRACK_MAX + 40; i++) p.push(10 + i / 1000, 20);
+    store.raw.set(KEY, JSON.stringify({ seed: 1, at: 1, p }));
+    const back = loadTrack()!;
+    expect(back.points).toHaveLength(TRACK_MAX);
+    // The *end* of it: the last point of the row is the last point read.
+    expect(back.points[back.points.length - 1].lat).toBeCloseTo(10 + (TRACK_MAX + 39) / 1000, 5);
   });
 
   it('survives storage refusing to work at all', () => {

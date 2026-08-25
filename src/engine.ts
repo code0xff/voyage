@@ -1167,11 +1167,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     track.count = 0;
     const row = loadTrack();
     if (!row || row.seed !== current.seed) return;
-    // The tail, if the row is somehow longer than this build keeps: a track
-    // written when `TRACK_MAX` was larger is still a true track, and the
-    // recent end of it is the half worth having.
-    const from = Math.max(0, row.points.length - TRACK_MAX);
-    for (let i = from; i < row.points.length; i++) {
+    // `loadTrack` hands back at most `TRACK_MAX` of them -- it takes the tail
+    // of a longer row rather than building points this would drop -- so the
+    // ring cannot be overrun from here. Guarded anyway, because the bound
+    // lives in another module and this one writes into a fixed array.
+    const take = Math.min(row.points.length, TRACK_MAX);
+    for (let i = row.points.length - take; i < row.points.length; i++) {
       const p = toPlane(anchor, row.points[i]);
       track.xy[track.count * 2] = p.x;
       track.xy[track.count * 2 + 1] = p.y;

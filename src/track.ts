@@ -1,4 +1,5 @@
 import { clampLat, wrapLon, type LatLon } from './sim/globe';
+import { TRACK_MAX } from './view/minimap';
 
 /**
  * The track she has sailed on this voyage, carried from one session to the
@@ -55,6 +56,23 @@ const KEY = 'voyage.track.v1';
  */
 const DP = 1e5;
 
+/**
+ * The longest row this will look at, characters.
+ *
+ * Nothing stored is trusted, and until this was here that stopped at the
+ * *shape* of the row: a hand-edited one with two hundred thousand coordinates
+ * in it parsed every one, built a `LatLon` for each, and handed them to a
+ * caller that keeps the last few hundred. Five megabytes of localStorage is
+ * enough to hold such a row, and the cost lands on the frame a session opens
+ * in.
+ *
+ * Sixty-four characters a point is generous against the twenty-four a written
+ * one takes -- two signed numbers at five decimal places and their commas --
+ * so no row this game has produced comes near it, and one that does was not
+ * written by it.
+ */
+const MAX_CHARS = TRACK_MAX * 64 + 256;
+
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
 /**
@@ -69,12 +87,19 @@ export function loadTrack(): Track | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
+    if (raw.length > MAX_CHARS) return null;
     const o = JSON.parse(raw) as { seed?: unknown; at?: unknown; p?: unknown };
     if (typeof o !== 'object' || o === null) return null;
     if (!finite(o.seed) || !finite(o.at)) return null;
     if (!Array.isArray(o.p)) return null;
     const points: LatLon[] = [];
-    for (let i = 0; i < o.p.length; i += 2) {
+    // The tail, if the row holds more than the chart keeps -- a row written
+    // when `TRACK_MAX` was larger is still a true track, and its recent end
+    // is the half worth having. Skipped rather than parsed and discarded: the
+    // caller would drop them anyway, and building them first is the work this
+    // is here to avoid.
+    const from = Math.max(0, o.p.length - TRACK_MAX * 2) & ~1;
+    for (let i = from; i < o.p.length; i += 2) {
       const lat: unknown = o.p[i];
       const lon: unknown = o.p[i + 1];
       // Flat pairs, so this also catches a row cut in the middle of a point:
