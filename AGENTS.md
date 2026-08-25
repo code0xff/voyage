@@ -74,9 +74,20 @@ are independent features with independent schemas, and sharing one would mean
 every change to how quests are stored forces a version bump the logbook has to
 migrate through, for a feature it knows nothing about.
 
-localStorage keeps the two rows that are overwritten rather than accumulated:
-the settings, and the voyage she is on (`src/underway.ts` — a seed and a
-position, so that "sail on" opens where she got to).
+localStorage keeps the rows that are overwritten rather than accumulated: the
+settings, the voyage she is on (`src/underway.ts` — which world, where she got
+to, the hour, and the hour that hour is counted from, so that "sail on" opens
+where and when she left off) and the track she sailed to get there
+(`src/track.ts`).
+
+The track is a separate row and not a field on the voyage, because the voyage
+row is refused whole when any part of it is wrong and six hundred points
+folded in would let one bad coordinate lose the position too. It is bounded
+rather than accumulating — the chart keeps the last 8.3 km, which is what the
+chart can draw — so it belongs here beside the settings and not in IndexedDB.
+Being two rows, they can in principle disagree; the cost is a track tail up to
+half a minute shorter than the position, which is what the write throttle
+already permits every second of normal play.
 
 The one thing local-first cannot do is follow you to another device. If that is
 ever wanted it needs accounts, and accounts are the real cost — not the database.

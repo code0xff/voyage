@@ -15,12 +15,18 @@ import { TRACK_MAX } from './view/minimap';
  * water astern drawn empty reads as having sailed nowhere.
  *
  * Its own row rather than a field on `Underway`, for two reasons. That row is
- * three numbers and is refused whole when any of them is wrong; folding an
- * array of six hundred points into it would mean one bad coordinate losing
- * the position too, and the position is the one that matters. And they are
- * written at the same moment but wanted at different ones -- the menu reads
- * the position to label the "sail on" button before the engine exists, and
- * has no use for the track.
+ * a handful of numbers and is refused whole when the seed, the timestamp or
+ * either half of the position is wrong; folding seven hundred points into it
+ * would mean one bad coordinate losing the position too, and the position is
+ * the one that matters. And they are written on the same tick but wanted at
+ * different ones -- the menu reads the position to label the "sail on" button
+ * before the engine exists, and has no use for the track.
+ *
+ * Two rows can disagree, and there is no transaction across them: a write
+ * that fails here while the position's succeeds leaves a track ending short
+ * of where she resumes. That is accepted rather than solved, because the
+ * shortfall it produces is the one the throttle already produces every second
+ * of normal play -- the row is up to half a minute behind her by design.
  *
  * Latitude and longitude, never plane metres, on `underway.ts`'s reasoning
  * exactly: the tangent plane is re-pinned under the boat every 200 km, so its
