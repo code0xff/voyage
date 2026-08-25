@@ -155,10 +155,12 @@ export function loadUnderway(): Underway | null {
     // to the start hour is the honest failure, and it is the one already
     // taken for an hour that is missing or not a number.
     const hour = readable(o.hour) ? o.hour : null;
-    // On the same terms, and it must be a *day* rather than the clock's own
+    // On the same terms, and against the day rather than the clock's own
     // range: it is an hour of the day the voyage set out on, which is what
-    // the Start time setting hands over.
-    const began = finite(o.began) && o.began >= 0 && o.began < 24 ? o.began : null;
+    // the Start time setting hands over -- so the bound is that setting's,
+    // which `loadSettings` clamps to 0..24 *inclusive*. Written exclusive
+    // first, which refused the one voyage begun at the top of the range.
+    const began = finite(o.began) && o.began >= 0 && o.began <= 24 ? o.began : null;
     return { seed: o.seed, place, hour, began, at: o.at };
   } catch {
     return null;

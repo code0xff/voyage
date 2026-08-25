@@ -176,6 +176,31 @@ describe('the voyage she is on', () => {
     expect(hour, 'the carried clock reaches the sky as a stuttering float').toBeLessThan(3e5);
   });
 
+  it('takes any hour the Start time setting can hand it as an origin', () => {
+    // `began` is an hour of the day, and the day it has to cover is the one
+    // `loadSettings` allows: it clamps `startHour` to 0..24 inclusive, so 24
+    // is a hour a voyage can have begun at. Written exclusive first, which
+    // refused exactly that one and quietly put its tide back on the setting.
+    for (const began of [0, 9, 23.5, 24]) {
+      saveUnderway({ ...SYDNEY, began });
+      const back = loadUnderway()!.began;
+      // Asserted non-null *before* the number, and not as a formality:
+      // `expect(null).toBeCloseTo(0)` passes, because null coerces to zero in
+      // the subtraction. Written the short way, the midnight case blessed a
+      // bound that refused it.
+      expect(back, `${began} was refused as an origin`).not.toBeNull();
+      expect(back, `${began} came back as something else`).toBeCloseTo(began, 9);
+    }
+    // And not an hour of some other day.
+    for (const began of [-0.5, 24.5, NaN, 'nine']) {
+      store.raw.set(
+        KEY,
+        JSON.stringify({ seed: 7, place: { lat: 1, lon: 2 }, hour: 20, began, at: 1 }),
+      );
+      expect(loadUnderway()!.began, `${began} was taken as an origin`).toBeNull();
+    }
+  });
+
   it('knows whether a row is the world these settings would sail', () => {
     // A seed *is* the world now: the same coordinates under another seed are
     // another shoreline.
