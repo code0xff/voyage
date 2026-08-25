@@ -245,6 +245,7 @@ import { TIDE_PERIOD } from './sim/current';
 import { LogStoreUnavailable } from './logbook';
 import type { EngineEvent } from './engine';
 import { TRACK_MAX, TRACK_STEP } from './view/minimap';
+import { HOUR_LIMIT } from './underway';
 import { METRES_PER_DEG_LAT } from './sim/globe';
 import { waterById } from './sim/waters';
 import { ManeuverTracker, type Maneuver } from './sim/maneuver';
@@ -2744,6 +2745,28 @@ describe('the clock she is sailing on', () => {
   it('opens a new voyage at the start time', () => {
     const engine = sailing({ randomWorld: false, seed: 13, startHour: 9, timeScale: 0 });
     expect(clock(engine)).toBeCloseTo(9, 1);
+    engine.dispose();
+  });
+
+  it('stops the clock where the row would have to stop it', () => {
+    // Clamping only the stored copy left the session running past a bound its
+    // row was pinned at, so the next open jumped the sky and the tide
+    // backwards -- the one thing the pinned calendar exists to avoid.
+    //
+    // Started just short of the limit and run hard at it. `HOUR_LIMIT` is
+    // imported because it is what the test needs in order to arrive at the
+    // boundary at all; what is asserted is that the clock does not pass it
+    // and that the row agrees with the session, neither of which restates it.
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, HOUR_LIMIT - 0.5, 9);
+    const engine = sailing({ randomWorld: false, seed: 13, startHour: 9, timeScale: 600 });
+    engine.advance(KEEP_PLACE_EVERY + 1);
+    const written = kept.stored!.hour as number;
+    expect(written, 'the row and the running session disagree').toBe(HOUR_LIMIT);
+    frame(0.1);
+    expect(
+      sceneCalls.elapsedHours,
+      'the session ran on past the clock its row was pinned at',
+    ).toBe(written);
     engine.dispose();
   });
 

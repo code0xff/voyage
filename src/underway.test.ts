@@ -163,16 +163,23 @@ describe('the voyage she is on', () => {
     // comes back at it -- a pinned calendar at a steady time of day -- rather
     // than written past it and refused on the next open.
     //
-    // Both numbers written out, because they are the claim: asserting the
-    // module's own bound back at it would hold at any bound including none.
+    // Every number written out, because they are the claim: asserting the
+    // module's own bound back at it would hold at any bound including none --
+    // and a bound of zero would satisfy the two upper claims below on its
+    // own, which is what the lower one is here to stop.
     saveUnderway({ ...SYDNEY, hour: 1e300 });
     const hour = loadUnderway()!.hour!;
+    // Far enough for any voyage: ten thousand world hours is a year and a
+    // half of weather, and a clock clamped short of that would be pinning
+    // calendars on voyages people actually sail.
+    expect(hour, 'the clock is pinned inside a voyage anyone might sail').toBeGreaterThan(1e4);
     // The clock is stepped by about 1e-5 of an hour, and one too large to add
     // that to is a stopped sun that nothing reports.
     expect(hour + 1e-5, 'the clock is too large to advance').toBeGreaterThan(hour);
-    // And it reaches the renderer as a float32 uniform that turns the stars
-    // and drifts the cloud deck. Past about 3e5 the drift quantises to a
-    // visible fraction of the finest thing in the cloud noise.
+    // And the renderer multiplies it up into float32 uniforms -- the cloud
+    // deck's drift at 0.5 an hour, scaled again in the shader and sampled by
+    // five noise octaves. Past about 3e5 the octave carrying half the sky
+    // starts stepping in visible fractions of a noise cell.
     expect(hour, 'the carried clock reaches the sky as a stuttering float').toBeLessThan(3e5);
   });
 

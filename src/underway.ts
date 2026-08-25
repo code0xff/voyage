@@ -96,30 +96,53 @@ const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFi
 const readable = (v: unknown): v is number => finite(v) && v >= 0 && v <= HOUR_LIMIT;
 
 /**
- * The furthest the carried clock is allowed to have run, world hours.
+ * The furthest the clock is allowed to run, world hours.
  *
  * Eleven years, which is about seventeen hundred hours of playing one voyage
  * at the default time scale -- further than a voyage goes, and the clock is
  * the only thing here that can grow without bound now that it survives a
  * session.
  *
- * The bound is not the double that holds `hour`, which is fine for far longer.
- * It is float32, on the far side of the renderer: the sky turns the stars by
- * `elapsedHours * SIDEREAL_RATE` and drifts the cloud deck by
- * `elapsedHours * CLOUD_DRIFT_PER_HOUR`, both uniforms, both linear in this
- * number and neither periodic in a way that could be wrapped -- the stars
- * would take a modulo of 24 happily, the drift would jump. Measured at the
- * limit: the drift quantises to 2.6% of the finest thing in the cloud noise
- * and a star steps by 0.1 of a degree, which is nothing. Ten times further
- * it is 13% and half a degree, which is a stuttering sky.
+ * The bound is not the double that holds `hour`, which is good for far
+ * longer. It is float32, on the far side of the renderer. `skydome.ts`
+ * multiplies the hour up and hands the *products* to two uniforms -- the star
+ * angle at `2 pi / 24` per hour, and the cloud deck's drift at 0.5 per hour --
+ * and neither is periodic in a way that could be wrapped on the way through:
+ * the stars would take a modulo of 24 happily, the drift would jump.
  *
- * Clamped rather than refused, so an absurd row still sails. What it costs a
- * voyage that somehow reached it is a pinned calendar at a steady time of
- * day, which is a good deal better than the alternative it also guards: a
+ * The drift is the binding one, and by a long way, because it does not stay a
+ * drift: the shader scales it by `DECK_SCALE` and then samples five noise
+ * octaves off it, so a step in the uniform is a step of `1.9 * 2.03^i` in
+ * octave i's own cells. Measured, per octave, against its share of the field:
+ *
+ *     hours    base octave (52% of it)   finest octave (3.2% of it)
+ *     2e4      0.12% of a cell           2.1%
+ *     1e5      0.61%                     10%
+ *     3e5      1.8%                      31%
+ *     1e6      3.0%                      52%
+ *
+ * So 1e5 keeps the octave that carries half the sky moving at well under a
+ * hundredth of a cell, and leaves a tenth-of-a-cell stutter only in the one
+ * carrying three per cent of it. At 1e6 the base octave itself is stepping
+ * and the finest is jumping half a cell at a time.
+ *
+ * A first version of this reasoned about the hour rather than the products
+ * and put the limit at 1e6, which is past where the sky visibly stutters. It
+ * also compared against a guess at the finest feature instead of the octave
+ * scales above, and was out by a factor of four at its own limit.
+ *
+ * The *live* clock is held here too, in the engine's step. Clamping only the
+ * stored copy left the session running past a limit its row was pinned at, so
+ * a reload jumped the sky and the tide backwards -- which is the one thing
+ * the pinned calendar was supposed to avoid.
+ *
+ * Clamped rather than refused on the way out, so an absurd row still sails.
+ * What it costs a voyage that reached it is a pinned calendar at a steady
+ * time of day, which is much better than the thing it also guards: a
  * hand-edited 1e300 makes `hour += dt` a no-op and stops the sun with nothing
  * reporting a fault.
  */
-const HOUR_LIMIT = 1e5;
+export const HOUR_LIMIT = 1e5;
 
 /**
  * Read the voyage, or null if there is none to read.

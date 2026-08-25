@@ -13,7 +13,7 @@ import { WindField } from './sim/wind';
 import { CurrentField, DEFAULT_FULL_DEPTH, tideRate } from './sim/current';
 import { RegionTerrain } from './sim/region-terrain';
 import { loadEarth } from './terrain-load';
-import { clearUnderway, loadUnderway, sameWorld, saveUnderway } from './underway';
+import { HOUR_LIMIT, clearUnderway, loadUnderway, sameWorld, saveUnderway } from './underway';
 import { clearTrack, loadTrack, saveTrack } from './track';
 import { questStore } from './quests-store';
 import {
@@ -2129,7 +2129,13 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     streamWorld(state.pos.x, state.pos.y);
 
     // Time of day. timeScale is "simulated minutes per real minute".
-    hour += (PHYS_DT / 3600) * current.timeScale;
+    //
+    // Held at the same limit the stored copy is held at, and that is not
+    // belt and braces: clamping only on the way out left the session running
+    // past a bound its row was pinned at, so the next open jumped the sky and
+    // the tide *backwards*. A clock this far on is eleven years of world time
+    // and has stopped being a clock; stopping it is the honest end.
+    hour = Math.min(hour + (PHYS_DT / 3600) * current.timeScale, HOUR_LIMIT);
     /*
      * The stream turns.
      *
