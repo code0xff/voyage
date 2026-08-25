@@ -1989,7 +1989,15 @@ describe('sailing on the Earth', () => {
     // pond and float her in it, which is worse than failing because it looks
     // like it worked. The stub planet is land north of 30N.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    kept.stored = storedOn({ lat: 45, lon: -100 });
+    kept.stored = storedOn({ lat: 45, lon: -100 }, 13, 22);
+    tracked.stored = {
+      seed: 13,
+      at: 1,
+      points: [
+        { lat: 45.02, lon: -100 },
+        { lat: 45.01, lon: -100 },
+      ],
+    };
     const engine = sailing({ randomWorld: false, seed: 13 });
     await Promise.resolve();
     await Promise.resolve();
@@ -1998,6 +2006,24 @@ describe('sailing on the Earth', () => {
     // And she is where the game opens, not in the middle of a continent.
     expect(placeOf(engine).lat).toBeCloseTo(37.78, 1);
     expect(warn).toHaveBeenCalled();
+
+    // The whole voyage is forgotten, not only its position. It used to throw
+    // the position away and leave the rest of the same record standing: the
+    // track drawn around a spot that had just been rejected, its row left for
+    // the next departure to take up -- the seed still matched -- and the
+    // clock still that of the voyage that could not be opened.
+    expect(tracked.stored, "the rejected voyage's track was left in store").toBeNull();
+    frame(0.1);
+    expect(engine.snapshot.sky.hour, "the rejected voyage's clock was kept").toBeCloseTo(9, 1);
+    engine.putToSea();
+    engine.advance(0.02);
+    const { xy, count } = engine.snapshot.track;
+    const here = engine.snapshot.state.pos;
+    expect(count, 'nothing was recorded after starting over').toBeGreaterThan(0);
+    expect(
+      Math.hypot(xy[0] - here.x, xy[1] - here.y),
+      'the departure took up the rejected track',
+    ).toBeLessThan(500);
     warn.mockRestore();
     engine.dispose();
   });
@@ -3068,6 +3094,36 @@ describe('the track she has sailed', () => {
     // in it was sailed since the seed changed.
     expect(tracked.stored!.seed).toBe(14);
     expect(tracked.stored!.points.length).toBeLessThan(8);
+    engine.dispose();
+  });
+
+  it('stops carrying a voyage on once the world has been rebuilt under it', () => {
+    // The seed can be typed into the menu twice, and typing it back does not
+    // undo the rebuild in between. `applySettings` drops the track each time,
+    // but the *flag* saying this session is a resumed voyage outlived both --
+    // so a departure that did not come through `sailFrom` took the old
+    // voyage's track and clock back up, its row having matched again.
+    //
+    // Not a path either menu door takes -- both call `sailFrom` -- but it is
+    // reachable through the engine's own API, which is the surface this test
+    // file drives and the one another caller would meet.
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 22);
+    tracked.stored = {
+      seed: 13,
+      at: 1,
+      points: [
+        { lat: -33.53, lon: 18.4 },
+        { lat: -33.52, lon: 18.4 },
+      ],
+    };
+    const engine = createEngine(canvas(), settings({ randomWorld: false, seed: 13, startHour: 9 }));
+    engine.applySettings(settings({ randomWorld: false, seed: 14, startHour: 9 }));
+    engine.applySettings(settings({ randomWorld: false, seed: 13, startHour: 9 }));
+    engine.putToSea();
+    engine.advance(0.02);
+    expect(trackReach(engine), 'the rebuilt world took the old track back up').toBeLessThan(500);
+    frame(0.1);
+    expect(engine.snapshot.sky.hour, 'the rebuilt world took the old clock').toBeCloseTo(9, 1);
     engine.dispose();
   });
 

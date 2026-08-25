@@ -1418,6 +1418,17 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
         if (remembered && loaded.isLand(oceanAnchor)) {
           console.warn('the remembered position is on land; starting over', oceanAnchor);
           clearUnderway();
+          // The whole voyage, not only its position. It threw the position
+          // away and left the rest of the same record standing: the track was
+          // already laid out and stayed on the chart around a spot that had
+          // just been rejected, its row was left in store for the next
+          // departure to take up -- the seed still matched -- and `resuming`
+          // was still true, so that departure would have taken the clock as
+          // well. Starting over is starting over.
+          resuming = false;
+          track.count = 0;
+          clearTrack();
+          hour = current.startHour;
           oceanAnchor = { ...DEFAULT_ANCHOR };
           pinForWorld();
           state.pos = { x: 0, y: 0 };
@@ -1735,10 +1746,12 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     snapshot.soundOn = s.sound;
     if (worldChanged) {
       rebuildWorld();
-      // And the track goes with the world it was sailed in. The seed can be
+      // And the voyage goes with the world it was sailed in. The seed can be
       // typed into the menu over a running voyage, so the coast is redrawn
       // under her without a departure -- and a track kept across that is a
-      // line through water that no longer exists.
+      // line through water that no longer exists. `resuming` goes with it:
+      // left standing, a `putToSea` that did not come through `sailFrom`
+      // would take up the voyage the rebuild had just replaced.
       //
       // The line on the chart was always wrong here and nobody had noticed;
       // what made it worth fixing is that the track is written down now, and
@@ -1747,6 +1760,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       // `restoreTrack`'s seed check exists to refuse -- smuggled past it at
       // the write instead of the read.
       track.count = 0;
+      resuming = false;
     }
     // Toggled mid-session, the hand appears or goes without a restart. After a
     // rebuild the world under the old hand is gone, so it is dealt again too --
