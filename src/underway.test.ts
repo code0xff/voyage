@@ -22,7 +22,7 @@ function fakeStorage() {
 }
 
 const KEY = 'voyage.underway.v1';
-const SYDNEY = { seed: 7, place: { lat: -33.87, lon: 151.21 }, hour: 20.5 };
+const SYDNEY = { seed: 7, place: { lat: -33.87, lon: 151.21 }, hour: 20.5, began: 9 };
 
 let store: ReturnType<typeof fakeStorage>;
 const had = 'localStorage' in globalThis;
@@ -50,6 +50,7 @@ describe('the voyage she is on', () => {
     expect(row.place.lat).toBeCloseTo(-33.87, 9);
     expect(row.place.lon).toBeCloseTo(151.21, 9);
     expect(row.hour).toBeCloseTo(20.5, 9);
+    expect(row.began).toBeCloseTo(9, 9);
     expect(row.at).toBe(1234);
   });
 

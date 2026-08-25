@@ -381,7 +381,7 @@ export function App() {
     const s = settingsRef.current;
     // Where a new voyage begins: the departure chosen in the settings.
     const from = waterById(s.departure)?.place ?? null;
-    if (from) saveUnderway({ seed: s.seed, place: from, hour: null });
+    if (from) saveUnderway({ seed: s.seed, place: from, hour: null, began: null });
     else clearUnderway();
     // A new voyage has no clock and no track behind it, and both are written
     // here for the reason the position is: pressed while the engine is still

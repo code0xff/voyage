@@ -68,6 +68,22 @@ export interface Underway {
    * midnight, which is worse than the reset it is fixing.
    */
   hour: number | null;
+  /**
+   * The hour the voyage began at, which is what its tide is measured from,
+   * or null for a row that does not say.
+   *
+   * The "Start time" setting is where a *new* voyage begins, and a player may
+   * move it between one session and the next. `hour` alone was enough until
+   * you ask what it counts from: the tide's phase is `hour - startHour` over
+   * the period, so read against a setting that has since moved, a resumed
+   * voyage opened on a tide it was never on -- move Start time by six hours
+   * with a 12.42-hour period and the stream runs the other way.
+   *
+   * So the origin travels with the clock. It is the one thing here that is
+   * *not* re-derivable and not the world's either: it is a fact about when
+   * this particular voyage started.
+   */
+  began: number | null;
   /** ms since the epoch. The only thing a later sync could resolve on. */
   at: number;
 }
@@ -139,7 +155,11 @@ export function loadUnderway(): Underway | null {
     // to the start hour is the honest failure, and it is the one already
     // taken for an hour that is missing or not a number.
     const hour = readable(o.hour) ? o.hour : null;
-    return { seed: o.seed, place, hour, at: o.at };
+    // On the same terms, and it must be a *day* rather than the clock's own
+    // range: it is an hour of the day the voyage set out on, which is what
+    // the Start time setting hands over.
+    const began = finite(o.began) && o.began >= 0 && o.began < 24 ? o.began : null;
+    return { seed: o.seed, place, hour, began, at: o.at };
   } catch {
     return null;
   }
@@ -164,6 +184,7 @@ export function saveUnderway(voyage: Omit<Underway, 'at'>, at = Date.now()): voi
         // back at it -- a pinned calendar at a steady time of day -- rather
         // than written past it and refused on the next open.
         hour: voyage.hour === null ? null : clamp(voyage.hour, 0, HOUR_LIMIT),
+        began: voyage.began,
         at,
       }),
     );

@@ -882,6 +882,21 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
    */
   let resuming = remembered !== null;
   /**
+   * The hour this voyage began at, which its tide is measured from.
+   *
+   * Held apart from `current.startHour` because that setting is where a *new*
+   * voyage begins and the player may move it between sessions. `tideRate`
+   * takes the phase as `hour - began` over the period, and reading that
+   * second argument straight from the setting -- which is what it did -- put
+   * a resumed voyage on a tide it had never been on: move Start time by half
+   * a period and the stream runs the other way, on a voyage whose clock had
+   * not moved at all.
+   *
+   * `newSession` puts it back to the setting for a new voyage; `resumeVoyage`
+   * takes it from the row for one being carried on.
+   */
+  let began = current.startHour;
+  /**
    * Where the player has asked the *next* departure to open, if they have
    * asked at all. Held apart from `oceanAnchor`, which is where the plane is
    * pinned for the session she is sailing now: writing the choice straight
@@ -1143,7 +1158,13 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // The same world, on `sameWorld`'s argument: an hour is harmless anywhere
     // but it is half of this row, and taking half of a row that belongs to
     // another voyage is how the other half gets taken next.
-    if (row && sameWorld(row, current) && row.hour !== null) hour = row.hour;
+    if (row && sameWorld(row, current) && row.hour !== null) {
+      hour = row.hour;
+      // Rows written before the origin travelled with the clock have none,
+      // and fall back to the setting -- which is what every resumed voyage
+      // did until now, so nothing that worked stops working.
+      began = row.began ?? current.startHour;
+    }
     restoreTrack();
   }
 
@@ -1200,7 +1221,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // clearing digs out of whatever it lands on. Nothing is written until
     // she is off it again, so the last good position stands.
     if (snapshot.clearance <= 0) return;
-    saveUnderway({ seed: current.seed, place: snapshot.place, hour });
+    saveUnderway({ seed: current.seed, place: snapshot.place, hour, began });
     // With the position and on its guards, not on its own timer. They are two
     // halves of one record -- where she got to, and how she got there -- and
     // a track written past a position that was not would draw a line running
@@ -1429,6 +1450,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
           track.count = 0;
           clearTrack();
           hour = current.startHour;
+          began = current.startHour;
           oceanAnchor = { ...DEFAULT_ANCHOR };
           pinForWorld();
           state.pos = { x: 0, y: 0 };
@@ -1894,6 +1916,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // hour crossed the line that keeps the trim and the heading out. "Start
     // time" is what the setting is called and what it now is.
     hour = current.startHour;
+    began = current.startHour;
     // So does the wind's direction on the open coast, where the belt says what
     // the wind does. *Snapped* here rather than eased: the ease
     // below exists so a boat sailing north into the westerlies finds them
@@ -1954,7 +1977,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // clock, and the same two lines would have opened it on a spring ebb the
     // sun said was slack -- with the sea raised on that wind-over-tide for the
     // one step before the loop corrected it.
-    const opened = tideRate(hour, current.startHour, current.tideHours);
+    const opened = tideRate(hour, began, current.tideHours);
     streamNow.x = fullStream.x * opened;
     streamNow.y = fullStream.y * opened;
     // A new session starts with the sea its weather implies, not the one the
@@ -2116,7 +2139,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
      * displacement the waves and the wake are carried by. Nothing here has a
      * clock of its own to leave running across a restart.
      */
-    const tide = tideRate(hour, current.startHour, current.tideHours);
+    const tide = tideRate(hour, began, current.tideHours);
     streamNow.x = fullStream.x * tide;
     streamNow.y = fullStream.y * tide;
     // Weather keeps world time, not wall-clock time: a front takes hours to
@@ -2844,12 +2867,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
       const resume = spot?.resume === true;
       if (spot?.place) {
         // Read before it is written over: on a resume the row being replaced
-        // is this voyage's own, and its clock goes on. A new voyage starts at
-        // the Start time setting, which is what a null hour asks for.
+        // is this voyage's own, and its clock -- and the hour that clock is
+        // counted from -- go on. A new voyage starts at the Start time
+        // setting, which is what a null pair asks for.
+        const carried = resume ? loadUnderway() : null;
         saveUnderway({
           seed: current.seed,
           place: spot.place,
-          hour: resume ? (loadUnderway()?.hour ?? null) : null,
+          hour: carried?.hour ?? null,
+          began: carried?.began ?? null,
         });
       } else {
         clearUnderway();

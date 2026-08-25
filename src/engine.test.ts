@@ -1605,8 +1605,13 @@ describe('the flare', () => {
  * A stored voyage on the Earth, as the engine would have written it. The
  * tests below all sail seed 13 on the coast, so the world is theirs.
  */
-function storedOn(place: { lat: number; lon: number }, seed = 13, hour: number | null = null) {
-  return { seed, place, hour, pos: null, at: 1 };
+function storedOn(
+  place: { lat: number; lon: number },
+  seed = 13,
+  hour: number | null = null,
+  began: number | null = null,
+) {
+  return { seed, place, hour, began, pos: null, at: 1 };
 }
 
 /** What the row says her position was, whichever coordinate its world uses. */
@@ -1998,7 +2003,7 @@ describe('sailing on the Earth', () => {
     // pond and float her in it, which is worse than failing because it looks
     // like it worked. The stub planet is land north of 30N.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    kept.stored = storedOn({ lat: 45, lon: -100 }, 13, 22);
+    kept.stored = storedOn({ lat: 45, lon: -100 }, 13, 22, 9);
     tracked.stored = {
       seed: 13,
       at: 1,
@@ -2748,7 +2753,7 @@ describe('the clock she is sailing on', () => {
     // star field would spin back through a day every night. It is the only
     // consumer that sees the raw number, so every other assertion in this
     // block would pass with it broken.
-    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 30);
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 30, 9);
     const engine = sailing({ randomWorld: false, seed: 13, startHour: 9, timeScale: 0 });
     frame(0.1);
     // Thirty, and not the six o'clock in the morning it wraps to: past
@@ -2826,7 +2831,7 @@ describe('the clock she is sailing on', () => {
     // because it is what the test needs in order to look at anything -- and
     // written out as 12.42 this would stop being about the default tide the
     // moment the default moved.
-    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 9 + TIDE_PERIOD / 2);
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 9 + TIDE_PERIOD / 2, 9);
     const engine = sailing({
       randomWorld: false,
       seed: 13,
@@ -2840,6 +2845,32 @@ describe('the clock she is sailing on', () => {
     // on, which is what the sea is built from.
     const stream = engine.snapshot.currents.peak;
     expect(stream.x, 'the resumed session opened on the wrong half of the tide').toBeLessThan(0);
+    engine.dispose();
+  });
+
+  it('measures a resumed tide from the hour the voyage began at', () => {
+    // The phase is `hour - began` over the period, and `began` used to be
+    // read from the Start time setting -- which is where a *new* voyage
+    // begins and which a player may move between sessions. So a resumed
+    // voyage opened on a tide it had never been on.
+    //
+    // Same voyage as the test above, same clock, and the setting moved half a
+    // period. The stream must be where the voyage's own origin puts it, not
+    // where the moved setting would.
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 9 + TIDE_PERIOD / 2, 9);
+    const engine = sailing({
+      randomWorld: false,
+      seed: 13,
+      startHour: 9 + TIDE_PERIOD / 2,
+      timeScale: 0,
+      driftKnots: 2,
+      setDeg: 90,
+      tideHours: TIDE_PERIOD,
+    });
+    expect(
+      engine.snapshot.currents.peak.x,
+      'the resumed tide followed the setting rather than the voyage',
+    ).toBeLessThan(0);
     engine.dispose();
   });
 
@@ -3140,7 +3171,7 @@ describe('the track she has sailed', () => {
     // Not a path either menu door takes -- both call `sailFrom` -- but it is
     // reachable through the engine's own API, which is the surface this test
     // file drives and the one another caller would meet.
-    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 22);
+    kept.stored = storedOn({ lat: -33.5, lon: 18.4 }, 13, 22, 9);
     tracked.stored = {
       seed: 13,
       at: 1,
