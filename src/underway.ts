@@ -76,6 +76,9 @@ const KEY = 'voyage.underway.v1';
 
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
+/** Whether a stored hour is one this game could have written. */
+const readable = (v: unknown): v is number => finite(v) && v >= 0 && v <= HOUR_LIMIT;
+
 /**
  * The furthest the carried clock is allowed to have run, world hours.
  *
@@ -128,7 +131,14 @@ export function loadUnderway(): Underway | null {
     // written before the clock was carried has no `hour`, and those are good
     // voyages. The caller falls back to the start hour, which is exactly what
     // every session did before this.
-    const hour = finite(o.hour) ? clamp(o.hour, 0, HOUR_LIMIT) : null;
+    //
+    // Out of range counts as unreadable, and is not clamped. Clamping looks
+    // like the kinder answer and is not: a negative hour clamped to zero is a
+    // *readable* clock saying midnight, which the engine then opens the
+    // voyage on -- before the hour it says the voyage began at. Falling back
+    // to the start hour is the honest failure, and it is the one already
+    // taken for an hour that is missing or not a number.
+    const hour = readable(o.hour) ? o.hour : null;
     return { seed: o.seed, place, hour, at: o.at };
   } catch {
     return null;
@@ -147,6 +157,12 @@ export function saveUnderway(voyage: Omit<Underway, 'at'>, at = Date.now()): voi
       JSON.stringify({
         ...voyage,
         place: { lat: clampLat(voyage.place.lat), lon: wrapLon(voyage.place.lon) },
+        // Clamped on the way out and refused on the way in, which sounds
+        // inconsistent and is the point: this bounds what the game writes,
+        // and `loadTrack`'s twin refuses what it did not. A voyage whose
+        // clock somehow reached the limit is written at the limit and comes
+        // back at it -- a pinned calendar at a steady time of day -- rather
+        // than written past it and refused on the next open.
         hour: voyage.hour === null ? null : clamp(voyage.hour, 0, HOUR_LIMIT),
         at,
       }),

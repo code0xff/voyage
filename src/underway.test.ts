@@ -142,25 +142,37 @@ describe('the voyage she is on', () => {
     }
   });
 
-  it('holds the carried clock where the sun still moves', () => {
-    // Two claims, both written out rather than imported: asserting the
-    // module's own bound back at it would hold at any bound, including none.
-    store.raw.set(KEY, JSON.stringify({ seed: 7, place: { lat: 1, lon: 2 }, hour: 1e300, at: 1 }));
+  it('refuses a carried clock it could not have written', () => {
+    // Refused rather than clamped, both ends, and the caller falls back to
+    // the start hour -- which is the answer it already takes for an hour that
+    // is missing or not a number. Clamped instead, each of these comes back
+    // as a perfectly readable clock that the voyage then opens on: midnight
+    // at one end, and at the other an hour the sky cannot draw smoothly.
+    for (const hour of [-5, -1e-6, 1e300, 5e5]) {
+      store.raw.set(KEY, JSON.stringify({ seed: 7, place: { lat: 1, lon: 2 }, hour, at: 1 }));
+      const row = loadUnderway();
+      expect(row, String(hour)).not.toBeNull();
+      expect(row!.hour, `${hour} was taken as a clock`).toBeNull();
+    }
+  });
+
+  it('writes a clock the sun and the sky can both still move', () => {
+    // The other side of the same bound: what the game *writes* is clamped, so
+    // a voyage whose clock somehow ran past the limit is written at it and
+    // comes back at it -- a pinned calendar at a steady time of day -- rather
+    // than written past it and refused on the next open.
+    //
+    // Both numbers written out, because they are the claim: asserting the
+    // module's own bound back at it would hold at any bound including none.
+    saveUnderway({ ...SYDNEY, hour: 1e300 });
     const hour = loadUnderway()!.hour!;
-    // The clock is stepped by about 1e-5 of an hour, and a clock too large to
-    // add that to is a stopped sun that nothing reports.
+    // The clock is stepped by about 1e-5 of an hour, and one too large to add
+    // that to is a stopped sun that nothing reports.
     expect(hour + 1e-5, 'the clock is too large to advance').toBeGreaterThan(hour);
-    expect(hour).toBeGreaterThan(0);
     // And it reaches the renderer as a float32 uniform that turns the stars
     // and drifts the cloud deck. Past about 3e5 the drift quantises to a
-    // visible fraction of the finest thing in the cloud noise; this is the
-    // margin under that.
+    // visible fraction of the finest thing in the cloud noise.
     expect(hour, 'the carried clock reaches the sky as a stuttering float').toBeLessThan(3e5);
-
-    // And never before the voyage began: the clock counts on from the start
-    // hour and does not run backwards.
-    store.raw.set(KEY, JSON.stringify({ seed: 7, place: { lat: 1, lon: 2 }, hour: -5, at: 1 }));
-    expect(loadUnderway()!.hour).toBeGreaterThanOrEqual(0);
   });
 
   it('knows whether a row is the world these settings would sail', () => {
