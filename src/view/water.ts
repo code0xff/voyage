@@ -999,7 +999,7 @@ export function createWater(): Water {
       // sea lags, it is raised on the wind over the moving water, and the
       // player can scale it. Taking `tws` here would foam a sea that had not
       // arrived yet, and would ignore the sea slider entirely.
-      uniforms.uFoam.value = foamLevel(waves.windSpeed);
+      uniforms.uFoam.value = foamLevel(waves.buildWind);
       // Ripple with the wind. A glassy calm is a real thing and should look
       // like one, but the sea should never be a mirror once it is blowing.
       uniforms.uRipple.value = Math.min(0.3 + tws / 9, 1.5);
