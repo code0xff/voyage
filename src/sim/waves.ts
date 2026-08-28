@@ -178,6 +178,20 @@ export class WaveField {
   private readonly weights = new Float64Array(MAX_WAVES);
   /** Significant wave height H1/3, m. Used by the HUD and added resistance. */
   sigWaveHeight = 0;
+  /**
+   * The wind this sea was built from, m/s -- not the wind blowing now.
+   *
+   * They are different numbers and the difference matters to anything that has
+   * to agree with the water: the sea builds and turns with a lag, it is raised
+   * on the wind over the *moving* water, and the player can scale it. Whatever
+   * reads this gets the wind the waves in front of it actually came from.
+   *
+   * The whitecaps read it. Foam coverage is a function of wind speed and the
+   * wave field's own steepness is not -- H13 and the dominant wavelength both
+   * go as u^2, so H/lambda is a constant 0.031 whatever the wind -- which
+   * leaves this as the only thing that can tell the sea when to break.
+   */
+  windSpeed = 0;
 
   constructor(tws: number, twd: number) {
     this.setFromWind(tws, twd);
@@ -307,6 +321,7 @@ export class WaveField {
     const lambda = Math.max(4, 0.42 * u * u); // m, dominant wavelength
     const h13 = waveHeightFromWind(u);
     this.sigWaveHeight = h13;
+    this.windSpeed = u;
 
     // Waves travel with the wind; twd is where it blows *from*, so invert it.
     const from = compassVec(twd);

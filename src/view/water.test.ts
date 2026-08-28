@@ -3,7 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { HeightField } from '../sim/heightfield';
 import { RegionTerrain } from '../sim/region-terrain';
 import { coastRegion } from '../sim/coast';
-import { FAR_SIZE, FIELD_DEPTH, SEG, SIZE, createWater, fieldGlsl, ringGeometry } from './water';
+import {
+  FAR_SIZE,
+  FIELD_DEPTH,
+  SEG,
+  SIZE,
+  createWater,
+  fieldGlsl,
+  foamLevel,
+  ringGeometry,
+} from './water';
 import { EYE_FAR } from './scene';
 import { CLEAR_DAY } from '../sim/weather';
 
@@ -324,6 +333,44 @@ describe('the water texture of a moved window', () => {
       expect(Math.abs(greenAt(row, 0) - expected)).toBeLessThanOrEqual(FIELD_DEPTH / 255);
     }
     water.dispose();
+  });
+});
+
+/**
+ * The foam threshold, which is a convention and not a look: it is the sea's
+ * only route from wind speed to whitecaps, and it runs *downwards* as the wind
+ * gets up, because it is a height the water has to clear. A sign error here
+ * would put the foam on a millpond and take it off a gale, and would show in a
+ * screenshot as nothing at all -- the sea would simply be wrong in a direction
+ * nobody was looking.
+ */
+describe('the foam threshold', () => {
+  it('falls as the wind rises, so more of the sea breaks', () => {
+    let last = Infinity;
+    for (let u = 1; u <= 20; u++) {
+      const t = foamLevel(u);
+      expect(t).toBeLessThan(last);
+      last = t;
+    }
+  });
+
+  /**
+   * Written out rather than derived, because these two numbers are the claim
+   * and not a scaffold for it: a force 4 is where a sea starts to show the odd
+   * white crest, and a force 8 is where it is streaked with them. In sigma of
+   * surface elevation that is a threshold the water clears rarely and one it
+   * clears often, and 2 and 1 are where those sit.
+   */
+  it('is barely reached at force 4 and easily at force 8', () => {
+    expect(foamLevel(6)).toBeGreaterThan(2);
+    expect(foamLevel(18)).toBeLessThan(1);
+  });
+
+  it('stops moving outside the winds it was fitted over', () => {
+    expect(foamLevel(25)).toBe(foamLevel(20));
+    expect(foamLevel(60)).toBe(foamLevel(20));
+    expect(foamLevel(0)).toBe(foamLevel(0.5));
+    expect(Number.isFinite(foamLevel(0))).toBe(true);
   });
 });
 

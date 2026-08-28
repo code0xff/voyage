@@ -3,7 +3,7 @@ import { MAX_WAVES, type WaveField } from '../sim/waves';
 
 import { EDGE_FADE, type RegionTerrain } from '../sim/region-terrain';
 import type { SkyState } from '../sim/sky';
-import { smoothstep } from '../sim/math';
+import { clamp, smoothstep } from '../sim/math';
 import { CLEAR_DAY } from '../sim/weather';
 
 /**
@@ -28,6 +28,38 @@ import { CLEAR_DAY } from '../sim/weather';
 // under the far corner of this grid has to be one the island window can answer.
 export const SIZE = 900;
 export const SEG = 300; // subdivisions -> 3 m per cell
+
+/**
+ * The elevation, in units of the sea's own sigma, above which the water foams.
+ *
+ * This is where the whitecaps get their wind dependence, and it has to be here
+ * because the wave field has none to give: H13 and the dominant wavelength both
+ * go as u^2, so this sea's steepness is a constant 0.031 at every wind speed and
+ * at every setting of the sea slider. Nothing about the shape of the water says
+ * whether it is blowing.
+ *
+ * Coverage does. Monahan and O'Muircheartaigh measured whitecap area as
+ * W = 3.84e-6 * U^3.41, which is 0.2% of the sea at force 4 and 10% at force 8,
+ * and elevation in a random sea is Gaussian -- so asking for coverage W is
+ * asking for the height only W of the surface stands above. Solving that
+ * against the actual wave field at nine wind speeds, with the steepness gate
+ * in the shader included, gives thresholds that lie on a straight line in
+ * log U to within 0.11 sigma:
+ *
+ *     t = 4.839 - 1.5154 ln U
+ *
+ * That error is far inside the scatter of Monahan's own data, which spans a
+ * factor of two or three at any one wind speed.
+ *
+ * Clamped at 20 m/s because that is the top of the range it was fitted over
+ * and the law itself runs past 100% coverage not far above it; clamped at the
+ * bottom only to keep the logarithm finite, since by then the threshold is
+ * over six sigma and nothing reaches it.
+ */
+export const foamLevel = (wind: number): number => 4.839 - 1.5154 * Math.log(clamp(wind, 0.5, 20));
+
+/** How white a fully broken crest goes. */
+const FOAM_OPACITY = 0.7;
 
 /**
  * Depth, in metres, that the field texture's green channel stores as 1.0.
@@ -352,7 +384,7 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uFogColor;
   uniform float uFogNear;
   uniform float uFogFar;
-  uniform float uWhitecap;
+  uniform float uFoam;    // elevation in sigma above which the water breaks
   uniform float uSpecular;
   uniform float uRipple;
   uniform vec2 uPin;   // how far the plane has been re-pinned under the water
@@ -412,41 +444,43 @@ const fragmentShader = /* glsl */ `
     // water does not, and the whitecaps quietly stop appearing. Against sigma
     // the same sea gives the same foam however it was written down.
     //
-    // The two thresholds are where they were for the four-component sea this
-    // replaced, to three figures: that sum came to 2.5603 sigma, so 0.72 and
-    // 0.99 of it are 1.8434 and 2.5347, written here as 1.84 and 2.53.
+    // Where the threshold comes from is foamLevel() above: elevation is
+    // Gaussian, whitecap coverage is a measured function of wind speed, and
+    // that pair fixes the height the water has to reach. It is the only route
+    // the wind has into this, because the shape of the wave field carries no
+    // wind information at all -- the steepness is a constant.
     //
-    // Not Rayleigh, though those numbers invite it. Crest heights in a
-    // *narrow-band* sea are Rayleigh, which would put 18% of crests over the
-    // first threshold and 4% over the second; this sea is not narrow enough
-    // and counting local maxima over a 1 km square gives 32% and 9%. What
-    // decides the area of foam is the elevation at a point, which is Gaussian:
-    // 3.1% of the surface stands above the first threshold.
-    //
-    // None of which has ever been visible, because the steepness gate below
-    // is one this sea cannot open -- see it for the measurements. Both halves
-    // correct and the product is zero.
+    // What the threshold replaced was a fixed 1.84 to 2.53 sigma with a
+    // wind-driven *opacity* in front of it. That put the same area of foam on
+    // a force 3 and a force 9 and asked the alpha to tell them apart, which it
+    // could not: at 20 knots the alpha was 0.36 and the coverage 1.5%, and
+    // nothing was visible on screen. Coverage is what the eye reads, so
+    // coverage is what the wind now moves.
     if (vSigma > 0.001) {
-      float crest = smoothstep(1.84, 2.53, vHeight / vSigma);
-      // Unreachable, and left that way deliberately. Measured over a 1.2 km
-      // square the sea's mean slope is 0.042 and its steepest point 0.18, so
-      // this is exactly zero everywhere and no whitecap has ever been drawn.
+      // A wide soft edge, not a line: a crest does not start breaking all at
+      // once, and a narrow ramp made the far field -- where perspective packs
+      // many crests into few pixels -- read as flat white sheets with an edge
+      // to them. Over 1.2 sigma the foam thins out along a crest instead.
+      // foamLevel() is solved against this width, so widening it again means
+      // refitting.
+      float crest = smoothstep(uFoam, uFoam + 1.2, vHeight / vSigma);
+      // Steepness shapes the foam rather than gating it: this passes 43% of
+      // the surface, so the caps break up along a crest instead of icing every
+      // high one evenly. foamLevel() was solved with this term in place, so
+      // the coverage above is the coverage after it.
       //
-      // It is not a tuning that drifted. H13 goes as u^2 and so does the
-      // dominant wavelength, so H/lambda is a constant 0.031 at every wind
-      // speed -- four times gentler than the 1/7 at which water really breaks.
-      // No threshold taken from real breaking waves can be met here.
+      // Absolute, and safe to be absolute. Elevation had to be measured
+      // against the sea's own sigma because sigma moves with the wind; slope
+      // does not move with anything, since H13 and the dominant wavelength
+      // both go as u^2. Mean slope 0.042, so this band straddles it. Shelter
+      // and the grid fade are the two things that *do* scale it, and both
+      // should take the foam away with them.
       //
-      // Lowering it is not the fix on its own. At 0.02..0.05 the foam covers
-      // 0.8% of the surface and at 0.035..0.07, 0.4%; neither could be seen in
-      // the browser at 20 knots, where uWhitecap is only (10.3-6)/12 = 0.36.
-      // Forcing this product to 1.0 does visibly pale the whole sea, so the
-      // rest of the path works -- it is coverage and opacity together that are
-      // short. Making the sea break means retuning uWhitecap's range as well,
-      // and that is a decision about how the sea should look rather than a
-      // defect to correct, so it is left for whoever wants to take it.
-      float steep = smoothstep(0.22, 0.55, vSteepness);
-      col = mix(col, vec3(0.86, 0.91, 0.95), crest * steep * uWhitecap * vShelter);
+      // It was 0.22 to 0.55 -- five times the mean and above the steepest
+      // point anywhere in the field -- so it evaluated to exactly zero and no
+      // whitecap had ever been drawn since the term was written.
+      float steep = smoothstep(0.03, 0.055, vSteepness);
+      col = mix(col, vec3(0.86, 0.91, 0.95), crest * steep * ${FOAM_OPACITY.toFixed(2)} * vShelter);
     }
 
     // Deck lights pooling on the sea.
@@ -745,7 +779,7 @@ export function createWater(): Water {
     uFogColor: { value: new THREE.Color(0x1b2a3a) },
     uFogNear: { value: 260 },
     uFogFar: { value: 560 },
-    uWhitecap: { value: 0 },
+    uFoam: { value: foamLevel(0) },
     uSpecular: { value: 0.5 },
     uRipple: { value: 1 },
     uPin: { value: new THREE.Vector2() },
@@ -918,7 +952,11 @@ export function createWater(): Water {
       }
 
       // Whitecaps start to appear around 12 knots.
-      uniforms.uWhitecap.value = Math.min(Math.max((tws - 6) / 12, 0), 0.85);
+      // From the wind the sea was *built* from, not the wind blowing now: the
+      // sea lags, it is raised on the wind over the moving water, and the
+      // player can scale it. Taking `tws` here would foam a sea that had not
+      // arrived yet, and would ignore the sea slider entirely.
+      uniforms.uFoam.value = foamLevel(waves.windSpeed);
       // Ripple with the wind. A glassy calm is a real thing and should look
       // like one, but the sea should never be a mirror once it is blowing.
       uniforms.uRipple.value = Math.min(0.3 + tws / 9, 1.5);
