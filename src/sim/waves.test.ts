@@ -93,16 +93,25 @@ describe('encounter frequency', () => {
  * A sea of a fixed size, written as `n` independent components.
  *
  * Same total energy however finely it is split -- a sine of amplitude A has
- * variance A^2/2, so n components of A/sqrt(n) carry what one of A did. The
- * directions and phases are fanned out because that is what makes them
- * independent, and independence is the whole of why the variances add.
+ * variance A^2/2, so n components of A/sqrt(n) carry what one of A did. That
+ * only holds if they really are independent, which is why the *wavelengths*
+ * differ here and not only the directions and phases.
+ *
+ * The first version of this fixture gave every component the same wavelength,
+ * and that is independent in space and not in time: distinct wave vectors, so
+ * the spatial RMS came out right, but one shared frequency, so at a fixed
+ * point the whole sum collapses into a single sinusoid whose amplitude is
+ * whatever the phases happen to add up to. Measured over 400 s at the origin
+ * it was 0.124 against a claimed 0.354. Time is the half that matters, because
+ * `waveHitStrength` multiplies this amplitude by a frequency to get the
+ * surface's vertical velocity past the hull.
  */
 function splitSea(n: number, total: number): WaveField {
   const w = new WaveField(12, 0);
   w.comps.length = 0;
   for (let i = 0; i < n; i++) {
     const dir = (i - (n - 1) / 2) * 0.3;
-    const k = (2 * Math.PI) / 16;
+    const k = (2 * Math.PI) / (12 + i * 3.7);
     w.comps.push({
       dirX: Math.sin(dir),
       dirY: Math.cos(dir),
@@ -126,6 +135,28 @@ describe('encounter amplitude', () => {
     const fine = dominantEncounter(splitSea(9, 0.5), 0, 0, 0);
     expect(fine.amp).toBeGreaterThan(0);
     expect(fine.amp).toBeCloseTo(coarse.amp, 6);
+  });
+
+  /**
+   * And the size it reports is the size the water is, not just the size the
+   * arithmetic in `rms` says. Measured the way the sound uses it: at one point,
+   * over time, which is where a sea made of components that do not really
+   * differ gives itself away.
+   *
+   * Without this, the invariance above is satisfied by anything blind to the
+   * split -- `rms` is a pure function of the amplitudes and cannot tell whether
+   * the sea it describes exists.
+   */
+  it('is the size the water at a point really moves', () => {
+    const w = splitSea(9, 0.5);
+    let sum = 0;
+    const n = 40000; // 400 s, long enough for the slowest component to average
+    for (let i = 0; i < n; i++) {
+      w.update(0.01);
+      const h = w.heightAt(0, 0);
+      sum += h * h;
+    }
+    expect(Math.sqrt(sum / n)).toBeCloseTo(w.rms, 2);
   });
 
   it('grows with the sea, whatever it is written in', () => {
