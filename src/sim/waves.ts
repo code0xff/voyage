@@ -212,23 +212,40 @@ export class WaveField {
       [0.37, 0.14, -0.72],
     ];
 
-    this.comps.length = 0;
     for (let i = 0; i < spec.length; i++) {
       const [lm, aw, dd] = spec[i];
       const lam = lambda * lm;
       const k = (2 * Math.PI) / lam;
       const dir = baseDir + dd;
-      this.comps.push({
-        dirX: Math.sin(dir),
-        dirY: Math.cos(dir),
-        k,
-        omega: Math.sqrt(G * k),
-        // H1/3 is roughly 4*sigma; split the components so their squares sum to
-        // sigma^2.
-        amp: (h13 / 4) * aw * 2,
-        basePhase: i * 1.7,
-      });
+      const c = this.component(i);
+      c.dirX = Math.sin(dir);
+      c.dirY = Math.cos(dir);
+      c.k = k;
+      c.omega = Math.sqrt(G * k);
+      // H1/3 is roughly 4*sigma; split the components so their squares sum to
+      // sigma^2.
+      c.amp = (h13 / 4) * aw * 2;
+      c.basePhase = i * 1.7;
     }
+    this.comps.length = spec.length;
+  }
+
+  /**
+   * The component to write into, made once and then overwritten.
+   *
+   * `setFromWind` runs on every physics tick -- the sea builds and turns with
+   * the wind over the water, which is itself moving -- so rebuilding the array
+   * there threw away and remade every component 120 times a second for a set
+   * of numbers that mostly do not change. Nothing outside holds a component
+   * across a tick, so overwriting them is invisible; the only reason it was
+   * written the other way is that `push` reads more naturally.
+   */
+  private component(i: number): WaveComponent {
+    const held = this.comps[i];
+    if (held) return held;
+    const made: WaveComponent = { dirX: 0, dirY: 1, k: 1, omega: 1, amp: 0, basePhase: 0 };
+    this.comps[i] = made;
+    return made;
   }
 
   /**
