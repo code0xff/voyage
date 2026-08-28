@@ -89,6 +89,52 @@ describe('encounter frequency', () => {
   });
 });
 
+/**
+ * A sea of a fixed size, written as `n` independent components.
+ *
+ * Same total energy however finely it is split -- a sine of amplitude A has
+ * variance A^2/2, so n components of A/sqrt(n) carry what one of A did. The
+ * directions and phases are fanned out because that is what makes them
+ * independent, and independence is the whole of why the variances add.
+ */
+function splitSea(n: number, total: number): WaveField {
+  const w = new WaveField(12, 0);
+  w.comps.length = 0;
+  for (let i = 0; i < n; i++) {
+    const dir = (i - (n - 1) / 2) * 0.3;
+    const k = (2 * Math.PI) / 16;
+    w.comps.push({
+      dirX: Math.sin(dir),
+      dirY: Math.cos(dir),
+      k,
+      omega: Math.sqrt(9.81 * k),
+      amp: total / Math.sqrt(n),
+      basePhase: i * 2.4,
+    });
+  }
+  return w;
+}
+
+describe('encounter amplitude', () => {
+  /**
+   * Regression: the encounter reported the biggest component's amplitude, so
+   * the same sea written as a finer spectrum claimed to be a smaller sea --
+   * and the sound of it got quieter every time the wave model gained detail.
+   */
+  it('is the size of the sea, not of however many pieces it was written in', () => {
+    const coarse = dominantEncounter(splitSea(1, 0.5), 0, 0, 0);
+    const fine = dominantEncounter(splitSea(9, 0.5), 0, 0, 0);
+    expect(fine.amp).toBeGreaterThan(0);
+    expect(fine.amp).toBeCloseTo(coarse.amp, 6);
+  });
+
+  it('grows with the sea, whatever it is written in', () => {
+    const small = dominantEncounter(splitSea(9, 0.3), 0, 0, 0);
+    const big = dominantEncounter(splitSea(9, 0.9), 0, 0, 0);
+    expect(big.amp).toBeCloseTo(small.amp * 3, 6);
+  });
+});
+
 describe('wave hit strength', () => {
   /**
    * The point of the whole thing: at the same wave height and the same boat

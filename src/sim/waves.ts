@@ -96,6 +96,22 @@ export class WaveField {
   }
 
   /**
+   * RMS surface elevation, m -- sigma, the scale of this sea.
+   *
+   * The one measure of "how big is it" that does not depend on how finely the
+   * spectrum was chopped up. A sine of amplitude A has variance A^2/2, the
+   * components are independent, so the variances add. Split any component into
+   * two of amplitude A/sqrt(2) and the water is a different water but the same
+   * size, and this returns the same number; anything reading a single
+   * component's amplitude does not.
+   */
+  get rms(): number {
+    let v = 0;
+    for (const c of this.comps) v += c.amp * c.amp;
+    return Math.sqrt(v * 0.5);
+  }
+
+  /**
    * How far the water has been carried since the session began, m.
    *
    * Exposed so that anything else drawn *in* the water -- the wake is the one
@@ -290,7 +306,16 @@ export class WaveField {
 export interface Encounter {
   /** rad/s, how often she meets it. Never negative. */
   omega: number;
-  /** m, amplitude of that train. */
+  /**
+   * m, the scale of the sea -- its RMS elevation, not the biggest component's
+   * amplitude.
+   *
+   * The rhythm belongs to the dominant train and the size does not. One
+   * component's amplitude is an artefact of how the spectrum was discretised:
+   * the same water written as four components or as sixteen reports a
+   * different number, and the finer the spectrum the quieter the sea claims to
+   * be. `WaveField.rms` is the same water either way.
+   */
   amp: number;
 }
 
@@ -308,6 +333,10 @@ export interface Encounter {
  * same boat speed and the same wave height, and it is the only quantity that
  * expresses it. The dominant train is taken alone: the sea has several, but the
  * rhythm you hear is the big one's.
+ *
+ * The *size* is the whole sea's, though, and only the frequency is the dominant
+ * train's -- see `Encounter.amp`. Both were the biggest component's until the
+ * spectrum got finer, at which point that component stopped being the sea.
  */
 export function dominantEncounter(
   waves: WaveField,
@@ -333,7 +362,7 @@ export function dominantEncounter(
   if (!best) return { omega: 0, amp: 0 };
 
   const closing = best.dirX * vx + best.dirY * vy;
-  return { omega: Math.abs(best.omega - best.k * closing), amp: best.amp };
+  return { omega: Math.abs(best.omega - best.k * closing), amp: waves.rms };
 }
 
 /**
