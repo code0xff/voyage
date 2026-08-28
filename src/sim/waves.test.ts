@@ -159,6 +159,22 @@ describe('encounter amplitude', () => {
     expect(Math.sqrt(sum / n)).toBeCloseTo(w.rms, 2);
   });
 
+  /**
+   * Regression: the shelter reached the hull and the water shader and not the
+   * sound, so lying in the flat water behind a headland the boat still heard
+   * the open sea meeting her.
+   *
+   * Only the size is sheltered. A lee takes the height out of the waves and
+   * leaves their length alone, so the rate she meets them cannot move.
+   */
+  it('is damped by a lee, and the rate of meeting them is not', () => {
+    const w = sea();
+    const open = dominantEncounter(w, 0.4, 3, 0);
+    const lee = dominantEncounter(w, 0.4, 3, 0, 0.25);
+    expect(lee.amp).toBeCloseTo(open.amp * 0.25, 9);
+    expect(lee.omega).toBeCloseTo(open.omega, 9);
+  });
+
   it('grows with the sea, whatever it is written in', () => {
     const small = dominantEncounter(splitSea(9, 0.3), 0, 0, 0);
     const big = dominantEncounter(splitSea(9, 0.9), 0, 0, 0);

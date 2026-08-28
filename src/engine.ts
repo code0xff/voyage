@@ -568,6 +568,15 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
 
   // Reused every physics step; allocating per step would keep the GC busy at 120 Hz.
   const hullWave: HullWaveSample = { heave: 0, pitchSlope: 0, rollSlope: 0 };
+  /**
+   * How much of the sea the land leaves standing where she is, 0..1.
+   *
+   * Kept because the render loop needs it and the step is where it is known.
+   * It reaches the physics folded into `sea` -- into h13, the heave and both
+   * slopes -- so there is nothing to add there; the sound is the one consumer
+   * that has to be handed it whole.
+   */
+  let seaShelter = 1;
   const sea: SeaState = {
     h13: 0,
     heave: 0,
@@ -2280,6 +2289,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
     // can be handed, and the stream only varies with depth.
     waves.update(PHYS_DT, currents.peak);
     const shelter = query.waveShelter(state.pos.x, state.pos.y, wind.baseTwd);
+    seaShelter = shelter;
     sampleHull(
       waves,
       state.pos.x,
@@ -2590,7 +2600,7 @@ export function createEngine(canvas: HTMLCanvasElement, settings: Settings): Eng
           Math.abs(state.heel) * RAD,
           msToKnots(env.tws),
         ]);
-        sound.update(state, diag, waves, weather.state, wall, currents.peak);
+        sound.update(state, diag, waves, weather.state, wall, currents.peak, seaShelter);
       }
     }
 

@@ -296,6 +296,8 @@ export class SoundEngine {
     weather: WeatherState,
     dt: number,
     fieldDrift: { x: number; y: number },
+    /** Wave height multiplier from land shelter, 0..1. */
+    shelter: number,
   ): void {
     const ctx = this.ctx;
     if (!ctx || !this.hull || !this.rig || !this.luff || !this.luffAm || !this.rain) return;
@@ -340,6 +342,7 @@ export class SoundEngine {
       state.heading,
       groundFwd - driftFwd,
       groundStb - driftStb,
+      shelter,
     );
     this.wavePhase += enc.omega * dt;
     if (this.wavePhase >= TAU) {

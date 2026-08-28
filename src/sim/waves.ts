@@ -481,6 +481,18 @@ export function dominantEncounter(
   u: number,
   /** Athwartships, likewise. */
   v: number,
+  /**
+   * Wave height multiplier from land shelter, 0..1 -- the same term
+   * `sampleHull` takes, defaulted the same way and for the same reason.
+   *
+   * The lee is part of the sea and not a decoration on it: the shader scales
+   * its amplitudes by this, `sampleHull` scales the hull's, and for a while
+   * this function did not, so a boat lying in the flat water behind a headland
+   * felt nothing and heard the open sea. Only the size is sheltered -- a lee
+   * takes the height out of the waves and leaves their length alone, so the
+   * frequency below is untouched.
+   */
+  shelter = 1,
 ): Encounter {
   // Her velocity through the wave pattern, in world axes -- which is through
   // the water only while the pattern is standing still, and it no longer is.
@@ -498,7 +510,7 @@ export function dominantEncounter(
   if (!best) return { omega: 0, amp: 0 };
 
   const closing = best.dirX * vx + best.dirY * vy;
-  return { omega: Math.abs(best.omega - best.k * closing), amp: waves.rms };
+  return { omega: Math.abs(best.omega - best.k * closing), amp: waves.rms * shelter };
 }
 
 /**
