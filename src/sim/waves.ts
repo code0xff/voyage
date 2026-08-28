@@ -17,7 +17,85 @@ import { compassVec, wrap2Pi, type Vec2 } from './math';
  */
 
 const G = 9.81;
-export const MAX_WAVES = 4;
+/**
+ * How many components the sea is written in.
+ *
+ * Four hand-picked ones for most of this project's life, which is enough to
+ * float a boat correctly and not enough to look like water: four sines make
+ * four sets of parallel ridges running most of the way across the world, and
+ * the eye finds the repeat in a few seconds. Sixteen drawn from a spectrum
+ * breaks the crests up without changing the size of the sea.
+ *
+ * The cost is a sixteen-iteration loop per vertex in the water shader and per
+ * hull sample in the physics, so this is not a number to raise idly; see the
+ * commit that set it for what was measured.
+ */
+export const MAX_WAVES = 16;
+
+/**
+ * The band of wavelengths the sea is written in, as multiples of the dominant.
+ *
+ * The spectrum runs far wider than this in both directions and most of what is
+ * cut off is on the *short* side, which is not an approximation anyone should
+ * be surprised by: the water grid is a 3 m cell (`SEG` in view/water.ts), so a
+ * wave under about 6 m has fewer than two vertices to a crest and comes out as
+ * a crawling moire rather than as a wave. The chop below this band is drawn --
+ * it is `rippleGlsl`, the normal perturbation that adds texture without
+ * touching the height. That is the honest description of the split: this array
+ * is the part of the spectrum the grid can carry, and the ripple is the tail
+ * it cannot.
+ *
+ * Which leaves where to put the band, and the answer is not taste either. Its
+ * width is set by making every one of the sixteen worth its loop iteration --
+ * at 2.5 the weakest band still carries 18% of the peak's energy, and widening
+ * it spends bands on nothing (at 3.5, the weakest is 1%). Its position is set
+ * by holding the energy-weighted mean wavelength at 1.071 times the dominant,
+ * which is where the four-component table it replaces had it. The sea is the
+ * same size and the same length as it was; only its detail changed.
+ *
+ * At 12 knots that is 11.6 m to 29 m, so the shortest component has nearly
+ * four grid cells to a crest. The old table's shortest had 1.97 -- under the
+ * two that sampling one at all requires.
+ */
+const MIN_MULT = 0.725;
+const MAX_MULT = 1.8125;
+
+/**
+ * Half-width of the directional fan, rad -- about 41 degrees either side.
+ *
+ * Also what the old table had: its widest offset was 0.72. A real sea's
+ * spreading is narrowest at the spectral peak and wider away from it, which
+ * this does not model; the fan is uniform and the components are scattered
+ * across it, which is what stops the ridges being parallel.
+ */
+const SPREAD = 0.72;
+
+/** 1/phi. Successive multiples of it fill an interval about as evenly as anything can. */
+const GOLDEN = (Math.sqrt(5) - 1) / 2;
+
+/**
+ * The n'th direction offset, in -1..1, starting at the middle.
+ *
+ * A Kronecker sequence rather than an even fan, because the offsets are handed
+ * out walking up from the spectral peak and wrapping round: an even fan would
+ * then put neighbouring frequencies at neighbouring angles, and the sea would
+ * be a smooth sweep of direction with wavelength -- which reads as one curved
+ * ridge rather than as a confused sea. This drops each new component into the
+ * widest gap left, so frequency and direction stay unrelated.
+ *
+ * n = 0 lands exactly at 0, which is why the peak band is given it: the
+ * biggest waves should run with the wind, and `SeaState.dir` says they do.
+ */
+const fan = (n: number): number => 2 * ((n * GOLDEN + 0.5) % 1) - 1;
+
+/**
+ * The golden angle, rad. Component phases are multiples of it.
+ *
+ * They only have to be spread, and any irrational multiple spreads them; this
+ * is the one that spreads a partial sequence best, which matters because the
+ * eye is looking at all sixteen at once.
+ */
+const PHASE_STEP = Math.PI * (3 - Math.sqrt(5));
 
 /**
  * The wind over the water, m/s, world frame -- the velocity that actually
@@ -84,6 +162,11 @@ export class WaveField {
   private driftX = 0;
   private driftY = 0;
   private readonly driftOut: Vec2 = { x: 0, y: 0 };
+  /**
+   * The spectrum's band weights, scratch. Written and read inside one
+   * `setFromWind`, which runs on every physics tick and must not allocate.
+   */
+  private readonly weights = new Float64Array(MAX_WAVES);
   /** Significant wave height H1/3, m. Used by the HUD and added resistance. */
   sigWaveHeight = 0;
 
@@ -191,6 +274,21 @@ export class WaveField {
    * Pierson-Moskowitz ocean: about 0.5 m high and 16 m long in 12 knots, which
    * is the right size for a 10 m yacht to sail through. Open-ocean parameters
    * give 36 m wavelengths that the boat simply rides over without noticing.
+   *
+   * The *shape* is Pierson-Moskowitz even where the scale is not:
+   * S(w) ~ w^-5 exp(-1.25 (w_p/w)^4), sampled in bands spaced evenly in log w.
+   * With that spacing dw goes as w, so the variance a band carries goes as
+   * w^-4 exp(-1.25 (w_p/w)^4) -- which, written in the wavelength multiple
+   * m = (w_p/w)^2, is just m^2 exp(-1.25 m^2). Whatever constant stands in
+   * front of the spectrum cancels in the normalisation below, which is why
+   * none appears here and no fetch or gravity constant is needed to get the
+   * shape right.
+   *
+   * The height is not left to the spectrum. The bands are normalised so their
+   * variances sum to sigma^2 with sigma = H13/4, which makes `heightAt` and
+   * `sigWaveHeight` two descriptions of one sea by construction rather than by
+   * tuning -- the hand-written table they replace agreed to 0.8%, and only
+   * because its weights had been chosen to.
    */
   setFromWind(tws: number, twd: number): void {
     const u = Math.max(tws, 0.5);
@@ -202,32 +300,41 @@ export class WaveField {
     const from = compassVec(twd);
     const baseDir = Math.atan2(-from.x, -from.y);
 
-    // Wavelength and amplitude split, plus directional spreading. All components
-    // running the same way would produce infinitely long ridges that look fake.
-    const spec: [number, number, number][] = [
-      // [wavelength multiple, amplitude weight, direction offset (rad)]
-      [1.0, 0.55, 0],
-      [0.61, 0.26, 0.42],
-      [1.72, 0.32, -0.3],
-      [0.37, 0.14, -0.72],
-    ];
+    // The spectrum first: the normalisation needs the total, and the fan needs
+    // to know which band came out biggest.
+    const step = (MAX_MULT / MIN_MULT) ** (1 / (MAX_WAVES - 1));
+    const weights = this.weights;
+    let total = 0;
+    let peak = 0;
+    let m = MIN_MULT;
+    for (let i = 0; i < MAX_WAVES; i++) {
+      const mm = m * m;
+      weights[i] = mm * Math.exp(-1.25 * mm);
+      total += weights[i];
+      if (weights[i] > weights[peak]) peak = i;
+      m *= step;
+    }
 
-    for (let i = 0; i < spec.length; i++) {
-      const [lm, aw, dd] = spec[i];
-      const lam = lambda * lm;
-      const k = (2 * Math.PI) / lam;
-      const dir = baseDir + dd;
+    const sigma = h13 / 4;
+    m = MIN_MULT;
+    for (let i = 0; i < MAX_WAVES; i++) {
+      const k = (2 * Math.PI) / (lambda * m);
+      // Offsets handed out from the peak band outwards, so the biggest waves
+      // run with the wind and the rest scatter either side of them.
+      const dir = baseDir + SPREAD * fan((i - peak + MAX_WAVES) % MAX_WAVES);
       const c = this.component(i);
       c.dirX = Math.sin(dir);
       c.dirY = Math.cos(dir);
       c.k = k;
       c.omega = Math.sqrt(G * k);
-      // H1/3 is roughly 4*sigma; split the components so their squares sum to
-      // sigma^2.
-      c.amp = (h13 / 4) * aw * 2;
-      c.basePhase = i * 1.7;
+      // This band's share of sigma^2 is (weights[i] / total) * sigma^2, and a
+      // sine of amplitude A has variance A^2/2, so the amplitude is the root
+      // of twice the share.
+      c.amp = Math.sqrt((2 * weights[i] * sigma * sigma) / total);
+      c.basePhase = i * PHASE_STEP;
+      m *= step;
     }
-    this.comps.length = spec.length;
+    this.comps.length = MAX_WAVES;
   }
 
   /**

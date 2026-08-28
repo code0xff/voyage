@@ -185,6 +185,89 @@ describe('wave hit strength', () => {
  * physics and the shader agreeing with each other on something slightly wrong.
  * The drift is now integrated and folded into each component's phase.
  */
+describe('the spectrum', () => {
+  /** The components in wavelength order, which is the order they are built in. */
+  const amps = (w: WaveField) => w.comps.map((c) => c.amp);
+  const peakOf = (a: number[]) => a.indexOf(Math.max(...a));
+
+  /**
+   * The two halves of the model have to describe one sea. `sigWaveHeight` is
+   * read straight off the wind by `waveHeightFromWind` and drives the added
+   * resistance and the HUD; the components are what the boat actually floats
+   * on. Nothing makes them agree except the normalisation, and the table of
+   * weights this replaced agreed only to 0.8% and only by having been tuned.
+   */
+  it('carries exactly the significant wave height it reports', () => {
+    for (const tws of [0.4, 3, 7, 12, 20]) {
+      const w = new WaveField(tws, 0.6);
+      expect(w.rms).toBeGreaterThan(0);
+      expect(4 * w.rms).toBeCloseTo(w.sigWaveHeight, 10);
+    }
+  });
+
+  /**
+   * Pierson-Moskowitz, sampled: energy rises to a peak somewhere inside the
+   * band and falls away either side of it. A flat set of weights -- which is
+   * what a spectrum reduces to if the shape term is dropped -- has its maximum
+   * at the first band and fails on every clause here.
+   */
+  it('peaks inside the band and falls away either side', () => {
+    const a = amps(new WaveField(12, 0));
+    const peak = peakOf(a);
+    expect(peak).toBeGreaterThan(0);
+    expect(peak).toBeLessThan(a.length - 1);
+    for (let i = 1; i <= peak; i++) expect(a[i]).toBeGreaterThanOrEqual(a[i - 1]);
+    for (let i = peak + 1; i < a.length; i++) expect(a[i]).toBeLessThanOrEqual(a[i - 1]);
+    // The long tail is the side that falls off hard, and does.
+    expect(a[a.length - 1]).toBeLessThan(a[peak] * 0.5);
+  });
+
+  it('runs the biggest waves with the wind', () => {
+    const twd = 1.1;
+    const w = new WaveField(12, twd);
+    const best = w.comps[peakOf(amps(w))];
+    // Travel is downwind, and twd is where it blows from.
+    expect(wrapPi(Math.atan2(best.dirX, best.dirY) - (twd + Math.PI))).toBeCloseTo(0, 6);
+  });
+
+  /**
+   * Short crests, which is the whole point of a spectrum over a handful of
+   * hand-picked components. Walked along the biggest train's own crest line
+   * the surface should forget itself within a few hundred metres; if one
+   * direction carries most of the sea it cannot, because that component
+   * contributes nothing to the difference.
+   *
+   * Measured rather than derived: the four-component table this replaced sat
+   * at 0.54 to 0.65 across the wind range, because 61% of its energy was in a
+   * single direction. The spectrum sits at 0.04 to 0.16.
+   */
+  it('has crests short enough to lose track of themselves', () => {
+    for (const tws of [4, 8, 12, 16]) {
+      const w = new WaveField(tws, 0);
+      const best = w.comps[peakOf(amps(w))];
+      // Along the crest: ninety degrees off the way the train travels.
+      const px = best.dirY;
+      const py = -best.dirX;
+      const s2 = w.rms * w.rms;
+
+      let acc = 0;
+      let bands = 0;
+      for (let d = 40; d <= 400; d += 5) {
+        let sum = 0;
+        const n = 300;
+        for (let i = 0; i < n; i++) {
+          const x = (i * 37.13) % 900;
+          const y = (i * 91.7) % 900;
+          sum += w.heightAt(x, y) * w.heightAt(x + px * d, y + py * d);
+        }
+        acc += sum / n / s2;
+        bands++;
+      }
+      expect(Math.abs(acc / bands)).toBeLessThan(0.3);
+    }
+  });
+});
+
 describe('drift with the water', () => {
   const DT = 1 / 120;
   const run = (field: WaveField, seconds: number, drift?: { x: number; y: number }) => {
@@ -267,9 +350,29 @@ describe('drift with the water', () => {
     const measured = (w.heightAt(30, -12) - h0) / 1e-4;
     expect(rate).toBeCloseTo(measured, 3);
 
-    // ...and the still-water rate is a different number here, or the drift term
-    // could be anything.
-    expect(Math.abs(w.verticalVelocityAt(30, -12) - rate)).toBeGreaterThan(0.05);
+    // ...and the drift term is not doing nothing, or the finite difference
+    // above would be satisfied by an advection of zero.
+    //
+    // Measured over a spread of points and against the size of the rate
+    // itself, rather than at this one point against an absolute 0.05, which is
+    // what it was. That guard was a single draw from a distribution: it stood
+    // for years and then landed at 0.038 the day the sea was rewritten as a
+    // spectrum, having caught nothing and having nothing to say about the
+    // change. A ratio survives the sea being retuned; an absolute in m/s does
+    // not, because the sea's whole scale moves with the wind.
+    //
+    // It stands at 0.128 as this is written, against a bound of 0.05: loose,
+    // because all this has to catch is an advection term of nothing.
+    let diff = 0;
+    let mag = 0;
+    for (let i = 0; i < 200; i++) {
+      const x = i * 13.7;
+      const y = -i * 7.1;
+      const real = w.verticalVelocityAt(x, y, set);
+      diff += (w.verticalVelocityAt(x, y) - real) ** 2;
+      mag += real * real;
+    }
+    expect(Math.sqrt(diff / mag)).toBeGreaterThan(0.05);
   });
 
   /**
