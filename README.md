@@ -676,6 +676,19 @@ significant wave height and the chop is left to the ripple, a fixed set of
 short wavelengths that perturbs the normal without touching the height. The
 ripple is not that missing tail; it stands in for it.
 
+**Whitecaps come from the wind, not from the wave shape.** They have to: H1/3
+and the dominant wavelength both go as u², so this sea's steepness is a
+constant 0.031 whatever the wind, and four times gentler than the 1/7 at which
+water really breaks. What varies with wind is *how much* of the sea is white,
+and that is measured — Monahan and O'Muircheartaigh's W = 3.84e-6·U^3.41.
+Surface elevation is Gaussian, so asking for coverage W is asking for the
+height only W of the water stands above, and the shader gets that height. Foam
+starts to show around force 4 and covers a tenth of the sea by force 8.
+
+The term was in the shader for a long time before any of it appeared: the
+steepness it demanded was five times the mean slope of the sea it was applied
+to, so it evaluated to zero and no whitecap was ever drawn.
+
 Anything else drawn on the water reads it through `Water.surfaceHeight`, which
 is that same formula plus the two things the shader does to it and the boat
 never sees: the fade that flattens the grid towards its edge, and the land
