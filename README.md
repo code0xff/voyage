@@ -656,6 +656,22 @@ Vertex displacement runs in a GPU vertex shader; the height the boat floats at
 is computed on the CPU. The two use *literally the same formula*, which is why
 the wave model is restricted to a sum of sines whose parameters fit in uniforms.
 
+Sixteen of them, drawn from a Pierson-Moskowitz spectrum rather than picked by
+hand. The band runs from 0.725 to 1.8125 of the dominant wavelength: narrow
+enough that every component is worth its loop iteration — the weakest still
+carries 18% of the peak's energy — and placed so the energy-weighted mean
+wavelength lands where the four hand-picked components had it. Their variances
+are normalised to sum to (H1/3 / 4)², so the surface the boat floats on and the
+significant wave height the instruments report are one sea by construction.
+
+What that buys is short crests. Walked along the biggest train's own crest line,
+the surface used to stay 0.6 correlated over hundreds of metres — 61% of the
+energy ran in one direction, so four sines made four sets of parallel ridges and
+the eye found the repeat in seconds. It is 0.04 to 0.16 now. The waves below the
+band are not lost either: they are the ripple, a normal perturbation that adds
+texture without touching the height, because a 3 m grid cell cannot carry a
+crest under about 6 m without turning it into a crawling moiré.
+
 Anything else drawn on the water reads it through `Water.surfaceHeight`, which
 is that same formula plus the two things the shader does to it and the boat
 never sees: the fade that flattens the grid towards its edge, and the land
