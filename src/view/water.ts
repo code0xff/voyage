@@ -291,7 +291,11 @@ const shelterGlsl = /* glsl */ `
   }
 `;
 
-const vertexShader = /* glsl */ `
+/**
+ * The wave grid's vertex shader. Exported for the same tripwire reason the
+ * fragment shader is.
+ */
+export const vertexShader = /* glsl */ `
   uniform float uTime;
   uniform vec2 uOrigin;                  // world position of the grid centre (sim coords)
   uniform vec4 uWaveA[${MAX_WAVES}];     // dirX, dirY, k, omega
@@ -302,7 +306,8 @@ const vertexShader = /* glsl */ `
   varying vec3 vWorld;
   varying float vHeight;
   varying float vSigma;
-  varying float vSteepness;
+  varying float vSeaSlope;
+  varying float vEdge;
   varying float vShelter;
 
   ${fieldGlsl}
@@ -321,11 +326,20 @@ const vertexShader = /* glsl */ `
     // invisible, not the haze.
     float edge = max(abs(position.x), abs(position.y)) / ${SIZE.toFixed(1)};
     float shelter = waveShelter(p);
-    float fade = (1.0 - smoothstep(0.28, 0.49, edge)) * shelter;
+    // The two halves of the fade are needed apart as well as together: the
+    // whitecaps have to die at the rim with the waves, but must take the lee
+    // once rather than once per term. See the foam block in the fragment.
+    float edgeFade = 1.0 - smoothstep(0.28, 0.49, edge);
+    float fade = edgeFade * shelter;
 
     float h = 0.0;
     float dhdx = 0.0;
     float dhdy = 0.0;
+    // The same gradient built from the unattenuated amplitudes: the slope of
+    // the sea outside the lee and away from the rim. What breaks a wave is
+    // how steep that sea is, and the lee's effect on the foam is applied once,
+    // in the fragment shader, rather than smuggled in through this as well.
+    vec2 seaGrad = vec2(0.0);
     vec2 horiz = vec2(0.0);
     float variance = 0.0;
 
@@ -344,6 +358,7 @@ const vertexShader = /* glsl */ `
       h += av * s;
       dhdx += av * k * d.x * c;
       dhdy += av * k * d.y * c;
+      seaGrad += d * (a * k * c);
       // Gerstner horizontal displacement: sharpens crests, flattens troughs
       horiz += d * (uSteep * av * c);
       // Variance, not the sum of amplitudes: see vSigma's use in the fragment
@@ -365,7 +380,8 @@ const vertexShader = /* glsl */ `
     vNormal = normalize(vec3(-dhdx, 1.0, dhdy));
     vHeight = h;
     vSigma = sqrt(variance);
-    vSteepness = length(vec2(dhdx, dhdy));
+    vSeaSlope = length(seaGrad);
+    vEdge = edgeFade;
     vShelter = shelter;
 
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
@@ -374,7 +390,15 @@ const vertexShader = /* glsl */ `
   }
 `;
 
-const fragmentShader = /* glsl */ `
+/**
+ * The wave grid's fragment shader.
+ *
+ * Exported for the tripwire in water.test.ts and for nothing else. No GLSL
+ * runs under vitest, so the one thing a test can hold about this shader is
+ * what it says -- see the origin tripwire there for the precedent, and the
+ * foam tripwire for what it caught.
+ */
+export const fragmentShader = /* glsl */ `
   uniform float uTime;
   uniform vec3 uDeep;
   uniform vec3 uShallow;
@@ -395,7 +419,8 @@ const fragmentShader = /* glsl */ `
   varying vec3 vWorld;
   varying float vHeight;
   varying float vSigma;
-  varying float vSteepness;
+  varying float vSeaSlope;
+  varying float vEdge;
   varying float vShelter;
 
   ${rippleGlsl}
@@ -464,23 +489,41 @@ const fragmentShader = /* glsl */ `
       // foamLevel() is solved against this width, so widening it again means
       // refitting.
       float crest = smoothstep(uFoam, uFoam + 1.2, vHeight / vSigma);
-      // Steepness shapes the foam rather than gating it: this passes 43% of
-      // the surface, so the caps break up along a crest instead of icing every
-      // high one evenly. foamLevel() was solved with this term in place, so
-      // the coverage above is the coverage after it.
+      // Steepness shapes the foam rather than gating it: about 43% of the
+      // surface passes, so the caps break up along a crest instead of icing
+      // every high one evenly. foamLevel() was solved with this term in
+      // place, so the coverage above is the coverage after it.
       //
       // Absolute, and safe to be absolute. Elevation had to be measured
-      // against the sea's own sigma because sigma moves with the wind; slope
-      // does not move with anything, since H13 and the dominant wavelength
-      // both go as u^2. Mean slope 0.042, so this band straddles it. Shelter
-      // and the grid fade are the two things that *do* scale it, and both
-      // should take the foam away with them.
+      // against the sea's own sigma because sigma moves with the wind; the
+      // sea's slope does not, since H13 and the dominant wavelength both go as
+      // u^2 -- above the 4 m wavelength floor, which binds below about 3 m/s
+      // and where there is nothing to break anyway. Mean slope 0.042, so this
+      // band straddles it.
+      //
+      // It reads vSeaSlope and not the drawn gradient, which is the whole
+      // difference between taking the lee once and taking it twice. The drawn
+      // gradient carries the shelter, and this band is narrow enough that
+      // running it through here as well squared the lee: at shelter 0.6 the
+      // foam came out at 0.20 of open water where the physics below says
+      // 0.42, and at 0.4 it was 0.025 against 0.21.
       //
       // It was 0.22 to 0.55 -- five times the mean and above the steepest
       // point anywhere in the field -- so it evaluated to exactly zero and no
       // whitecap had ever been drawn since the term was written.
-      float steep = smoothstep(0.03, 0.055, vSteepness);
-      col = mix(col, vec3(0.86, 0.91, 0.95), crest * steep * ${FOAM_OPACITY.toFixed(2)} * vShelter);
+      float steep = smoothstep(0.03, 0.055, vSeaSlope);
+
+      // The lee, once, and not linearly. Shelter scales wave *height*, and
+      // Monahan's law is in wind speed, and height goes as the square of it --
+      // so a lee of s is the coverage of a wind of sqrt(s), and the coverage
+      // goes as s^(3.41/2). The edge fade is separate and is linear, because
+      // it is not a sea state at all: it is the grid flattening itself to meet
+      // a far sea that draws no foam, and the foam has to be gone by the join.
+      col = mix(
+        col,
+        vec3(0.86, 0.91, 0.95),
+        crest * steep * ${FOAM_OPACITY.toFixed(2)} * pow(vShelter, 1.705) * vEdge
+      );
     }
 
     // Deck lights pooling on the sea.
