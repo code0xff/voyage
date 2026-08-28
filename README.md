@@ -678,12 +678,15 @@ ripple is not that missing tail; it stands in for it.
 
 **Whitecaps come from the wind, not from the wave shape.** They have to: H1/3
 and the dominant wavelength both go as u², so this sea's steepness is a
-constant 0.031 whatever the wind, and four times gentler than the 1/7 at which
-water really breaks. What varies with wind is *how much* of the sea is white,
-and that is measured — Monahan and O'Muircheartaigh's W = 3.84e-6·U^3.41.
-Surface elevation is Gaussian, so asking for coverage W is asking for the
-height only W of the water stands above, and the shader gets that height. Foam
-starts to show around force 4 and covers a tenth of the sea by force 8.
+constant 0.031 whatever the wind — four and a half times gentler than the 1/7
+at which water really breaks. What varies with wind is *how much* of the sea
+is white, and that is measured: Monahan and O'Muircheartaigh's
+W = 3.84e-6·U^3.41. Elevation in a random sea is close to Gaussian, so asking
+for coverage W is asking for the height only W of the water stands above —
+and that height was then solved numerically against this field rather than
+assumed off the Gaussian, because sixteen fixed-phase sines are not a random
+process (kurtosis 2.9 against 3). It tracks the law to within a quarter from
+force 4 to force 8, where a little over 8% of the wave grid is white.
 
 The term was in the shader for a long time before any of it appeared: the
 steepness it demanded was five times the mean slope of the sea it was applied

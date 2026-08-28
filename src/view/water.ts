@@ -34,27 +34,38 @@ export const SEG = 300; // subdivisions -> 3 m per cell
  *
  * This is where the whitecaps get their wind dependence, and it has to be here
  * because the wave field has none to give: H13 and the dominant wavelength both
- * go as u^2, so this sea's steepness is a constant 0.031 at every wind speed and
- * at every setting of the sea slider. Nothing about the shape of the water says
- * whether it is blowing.
+ * go as u^2, so H13/lambda is a constant 0.031 -- and the surface's own slope
+ * with it, at a measured mean of 0.042 -- whatever the wind and whatever the
+ * sea slider is set to. Both of those hold above `lambda`'s 4 m floor, which
+ * binds below about 3.1 m/s, where there is nothing to break anyway. Nothing
+ * about the shape of the water says whether it is blowing.
  *
  * Coverage does. Monahan and O'Muircheartaigh measured whitecap area as
- * W = 3.84e-6 * U^3.41, which is 0.2% of the sea at force 4 and 10% at force 8,
- * and elevation in a random sea is Gaussian -- so asking for coverage W is
- * asking for the height only W of the surface stands above. Solving that
- * against the actual wave field at nine wind speeds, with the steepness gate
- * in the shader included, gives thresholds that lie on a straight line in
- * log U to within 0.11 sigma:
+ * W = 3.84e-6 * U^3.41, which is 0.2% of the sea at force 4 and 10% at force
+ * 8, and elevation in a random sea is close to Gaussian -- so asking for
+ * coverage W is asking for the height only W of the surface stands above.
+ *
+ * Close to, and not exactly: a sum of sixteen fixed-phase sines is not a
+ * random process, and sampling it gives a kurtosis of 2.89 to 2.94 against a
+ * Gaussian's 3, with a tail past 3 sigma about a fifth thinner than Gaussian.
+ * Which costs nothing, because the Gaussian is only the reason to look: the
+ * threshold was solved numerically against the *actual* field at nine wind
+ * speeds, with the shader's ramp and steepness gate included, so whatever the
+ * distribution really is, it is the one that was fitted. Those thresholds lie
+ * on a straight line in log U to within 0.11 sigma:
  *
  *     t = 4.839 - 1.5154 ln U
  *
- * That error is far inside the scatter of Monahan's own data, which spans a
- * factor of two or three at any one wind speed.
+ * Measured back against the field, the coverage that produces runs from 0.79
+ * to 1.23 of Monahan's law between 6 and 20 m/s, and falls below it under
+ * force 3. A quarter either way is far inside the scatter of Monahan's own
+ * data, which spans a factor of two or three at any one wind speed.
  *
- * Clamped at 20 m/s because that is the top of the range it was fitted over
- * and the law itself runs past 100% coverage not far above it; clamped at the
- * bottom only to keep the logarithm finite, since by then the threshold is
- * over six sigma and nothing reaches it.
+ * Clamped at 20 m/s because that is the top of the range it was fitted over,
+ * not because the law breaks there -- it reaches 100% coverage at 38.7 m/s,
+ * which the sea slider can reach. Clamped at the bottom only to keep the
+ * logarithm finite, since by then the threshold is over six sigma and nothing
+ * reaches it.
  */
 export const foamLevel = (wind: number): number => 4.839 - 1.5154 * Math.log(clamp(wind, 0.5, 20));
 
@@ -469,11 +480,12 @@ export const fragmentShader = /* glsl */ `
     // water does not, and the whitecaps quietly stop appearing. Against sigma
     // the same sea gives the same foam however it was written down.
     //
-    // Where the threshold comes from is foamLevel() above: elevation is
-    // Gaussian, whitecap coverage is a measured function of wind speed, and
-    // that pair fixes the height the water has to reach. It is the only route
-    // the wind has into this, because the shape of the wave field carries no
-    // wind information at all -- the steepness is a constant.
+    // Where the threshold comes from is foamLevel() above: whitecap coverage
+    // is a measured function of wind speed, elevation is near enough Gaussian
+    // to know what to look for, and the threshold was then solved against this
+    // field. It is the only route the wind has into the foam, because the
+    // shape of the wave field carries no wind information at all -- the
+    // steepness is a constant.
     //
     // What the threshold replaced was a fixed 1.84 to 2.53 sigma with a
     // wind-driven *opacity* in front of it. That put the same area of foam on
@@ -489,9 +501,10 @@ export const fragmentShader = /* glsl */ `
       // foamLevel() is solved against this width, so widening it again means
       // refitting.
       float crest = smoothstep(uFoam, uFoam + 1.2, vHeight / vSigma);
-      // Steepness shapes the foam rather than gating it: about 43% of the
-      // surface passes, so the caps break up along a crest instead of icing
-      // every high one evenly. foamLevel() was solved with this term in
+      // Steepness shapes the foam rather than gating it: 43% of the surface
+      // passes at every wind above the wavelength floor -- 43.1% from 4 m/s to
+      // 20 m/s, 39.6% at 3 -- so the caps break up along a crest instead of
+      // icing every high one evenly. foamLevel() was solved with this term in
       // place, so the coverage above is the coverage after it.
       //
       // Absolute, and safe to be absolute. Elevation had to be measured
@@ -999,6 +1012,11 @@ export function createWater(): Water {
       // sea lags, it is raised on the wind over the moving water, and the
       // player can scale it. Taking `tws` here would foam a sea that had not
       // arrived yet, and would ignore the sea slider entirely.
+      //
+      // Which is the opposite of what uRipple below wants, and deliberately
+      // so. Foam sits on the swell and has to arrive with it; the ripple is
+      // the chop and the cat's paws, which answer the wind in seconds. Two
+      // different winds because they are two different things.
       uniforms.uFoam.value = foamLevel(waves.buildWind);
       // Ripple with the wind. A glassy calm is a real thing and should look
       // like one, but the sea should never be a mirror once it is blowing.
