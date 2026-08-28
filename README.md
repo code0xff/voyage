@@ -667,10 +667,14 @@ significant wave height the instruments report are one sea by construction.
 What that buys is short crests. Walked along the biggest train's own crest line,
 the surface used to stay 0.6 correlated over hundreds of metres — 61% of the
 energy ran in one direction, so four sines made four sets of parallel ridges and
-the eye found the repeat in seconds. It is 0.04 to 0.16 now. The waves below the
-band are not lost either: they are the ripple, a normal perturbation that adds
-texture without touching the height, because a 3 m grid cell cannot carry a
-crest under about 6 m without turning it into a crawling moiré.
+the eye found the repeat in seconds. It is 0.04 to 0.16 now.
+
+That band holds about half the spectrum's energy, and the half it drops is the
+short half — a 3 m grid cell cannot carry a crest under about 6 m without
+turning it into a crawling moiré, so the sixteen are renormalised to the full
+significant wave height and the chop is left to the ripple, a fixed set of
+short wavelengths that perturbs the normal without touching the height. The
+ripple is not that missing tail; it stands in for it.
 
 Anything else drawn on the water reads it through `Water.surfaceHeight`, which
 is that same formula plus the two things the shader does to it and the boat

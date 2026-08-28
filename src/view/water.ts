@@ -412,13 +412,39 @@ const fragmentShader = /* glsl */ `
     // water does not, and the whitecaps quietly stop appearing. Against sigma
     // the same sea gives the same foam however it was written down.
     //
-    // The two thresholds are exactly where they were for the four-component
-    // sea this replaced -- that sum came to 2.56 sigma, so 0.72 and 0.99 of it
-    // are 1.84 and 2.53 -- and they now have a meaning as well as a history:
-    // crest heights in a random sea are Rayleigh, so foam starts on the
-    // highest 18% of crests and is full on the highest 4%.
+    // The two thresholds are where they were for the four-component sea this
+    // replaced, to three figures: that sum came to 2.5603 sigma, so 0.72 and
+    // 0.99 of it are 1.8434 and 2.5347, written here as 1.84 and 2.53.
+    //
+    // Not Rayleigh, though those numbers invite it. Crest heights in a
+    // *narrow-band* sea are Rayleigh, which would put 18% of crests over the
+    // first threshold and 4% over the second; this sea is not narrow enough
+    // and counting local maxima over a 1 km square gives 32% and 9%. What
+    // decides the area of foam is the elevation at a point, which is Gaussian:
+    // 3.1% of the surface stands above the first threshold.
+    //
+    // None of which has ever been visible, because the steepness gate below
+    // is one this sea cannot open -- see it for the measurements. Both halves
+    // correct and the product is zero.
     if (vSigma > 0.001) {
       float crest = smoothstep(1.84, 2.53, vHeight / vSigma);
+      // Unreachable, and left that way deliberately. Measured over a 1.2 km
+      // square the sea's mean slope is 0.042 and its steepest point 0.18, so
+      // this is exactly zero everywhere and no whitecap has ever been drawn.
+      //
+      // It is not a tuning that drifted. H13 goes as u^2 and so does the
+      // dominant wavelength, so H/lambda is a constant 0.031 at every wind
+      // speed -- four times gentler than the 1/7 at which water really breaks.
+      // No threshold taken from real breaking waves can be met here.
+      //
+      // Lowering it is not the fix on its own. At 0.02..0.05 the foam covers
+      // 0.8% of the surface and at 0.035..0.07, 0.4%; neither could be seen in
+      // the browser at 20 knots, where uWhitecap is only (10.3-6)/12 = 0.36.
+      // Forcing this product to 1.0 does visibly pale the whole sea, so the
+      // rest of the path works -- it is coverage and opacity together that are
+      // short. Making the sea break means retuning uWhitecap's range as well,
+      // and that is a decision about how the sea should look rather than a
+      // defect to correct, so it is left for whoever wants to take it.
       float steep = smoothstep(0.22, 0.55, vSteepness);
       col = mix(col, vec3(0.86, 0.91, 0.95), crest * steep * uWhitecap * vShelter);
     }

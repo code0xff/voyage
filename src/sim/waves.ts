@@ -56,6 +56,11 @@ export const MAX_WAVES = 16;
  * At 12 knots that is 11.6 m to 29 m, so the shortest component has nearly
  * four grid cells to a crest. The old table's shortest had 1.97 -- under the
  * two that sampling one at all requires.
+ *
+ * Below about six knots that stops holding, and it is `lambda`'s 4 m floor
+ * doing it rather than this band: the shortest component sticks at 2.9 m and
+ * gets one cell. Left alone, because the sea there is 0.12 m high and the
+ * aliasing has nothing to show.
  */
 const MIN_MULT = 0.725;
 const MAX_MULT = 1.8125;
@@ -63,10 +68,14 @@ const MAX_MULT = 1.8125;
 /**
  * Half-width of the directional fan, rad -- about 41 degrees either side.
  *
- * Also what the old table had: its widest offset was 0.72. A real sea's
- * spreading is narrowest at the spectral peak and wider away from it, which
- * this does not model; the fan is uniform and the components are scattered
- * across it, which is what stops the ridges being parallel.
+ * Taken from the old table, whose widest offset was 0.72; its fan was one-sided
+ * though (-0.72 to +0.42) where this one is centred on the wind. This is a
+ * bound rather than a value anything takes: the sixteen offsets land between
+ * -0.63 and +0.68, because `fan` samples the open interval.
+ *
+ * A real sea's spreading is narrowest at the spectral peak and wider away from
+ * it, which this does not model; the fan is uniform and the components are
+ * scattered across it, which is what stops the ridges being parallel.
  */
 const SPREAD = 0.72;
 
@@ -282,7 +291,10 @@ export class WaveField {
    * m = (w_p/w)^2, is just m^2 exp(-1.25 m^2). Whatever constant stands in
    * front of the spectrum cancels in the normalisation below, which is why
    * none appears here and no fetch or gravity constant is needed to get the
-   * shape right.
+   * shape right. Each band is one sample of that density rather than an
+   * integral over the band, which is what makes it sixteen multiplications
+   * instead of sixteen quadratures; the difference shows in the mean
+   * wavelength, 1.0715 of the dominant sampled against 1.0802 integrated.
    *
    * The height is not left to the spectrum. The bands are normalised so their
    * variances sum to sigma^2 with sigma = H13/4, which makes `heightAt` and
