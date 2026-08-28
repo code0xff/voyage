@@ -269,7 +269,7 @@ const vertexShader = /* glsl */ `
   varying vec3 vNormal;
   varying vec3 vWorld;
   varying float vHeight;
-  varying float vAmp;
+  varying float vSigma;
   varying float vSteepness;
   varying float vShelter;
 
@@ -295,7 +295,7 @@ const vertexShader = /* glsl */ `
     float dhdx = 0.0;
     float dhdy = 0.0;
     vec2 horiz = vec2(0.0);
-    float ampSum = 0.0;
+    float variance = 0.0;
 
     for (int i = 0; i < ${MAX_WAVES}; i++) {
       vec2 d = uWaveA[i].xy;
@@ -314,7 +314,9 @@ const vertexShader = /* glsl */ `
       dhdy += av * k * d.y * c;
       // Gerstner horizontal displacement: sharpens crests, flattens troughs
       horiz += d * (uSteep * av * c);
-      ampSum += av;
+      // Variance, not the sum of amplitudes: see vSigma's use in the fragment
+      // shader. Independent sines, so the variances are what add.
+      variance += av * av * 0.5;
     }
 
     // sim (x=east, y=north) -> three (x=east, y=up, z=south)
@@ -330,7 +332,7 @@ const vertexShader = /* glsl */ `
     // Normal. three.z = -sim.y, so the z component flips sign.
     vNormal = normalize(vec3(-dhdx, 1.0, dhdy));
     vHeight = h;
-    vAmp = ampSum;
+    vSigma = sqrt(variance);
     vSteepness = length(vec2(dhdx, dhdy));
     vShelter = shelter;
 
@@ -360,7 +362,7 @@ const fragmentShader = /* glsl */ `
   varying vec3 vNormal;
   varying vec3 vWorld;
   varying float vHeight;
-  varying float vAmp;
+  varying float vSigma;
   varying float vSteepness;
   varying float vShelter;
 
@@ -401,8 +403,22 @@ const fragmentShader = /* glsl */ `
     // Whitecaps. Keying on height alone produces broad white bands that read
     // as fog. Waves only actually break on crests that are both high *and*
     // steep, so require both. Sheltered water does not break at all.
-    if (vAmp > 0.001) {
-      float crest = smoothstep(0.72, 0.99, vHeight / vAmp);
+    //
+    // Height is measured against sigma -- the sea's RMS elevation -- and not
+    // against the sum of the amplitudes, which is what it was. That sum is the
+    // height the sea would reach if every component crested at once, so it is
+    // a number about the wave *model* rather than about the water: chop the
+    // same sea into more components and the sum grows like sqrt(n) while the
+    // water does not, and the whitecaps quietly stop appearing. Against sigma
+    // the same sea gives the same foam however it was written down.
+    //
+    // The two thresholds are exactly where they were for the four-component
+    // sea this replaced -- that sum came to 2.56 sigma, so 0.72 and 0.99 of it
+    // are 1.84 and 2.53 -- and they now have a meaning as well as a history:
+    // crest heights in a random sea are Rayleigh, so foam starts on the
+    // highest 18% of crests and is full on the highest 4%.
+    if (vSigma > 0.001) {
+      float crest = smoothstep(1.84, 2.53, vHeight / vSigma);
       float steep = smoothstep(0.22, 0.55, vSteepness);
       col = mix(col, vec3(0.86, 0.91, 0.95), crest * steep * uWhitecap * vShelter);
     }
