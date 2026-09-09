@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { FLARE_WARM } from './flare';
+import { noiseGlsl } from './noise-glsl';
 import { approach } from '../sim/math';
 import type { SkyState } from '../sim/sky';
 
@@ -96,22 +97,7 @@ const fragmentShader = /* glsl */ `
     return sin(t * 3.14159265);
   }
 
-  float hash12(vec2 p) {
-    vec3 q = fract(vec3(p.xyx) * 0.1031);
-    q += dot(q, q.yzx + 33.33);
-    return fract((q.x + q.y) * q.z);
-  }
-
-  float vnoise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    float a = hash12(i);
-    float b = hash12(i + vec2(1.0, 0.0));
-    float c = hash12(i + vec2(0.0, 1.0));
-    float e = hash12(i + vec2(1.0, 1.0));
-    return mix(mix(a, b, f.x), mix(c, e, f.x), f.y);
-  }
+  ${noiseGlsl}
 
   /**
    * Two octaves, and not for drawing anything: this is the field that bends
