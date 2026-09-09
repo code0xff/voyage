@@ -676,21 +676,28 @@ significant wave height and the chop is left to the ripple, a fixed set of
 short wavelengths that perturbs the normal without touching the height. The
 ripple is not that missing tail; it stands in for it.
 
-**Whitecaps come from the wind, not from the wave shape.** They have to: H1/3
-and the dominant wavelength both go as u², so this sea's steepness is a
-constant 0.031 whatever the wind — four and a half times gentler than the 1/7
-at which water really breaks. What varies with wind is *how much* of the sea
-is white, and that is measured: Monahan and O'Muircheartaigh's
-W = 3.84e-6·U^3.41. Elevation in a random sea is close to Gaussian, so asking
-for coverage W is asking for the height only W of the water stands above —
-and that height was then solved numerically against this field rather than
-assumed off the Gaussian, because sixteen fixed-phase sines are not a random
-process (kurtosis 2.9 against 3). It tracks the law to within a quarter from
-force 4 to force 8, where a little over 8% of the wave grid is white.
+**The sea does not break.** No whitecaps, deliberately, and the reason is in
+the wave model rather than in the shader: H1/3 and the dominant wavelength both
+go as u², so this sea's steepness is a constant 0.031 whatever the wind — four
+and a half times gentler than the 1/7 at which water really breaks. Nothing in
+the shape of this water can be read as a wave about to break.
 
-The term was in the shader for a long time before any of it appeared: the
-steepness it demanded was five times the mean slope of the sea it was applied
-to, so it evaluated to zero and no whitecap was ever drawn.
+Foam was drawn for four days and then taken out. Since the wave field carries
+no wind information, the wind had to reach the foam through *coverage*, and
+that part worked: Monahan and O'Muircheartaigh measured whitecap area as
+W = 3.84e-6·U^3.41, elevation in a random sea is close to Gaussian, and solving
+those together against this field gave a threshold that tracked the law to
+within a third from force 4 to force 8. What did not work was where the foam
+sat. Keyed on the surface's *height*, a patch of white existed only while the
+water under it was high — so it travelled with the wave rather than staying in
+the sea, sliding across the water at the phase speed, 10 knots at force 4 past
+a boat doing five. Foam that stays where it was laid needs the surface the
+shader *had* and not only the one it has, and that attempt stopped the wave
+grid rendering for reasons this repository has not got to the bottom of.
+
+Worth knowing before trying again: the term sat in the shader for a long time
+before any of this, demanding a surface slope five times the mean of the sea it
+was applied to, so it evaluated to zero and no whitecap had ever been drawn.
 
 Anything else drawn on the water reads it through `Water.surfaceHeight`, which
 is that same formula plus the two things the shader does to it and the boat
@@ -947,6 +954,11 @@ meaning anything.
   not another phase term: a falling tide has to decide what happens to a boat
   anchored over a bank, and what the soundings on the chart are measured from.
 - No wave orbital velocity acting on the hull, and no surfing.
+- **The sea does not break.** No whitecaps: this wave model holds H/lambda at a
+  constant 0.031 whatever the wind, four and a half times gentler than the 1/7
+  at which water really breaks. Foam keyed on the surface's height was drawn
+  for four days and slid across the water at the wave's phase speed, which is
+  what a function of the instantaneous surface does. Section 10 has the rest.
 - No AI opponents, and nothing to chase. Racing's ghost — your own best run,
   replayed alongside you — was put to the question again for passages and
   turned down. See [docs/open-questions.md](docs/open-questions.md).
