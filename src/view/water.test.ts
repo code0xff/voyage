@@ -10,9 +10,6 @@ import {
   SIZE,
   createWater,
   fieldGlsl,
-  foamLevel,
-  fragmentShader,
-  vertexShader,
   ringGeometry,
 } from './water';
 import { EYE_FAR } from './scene';
@@ -335,92 +332,6 @@ describe('the water texture of a moved window', () => {
       expect(Math.abs(greenAt(row, 0) - expected)).toBeLessThanOrEqual(FIELD_DEPTH / 255);
     }
     water.dispose();
-  });
-});
-
-/**
- * The foam threshold, which is a convention and not a look: it is the sea's
- * only route from wind speed to whitecaps, and it runs *downwards* as the wind
- * gets up, because it is a height the water has to clear. A sign error here
- * would put the foam on a millpond and take it off a gale, and would show in a
- * screenshot as nothing at all -- the sea would simply be wrong in a direction
- * nobody was looking.
- */
-describe('the foam threshold', () => {
-  it('falls as the wind rises, so more of the sea breaks', () => {
-    let last = Infinity;
-    for (let u = 1; u <= 20; u++) {
-      const t = foamLevel(u);
-      expect(t).toBeLessThan(last);
-      last = t;
-    }
-  });
-
-  /**
-   * Written out rather than derived, because these two numbers are the claim
-   * and not a scaffold for it: a force 4 is where a sea starts to show the odd
-   * white crest, and a force 8 is where it is streaked with them. In sigma of
-   * surface elevation that is a threshold the water clears rarely and one it
-   * clears often, and 2 and 1 are where those sit.
-   */
-  it('is barely reached at force 4 and easily at force 8', () => {
-    expect(foamLevel(6)).toBeGreaterThan(2);
-    expect(foamLevel(18)).toBeLessThan(1);
-  });
-
-  it('stops moving outside the winds it was fitted over', () => {
-    expect(foamLevel(25)).toBe(foamLevel(20));
-    expect(foamLevel(60)).toBe(foamLevel(20));
-    expect(foamLevel(0)).toBe(foamLevel(0.5));
-    expect(Number.isFinite(foamLevel(0))).toBe(true);
-  });
-});
-
-/**
- * A tripwire for the one thing about the foam that a string can hold.
- *
- * The lee reaches the whitecaps twice if you let it: shelter scales every wave
- * amplitude in the vertex shader, so the drawn gradient already carries it,
- * and multiplying the foam by shelter again on top of a gate that sits on that
- * gradient squares it. It did, and a review found it: at shelter 0.6 the foam
- * came out at 0.20 of open water where it should be 0.42, and at 0.4 it was
- * 0.025 against 0.21 -- a lee that took the foam away eight times over.
- *
- * The cure is that the steepness gate reads `vSeaSlope`, which is built from
- * the unattenuated amplitudes, and the lee is applied once at the end. Neither
- * half of that shows in a screenshot, and no GLSL runs here, so this asserts
- * the text.
- */
-describe('the foam tripwire', () => {
-  /** The foam term, from `crest` to the end of its mix. */
-  const foamTerm = (): string => {
-    const at = fragmentShader.indexOf('float crest = smoothstep(uFoam');
-    expect(at).toBeGreaterThan(-1);
-    const end = fragmentShader.indexOf(');', fragmentShader.indexOf('col = mix(', at));
-    return fragmentShader.slice(at, end);
-  };
-
-  it('gates the foam on the sea\'s own slope, not the sheltered one', () => {
-    const term = foamTerm();
-    expect(term).toContain('smoothstep(0.03, 0.055, vSeaSlope)');
-    // The drawn gradient is what the normal is built from and carries the lee.
-    expect(term).not.toContain('vSteepness');
-  });
-
-  it('takes the lee exactly once, and the rim separately', () => {
-    const term = foamTerm();
-    expect(term.match(/vShelter/g) ?? []).toHaveLength(1);
-    expect(term).toContain('pow(vShelter, 1.705)');
-    expect(term).toContain('vEdge');
-  });
-
-  /**
-   * And `vSeaSlope` is what it claims: built from `a`, the amplitude before
-   * the fade, rather than from `av`, which is the amplitude after it.
-   */
-  it('builds that slope before the fade rather than after it', () => {
-    expect(vertexShader).toContain('seaGrad += d * (a * k * c);');
-    expect(vertexShader).toContain('vSeaSlope = length(seaGrad);');
   });
 });
 
